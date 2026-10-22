@@ -1,7 +1,7 @@
 import type { Express, RequestHandler } from 'express';
 import { installManagementJsonRoutes } from '../../http/management-policy';
 import type { AsrSettingsStore } from './asr/asr-settings';
-import type { LocalSpeech } from './asr/local-speech';
+import type { SpeechRouter } from './asr/speech-provider';
 import type { VoiceServiceStore } from './tts/voice-services';
 import { installAsrRoutes } from './asr/asr.routes';
 import { installTranscribeRoutes } from './asr/transcribe.routes';
@@ -12,7 +12,8 @@ import { installVoiceServiceRoutes } from './tts/voice-services.routes';
 export type AudioRouteDependencies = {
   origin: string;
   authenticateManagement: RequestHandler;
-  speech: LocalSpeech;
+  /** Whisper, local SenseVoice and the engine used when no service is selected. */
+  speech: SpeechRouter;
   asrSettings: AsrSettingsStore;
   voiceServices: VoiceServiceStore;
   removeVoiceService: (id: string) => Promise<unknown>;

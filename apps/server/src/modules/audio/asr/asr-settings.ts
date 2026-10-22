@@ -9,6 +9,7 @@ import {
   type AsrServiceView,
 } from '@voxel/shared';
 import { validateWhisperSettings } from './whisper-settings';
+import { validateSenseVoiceSettings } from './sense-voice-models';
 import { AppError } from '../../../common/errors';
 
 export function validateAsrSettings(
@@ -59,10 +60,21 @@ export function asrEndpoint(settings: BailianAsrDraft) {
 
 type SavedService = AsrServiceDraft & { id: string };
 const publicView = (value: SavedService): AsrServiceView => {
-  if (value.provider === 'whisper') return { ...value };
+  // Only the cloud profile owns a secret; server-side engines are returned as saved.
+  if (value.provider === 'whisper' || value.provider === 'sense-voice')
+    return { ...value };
   const { apiKey, ...settings } = value;
   return { ...settings, hasApiKey: !!apiKey };
 };
+/** Safe because the switch above already rejects a saved service changing type. */
+function previousBailian(
+  previous?: SavedService,
+): (BailianAsrDraft & { id?: string }) | undefined {
+  if (!previous || (previous.provider ?? 'bailian') !== 'bailian')
+    return undefined;
+  return previous as BailianAsrDraft & { id?: string };
+}
+
 function validateService(
   input: unknown,
   previous?: SavedService,
@@ -71,20 +83,26 @@ function validateService(
     throw new AppError('识别服务配置无效。');
   const value = input as Record<string, unknown>;
   const provider = value.provider ?? 'bailian';
-  if (provider !== 'whisper' && provider !== 'bailian')
+  if (
+    provider !== 'whisper' &&
+    provider !== 'bailian' &&
+    provider !== 'sense-voice'
+  )
     throw new AppError('请选择支持的识别服务类型。');
   if (previous && provider !== (previous.provider ?? 'bailian'))
     throw new AppError('已有服务不能更改类型，请添加新的服务。');
   const settings =
     provider === 'whisper'
       ? { ...validateWhisperSettings(value), provider: 'whisper' as const }
-      : {
-          ...validateAsrSettings(
-            input,
-            previous?.provider === 'whisper' ? undefined : previous,
-          ),
-          provider: 'bailian' as const,
-        };
+      : provider === 'sense-voice'
+        ? {
+            ...validateSenseVoiceSettings(value),
+            provider: 'sense-voice' as const,
+          }
+        : {
+            ...validateAsrSettings(input, previousBailian(previous)),
+            provider: 'bailian' as const,
+          };
   const name = (input as Record<string, unknown>).name;
   if (
     typeof name !== 'string' ||

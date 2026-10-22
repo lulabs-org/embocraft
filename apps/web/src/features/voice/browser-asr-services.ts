@@ -9,7 +9,7 @@ export type BrowserAsrDraft = {
 export type BrowserAsrService = BrowserAsrDraft & { id: string };
 export type WebAsrDraft = AsrServiceDraft | BrowserAsrDraft;
 export type WebAsrService = AsrServiceView | BrowserAsrService;
-export type AsrProvider = 'bailian' | 'whisper' | 'browser';
+export type AsrProvider = 'bailian' | 'whisper' | 'sense-voice' | 'browser';
 export const BROWSER_ASR_STORAGE_KEY = 'voxel.browser-asr-services.v1';
 
 function validate(draft: BrowserAsrDraft): BrowserAsrDraft {

@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react';
-import type { BailianAsrDraft } from '@voxel/shared';
+import type { BailianAsrDraft, SenseVoiceLanguage } from '@voxel/shared';
 import type { AsrProvider } from './browser-asr-services';
 import { browserLanguages } from './browser-asr-languages';
 import type { useAsrServices } from './useAsrServices';
+
+const senseVoiceLanguages: [SenseVoiceLanguage, string][] = [
+  ['zh', '中文（默认）'],
+  ['auto', '自动检测'],
+  ['en', '英语'],
+];
 
 export function BailianAsrConfig({
   manager,
   disabled,
   models = ['default'],
+  senseVoiceModels = ['default'],
 }: {
   manager: ReturnType<typeof useAsrServices>;
   disabled: boolean;
   models?: string[];
+  senseVoiceModels?: string[];
 }) {
   const {
     draft,
@@ -27,11 +35,13 @@ export function BailianAsrConfig({
   useEffect(() => setEditingKey(false), [saved]);
   const hasSavedKey =
     saved?.provider !== 'whisper' &&
+    saved?.provider !== 'sense-voice' &&
     saved?.provider !== 'browser' &&
     !!saved?.hasApiKey;
   const canKeepKey =
     hasSavedKey &&
     draft.provider !== 'whisper' &&
+    draft.provider !== 'sense-voice' &&
     draft.provider !== 'browser' &&
     saved?.region === draft.region &&
     saved?.workspaceId === draft.workspaceId;
@@ -70,6 +80,7 @@ export function BailianAsrConfig({
             }
           >
             <option value="whisper">自托管 Whisper</option>
+            <option value="sense-voice">本地 SenseVoice（服务器离线）</option>
             <option value="bailian">阿里云百炼</option>
             <option value="browser">浏览器语音识别（Web Speech API）</option>
           </select>
@@ -156,6 +167,45 @@ export function BailianAsrConfig({
                 onChange={(e) => change({ prompt: e.target.value })}
               />
             </label>
+          </>
+        ) : draft.provider === 'sense-voice' ? (
+          <>
+            <label>
+              识别模型
+              <select
+                value={draft.model}
+                onChange={(e) => change({ model: e.target.value })}
+              >
+                {[...new Set([...senseVoiceModels, draft.model])].map(
+                  (model) => (
+                    <option key={model} value={model}>
+                      {model === 'default' ? '服务器默认模型' : model}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <label>
+              识别语言
+              <select
+                value={draft.language}
+                onChange={(e) =>
+                  change({
+                    language: e.target.value as SenseVoiceLanguage,
+                  })
+                }
+              >
+                {senseVoiceLanguages.map(([code, label]) => (
+                  <option key={code} value={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <small>
+              模型须已放在服务器项目目录的 models/
+              下。识别在服务器进程内离线完成，不需要 API Key，也不会上传音频。
+            </small>
           </>
         ) : (
           <>
@@ -272,19 +322,25 @@ export function BailianAsrConfig({
       {dirty && <p className="agent-hint">请先保存修改，再开始录音。</p>}
       {draft.provider === 'browser' ? (
         <p className="agent-hint">
-          浏览器直接进行麦克风识别，可能使用在线识别服务。保存后可在下方试用；聊天和附近语音继续使用
-          Whisper。
+          浏览器直接进行麦克风识别，可能使用在线识别服务。保存后可在下方试用；聊天和附近语音使用服务器默认识别引擎。
         </p>
       ) : draft.provider === 'whisper' ? (
         <p className="agent-hint">
           录音与文件使用当前 Whisper
           配置在项目服务器识别。聊天和附近语音继续使用服务器默认配置。
         </p>
+      ) : draft.provider === 'sense-voice' ? (
+        <p className="agent-hint">
+          录音与文件在项目服务器本地使用 SenseVoice
+          离线识别，不经任何云端。服务器默认识别引擎由 ASR_PROVIDER
+          控制，聊天与附近语音会跟随该默认值。
+        </p>
       ) : (
         <>
           <p className="agent-hint">
             录音经项目服务器发送给阿里云，按服务商规则计费。此处选择用于 ASR
-            试用；聊天和附近语音继续使用 Whisper。
+            试用；聊天和附近语音使用服务器默认识别引擎（默认优先本地
+            SenseVoice，否则 Whisper）。
           </p>
           <a
             className="console-help-link"

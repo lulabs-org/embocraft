@@ -5,13 +5,13 @@ import { createOriginGuard } from '../../../http/middleware/origin-guard';
 import { errorHandler } from '../../../http/middleware/error-handler';
 import { AsrSettingsStore } from './asr-settings';
 import express, { type Express } from 'express';
-import { LocalSpeech } from './local-speech';
 import { MAX_AUDIO_BYTES } from '../processing/normalize';
 import { AppError } from '../../../common/errors';
 import { scheduleSpeech } from './speech-scheduler';
+import { speechRouter, type SpeechRouter } from './speech-provider';
 export function installTranscribeRoutes(
   app: Express,
-  speech = new LocalSpeech(),
+  router: SpeechRouter = speechRouter(),
   asrSettings = new AsrSettingsStore(),
   origin = env.webOrigin(),
 ) {
@@ -52,7 +52,7 @@ export function installTranscribeRoutes(
    *         name: serviceId
    *         schema:
    *           type: string
-   *         description: 可选指定的 ASR 服务配置 ID
+   *         description: 可选指定的 ASR 服务配置 ID（Whisper 或本地 SenseVoice）
    *       - in: query
    *         name: partial
    *         schema:
@@ -94,17 +94,20 @@ export function installTranscribeRoutes(
             ? undefined
             : asrSettings.acquire(String(req.query.serviceId));
         release = selected?.release;
-        if (selected && selected.settings.provider !== 'whisper')
-          throw new AppError('请选择 Whisper 服务。');
-        const text = await scheduleSpeech(speech).transcribe(
+        const profile = selected?.settings;
+        const engine = router.engineFor(profile);
+        const settings =
+          profile &&
+          (profile.provider === 'whisper' || profile.provider === 'sense-voice')
+            ? profile
+            : undefined;
+        const text = await scheduleSpeech(engine).transcribe(
           Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
           req.headers['content-type'] ?? '',
           String(req.query.language ?? 'zh'),
           controller.signal,
           req.query.partial === '1',
-          selected?.settings.provider === 'whisper'
-            ? selected.settings
-            : undefined,
+          settings,
         );
         if (!controller.signal.aborted) res.json({ text });
       } catch (error) {

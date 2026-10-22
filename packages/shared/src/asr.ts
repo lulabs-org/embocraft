@@ -19,12 +19,28 @@ export const DEFAULT_WHISPER_ASR: WhisperAsrSettings = {
   temperature: 0,
   prompt: '',
 };
+/** Offline SenseVoice running inside the project server; no address, model download or API key. */
+export type SenseVoiceLanguage = 'auto' | 'zh' | 'en';
+export type SenseVoiceAsrSettings = {
+  model: string;
+  language: SenseVoiceLanguage;
+};
+export const DEFAULT_SENSE_VOICE_ASR: SenseVoiceAsrSettings = {
+  model: 'default',
+  language: 'zh',
+};
 export type AsrServiceDraft =
   | (BailianAsrDraft & { provider?: 'bailian'; name: string })
-  | (WhisperAsrSettings & { provider: 'whisper'; name: string });
+  | (WhisperAsrSettings & { provider: 'whisper'; name: string })
+  | (SenseVoiceAsrSettings & { provider: 'sense-voice'; name: string });
 export type AsrServiceView =
   | (BailianAsrView & { provider?: 'bailian'; id: string; name: string })
-  | (WhisperAsrSettings & { provider: 'whisper'; id: string; name: string });
+  | (WhisperAsrSettings & { provider: 'whisper'; id: string; name: string })
+  | (SenseVoiceAsrSettings & {
+      provider: 'sense-voice';
+      id: string;
+      name: string;
+    });
 export const DEFAULT_BAILIAN_ASR: BailianAsrSettings = {
   region: 'beijing',
   workspaceId: '',

@@ -22,6 +22,11 @@ import {
   type AsrBridge,
 } from './modules/audio/asr/asr.socket';
 import { LocalSpeech } from './modules/audio/asr/local-speech';
+import {
+  SpeechRouter,
+  speechRouter,
+} from './modules/audio/asr/speech-provider';
+import type { SpeechTranscriber } from './modules/audio/asr/speech-transcriber';
 import { createVoiceProvider } from './modules/audio/session';
 import { VoiceServiceStore } from './modules/audio/tts/voice-services';
 
@@ -42,7 +47,9 @@ export type ServerOptions = {
   providers?: ProviderStore;
   voiceServices?: VoiceServiceStore;
   asrSettings?: AsrSettingsStore;
-  speech?: LocalSpeech;
+  /** Self-hosted Whisper engine; also pins the default engine for voice without a saved service. */
+  speech?: LocalSpeech | SpeechTranscriber;
+  senseVoice?: SpeechTranscriber;
   worldStore?: WorldStore;
   agentDependencies?: AICharacterDependencies;
   modelQuery?: ModelQuery;
@@ -100,7 +107,13 @@ export async function createServer(options: ServerOptions = {}) {
     voiceServices,
   );
   const modelCatalog = new ModelCatalog(providers, options.modelQuery);
-  const speech = options.speech ?? new LocalSpeech();
+  const speech = options.speech
+    ? new SpeechRouter({
+        whisper: options.speech,
+        default: options.speech,
+        senseVoice: options.senseVoice,
+      })
+    : speechRouter();
   const app = createApp({
     origin: config.webOrigin,
     health: config,
@@ -128,7 +141,7 @@ export async function createServer(options: ServerOptions = {}) {
     },
     chat: {
       getChat: () => world?.chat,
-      speech,
+      speech: speech.default,
       getAgentSpeech: () => world?.agentSpeech,
     },
   });

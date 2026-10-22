@@ -25,6 +25,7 @@
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
     "pg": "^8.23.1",
+    "sherpa-onnx-node": "1.13.8",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
     "ws": "8.22.0"

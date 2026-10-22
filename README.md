@@ -43,7 +43,7 @@ docker compose up -d --build
 - **Web 前端**：打开浏览器访问 `http://localhost`（默认 80 端口，前端通过 Nginx 自动反代 API 与 WebSocket）
 - **Swagger API 文档**：访问 `http://localhost:2567/api-docs`
 - **数据库**：PostgreSQL 数据自动持久化在 `voxel_postgres_data` 数据卷中，宿主机端口 `55432`
-- **语音服务 ASR / TTS**：内置共享 `voxel-speech`（Speaches，Compose 服务名 `speech`）容器，CPU 使用 int8 推理，模型缓存在 `voxel_whisper_cache` 卷中。Whisper 首次识别需要联网下载模型，下载后可离线识别；模型加载后常驻内存，避免空闲后重复冷启动。
+- **语音服务 ASR / TTS**：内置共享 `voxel-speech`（Speaches，Compose 服务名 `speech`）容器，CPU 使用 int8 推理，模型缓存在 `voxel_whisper_cache` 卷中。Whisper 首次识别需要联网下载模型，下载后可离线识别；模型加载后常驻内存，避免空闲后重复冷启动。服务器也可选用本地 SenseVoice（sherpa-onnx）：将模型包放入 `models/` 即可离线识别，详见 [语音配置](docs/VOICE.md)。
 - **Piper TTS**：控制台选择中文 Huayan / 超文 Chaowen 或英文 Lessac，点击“安装模型”，安装后可离线合成。旧 macOS 服务自动迁移，保留 Agent 绑定；原配置备份为 `voice-services.json.pre-piper.bak`。
 - **服务配置**：模型、ASR 与 TTS 配置保存在 `voxel_server_data` 卷中，重建容器会保留。旧部署升级前，请先备份旧容器的 `/app/.data` 并迁入该卷。
 
@@ -89,7 +89,7 @@ docker compose down -v
 - 地形碰撞、重力、速度、编辑距离、基岩保护、玩家占用、相邻支撑和版本冲突均由服务器校验。
 - 聊天支持群聊、@ 私聊、语音转文字和语音消息；附近语音可独立开启麦克风与收听，按距离和朝向调节音量，并自动分段转写给附近玩家与 Agent。详见 [聊天与空间语音](docs/CHAT.md)。开启 Agent 的语音回复后，附近已开启收听的玩家可听到它的声音，私聊只对指定对象播放。玩家位置以 20Hz 权威更新，画面进行插值。
 - 页面刷新自动使用当前标签页的昵称和重连令牌；异常断线 20 秒内可保留身份，超时或服务器重启则重新入房。
-- 控制台的“文本转语音（TTS）”管理本机、百炼及兼容接口的音色，支持保存、试听和 Agent 绑定。“语音识别（ASR）”支持自托管 Whisper 与阿里云百炼实时识别，可配置地域、模型与服务端密钥，试用临时字幕及逐句确认；聊天与附近语音继续使用 Whisper。详见 [语音配置](docs/VOICE.md)。
+- 控制台的“文本转语音（TTS）”管理本机、百炼及兼容接口的音色，支持保存、试听和 Agent 绑定。“语音识别（ASR）”支持自托管 Whisper、本地 SenseVoice 与阿里云百炼实时识别，可配置模型、语言、地域与服务端密钥，试用临时字幕及逐句确认；聊天与附近语音默认优先使用已安装的本地 SenseVoice，否则回退 Whisper。详见 [语音配置](docs/VOICE.md)。
 
 ## 验证
 
@@ -180,7 +180,7 @@ apps/web/src/
 
 Agent 观察是以自身为中心半径 8 的距离裁剪，最多 500 个最近方块，不做遮挡/视锥裁剪；这是结构化场景接口，并非模型视觉。Agent 与人类共用同一移动和编辑校验。Scout 脚本 Agent 没有 LLM；DeepSeek AI 玩家由模型决策，两者都没有额外管理权限。协议见 [接口文档](docs/PROTOCOL.md)。
 
-语音方案已支持 `mock`、`browser` 和 `ollama`。回声不是 AI；Ollama 需预先安装并配置。聊天语音识别由服务器 Whisper 处理，控制台另支持阿里云百炼实时 ASR 试用和云端 TTS。云端凭据仅保存在服务端，不能放 `VITE_*`。
+语音方案已支持 `mock`、`browser` 和 `ollama`。回声不是 AI；Ollama 需预先安装并配置。聊天语音识别由服务器处理：默认 `ASR_PROVIDER=auto` 时优先使用已安装的本地 SenseVoice，否则回退 Whisper；控制台另支持阿里云百炼实时 ASR 试用和云端 TTS。云端凭据仅保存在服务端，不能放 `VITE_*`。
 
 ### 在大厅创建 AI 玩家
 

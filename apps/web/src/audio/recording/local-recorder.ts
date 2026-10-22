@@ -3,6 +3,8 @@ export type SpeechCapabilities = {
   local: { available: boolean; reason: string };
   ollamaConfigured: boolean;
   whisperModels?: string[];
+  /** Model packs already installed on the server for local SenseVoice. */
+  senseVoiceModels?: string[];
 };
 export type RecordingCallbacks = {
   onState: (state: 'listening' | 'thinking', message: string) => void;

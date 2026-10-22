@@ -29,7 +29,7 @@ export type AppDependencies = {
   };
   chat: {
     getChat: Parameters<typeof installChatRoutes>[1];
-    speech: AudioRouteDependencies['speech'];
+    speech: Parameters<typeof installChatRoutes>[2];
     getAgentSpeech: NonNullable<Parameters<typeof installChatRoutes>[3]>;
   };
 };

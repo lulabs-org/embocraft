@@ -32,9 +32,15 @@ export function SpeechRecognitionPanel({
   const asr = useAsrServices(active);
   const service = asr.id;
   const isBrowser = asr.draft.provider === 'browser';
-  const isWhisper = asr.draft.provider === 'whisper';
-  const whisperServiceId =
-    asr.selected?.provider === 'whisper' ? service : undefined;
+  // Server-side engines recognize 16 kHz WAV snapshots over the ordinary HTTP endpoint.
+  const isServerEngine =
+    asr.draft.provider === 'whisper' || asr.draft.provider === 'sense-voice';
+  const isLocalEngine = asr.draft.provider === 'sense-voice';
+  const serverServiceId =
+    asr.selected?.provider === 'whisper' ||
+    asr.selected?.provider === 'sense-voice'
+      ? service
+      : undefined;
   const selectedModel =
     asr.selected && asr.selected.provider !== 'browser'
       ? asr.selected.model
@@ -81,7 +87,7 @@ export function SpeechRecognitionPanel({
     };
   }, [active, connection, recorder, live, browser, service, release]);
   useEffect(() => {
-    if (!active || !isWhisper) return;
+    if (!active || !isServerEngine) return;
     const abort = new AbortController();
     setChecking(true);
     setCheckError('');
@@ -94,7 +100,7 @@ export function SpeechRecognitionPanel({
       setCheckedAt(new Date());
     }, 10000);
     void voiceApi
-      .capabilities(abort.signal, whisperServiceId)
+      .capabilities(abort.signal, serverServiceId)
       .then((value) => {
         if (!abort.signal.aborted) setCapabilities(value);
       })
@@ -113,7 +119,7 @@ export function SpeechRecognitionPanel({
       clearTimeout(timeout);
       abort.abort();
     };
-  }, [active, isWhisper, retry, whisperServiceId, selectedModel]);
+  }, [active, isServerEngine, retry, serverServiceId, selectedModel]);
   const busy = state !== 'idle';
   const ready =
     active &&
@@ -124,9 +130,11 @@ export function SpeechRecognitionPanel({
       ? browser.available
       : asr.loaded &&
         !asr.loading &&
-        (asr.selected.provider === 'whisper'
+        (isServerEngine
           ? capabilities?.local.available && !checking && !checkError
-          : asr.selected.provider !== 'browser' && asr.selected.hasApiKey));
+          : asr.selected.provider !== 'browser' &&
+            'hasApiKey' in asr.selected &&
+            asr.selected.hasApiKey));
   const chooseService = (id: string) => {
     if (id === service) return;
     stop();
@@ -181,7 +189,7 @@ export function SpeechRecognitionPanel({
         },
       });
     } else if (file)
-      void recorder.transcribeFile(file, language, callbacks, whisperServiceId);
+      void recorder.transcribeFile(file, language, callbacks, serverServiceId);
     else
       void live.start(
         language,
@@ -202,16 +210,16 @@ export function SpeechRecognitionPanel({
         },
         undefined,
         undefined,
-        !isWhisper
+        !isServerEngine
           ? (events) => new BailianSpeechSession(service, language, events)
-          : whisperServiceId
+          : serverServiceId
             ? (events) =>
                 new LiveSpeechSession(
                   speechTransport(
                     language,
                     undefined,
                     undefined,
-                    whisperServiceId,
+                    serverServiceId,
                   ),
                   events,
                 )
@@ -247,7 +255,9 @@ export function SpeechRecognitionPanel({
                     ? `浏览器识别 · ${browserLanguages.find(([code]) => code === value.language)?.[1] ?? value.language} · 此浏览器保存`
                     : value.provider === 'whisper'
                       ? `Whisper · ${value.model === 'default' ? '默认模型' : value.model} · ${value.threads} 线程`
-                      : `阿里云百炼 · ${value.model}`,
+                      : value.provider === 'sense-voice'
+                        ? `本地 SenseVoice · ${value.model === 'default' ? '默认模型' : value.model} · ${value.language === 'auto' ? '自动语言' : value.language === 'en' ? '英语' : '中文'}`
+                        : `阿里云百炼 · ${value.model}`,
               }))
               .map((item) => (
                 <button
@@ -289,10 +299,15 @@ export function SpeechRecognitionPanel({
             manager={asr}
             disabled={busy}
             models={capabilities?.whisperModels}
+            senseVoiceModels={capabilities?.senseVoiceModels}
           />
-          {!isBrowser && asr.selected?.provider === 'whisper' && (
+          {!isBrowser && isServerEngine && (
             <section className="console-panel-section">
-              <h4>Whisper 服务状态</h4>
+              <h4>
+                {isLocalEngine
+                  ? '本地 SenseVoice 服务状态'
+                  : 'Whisper 服务状态'}
+              </h4>
               <p role="status" aria-live="polite" aria-atomic="true">
                 {checking
                   ? '正在检查服务…'
@@ -329,15 +344,22 @@ export function SpeechRecognitionPanel({
                 </button>
               </div>
               <p className="agent-hint">
-                聊天录音和附近语音也使用自托管
-                Whisper。识别模型部署在服务器上，玩家无需安装。
+                {isLocalEngine
+                  ? '本地模型在服务器进程内推理，聊天录音和附近语音也可使用它；只需在服务器环境变量中设 ASR_PROVIDER=sense-voice 或 auto。'
+                  : '聊天录音和附近语音也使用自托管 Whisper。识别模型部署在服务器上，玩家无需安装。'}
               </p>
-              {!capabilities?.local.available && (
-                <p className="agent-hint">
-                  服务未就绪时，可在服务器的项目目录运行{' '}
-                  <code>pnpm voice:setup</code> 准备识别模型。
-                </p>
-              )}
+              {!capabilities?.local.available &&
+                (isLocalEngine ? (
+                  <p className="agent-hint">
+                    未就绪时，请把 sherpa-onnx-sense-voice
+                    模型目录放到服务器项目根目录的 models/ 下。
+                  </p>
+                ) : (
+                  <p className="agent-hint">
+                    服务未就绪时，可在服务器的项目目录运行{' '}
+                    <code>pnpm voice:setup</code> 准备识别模型。
+                  </p>
+                ))}
             </section>
           )}
           <section className="voice-preview" aria-label="语音识别试用">
@@ -366,7 +388,7 @@ export function SpeechRecognitionPanel({
               >
                 开始录音
               </button>
-              {!isBrowser && asr.selected?.provider === 'whisper' && (
+              {!isBrowser && isServerEngine && (
                 <button
                   type="button"
                   className="asr-file-toggle"
@@ -409,7 +431,7 @@ export function SpeechRecognitionPanel({
                 或 localhost 下打开；Whisper 支持音频文件识别。
               </p>
             )}
-            {!isBrowser && asr.selected?.provider === 'whisper' && (
+            {!isBrowser && isServerEngine && (
               <div
                 id={fileTestId}
                 hidden={!showFileTest}
@@ -433,9 +455,11 @@ export function SpeechRecognitionPanel({
             <small className="asr-help">
               {isBrowser
                 ? '语音由浏览器直接识别，可能需要联网。'
-                : !isWhisper
+                : !isServerEngine
                   ? '录音经项目服务器实时转发至阿里云识别。'
-                  : '录音或文件会发送到项目服务器识别。'}
+                  : isLocalEngine
+                    ? '录音或文件只在项目服务器本地识别，不会上传音频。'
+                    : '录音或文件会发送到项目服务器识别。'}
               每次连续录音最长 5
               分钟；结束录音会等待最后的识别结果，取消会丢弃未确认内容。试用结果不会发送到聊天或触发
               Agent；切换页面或关闭控制台会停止录音和识别。

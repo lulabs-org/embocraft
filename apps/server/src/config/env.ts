@@ -21,6 +21,9 @@ const DEFAULT_GATEWAY_ORIGINS = [
 const VALID_VOICE_PROVIDERS = ['mock', 'browser', 'ollama'] as const;
 type VoiceProvider = (typeof VALID_VOICE_PROVIDERS)[number];
 
+export const VALID_ASR_PROVIDERS = ['auto', 'whisper', 'sense-voice'] as const;
+export type AsrProviderName = (typeof VALID_ASR_PROVIDERS)[number];
+
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 const dataPath = (name: string): string =>
@@ -125,6 +128,12 @@ function readVoiceConfig(env: EnvLookup = process.env) {
 }
 
 function readSpeechConfig(env: EnvLookup = process.env) {
+  const asrProvider = (env.ASR_PROVIDER ?? 'auto').trim() || 'auto';
+  if (!VALID_ASR_PROVIDERS.includes(asrProvider as AsrProviderName))
+    throw new Error('ASR_PROVIDER 仅支持 auto、whisper 或 sense-voice。');
+  const threads = Number(env.ASR_THREADS ?? 2);
+  if (!Number.isInteger(threads) || threads < 1 || threads > 16)
+    throw new Error('ASR_THREADS 须为 1–16 的整数。');
   return {
     path: env.PATH ?? '',
     whisperModel: env.WHISPER_MODEL,
@@ -133,6 +142,10 @@ function readSpeechConfig(env: EnvLookup = process.env) {
     whisperApiUrl: env.WHISPER_API_URL,
     speechApiUrl: env.SPEECH_API_URL,
     piperApiUrl: env.PIPER_API_URL,
+    asrProvider: asrProvider as AsrProviderName,
+    asrModelDir: env.ASR_MODEL_DIR?.trim() || resolve(repositoryRoot, 'models'),
+    senseVoiceModel: env.SENSE_VOICE_MODEL?.trim() ?? '',
+    asrThreads: threads,
   };
 }
 

@@ -11,3 +11,4 @@ artifacts/
 .playwright-cli/
 output/
 .vscode/
+models/

@@ -4,6 +4,8 @@ node_modules
 .vscode
 .playwright-cli
 .pnpm-store
+# SenseVoice packs are mounted at runtime, never baked into the image.
+models
 output
 artifacts
 dist

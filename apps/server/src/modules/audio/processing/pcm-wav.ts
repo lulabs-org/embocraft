@@ -1,7 +1,7 @@
 import { AppError } from '../../../common/errors';
 
-/** Validate bounded mono PCM16 audio, including duration and audible content. */
-export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {
+/** Parse the PCM payload of a bounded mono 16 kHz WAV and check its loudness and length. */
+export function readPcmWav(wav: Buffer, maxSeconds = 20.5) {
   if (
     wav.toString('ascii', 0, 4) !== 'RIFF' ||
     wav.toString('ascii', 8, 12) !== 'WAVE'
@@ -41,5 +41,10 @@ export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {
       400,
       'no-speech',
     );
-  return Math.round(seconds * 1000);
+  return { pcm, durationMs: Math.round(seconds * 1000) };
+}
+
+/** Validate bounded mono PCM16 audio, including duration and audible content. */
+export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {
+  return readPcmWav(wav, maxSeconds).durationMs;
 }

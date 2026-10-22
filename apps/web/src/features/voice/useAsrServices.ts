@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_BAILIAN_ASR,
+  DEFAULT_SENSE_VOICE_ASR,
   DEFAULT_WHISPER_ASR,
   type AsrServiceView,
 } from '@voxel/shared';
@@ -15,20 +16,27 @@ import {
   type WebAsrService,
 } from './browser-asr-services';
 
+/** Server-side engines never carry an API key, so editing them keeps every field. */
 const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }
     : provider === 'whisper'
       ? { ...DEFAULT_WHISPER_ASR, provider, name: '' }
-      : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+      : provider === 'sense-voice'
+        ? { ...DEFAULT_SENSE_VOICE_ASR, provider, name: '' }
+        : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
-  draft.provider === 'whisper' || draft.provider === 'browser'
+  draft.provider === 'whisper' ||
+  draft.provider === 'sense-voice' ||
+  draft.provider === 'browser'
     ? draft
     : { ...draft, apiKey: '' };
 const formFor = (id: string, saved?: WebAsrService) => ({
   id,
   draft: saved
-    ? saved.provider === 'whisper' || saved.provider === 'browser'
+    ? saved.provider === 'whisper' ||
+      saved.provider === 'sense-voice' ||
+      saved.provider === 'browser'
       ? { ...saved }
       : { ...saved, apiKey: '' }
     : fresh(),

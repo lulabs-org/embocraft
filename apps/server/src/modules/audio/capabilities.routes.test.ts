@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { AsrSettingsStore } from './asr/asr-settings';
 import { LocalSpeech } from './asr/local-speech';
+import { SpeechRouter } from './asr/speech-provider';
 import { PiperModels } from './tts/piper-models';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
@@ -27,7 +28,12 @@ describe('audio capabilities HTTP boundary', () => {
     store = new AsrSettingsStore(join(dir, 'services.json'));
     await store.load();
     const app = express();
-    installCapabilitiesRoutes(app, speech, store, origin);
+    installCapabilitiesRoutes(
+      app,
+      new SpeechRouter({ whisper: speech, default: speech }),
+      store,
+      origin,
+    );
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),

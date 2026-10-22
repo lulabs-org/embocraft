@@ -16,6 +16,7 @@ import { RoutedWebSocketTransport } from '../../../transport/websocket.transport
 import { createAsrSocket } from './asr.socket';
 import { installCapabilitiesRoutes } from '../capabilities.routes';
 import { LocalSpeech } from './local-speech';
+import { SpeechRouter } from './speech-provider';
 
 let server: Server,
   transport: RoutedWebSocketTransport,
@@ -40,7 +41,11 @@ beforeEach(async () => {
     available: true,
     reason: 'local',
   });
-  installCapabilitiesRoutes(app, speech, store);
+  installCapabilitiesRoutes(
+    app,
+    new SpeechRouter({ whisper: speech, default: speech }),
+    store,
+  );
   installAsrRoutes(app, store);
   server = createServer(app);
   transport = new RoutedWebSocketTransport(

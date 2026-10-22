@@ -6,14 +6,15 @@ import { errorHandler } from '../../http/middleware/error-handler';
 import express, { type Express } from 'express';
 import { type WorldChat } from './chat';
 
-import { LocalSpeech } from '../audio/asr/local-speech';
+import type { SpeechTranscriber } from '../audio/asr/speech-transcriber';
+import { speechRouter } from '../audio/asr/speech-provider';
 import { AppError } from '../../common/errors';
 import type { AgentSpeech } from '../audio/tts/agent-speech';
 import { scheduleSpeech } from '../audio/asr/speech-scheduler';
 export function installChatRoutes(
   app: Express,
   getChat: () => WorldChat | undefined,
-  speech = new LocalSpeech(),
+  speech: SpeechTranscriber = speechRouter().default,
   getAgentSpeech: () => AgentSpeech | undefined = () => undefined,
   origin = env.webOrigin(),
 ) {

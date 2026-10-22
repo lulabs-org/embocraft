@@ -2,12 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AsrSettingsStore } from './asr-settings';
-import { DEFAULT_WHISPER_ASR, DEFAULT_BAILIAN_ASR } from '@voxel/shared';
+import {
+  DEFAULT_WHISPER_ASR,
+  DEFAULT_BAILIAN_ASR,
+  DEFAULT_SENSE_VOICE_ASR,
+} from '@voxel/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { installTranscribeRoutes } from './transcribe.routes';
 import { LocalSpeech } from './local-speech';
+import { SpeechRouter } from './speech-provider';
+import type { SpeechTranscriber } from './speech-transcriber';
 import { AppError } from '../../../common/errors';
 describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore, dir: string;
@@ -25,7 +31,11 @@ describe('transcription HTTP boundary', () => {
     store = new AsrSettingsStore(join(dir, 'services.json'));
     await store.load();
     const app = express();
-    installTranscribeRoutes(app, speech, store);
+    installTranscribeRoutes(
+      app,
+      new SpeechRouter({ whisper: speech, default: speech }),
+      store,
+    );
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
@@ -159,5 +169,60 @@ describe('transcription HTTP boundary', () => {
     expect((await pending).status).toBe(200);
     await store.remove(a.id);
     expect((await send(a.id)).status).toBe(404);
+  });
+  it('routes a saved SenseVoice profile to the local engine with its language', async () => {
+    const transcribe = vi.fn(async () => '你好');
+    const engine: SpeechTranscriber = {
+      status: vi.fn(async () => ({ available: true, reason: 'ready' })),
+      normalize: vi.fn(async () => ({ bytes: Buffer.alloc(0), durationMs: 0 })),
+      transcribe,
+    };
+    const app = express();
+    installTranscribeRoutes(
+      app,
+      new SpeechRouter({
+        whisper: engine,
+        senseVoice: engine,
+        default: engine,
+        provider: 'sense-voice',
+      }),
+      store,
+      'http://127.0.0.1:5187',
+    );
+    const local = createServer(app);
+    await new Promise<void>((resolve) => local.listen(0, '127.0.0.1', resolve));
+    try {
+      const profile = await store.save({
+        ...DEFAULT_SENSE_VOICE_ASR,
+        provider: 'sense-voice',
+        name: '本地中文识别',
+      });
+      const response = await fetch(
+        `http://127.0.0.1:${(local.address() as { port: number }).port}/voice/transcribe?serviceId=${profile.id}&language=en`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'audio/wav' },
+          body: 'audio',
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ text: '你好' });
+      expect(transcribe).toHaveBeenCalledWith(
+        Buffer.from('audio'),
+        'audio/wav',
+        'en',
+        expect.anything(),
+        expect.objectContaining({
+          provider: 'sense-voice',
+          model: 'default',
+          language: 'zh',
+        }),
+      );
+      // The route releases the lease, so the profile can be deleted afterwards.
+      await store.remove(profile.id);
+    } finally {
+      local.closeAllConnections();
+      await new Promise<void>((resolve) => local.close(() => resolve()));
+    }
   });
 });

@@ -33,9 +33,14 @@ export function createAsrSocket(
         throw new AppError('不支持的识别语言。');
       if (!serviceId) throw new AppError('请先选择已保存的识别服务。');
       const { settings, release } = store.acquire(serviceId);
-      if (settings.provider === 'whisper') {
+      if (settings.provider !== 'bailian') {
         release();
-        throw new AppError('Whisper 服务请使用服务器音频识别接口。');
+        // Local engines decode HTTP snapshots on the server; only Bailian streams over WS.
+        const engine =
+          settings.provider === 'sense-voice' ? 'SenseVoice' : 'Whisper';
+        throw new AppError(
+          `${engine} 使用服务器音频识别接口，无需实时通道；请选择阿里云实时识别。`,
+        );
       }
       running++;
       client.once('close', () => {

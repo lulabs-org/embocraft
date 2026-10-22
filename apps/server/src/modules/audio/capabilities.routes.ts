@@ -5,13 +5,24 @@ import { createOriginGuard } from '../../http/middleware/origin-guard';
 import { AsrSettingsStore } from './asr/asr-settings';
 import { listWhisperModels } from './asr/whisper-settings';
 import type { Express } from 'express';
-import { LocalSpeech } from './asr/local-speech';
 import { AppError } from '../../common/errors';
 import { createVoiceProvider } from './session';
 import { PiperModels } from './tts/piper-models';
+import { listSenseVoiceModels } from './asr/sense-voice-models';
+import { speechRouter, type SpeechRouter } from './asr/speech-provider';
+import type { AsrServiceDraft } from '@voxel/shared';
+
+/** Only server-side engines accept transcription settings. */
+function settingsFor(view?: AsrServiceDraft) {
+  return view &&
+    (view.provider === 'whisper' || view.provider === 'sense-voice')
+    ? view
+    : undefined;
+}
+
 export function installCapabilitiesRoutes(
   app: Express,
-  speech = new LocalSpeech(),
+  router: SpeechRouter = speechRouter(),
   asrSettings = new AsrSettingsStore(),
   origin = env.webOrigin(),
 ) {
@@ -62,6 +73,10 @@ export function installCapabilitiesRoutes(
    *                   type: array
    *                   items:
    *                     type: string
+   *                 senseVoiceModels:
+   *                   type: array
+   *                   items:
+   *                     type: string
    *                 ollamaConfigured:
    *                   type: boolean
    *                 agentSpeech:
@@ -75,8 +90,12 @@ export function installCapabilitiesRoutes(
           req.query.serviceId === undefined
             ? undefined
             : asrSettings.get(String(req.query.serviceId));
-        if (selected && selected.provider !== 'whisper')
-          throw new AppError('请选择 Whisper 服务。');
+        // Cloud profiles are not a server engine, so engineFor rejects them.
+        const engine = router.engineFor(selected);
+        const [local, senseVoiceModels] = await Promise.all([
+          engine.status(settingsFor(selected)),
+          listSenseVoiceModels(),
+        ]);
         let ollamaConfigured = false;
         try {
           createVoiceProvider('ollama');
@@ -85,8 +104,9 @@ export function installCapabilitiesRoutes(
           /* Optional. */
         }
         res.json({
-          local: await speech.status(selected),
+          local,
           whisperModels: await listWhisperModels(),
+          senseVoiceModels: senseVoiceModels.map((model) => model.name),
           ollamaConfigured,
           agentSpeech: await new PiperModels().status(),
         });
