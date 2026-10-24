@@ -62,14 +62,14 @@ export async function runDecisionLoop(options: DecisionLoopOptions) {
         tools: o.tools,
       },
       streamFn: (model, context, streamOptions) =>
-        createModelStream(
-          o.config,
-          o.endpoint,
-          o.budget,
-          o.signal,
-          o.request,
-          o.save,
-        )(model, context, streamOptions),
+        createModelStream({
+          config: o.config,
+          endpoint: o.endpoint,
+          budget: o.budget,
+          signal: o.signal,
+          request: o.request,
+          persistAdmission: o.save,
+        })(model, context, streamOptions),
       toolExecution: 'sequential',
       transformContext: async (messages) => {
         if (contextEpoch !== o.contextEpoch?.()) {
