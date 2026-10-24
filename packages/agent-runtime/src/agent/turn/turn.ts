@@ -1,6 +1,7 @@
 import type { Message } from '@earendil-works/pi-ai';
 import {
   aiCharacterPermissions,
+  type AICharacterTask,
   type ChatData,
   type WorldEvent,
 } from '@voxel/shared';
@@ -63,7 +64,7 @@ export class Turn implements ToolHost {
   readonly attention?: AgentAttention;
   readonly log?: (message: string) => void;
   readonly beforeNewTaskHook?: (
-    task: import('@voxel/shared').AICharacterTask,
+    task: AICharacterTask,
     previous: AgentRunState,
   ) => Promise<void>;
 

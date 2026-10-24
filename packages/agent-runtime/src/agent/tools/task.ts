@@ -3,7 +3,7 @@ import type { AgentAction, BatchResult } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
 import { houseBlocks } from '../../world/actions/build';
 import { observedEmpty } from '../../world/observe/verify';
-import type { AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
 import { TaskService, type TaskLease } from '../task/service';
 import type { DecisionContext } from '../../contracts/observation';
 import type { ToolState } from '../../contracts/tool-state';

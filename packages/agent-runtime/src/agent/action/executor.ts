@@ -2,7 +2,7 @@ import { paceChat } from './chat-pacing';
 import { aiCharacterPermissions, key } from '@voxel/shared';
 import type { AgentAction, AgentConfig, Observation } from '../../contracts';
 import type { AgentSession } from '../../world/session/port';
-import type { AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
 import { TaskService, type TaskLease } from '../task/service';
 import type { AgentAttention } from '../../world/observe/attention';
 import { withDeadline } from '../../kernel/abort';

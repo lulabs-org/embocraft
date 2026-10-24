@@ -1,5 +1,6 @@
 import type { Message } from '@earendil-works/pi-ai';
-import { restoreBatchHistory, type AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
+import { restoreBatchHistory } from '../task/state';
 import { TaskService } from '../task/service';
 import { recentTurns } from './window';
 
@@ -10,14 +11,12 @@ export function checkpointMessages(memory: AgentRunState): Message[] {
 
 /** Migrate both current and archived run states without replaying old tool calls. */
 export function restoreCheckpoint(memory: AgentRunState) {
-  memory.effects.previous = restoreBatchHistory(memory.effects.previous);
+  const previous = restoreBatchHistory(memory.effects.previous);
+  memory.effects.previous = previous;
   if (memory.effects.pendingEffects)
     memory.effects.pendingEffects = restoreBatchHistory(
       memory.effects.pendingEffects,
     );
-  const previous = memory.effects.previous as
-    | import('../../contracts').BatchResult
-    | undefined;
   if (
     !memory.effects.pendingEffects &&
     previous?.results?.some((r) => r.status === 'unknown')
