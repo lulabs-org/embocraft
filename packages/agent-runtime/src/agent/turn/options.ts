@@ -1,7 +1,7 @@
 import type { AICharacterTask } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts';
 import type { AgentSession } from '../../world/session/port';
-import type { AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
 import type { AgentAttention } from '../../world/observe/attention';
 
 export type RunOptions = {

@@ -2,7 +2,8 @@ import { setTimeout as pause } from 'node:timers/promises';
 import type { AgentConfig } from '../contracts';
 import type { AgentSession } from '../world/session/port';
 import type { AgentAttention } from '../world/observe/attention';
-import { emptyState, newTask, type AgentRunState } from './task/state';
+import { emptyState, type AgentRunState } from '../contracts/state';
+import { newTask } from './task/state';
 import type { RunOptions } from './turn/options';
 
 /** Draw a fresh inclusive interval after a completed turn; requests never overlap. */

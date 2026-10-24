@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { AICharacterTask, WorldEvent, ChatData } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts';
+import type { AgentRunState } from '../../contracts/state';
 import { AgentRuntimeError } from '../../contracts/errors';
 import { checkBudgetCap, type RequestBudget } from './budget';
-import { newTask, type AgentRunState } from './state';
+import { newTask } from './state';
 
 export type TaskCommand =
   | { type: 'start'; goal: string }

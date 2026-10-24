@@ -2,7 +2,7 @@ import { aiCharacterPermissions } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts/config';
 import type { Observation } from '../../contracts/observation';
 import { worldView } from '../../world/observe/extract';
-import type { AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
 
 export function formatTurnInput(
   config: AgentConfig,

@@ -4,10 +4,8 @@ import { setTimeout as pause } from 'node:timers/promises';
 import type { AgentConfig } from '../../packages/agent-runtime/src/contracts';
 import type { AgentSession } from '../../packages/agent-runtime/src/world/session/port';
 import type { AgentAttention } from '../../packages/agent-runtime/src/world/observe/attention';
-import {
-  newTask,
-  type AgentRunState,
-} from '../../packages/agent-runtime/src/agent/task/state';
+import type { AgentRunState } from '../../packages/agent-runtime/src/contracts/state';
+import { newTask } from '../../packages/agent-runtime/src/agent/task/state';
 import { emptyState } from '@voxel/agent-runtime';
 import { runTaskStep } from './decision-step';
 

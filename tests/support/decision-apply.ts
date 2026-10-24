@@ -6,7 +6,7 @@ import type {
   AgentAction,
 } from '../../packages/agent-runtime/src/contracts';
 import type { AgentSession } from '../../packages/agent-runtime/src/world/session/port';
-import type { AgentRunState } from '../../packages/agent-runtime/src/agent/task/state';
+import type { AgentRunState } from '../../packages/agent-runtime/src/contracts/state';
 import type { RequestBudget } from '../../packages/agent-runtime/src/agent/task/budget';
 import { checkBudgetCap } from '../../packages/agent-runtime/src/agent/task/budget';
 import type { DecisionContext } from '../../packages/agent-runtime/src/contracts/observation';

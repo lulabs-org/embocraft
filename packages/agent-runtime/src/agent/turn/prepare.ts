@@ -1,4 +1,4 @@
-import { key, type ChatData } from '@voxel/shared';
+import { key, type ChatData, type WorldEvent } from '@voxel/shared';
 import type { BatchResult, Observation } from '../../contracts';
 import type { DecisionContext } from '../../contracts/observation';
 import type { AgentRunState } from '../../contracts/state';
@@ -10,7 +10,7 @@ export async function prepareDecision(
   session: Pick<AgentSession, 'observe'>,
   memory: AgentRunState,
   signal: AbortSignal,
-  addressed?: import('@voxel/shared').WorldEvent,
+  addressed?: WorldEvent,
 ): Promise<DecisionContext | undefined> {
   const task = memory.task.current;
   const raw = await session.observe();
@@ -56,17 +56,14 @@ export async function prepareDecision(
     const resolved = memory.effects.pendingEffects.results
       .filter((r) => !['pending', 'succeeded'].includes(r.status))
       .every((r) => {
-        if (r.action.type === 'edit')
-          return r.action.material === null
-            ? observedEmpty(raw, r.action)
+        if (r.action.type === 'edit') {
+          const edit = r.action;
+          return edit.material === null
+            ? observedEmpty(raw, edit)
             : raw.blocks.some(
-                (b) =>
-                  key(b) ===
-                    key(r.action as import('../../contracts').PlannedEdit) &&
-                  b.material ===
-                    (r.action as import('../../contracts').PlannedEdit)
-                      .material,
+                (b) => key(b) === key(edit) && b.material === edit.material,
               );
+        }
         if (r.action.type === 'goto')
           return (
             arrived(raw, r.action) ||

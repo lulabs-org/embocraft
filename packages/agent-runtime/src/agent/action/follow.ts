@@ -6,7 +6,7 @@ import { navigate, observeNavigation } from '../../world/nav/controller';
 import { parseAction } from '../../world/actions/parse';
 import type { AgentConfig } from '../../contracts';
 import type { AgentSession } from '../../world/session/port';
-import type { AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
 import type { AgentAttention } from '../../world/observe/attention';
 type FollowOptions = {
   memory: AgentRunState;

@@ -50,6 +50,15 @@ function layer(path: string) {
   return segments.length === 1 ? segments[0].replace('.ts', '') : segments[0];
 }
 
+/** Public surface modules may aggregate symbols; implementation layers import them directly. */
+function isSurface(path: string): boolean {
+  const module = relative(runtime, path).split('\\').join('/');
+  return (
+    ['api', 'index', 'testing'].includes(layer(path)) ||
+    module === 'contracts/index.ts'
+  );
+}
+
 /** Arrows point from importer to allowed dependencies only. */
 const allowed: Record<string, string[]> = {
   contracts: ['contracts'],
@@ -179,5 +188,40 @@ describe('agent runtime dependency boundaries', () => {
             /^packages\/agent-runtime\/src\//,
           );
         }
+  });
+
+  it('keeps re-exports and inline import() types on the public surface', () => {
+    for (const path of files) {
+      if (isSurface(path)) continue;
+      const module = relative(runtime, path);
+      const source = ts.createSourceFile(
+        path,
+        readFileSync(path, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      const reExports = source.statements
+        .filter(ts.isExportDeclaration)
+        .flatMap((statement) =>
+          statement.moduleSpecifier &&
+          ts.isStringLiteral(statement.moduleSpecifier)
+            ? [statement.getText(source)]
+            : [],
+        );
+      expect(
+        reExports,
+        `${module} must import from the defining module instead of re-exporting it`,
+      ).toEqual([]);
+      const inline: number[] = [];
+      const visit = (node: ts.Node) => {
+        if (ts.isImportTypeNode(node))
+          inline.push(
+            source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+          );
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+      expect(inline, `${module} uses inline import() types at`).toEqual([]);
+    }
   });
 });

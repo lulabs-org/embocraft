@@ -1,4 +1,8 @@
-import type { AICharacterTask, AICharacterUsage } from '@voxel/shared';
+import type {
+  AICharacterTask,
+  AICharacterUsage,
+  WorldEvent,
+} from '@voxel/shared';
 import type {
   BatchResult,
   BuildAction,
@@ -123,6 +127,6 @@ export type CharacterEvent = {
   taskId?: string;
   revision?: number;
   actionId?: string;
-  message?: import('@voxel/shared').WorldEvent;
+  message?: WorldEvent;
   detail?: string;
 };

@@ -1,5 +1,5 @@
 import type { ChatData, WorldEvent } from '@voxel/shared';
-import type { AgentRunState, CharacterEvent } from './state';
+import type { AgentRunState, CharacterEvent } from '../../contracts/state';
 
 /** One stable id per generation/actor/seq so retries never duplicate input. */
 export function chatEventId(

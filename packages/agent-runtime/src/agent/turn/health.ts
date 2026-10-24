@@ -2,7 +2,7 @@ import type { ToolState } from '../../contracts/tool-state';
 import type { Observation } from '../../contracts';
 import { worldSignature } from '../../world/observe/extract';
 import type { TaskService } from '../task/service';
-import type { AgentRunState } from '../task/state';
+import type { AgentRunState } from '../../contracts/state';
 
 /**
  * Monitors execution health during decision turns:
