@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { ModelCatalog } from './model-catalog';
-import { validateProvider } from './provider-validation';
-import { AppError } from '../../common/errors';
+import { validateProvider } from '../domain/model';
+import { AppError } from '../../../common/errors';
 
 const provider = (type = 'ollama', apiKey = '') =>
   validateProvider({ type, apiKey, name: 'fixture' });
@@ -79,9 +79,11 @@ it('hides provider failures, forwards saved configuration and releases failed qu
 
 it('fetches, deduplicates and sorts model IDs using fetch', async () => {
   const saved = provider('deepseek', 'fixture-secret');
-  const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-    Response.json({ data: [{ id: 'z' }, { id: 'a' }, { id: 'a' }] }),
-  );
+  const fetchSpy = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async () =>
+      Response.json({ data: [{ id: 'z' }, { id: 'a' }, { id: 'a' }] }),
+    );
   const catalog = new ModelCatalog({ get: () => saved });
   await expect(catalog.models(saved.id)).resolves.toEqual(['a', 'z']);
   expect(fetchSpy).toHaveBeenCalledWith(

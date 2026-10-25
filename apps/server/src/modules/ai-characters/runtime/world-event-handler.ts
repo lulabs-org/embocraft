@@ -83,9 +83,10 @@ export function handleWorldEvent(
         ctx.persist();
         return aiCharacterPermissions(job.view).chat
           ? session.request('chat', {
-              text: command === 'cancel'
-                ? '任务已取消，我会留在这里待命。'
-                : '任务已暂停，进度已保留。',
+              text:
+                command === 'cancel'
+                  ? '任务已取消，我会留在这里待命。'
+                  : '任务已暂停，进度已保留。',
               scope: 'private',
               recipients: [event.actor],
             })

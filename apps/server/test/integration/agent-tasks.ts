@@ -11,7 +11,10 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { ProviderStore } from '../../src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../../src/modules/providers';
 import { Session, until, delay } from '@voxel/agent-runtime';
 
 import type { AICharacterView, TaskRun } from '@voxel/shared';
@@ -36,8 +39,8 @@ type FixturePrompt = {
 };
 const prompts: FixturePrompt[] = [];
 try {
-  const store = new ProviderStore(join(dir, 'providers.json'));
-  await store.load({ DEEPSEEK_API_KEY: 'fixture-only' });
+  const store = new FileProviderRepository(join(dir, 'providers.json'));
+  await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture-only' });
   const request: typeof fetch = async (_url, init) => {
     calls++;
     const prompt = JSON.parse(

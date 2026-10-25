@@ -14,7 +14,10 @@ import type {
   VoiceServiceView,
 } from '@voxel/shared';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { ProviderStore } from '../../src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../../src/modules/providers';
 import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
 import { validatePcmWav } from '../../src/modules/audio/processing/pcm-wav';
 
@@ -51,8 +54,8 @@ await new Promise<void>((resolve) =>
 const providerUrl = `http://127.0.0.1:${(providerHttp.address() as { port: number }).port}/v1`;
 const voices = new VoiceServiceStore(join(dir, 'voices.json'));
 await voices.load();
-const providers = new ProviderStore(join(dir, 'providers.json'));
-await providers.load({ DEEPSEEK_API_KEY: 'fixture-model-key' });
+const providers = new FileProviderRepository(join(dir, 'providers.json'));
+await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-model-key' });
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 const humans: Session[] = [],
   bots: Session[] = [];

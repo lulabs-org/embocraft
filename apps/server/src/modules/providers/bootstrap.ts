@@ -1,0 +1,41 @@
+import { env, type EnvLookup } from '../../config/env';
+import { restoreSavedProvider, type SavedProvider } from './domain/model';
+import type { ProviderRepository } from './persistence/repository.port';
+
+/** Construct default providers from environment variables for initial seeding. */
+export function createDefaultProviders(envVars?: EnvLookup): SavedProvider[] {
+  const defaults = env.readProviders(envVars);
+  return [
+    restoreSavedProvider({
+      id: 'deepseek',
+      name: 'DeepSeek',
+      type: 'deepseek',
+      apiKey: defaults.deepseekApiKey,
+      defaultModel: defaults.deepseekModel,
+    }),
+    restoreSavedProvider({
+      id: 'ollama',
+      name: 'Ollama',
+      type: 'ollama',
+      defaultModel: defaults.ollamaModel,
+    }),
+  ];
+}
+
+/**
+ * Bootstrap provider repository on startup:
+ * loads existing configuration or seeds defaults from environment if absent.
+ */
+export async function bootstrapProviders(
+  repository: ProviderRepository,
+  envVars?: EnvLookup,
+): Promise<void> {
+  if (repository.list().length > 0) {
+    return;
+  }
+  const loaded = await repository.load();
+  if (!loaded) {
+    const defaults = createDefaultProviders(envVars);
+    await repository.seed(defaults);
+  }
+}

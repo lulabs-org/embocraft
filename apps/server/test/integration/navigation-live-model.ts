@@ -8,7 +8,7 @@ import { join, resolve, dirname } from 'node:path';
 import { AICharacterManager } from '../../src/modules/ai-characters';
 import { reserveRun } from '../../src/modules/tasks/runtime/execution';
 import { executionState } from '../../src/modules/ai-characters/domain/task-adapter';
-import { ProviderStore } from '../../src/modules/providers/provider-store';
+import { FileProviderRepository } from '../../src/modules/providers';
 import {
   AgentRunner,
   Session,
@@ -55,7 +55,7 @@ const record = async () => {
 try {
   const providerPath = join(dir, 'providers.json');
   await writeFile(providerPath, JSON.stringify([provider]), { mode: 0o600 });
-  const store = new ProviderStore(providerPath);
+  const store = new FileProviderRepository(providerPath);
   await store.load();
   let calls = 0;
   const actions = new Map<string, unknown>();

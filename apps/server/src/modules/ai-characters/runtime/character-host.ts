@@ -6,7 +6,7 @@ import {
 } from '@voxel/agent-runtime';
 import { appendAICharacterLog } from '../domain/activity-log';
 import type { Job } from '../domain/types';
-import type { SavedProvider } from '../../providers/provider-validation';
+import type { SavedProvider } from '../../providers/domain/model';
 import {
   captureTask,
   currentRun,
@@ -49,7 +49,10 @@ export class AICharacterHost {
       await ctx.save();
       if (job.abort.signal.aborted || ctx.closing()) return;
 
-      const inferenceDefaults = resolveInferenceDefaults(job.view.model, provider.type);
+      const inferenceDefaults = resolveInferenceDefaults(
+        job.view.model,
+        provider.type,
+      );
       const config: AgentConfig = {
         ...inferenceDefaults,
         ...job.view,

@@ -3,8 +3,6 @@ import { object, text } from '../../../common/validation';
 import type { ProviderDraft, ProviderType } from '@voxel/shared';
 import { validateProviderBaseUrl } from './security';
 
-export type ProviderInput = ProviderDraft;
-
 export function assertProviderType(
   type: unknown,
 ): asserts type is ProviderType {
@@ -14,7 +12,7 @@ export function assertProviderType(
 }
 
 /** Validate one request independently of any previously saved provider. */
-export function validateProviderInput(value: unknown): ProviderInput {
+export function validateProviderInput(value: unknown): ProviderDraft {
   const input = object(value);
   assertProviderType(input.type);
 

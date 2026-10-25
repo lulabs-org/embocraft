@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type ServerOptions } from '../../src/server';
 import { env } from '../../src/config';
-import { ProviderStore } from '../../src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../../src/modules/providers';
 import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
 import { AsrSettingsStore } from '../../src/modules/audio/asr/asr-settings';
 
@@ -20,9 +23,10 @@ export async function createTestServer(
   let server: Awaited<ReturnType<typeof createServer>> | undefined;
   try {
     const providers =
-      options.providers ?? new ProviderStore(join(directory, 'providers.json'));
+      options.providers ??
+      new FileProviderRepository(join(directory, 'providers.json'));
     if (!options.providers)
-      await providers.load({ DEEPSEEK_API_KEY: 'fixture-only' });
+      await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-only' });
     server = await createServer({
       ...options,
       providers,

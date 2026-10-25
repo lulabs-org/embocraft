@@ -7,10 +7,10 @@ import {
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { emptyState } from '@voxel/agent-runtime';
-import type { ProviderPort } from '../../providers/provider-port';
+import type { ProviderQueryPort } from '../../providers/ports';
 import type { ArchivePort } from '../../../persistence/archive';
 import { ManagementEvents } from '../../management/events';
-import { ProviderStore } from '../../providers/provider-store';
+import { FileProviderRepository } from '../../providers/persistence/file-repository';
 import type { VoiceServiceStore } from '../../audio/tts/voice-services';
 import {
   readManagementArchive,
@@ -29,7 +29,7 @@ import {
   validateAICharacter,
   aiCharacterProfileInput,
 } from '../domain/validation';
-import type { SavedProvider } from '../../providers/provider-validation';
+import type { SavedProvider } from '../../providers/domain/model';
 import { AppError } from '../../../common/errors';
 
 import {
@@ -69,7 +69,7 @@ export class AICharacterOrchestrator {
   private shutdownPresence = new Map<string, Job['view']['status']>();
 
   constructor(
-    readonly providers: ProviderPort,
+    readonly providers: ProviderQueryPort,
     private serverUrl: string | (() => string),
     private dependencies: AICharacterDependencies,
     readonly voiceServices: VoiceServicePort | undefined,
@@ -637,7 +637,7 @@ export class AICharacterManager extends AICharacterOrchestrator {
   declare readonly voiceServices: VoiceServiceStore | undefined;
 
   constructor(
-    providers: ProviderStore,
+    providers: FileProviderRepository,
     serverUrl: string | (() => string),
     dependencies: AICharacterDependencies = {
       session: (url) => new Session(url),

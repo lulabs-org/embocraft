@@ -10,7 +10,7 @@ import {
 } from '@voxel/shared';
 import { AppError } from '../../../common/errors';
 import { object, text, integer, boolean } from '../../../common/validation';
-import { type SavedProvider } from '../../providers/provider-validation';
+import { type SavedProvider } from '../../providers/domain/model';
 
 const ALLOWED_REASONING_EFFORTS = ['none', 'low', 'high', 'max'] as const;
 
@@ -68,7 +68,13 @@ export function validateAICharacter(
     throw new AppError('此模型服务暂不提供 DeepSeek 思考参数。');
   }
 
-  const timeoutMs = integer(input.timeoutMs, '推理超时', defaults.timeoutMs, 1000, 120000);
+  const timeoutMs = integer(
+    input.timeoutMs,
+    '推理超时',
+    defaults.timeoutMs,
+    1000,
+    120000,
+  );
   const maxTokens = integer(
     input.maxTokens,
     '输出长度',

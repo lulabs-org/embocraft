@@ -28,16 +28,20 @@ import { VoiceServiceStore } from './modules/audio/tts/voice-services';
 import { GatewayAuth } from './modules/gateway/auth';
 import { installGatewaySocket } from './modules/gateway/socket';
 
-import { ProviderStore } from './modules/providers/provider-store';
-import { ModelCatalog } from './modules/providers/model-catalog';
-import { ProviderService } from './modules/providers/provider-service';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+  ModelCatalog,
+  ProviderHealthChecker,
+  ProviderService,
+} from './modules/providers';
 
 import { WorldRoom } from './modules/world/room';
 import { WorldStore } from './modules/world/store';
 
 export type ServerOptions = {
   config?: ServerConfig;
-  providers?: ProviderStore;
+  providers?: FileProviderRepository;
   voiceServices?: VoiceServiceStore;
   asrSettings?: AsrSettingsStore;
   speech?: LocalSpeech;
@@ -54,7 +58,7 @@ const wsHost = (host: string) => {
 
 type CoreStores = {
   gatewayAuth: GatewayAuth;
-  providers: ProviderStore;
+  providers: FileProviderRepository;
   voiceServices: VoiceServiceStore;
   asrSettings: AsrSettingsStore;
 };
@@ -64,12 +68,12 @@ async function loadStores(
   config: ServerConfig,
   options: ServerOptions,
 ): Promise<CoreStores> {
-  const providers = options.providers ?? new ProviderStore();
+  const providers = options.providers ?? new FileProviderRepository();
   const voiceServices = options.voiceServices ?? new VoiceServiceStore();
   const asrSettings = options.asrSettings ?? new AsrSettingsStore();
   const [gatewayAuth] = await Promise.all([
     GatewayAuth.load(config.gateway),
-    providers.load(),
+    bootstrapProviders(providers),
     voiceServices.load(),
     asrSettings.load(),
   ]);
@@ -97,11 +101,13 @@ export async function createServer(options: ServerOptions = {}) {
     voiceServices,
   );
   const modelCatalog = new ModelCatalog(providers);
+  const providerHealth = new ProviderHealthChecker(providers);
   const providerService = new ProviderService(
     providers,
     modelCatalog,
     (id) => characters.hasProviderReference(id),
     () => characters.events.publish('providers'),
+    providerHealth,
   );
   const speech = options.speech ?? new LocalSpeech();
   const app = createApp({

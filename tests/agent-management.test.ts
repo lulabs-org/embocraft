@@ -5,7 +5,8 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  ProviderStore,
+  FileProviderRepository,
+  bootstrapProviders,
   validateProvider,
   ModelCatalog,
 } from '../apps/server/src/modules/providers';
@@ -30,8 +31,8 @@ describe('provider configuration boundary', () => {
     const dir = await mkdtemp(join(tmpdir(), 'voxel-providers-'));
     folders.push(dir);
     const path = join(dir, 'providers.json');
-    const store = new ProviderStore(path);
-    await store.load({ DEEPSEEK_API_KEY: 'fixture-secret' });
+    const store = new FileProviderRepository(path);
+    await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture-secret' });
     expect(JSON.stringify(store.list())).not.toContain('fixture-secret');
     expect(store.list()[0].hasApiKey).toBe(true);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
@@ -41,8 +42,8 @@ describe('provider configuration boundary', () => {
     );
     expect(saved.name).toBe('Updated');
     expect(store.get('deepseek').apiKey).toBe('fixture-secret');
-    const reloaded = new ProviderStore(path);
-    await reloaded.load({ DEEPSEEK_API_KEY: 'different' });
+    const reloaded = new FileProviderRepository(path);
+    await bootstrapProviders(reloaded, { DEEPSEEK_API_KEY: 'different' });
     expect(reloaded.get('deepseek').apiKey).toBe('fixture-secret');
     await Promise.all([
       store.save({ name: 'A', type: 'ollama' }),
@@ -352,15 +353,15 @@ it('persists provider configurations cleanly and resolves character inference de
   const dir = await mkdtemp(join(tmpdir(), 'provider-clean-'));
   try {
     const path = join(dir, 'providers.json');
-    const store = new ProviderStore(path);
-    await store.load({ DEEPSEEK_API_KEY: 'fixture' });
+    const store = new FileProviderRepository(path);
+    await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture' });
 
     await store.save(
       { ...store.get('deepseek'), defaultModel: 'deepseek-reasoner' },
       'deepseek',
     );
-    const restored = new ProviderStore(path);
-    await restored.load({});
+    const restored = new FileProviderRepository(path);
+    await bootstrapProviders(restored);
     const provider = restored.get('deepseek');
     expect(provider.defaultModel).toBe('deepseek-reasoner');
     expect('inference' in provider).toBe(false);
