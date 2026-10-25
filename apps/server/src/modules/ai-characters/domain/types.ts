@@ -5,7 +5,7 @@ import type {
   Session,
 } from '@voxel/agent-runtime';
 import type { PlanService } from '../../tasks/persistence/service';
-import type { SavedProvider } from '../../providers/provider-validation';
+import type { SavedProvider } from '../../providers/domain/model';
 import type { TaskBook } from '../../tasks/domain/types';
 
 export interface HostedAICharacter {

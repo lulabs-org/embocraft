@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Session, until, AgentRunner } from '@voxel/agent-runtime';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { ProviderStore } from '../../src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../../src/modules/providers';
 import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
 process.env.DATABASE_URL = '';
 process.env.VOICE_PROVIDER = 'mock';
@@ -16,8 +19,8 @@ let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 let manager: AICharacterManager | undefined;
 let calls = 0;
 try {
-  const providers = new ProviderStore(join(dir, 'providers.json'));
-  await providers.load({ DEEPSEEK_API_KEY: 'fixture-only' });
+  const providers = new FileProviderRepository(join(dir, 'providers.json'));
+  await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-only' });
   const voices = new VoiceServiceStore(join(dir, 'voices.json'));
   await voices.load();
   server = await createTestServer({

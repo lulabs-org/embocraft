@@ -1,11 +1,15 @@
-import { AppError } from '../../common/errors';
-import type { ProviderPort } from './provider-port';
+import { AppError } from '../../../common/errors';
+import type { ProviderQueryPort } from '../ports';
+import { ProviderHttpClient } from './client';
 
 /** Model discovery belongs to providers and does not require a character session. */
 export class ModelCatalog {
   private probing = new Set<string>();
 
-  constructor(private providers: Pick<ProviderPort, 'get'>) { }
+  constructor(
+    private readonly providers: Pick<ProviderQueryPort, 'get'>,
+    private readonly client = new ProviderHttpClient(),
+  ) {}
 
   async models(id: string) {
     if (this.probing.has(id))
@@ -17,14 +21,7 @@ export class ModelCatalog {
     this.probing.add(id);
 
     try {
-      const res = await fetch(
-        `${provider.baseUrl.replace(/\/+$/, '')}/models`,
-        {
-          headers: { Authorization: `Bearer ${provider.apiKey || 'ollama'}` },
-          redirect: 'error',
-          signal: AbortSignal.timeout(10000),
-        },
-      );
+      const res = await this.client.getModels(provider);
       if (!res.ok) throw 0;
       const { data = [] } = (await res.json()) as {
         data?: { id?: unknown }[];

@@ -8,7 +8,7 @@ import { installManagementRoutes } from '../modules/management/routes';
 import {
   installProviderRoutes,
   type ProviderRouteDependencies,
-} from '../modules/providers/providers.routes';
+} from '../modules/providers/routes/providers.routes';
 import { taskCommandBody } from '../modules/tasks/command-policy';
 import type { TaskPort } from '../modules/tasks/port';
 import { installTaskRoutes } from '../modules/tasks/routes';

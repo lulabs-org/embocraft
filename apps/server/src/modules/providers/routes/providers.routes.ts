@@ -1,14 +1,14 @@
-import { ManagementCommands } from '../management/commands';
+import { ManagementCommands } from '../../management/commands';
 import type { Express } from 'express';
-import type { ProviderService } from './provider-service';
-import { asyncRoute as route } from '../../http/middleware/async-route';
+import type { ProviderService } from '../services/provider-service';
+import { asyncRoute as route } from '../../../http/middleware/async-route';
 
 /**
  * 安装 Provider（模型提供商）相关 HTTP REST 路由
  */
 export type ProviderRouteDependencies = Pick<
   ProviderService,
-  'list' | 'save' | 'remove' | 'models'
+  'list' | 'save' | 'remove' | 'models' | 'health'
 >;
 
 export function installProviderRoutes(
@@ -153,6 +153,32 @@ export function installProviderRoutes(
     route(async (req, res) => {
       const models = await providers.models(String(req.params.id));
       res.json({ models });
+    }),
+  );
+
+  /**
+   * @openapi
+   * /providers/{id}/health:
+   *   get:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 探测模型服务连通性与模型列表能力
+   *     tags:
+   *       - Providers
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: 连通性与模型列表能力
+   */
+  app.get(
+    '/providers/:id/health',
+    route(async (req, res) => {
+      res.json(await providers.health(String(req.params.id)));
     }),
   );
 }

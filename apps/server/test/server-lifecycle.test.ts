@@ -7,7 +7,7 @@ import { MANAGEMENT_EVENTS_VERSION } from '@voxel/shared/management';
 import { createTestServer } from './helpers/test-server';
 import { createServer } from '../src/server';
 import { env } from '../src/config/env';
-import { ProviderStore } from '../src/modules/providers/provider-store';
+import { FileProviderRepository } from '../src/modules/providers';
 import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
 import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';
 import { whisperModelsDirectory } from '../src/modules/audio/asr/whisper-settings';
@@ -16,7 +16,7 @@ import { WorldStore } from '../src/modules/world/store';
 
 describe('server assembly and lifecycle', () => {
   it('keeps original data locations and validates deployment configuration without dotenv side effects', () => {
-    expect(new ProviderStore().path).toBe(
+    expect(new FileProviderRepository().path).toBe(
       join(env.root, '.data/agent-providers.json'),
     );
     expect(new VoiceServiceStore().path).toBe(

@@ -1,59 +1,55 @@
-import { env } from '../../config/env';
+import { env } from '../../../config/env';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { validateProvider } from './provider-validation';
-import { AppError } from '../../common/errors';
-import { toProviderView, type SavedProvider } from './domain/model';
+import { AppError } from '../../../common/errors';
+import {
+  toProviderView,
+  validateProvider,
+  restoreSavedProvider,
+  type SavedProvider,
+} from '../domain/model';
+import type { ProviderRepository } from './repository.port';
 
-export { toProviderView } from './domain/model';
-
-export class ProviderStore {
+/** Atomic JSON implementation of the provider repository. */
+export class FileProviderRepository implements ProviderRepository {
   private values: SavedProvider[] = [];
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(readonly path = env.dataPath('agent-providers.json')) {}
 
-  async load(envVars?: NodeJS.ProcessEnv) {
-    let content: string;
+  /**
+   * Load saved providers from disk.
+   * Returns true if loaded from existing file, false if file did not exist.
+   */
+  async load(): Promise<boolean> {
     try {
-      content = await readFile(this.path, 'utf8');
+      const content = await readFile(this.path, 'utf8');
+      this.values = this.parse(content);
+      return true;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new AppError('无法读取模型服务配置，请检查本地配置文件。', 500);
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        this.values = [];
+        return false;
       }
-      const defaults = env.readProviders(envVars);
-      this.values = [
-        {
-          id: 'deepseek',
-          name: 'DeepSeek',
-          type: 'deepseek',
-          apiKey: defaults.deepseekApiKey,
-          defaultModel: defaults.deepseekModel,
-        },
-        {
-          id: 'ollama',
-          name: 'Ollama',
-          type: 'ollama',
-          defaultModel: defaults.ollamaModel,
-        },
-      ].map((p) => ({ ...validateProvider(p), id: p.id }));
-
-      await this.persist(this.values);
-      return;
-    }
-
-    try {
-      const saved = JSON.parse(content);
-      if (!Array.isArray(saved) || saved.length > 20) throw Error();
-      this.values = saved.map((p: SavedProvider) => {
-        if (typeof p?.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(p.id))
-          throw Error();
-        return { ...validateProvider(p), id: p.id };
-      });
-    } catch {
       throw new AppError('无法读取模型服务配置，请检查本地配置文件。', 500);
     }
+  }
+
+  private parse(content: string): SavedProvider[] {
+    const list = JSON.parse(content);
+    if (!Array.isArray(list) || list.length > 20) {
+      throw new AppError('模型服务配置格式错误。');
+    }
+    return list.map(restoreSavedProvider);
+  }
+
+  /** Seed initial providers and persist them to disk. */
+  async seed(initial: SavedProvider[]): Promise<void> {
+    return this.mutate(async () => {
+      this.values = initial.map(restoreSavedProvider);
+      await this.persist(this.values);
+    });
   }
 
   list() {

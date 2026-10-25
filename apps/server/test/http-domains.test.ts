@@ -76,6 +76,7 @@ it('protects each management domain and retains transport policies after path mi
     const paths = [
       '/ai-characters',
       '/providers',
+      '/providers/missing/health',
       '/tasks',
       '/task-runs/missing/pause',
       '/management/commands/missing',
@@ -210,6 +211,13 @@ it('routes resource IDs and request bodies to their owning domain without old Ag
         })
       ).json(),
     ).toEqual({ models: ['fixture-model'] });
+    expect(
+      await (
+        await fetch(`${server.httpUrl}/providers/${provider.id}/health`, {
+          headers,
+        })
+      ).json(),
+    ).toEqual({ reachable: true, modelsAvailable: true });
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://127.0.0.1:11434/v1/models',
       expect.objectContaining({

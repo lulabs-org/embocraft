@@ -1,7 +1,7 @@
 import { emptyState } from '@voxel/agent-runtime';
 import type { Edit } from '@voxel/shared';
 import type { AgentSession } from '@voxel/agent-runtime';
-import type { SavedProvider } from '../../apps/server/src/modules/providers/provider-validation';
+import type { SavedProvider } from '../../apps/server/src/modules/providers';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';

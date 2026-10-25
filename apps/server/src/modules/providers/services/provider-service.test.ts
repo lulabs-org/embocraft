@@ -1,7 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { AppError } from '../../common/errors';
-import { validateProvider } from './provider-validation';
-import { toProviderView } from './provider-store';
+import { AppError } from '../../../common/errors';
+import { validateProvider, toProviderView } from '../domain/model';
 import { ProviderService } from './provider-service';
 
 function fixture(referenced = false) {
@@ -14,6 +13,9 @@ function fixture(referenced = false) {
     remove: vi.fn(async () => {}),
   };
   const catalog = { models: vi.fn(async () => ['fixture-model']) };
+  const health = {
+    check: vi.fn(async () => ({ reachable: true, modelsAvailable: true })),
+  };
   const hasCharacterReference = vi.fn(() => referenced);
   const changed = vi.fn();
   return {
@@ -22,9 +24,11 @@ function fixture(referenced = false) {
       catalog,
       hasCharacterReference,
       changed,
+      health,
     ),
     store,
     catalog,
+    health,
     hasCharacterReference,
     changed,
     view,
@@ -32,15 +36,24 @@ function fixture(referenced = false) {
 }
 
 it('delegates reads and publishes one change after each saved provider', async () => {
-  const { service, store, catalog, changed, view } = fixture();
+  const { service, store, catalog, health, changed, view } = fixture();
   const input = { name: 'Updated', type: 'ollama' };
 
   expect(service.list()).toEqual([view]);
   await expect(service.models('ollama')).resolves.toEqual(['fixture-model']);
   expect(catalog.models).toHaveBeenCalledWith('ollama');
+  await expect(service.health('ollama')).resolves.toEqual({
+    reachable: true,
+    modelsAvailable: true,
+  });
+  expect(health.check).toHaveBeenCalledWith('ollama');
   await expect(service.save(input, 'ollama')).resolves.toEqual(view);
   expect(store.save).toHaveBeenCalledWith(input, 'ollama');
   expect(changed).toHaveBeenCalledTimes(1);
+  expect(changed).toHaveBeenCalledWith({
+    type: 'providers.changed',
+    providerId: view.id,
+  });
 });
 
 it('removes an unreferenced provider and publishes one change', async () => {
@@ -51,6 +64,10 @@ it('removes an unreferenced provider and publishes one change', async () => {
   expect(hasCharacterReference).toHaveBeenCalledWith('ollama');
   expect(store.remove).toHaveBeenCalledWith('ollama');
   expect(changed).toHaveBeenCalledTimes(1);
+  expect(changed).toHaveBeenCalledWith({
+    type: 'providers.changed',
+    providerId: 'ollama',
+  });
 });
 
 it('preserves the reference conflict without deleting or publishing', async () => {

@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest';
-import { validateProvider } from '../provider-validation';
-import { toProviderView } from './model';
+import {
+  toProviderView,
+  validateProvider,
+  restoreSavedProvider,
+} from './model';
 import { validateProviderInput } from './validation';
 
 it('applies provider defaults and validates fields without assigning an ID', () => {
@@ -83,4 +86,35 @@ it('keeps update key inheritance outside domain validation and redacts views', (
       saved,
     ),
   ).toThrow('更换服务地址或类型时，请重新填写 API Key。');
+});
+
+it('restoreSavedProvider validates both ID format and provider fields', () => {
+  const restored = restoreSavedProvider({
+    id: 'deepseek-custom',
+    name: 'DeepSeek',
+    type: 'deepseek',
+    apiKey: 'my-key',
+  });
+  expect(restored).toEqual({
+    id: 'deepseek-custom',
+    name: 'DeepSeek',
+    type: 'deepseek',
+    baseUrl: 'https://api.deepseek.com',
+    apiKey: 'my-key',
+    defaultModel: '',
+  });
+
+  expect(() =>
+    restoreSavedProvider({ id: '', name: 'Test', type: 'deepseek' }),
+  ).toThrow('无效的模型服务 ID。');
+  expect(() =>
+    restoreSavedProvider({
+      id: 'bad id with spaces',
+      name: 'Test',
+      type: 'deepseek',
+    }),
+  ).toThrow('无效的模型服务 ID。');
+  expect(() =>
+    restoreSavedProvider({ id: 'valid-id', name: '', type: 'deepseek' }),
+  ).toThrow('请输入服务名称。');
 });

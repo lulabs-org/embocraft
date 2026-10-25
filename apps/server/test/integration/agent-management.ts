@@ -6,7 +6,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { ProviderStore } from '../../src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../../src/modules/providers';
 import { Session, until, type Observation } from '@voxel/agent-runtime';
 
 import type { AICharacterView } from '@voxel/shared';
@@ -21,8 +24,8 @@ const observations: Observation[] = [];
 let speaker: Session | undefined;
 const originalFetch = globalThis.fetch;
 try {
-  const store = new ProviderStore(join(dir, 'providers.json'));
-  await store.load({ DEEPSEEK_API_KEY: 'fixture-secret' });
+  const store = new FileProviderRepository(join(dir, 'providers.json'));
+  await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture-secret' });
   const rolesInRequests: string[] = [];
   const capabilitiesInRequests: unknown[] = [];
   const request: typeof fetch = async (_url, init) => {

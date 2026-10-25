@@ -91,7 +91,7 @@ graph TD
     Create --> Startup["startup.ts<br/>checkStartupDatabase"]
     Create --> Stores["loadStores()（并行）"]
     Stores --> GA["GatewayAuth<br/>gateway/auth"]
-    Stores --> PS["ProviderStore<br/>providers"]
+    Stores --> PS["FileProviderRepository<br/>providers"]
     Stores --> VS["VoiceServiceStore<br/>audio/tts"]
     Stores --> AS["AsrSettingsStore<br/>audio/asr"]
 
@@ -473,7 +473,7 @@ graph LR
 
     WorldStoreN["WorldStore"] --> WorldT
     WorldStoreN --> EditT
-    ProviderStoreN["ProviderStore"] --> Prov
+    FileProviderRepoN["FileProviderRepository"] --> Prov
     VSN["VoiceServiceStore"] --> VoiceF
     ASN["AsrSettingsStore"] --> ASRF
     GAN["GatewayAuth"] --> Token

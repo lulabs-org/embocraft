@@ -6,7 +6,10 @@ import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AICharacterManager } from '../apps/server/src/modules/ai-characters';
-import { ProviderStore } from '../apps/server/src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../apps/server/src/modules/providers';
 import { VoiceServiceStore } from '../apps/server/src/modules/audio/tts/voice-services';
 import {
   AgentRuntimeError,
@@ -15,11 +18,11 @@ import {
 } from '@voxel/agent-runtime';
 
 import type { WorldEvent } from '@voxel/shared';
-let dir: string, store: ProviderStore, manager: AICharacterManager | undefined;
+let dir: string, store: FileProviderRepository, manager: AICharacterManager | undefined;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'agent-life-'));
-  store = new ProviderStore(join(dir, 'providers.json'));
-  await store.load({ DEEPSEEK_API_KEY: 'fixture' });
+  store = new FileProviderRepository(join(dir, 'providers.json'));
+  await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture' });
 });
 afterEach(async () => {
   await manager?.close();

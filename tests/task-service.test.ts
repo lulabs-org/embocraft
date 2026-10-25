@@ -12,7 +12,10 @@ import {
 import { testAgentConfig } from './support/agent-config';
 import { RequestBudget } from '../packages/agent-runtime/src/agent/task/budget';
 import { readManagementArchive } from '../apps/server/src/persistence/archive-file';
-import { ProviderStore } from '../apps/server/src/modules/providers/provider-store';
+import {
+  FileProviderRepository,
+  bootstrapProviders,
+} from '../apps/server/src/modules/providers';
 const config = testAgentConfig();
 const operator = { kind: 'operator' as const };
 
@@ -107,8 +110,8 @@ describe('TaskService revision and commit boundary', () => {
 it('backs up and migrates current and historical runtimes while preserving uncertain effects and budgets', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'agent-v2-migration-'));
   try {
-    const providers = new ProviderStore(join(dir, 'providers.json'));
-    await providers.load({ apiKey: 'fixture' });
+    const providers = new FileProviderRepository(join(dir, 'providers.json'));
+    await bootstrapProviders(providers);
     const task = { ...newTask('old build'), calls: 3, tokens: 600 };
     task.status = 'completed';
     // Persisted v2 archives are flat; restoreState is the only migration entry.
