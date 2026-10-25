@@ -19,7 +19,7 @@ export function createModel(
     api: 'openai-completions',
     provider: endpoint.type,
     baseUrl: endpoint.baseUrl,
-    reasoning: config.thinking === 'enabled',
+    reasoning: endpoint.type === 'deepseek' || config.thinking === 'enabled',
     input: ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 32768,
@@ -28,6 +28,10 @@ export function createModel(
       maxTokensField: endpoint.tokenField,
       supportsDeveloperRole: false,
       supportsStore: false,
+      ...(endpoint.type === 'deepseek' && {
+        thinkingFormat: 'deepseek',
+        supportsReasoningEffort: true,
+      }),
     },
   };
 }
