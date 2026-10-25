@@ -78,11 +78,7 @@ async function relay(request: RelayRequest) {
     output.push({
       type: 'error',
       reason: failure.stopReason,
-      error: {
-        ...emptyMessage(model),
-        stopReason: failure.stopReason,
-        errorMessage: failure.message,
-      },
+      error: errorMessage(model, failure),
     });
   let status = 0;
   try {
@@ -131,23 +127,29 @@ async function relay(request: RelayRequest) {
   }
 }
 
-/** Placeholder message that carries the model identity for terminal error events. */
-function emptyMessage(model: Model<'openai-completions'>): AssistantMessage {
+const EMPTY_USAGE: AssistantMessage['usage'] = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+
+/** Terminal error message carrying model identity and failure details. */
+function errorMessage(
+  model: Model<'openai-completions'>,
+  failure: StreamFailure,
+): AssistantMessage {
   return {
     role: 'assistant',
     content: [],
     api: model.api,
     provider: model.provider,
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: 'error',
+    usage: EMPTY_USAGE,
+    stopReason: failure.stopReason,
+    errorMessage: failure.message,
     timestamp: Date.now(),
   };
 }

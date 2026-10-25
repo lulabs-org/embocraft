@@ -63,7 +63,10 @@ export function validateProvider(
     );
   if (type === 'ollama' && !ollamaAddress)
     throw new AppError('Ollama 仅支持本机或局域网私有 IP 地址。');
-  const baseUrl = url.href.replace(/\/$/, '');
+  const baseUrl =
+    type === 'deepseek'
+      ? 'https://api.deepseek.com'
+      : url.href.replace(/\/$/, '');
   const apiKey = text(input.apiKey, 'API Key', 4096);
   if (
     previous?.apiKey &&
