@@ -1,6 +1,5 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { AgentRuntimeError } from '../../contracts/errors';
-import { checkBudgetCap } from '../task/budget';
 import type { TaskCommand } from '../task/service';
 import { conversationToolSchemas } from './schema';
 import type { ToolHost } from './port';
@@ -11,8 +10,10 @@ const result = (value: unknown) => ({
 });
 
 /**
- * Creates conversation-scoped task control tools (reply, start_task, revise_task, etc.)
- * that allow the model to manage high-level activities without invoking world actions directly.
+ * Creates conversation-scoped task control tools (reply, start_task, revise_task,
+ * etc.) that let the model manage high-level activities without invoking world
+ * actions directly. Configuration switching and commit bookkeeping live on the
+ * host so a handler only forwards the player's intent.
  */
 export function createTaskControlTools(o: ToolHost): AgentTool[] {
   return Object.entries(conversationToolSchemas).map(([name, parameters]) => ({
@@ -31,51 +32,16 @@ export function createTaskControlTools(o: ToolHost): AgentTool[] {
         relatedToTask?: boolean;
       };
       if (name === 'reply') {
-        if (
-          args.relatedToTask &&
-          o.memory.task.current &&
-          ['running', 'waiting'].includes(o.memory.task.current.status) &&
-          !checkBudgetCap(o.memory.task.current, o.userConfig)
-        )
-          o.attach();
-        await o.send(args.text!);
-        o.state.terminal = true;
+        await o.respond(args.text!, args.relatedToTask);
         return result({ replied: true });
       }
       if (!o.message) throw new AgentRuntimeError('任务控制需要明确玩家指令。');
       o.authorize();
-      await o.stopAction();
-      o.onActionStopped();
-      o.budget.flushTime();
       const command = {
         type: name.replace('_task', ''),
         goal: args.goal,
       } as TaskCommand;
-      // Switching tasks within one event must never reset already charged usage.
-      if (command.type === 'start') Object.assign(o.config, o.defaults);
-      else Object.assign(o.config, o.userConfig);
-      try {
-        await o.service.commit(
-          command,
-          { kind: 'player', message: o.message },
-          o.config,
-          () => o.save(),
-          o.budget,
-          o.beforeNewTaskHook,
-        );
-      } catch (error) {
-        if (error instanceof AgentRuntimeError && error.fatal) {
-          o.state.persistenceFailed = true;
-          o.state.terminal = true;
-        }
-        throw error;
-      }
-      const lease = o.service.lease();
-      o.onTaskCommitted(lease);
-      if (command.type === 'start') Object.assign(o.userConfig, o.config);
-      if (['pause'].includes(command.type)) o.state.terminal = true;
-      await o.observe();
-      if (args.reply) await o.send(args.reply);
+      await o.commitTask(command, args.reply);
       return result({ task: o.memory.task.current });
     },
   }));

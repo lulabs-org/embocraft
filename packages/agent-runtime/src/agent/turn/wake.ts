@@ -3,11 +3,19 @@ import type { WorldEvent } from '@voxel/shared';
 import { BackgroundActionTracker } from '../action/background';
 import { runFollowStep } from '../action/follow';
 import { checkBudgetCap } from '../task/budget';
+import { isActiveTask } from '../task/state';
 import { restoreCheckpoint } from './checkpoint';
 import type { RunOptions } from './options';
 import { Turn, type TurnActions } from './turn';
 
-/** One wake-up: follow ticks and background actions first, then event decisions. */
+/** What advancing a saved follow intent asks the wake loop to do next. */
+type FollowStep = 'idle' | 'resume' | 'stop';
+
+/**
+ * One wake-up: follow ticks and background actions first, then event decisions.
+ * A queued message always gets its own turn; an unattended turn runs only while
+ * the task is active or right after a background action settles.
+ */
 export class CharacterRunner {
   constructor(
     private endpoint: ModelEndpoint,
@@ -19,49 +27,21 @@ export class CharacterRunner {
     const background = new BackgroundActionTracker();
     let message = o.attention?.take();
     if (!message) restoreCheckpoint(memory);
-    if (
-      memory.task.current &&
-      ['running', 'waiting'].includes(memory.task.current.status)
-    ) {
-      const reason = checkBudgetCap(memory.task.current, o.config);
-      if (reason) {
-        memory.task.current.status = 'budget';
-        memory.task.current.reason = reason;
-        await o.checkpoint?.();
-      }
-    }
+    await this.parkBudgetExhausted(o);
     let actionResult = false;
     try {
-      do {
-        if (signal.aborted) break;
-        if (
-          !message &&
-          memory.effects.follow &&
-          !actionResult &&
-          memory.task.current &&
-          ['running', 'waiting'].includes(memory.task.current.status)
-        ) {
-          const reason = checkBudgetCap(memory.task.current!, o.config);
-          if (reason) {
-            memory.task.current!.status = 'budget';
-            memory.task.current!.reason = reason;
-            await o.checkpoint?.();
-          } else await runFollowStep(o);
-          if (
-            memory.task.current?.status === 'blocked' &&
-            memory.effects.activeAction?.status === 'failed'
-          ) {
-            delete memory.effects.follow;
-            memory.task.current.status = 'running';
+      while (!signal.aborted) {
+        switch (await this.advanceFollow(o, message, actionResult)) {
+          case 'stop':
+            return;
+          case 'resume':
+            // The failed follow was cleared; run one decision to pick a new step.
             actionResult = true;
-          } else return;
+            continue;
+          case 'idle':
+            break;
         }
-        if (
-          !message &&
-          !actionResult &&
-          (!memory.task.current ||
-            !['running', 'waiting'].includes(memory.task.current.status))
-        )
+        if (!message && !actionResult && !isActiveTask(memory.task.current))
           return;
         if (!background.isRunning || message || actionResult) {
           await this.turn(o, message, background);
@@ -86,10 +66,48 @@ export class CharacterRunner {
           continue;
         }
         return;
-      } while (!signal.aborted);
+      }
     } finally {
       await background.cleanup();
     }
+  }
+
+  /**
+   * Paces a saved follow intent with local navigation instead of a model request.
+   * A follow that ended blocked clears itself and asks for one recovery decision.
+   */
+  private async advanceFollow(
+    o: RunOptions,
+    message: WorldEvent | undefined,
+    actionResult: boolean,
+  ): Promise<FollowStep> {
+    const { memory } = o;
+    if (message || actionResult || !memory.effects.follow) return 'idle';
+    if (!isActiveTask(memory.task.current)) return 'idle';
+    if (await this.parkBudgetExhausted(o)) return 'stop';
+    await runFollowStep(o);
+    const task = memory.task.current;
+    if (
+      task?.status === 'blocked' &&
+      memory.effects.activeAction?.status === 'failed'
+    ) {
+      delete memory.effects.follow;
+      task.status = 'running';
+      return 'resume';
+    }
+    return 'stop';
+  }
+
+  /** Saves a task that cannot afford another request as 'budget'. */
+  private async parkBudgetExhausted(o: RunOptions): Promise<boolean> {
+    const task = o.memory.task.current;
+    if (!isActiveTask(task)) return false;
+    const reason = checkBudgetCap(task, o.config);
+    if (!reason) return false;
+    task.status = 'budget';
+    task.reason = reason;
+    await o.checkpoint?.();
+    return true;
   }
 
   private turn(

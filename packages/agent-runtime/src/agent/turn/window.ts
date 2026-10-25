@@ -69,3 +69,22 @@ export function recentInteractions(messages: Message[]): Message[] {
     return retained;
   });
 }
+
+/**
+ * The base transcript slice one provider request may see: every system message,
+ * the current human input, and the complete groups retained around it. The
+ * protocol correction, when queued, is appended by the caller.
+ */
+export function decisionWindow(
+  messages: Message[],
+  interactionHistory: boolean,
+): Message[] {
+  const retained = new Set(
+    (interactionHistory ? recentInteractions : recentTurns)(messages),
+  );
+  const input = messages.filter((message) => message.role === 'user').at(-1);
+  return messages.filter(
+    (message) =>
+      message.role === 'system' || message === input || retained.has(message),
+  );
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Observation } from '@voxel/agent-runtime';
 import { characterPrompt } from '../packages/agent-runtime/src/agent/prompt/system';
-import { formatTurnInput } from '../packages/agent-runtime/src/agent/prompt/view';
+import { turnInput } from '../packages/agent-runtime/src/agent/prompt/view';
 import { testAgentConfig } from './support/agent-config';
 import type { AgentConfig } from '@voxel/agent-runtime';
 function buildMessages(
@@ -15,7 +15,7 @@ function buildMessages(
   };
   return [
     { role: 'system', content: characterPrompt(config) },
-    { role: 'user', content: formatTurnInput(config, o, previous) },
+    { role: 'user', content: JSON.stringify(turnInput(config, o, previous)) },
   ];
 }
 

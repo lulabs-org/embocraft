@@ -1,8 +1,15 @@
 import type { Message } from '@earendil-works/pi-ai';
-import type { AgentRunState } from '../../contracts/state';
-import { restoreBatchHistory } from '../task/state';
-import { TaskService } from '../task/service';
+import type { AICharacterTask } from '@voxel/shared';
+import type { AgentRunState, PiCheckpoint } from '../../contracts/state';
+import { isEndedTask, restoreBatchHistory } from '../task/state';
+import { TaskService, type TaskLease } from '../task/service';
 import { recentTurns } from './window';
+
+/** Owner fields tie a checkpoint to exactly one task revision and audience. */
+type CheckpointOwner = Pick<
+  PiCheckpoint,
+  'taskId' | 'revision' | 'taskStartedAt' | 'audience'
+>;
 
 /** Model-specific deserialization stays outside task policy and persisted state types. */
 export function checkpointMessages(memory: AgentRunState): Message[] {
@@ -11,6 +18,36 @@ export function checkpointMessages(memory: AgentRunState): Message[] {
 
 /** Migrate both current and archived run states without replaying old tool calls. */
 export function restoreCheckpoint(memory: AgentRunState) {
+  restoreEffects(memory);
+  const saved = memory.checkpoint.pi;
+  if (saved?.inFlight)
+    memory.checkpoint.unknownEffect = { ...saved.inFlight, state: 'unknown' };
+  memory.version = 3;
+  const task = memory.task.current;
+  if (!task) {
+    delete memory.checkpoint.pi;
+    return;
+  }
+  const owner = checkpointOwner(new TaskService(memory).lease(), task);
+  if (
+    !saved ||
+    ![2, 3].includes(saved.version) ||
+    !matchesOwner(saved, owner)
+  ) {
+    delete memory.checkpoint.pi;
+    return;
+  }
+  try {
+    saved.messages = checkpointMessages(memory);
+  } catch {
+    delete memory.checkpoint.pi;
+    return;
+  }
+  if (saved.inFlight) saved.inFlight.state = 'unknown';
+}
+
+/** Picks up an interrupted effect ledger; unknown results stay pending for reconciliation. */
+function restoreEffects(memory: AgentRunState) {
   const previous = restoreBatchHistory(memory.effects.previous);
   memory.effects.previous = previous;
   if (memory.effects.pendingEffects)
@@ -19,62 +56,43 @@ export function restoreCheckpoint(memory: AgentRunState) {
     );
   if (
     !memory.effects.pendingEffects &&
-    previous?.results?.some((r) => r.status === 'unknown')
+    previous?.results?.some((result) => result.status === 'unknown')
   )
     memory.effects.pendingEffects = structuredClone(previous);
-  const saved = memory.checkpoint.pi;
-  if (saved?.inFlight)
-    memory.checkpoint.unknownEffect = { ...saved.inFlight, state: 'unknown' };
-  if (!memory.task.current) {
-    delete memory.checkpoint.pi;
-    memory.version = 3;
-    return;
-  }
-  const identity = new TaskService(memory).lease();
-  if (
-    !saved ||
-    ![2, 3].includes(saved.version) ||
-    saved.taskId !== identity.id ||
-    saved.revision !== identity.revision ||
-    saved.taskStartedAt !== memory.task.current.startedAt ||
-    saved.audience !== (memory.task.current.privateTo ?? 'public')
-  ) {
-    delete memory.checkpoint.pi;
-  } else {
-    try {
-      saved.messages = checkpointMessages(memory);
-    } catch {
-      delete memory.checkpoint.pi;
-    }
-    if (saved.inFlight) saved.inFlight.state = 'unknown';
-  }
-  memory.version = 3;
 }
 
-export function updateCheckpoint(
-  memory: AgentRunState,
-  messages: Message[],
-  apiKey?: string,
-) {
-  if (
-    !memory.task.current ||
-    ['completed', 'cancelled'].includes(memory.task.current.status)
-  ) {
+/** Persists the trimmed transcript for the current task; callers redact first. */
+export function updateCheckpoint(memory: AgentRunState, messages: Message[]) {
+  const task = memory.task.current;
+  if (!task || isEndedTask(task)) {
     delete memory.checkpoint.pi;
     return;
   }
-  const identity = new TaskService(memory).lease();
   memory.checkpoint.pi = {
     version: 3,
-    taskId: identity.id,
-    revision: identity.revision,
-    taskStartedAt: memory.task.current.startedAt,
-    audience: memory.task.current.privateTo ?? 'public',
+    ...checkpointOwner(new TaskService(memory).lease(), task),
     messages: recentTurns(messages),
     inFlight: memory.checkpoint.pi?.inFlight,
   };
-  if (apiKey)
-    memory.checkpoint.pi = JSON.parse(
-      JSON.stringify(memory.checkpoint.pi).split(apiKey).join('[已隐藏]'),
-    );
+}
+
+function checkpointOwner(
+  lease: TaskLease,
+  task: AICharacterTask,
+): CheckpointOwner {
+  return {
+    taskId: lease.id,
+    revision: lease.revision,
+    taskStartedAt: task.startedAt,
+    audience: task.privateTo ?? 'public',
+  };
+}
+
+function matchesOwner(saved: PiCheckpoint, owner: CheckpointOwner): boolean {
+  return (
+    saved.taskId === owner.taskId &&
+    saved.revision === owner.revision &&
+    saved.taskStartedAt === owner.taskStartedAt &&
+    saved.audience === owner.audience
+  );
 }
