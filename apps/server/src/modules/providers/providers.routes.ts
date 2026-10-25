@@ -1,17 +1,15 @@
 import { ManagementCommands } from '../management/commands';
 import type { Express } from 'express';
-import type { ProviderPort } from './provider-port';
+import type { ProviderService } from './provider-service';
 import { asyncRoute as route } from '../../http/middleware/async-route';
 
 /**
  * 安装 Provider（模型提供商）相关 HTTP REST 路由
  */
-export type ProviderRouteDependencies = {
-  store: Pick<ProviderPort, 'list' | 'save'>;
-  models: (id: string) => Promise<string[]>;
-  remove: (id: string) => Promise<void>;
-  changed: () => void;
-};
+export type ProviderRouteDependencies = Pick<
+  ProviderService,
+  'list' | 'save' | 'remove' | 'models'
+>;
 
 export function installProviderRoutes(
   app: Express,
@@ -34,7 +32,7 @@ export function installProviderRoutes(
   app.get(
     '/providers',
     route((_req, res) => {
-      res.json(providers.store.list());
+      res.json(providers.list());
     }),
   );
 
@@ -60,11 +58,9 @@ export function installProviderRoutes(
   app.post(
     '/providers',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'providers', async () => {
-        const value = await providers.store.save(req.body);
-        providers.changed();
-        return value;
-      });
+      const result = await commands.execute(req, 'providers', () =>
+        providers.save(req.body),
+      );
       res.status(201).json(result);
     }),
   );
@@ -97,14 +93,9 @@ export function installProviderRoutes(
   app.put(
     '/providers/:id',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'providers', async () => {
-        const value = await providers.store.save(
-          req.body,
-          String(req.params.id),
-        );
-        providers.changed();
-        return value;
-      });
+      const result = await commands.execute(req, 'providers', () =>
+        providers.save(req.body, String(req.params.id)),
+      );
       res.json(result);
     }),
   );
@@ -131,10 +122,9 @@ export function installProviderRoutes(
   app.delete(
     '/providers/:id',
     route(async (req, res) => {
-      await commands.execute(req, 'providers', async () => {
-        await providers.remove(String(req.params.id));
-        providers.changed();
-      });
+      await commands.execute(req, 'providers', () =>
+        providers.remove(String(req.params.id)),
+      );
       res.sendStatus(204);
     }),
   );
