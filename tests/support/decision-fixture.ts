@@ -11,6 +11,7 @@ import { AgentRuntimeError } from '../../packages/agent-runtime/src/contracts/er
 import { parseDecision } from './decision-decision';
 import { buildMessages } from './decision-prompts';
 import { runTaskStep } from './decision-step';
+import { resolveMaxTokensField } from '../../packages/agent-runtime/src/agent/model/pi';
 import type { RunOptions } from '../../packages/agent-runtime/src/api/runtime';
 export interface Planner {
   decide(
@@ -30,8 +31,6 @@ export class DecisionFixture implements Planner {
     private endpoint: ModelEndpoint = {
       type: 'deepseek',
       baseUrl: 'https://api.deepseek.com',
-      jsonMode: true,
-      tokenField: 'max_tokens',
     },
   ) {}
   async decide(
@@ -50,16 +49,14 @@ export class DecisionFixture implements Planner {
         stream: false,
         ...(this.endpoint.type === 'deepseek'
           ? {
+              response_format: { type: 'json_object' },
               thinking: { type: this.config.thinking },
               ...(this.config.thinking === 'enabled'
                 ? { reasoning_effort: this.config.reasoningEffort }
                 : {}),
             }
           : {}),
-        ...(this.endpoint.jsonMode
-          ? { response_format: { type: 'json_object' } }
-          : {}),
-        [this.endpoint.tokenField]: this.config.maxTokens,
+        [resolveMaxTokensField(this.config.model)]: this.config.maxTokens,
         messages: buildMessages(observation, previous, this.config),
       };
       this.lastUsage = {

@@ -377,8 +377,6 @@ describe('Pi provider and recovery boundaries', () => {
   const localEndpoint = {
     type: 'ollama' as const,
     baseUrl: 'http://localhost:11434/v1',
-    jsonMode: false,
-    tokenField: 'max_tokens' as const,
   };
   it('corrects one prose completion without replaying an acknowledged edit', async () => {
     const f = fixture([]);
@@ -481,9 +479,6 @@ describe('Pi provider and recovery boundaries', () => {
             type === 'deepseek'
               ? 'https://api.deepseek.com'
               : 'http://localhost:11434/v1',
-          jsonMode: true,
-          tokenField:
-            type === 'deepseek' ? 'max_tokens' : 'max_completion_tokens',
         },
         request,
       ).run({
@@ -516,12 +511,9 @@ describe('Pi provider and recovery boundaries', () => {
           num_ctx: 32768,
           num_predict: f.config.maxTokens,
         });
-      } else if (type === 'deepseek') {
-        expect(body.tool_choice).toBe('required');
-        expect(body.max_tokens).toBe(f.config.maxTokens);
       } else {
         expect(body.tool_choice).toBe('required');
-        expect(body.max_completion_tokens).toBe(f.config.maxTokens);
+        expect(body.max_tokens).toBe(f.config.maxTokens);
       }
       if (type === 'deepseek')
         expect(body.thinking).toEqual({ type: 'disabled' });

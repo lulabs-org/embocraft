@@ -704,8 +704,6 @@
       "thinkingDisabled": "Disabled",
       "thinkingEnabled": "Enabled",
       "reasoningEffortLabel": "Reasoning Effort",
-      "tokenFieldLabel": "Token Limit Field",
-      "tokenFieldHint": "Adjust only if the endpoint returns unsupported parameter errors. Token limit is configured above.",
       "openaiCompatibleHint": "Supports OpenAI Chat Completions compatible APIs. Saving does not trigger inference; updated settings apply to new or resumed agents.",
       "saveProvider": "Save Provider",
       "deleteProvider": "Delete Provider"

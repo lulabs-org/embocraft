@@ -1,5 +1,5 @@
 import { AppError } from '../../common/errors';
-import { object, text, integer, boolean } from '../../common/validation';
+import { object, text, integer } from '../../common/validation';
 import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import {
@@ -74,9 +74,6 @@ export function validateProvider(
     (new URL(previous.baseUrl).origin !== url.origin || previous.type !== type)
   )
     throw new AppError('更换服务地址或类型时，请重新填写 API Key。');
-  const tokenField = input.tokenField ?? 'max_tokens';
-  if (tokenField !== 'max_tokens' && tokenField !== 'max_completion_tokens')
-    throw new AppError('输出长度参数无效。');
   return {
     id: previous?.id ?? randomUUID(),
     name,
@@ -84,8 +81,6 @@ export function validateProvider(
     baseUrl,
     apiKey: apiKey || previous?.apiKey || '',
     defaultModel: text(input.defaultModel, '默认模型', 128),
-    jsonMode: boolean(input.jsonMode, true),
-    tokenField: type === 'compatible' ? tokenField : 'max_tokens',
     inference:
       input.inference === undefined
         ? previous?.inference && validateInference(previous.inference, type)

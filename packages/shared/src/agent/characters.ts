@@ -3,25 +3,7 @@ import type {
   AICharacterSkillId,
 } from './capabilities';
 import type { TaskLimits, AICharacterTask } from '../task/contracts';
-export type ProviderType = 'deepseek' | 'ollama' | 'compatible';
 export const AI_CHARACTER_ROLE_DESCRIPTION_LIMIT = 2000;
-export type ProviderInference = Pick<
-  AICharacterSettings,
-  'timeoutMs' | 'maxTokens' | 'thinking' | 'reasoningEffort'
->;
-
-export type ProviderView = {
-  /** Absent in legacy services until inference settings are saved. */
-  inference?: ProviderInference;
-  id: string;
-  name: string;
-  type: ProviderType;
-  baseUrl: string;
-  defaultModel: string;
-  hasApiKey: boolean;
-  jsonMode: boolean;
-  tokenField: 'max_tokens' | 'max_completion_tokens';
-};
 
 export type AICharacterSettings = {
   providerId: string;

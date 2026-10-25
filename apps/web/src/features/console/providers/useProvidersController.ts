@@ -96,8 +96,6 @@ export function useProvidersController(
             type: p.type,
             baseUrl: p.baseUrl,
             defaultModel: p.defaultModel,
-            jsonMode: p.jsonMode,
-            tokenField: p.tokenField,
             apiKey: '',
             inference: p.inference ?? { ...defaultInference },
           }

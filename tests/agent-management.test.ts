@@ -202,8 +202,6 @@ describe('multi-provider SDK requests', () => {
       const endpoint = {
         type,
         baseUrl: 'http://127.0.0.1:11434/v1',
-        jsonMode: false,
-        tokenField: 'max_completion_tokens' as const,
       };
       const config = {
         ...testAgentConfig(),
@@ -232,10 +230,10 @@ describe('multi-provider SDK requests', () => {
       const body = JSON.parse(init!.body as string);
       expect(body).toMatchObject({
         model: 'org/model:8b',
-        max_completion_tokens: 512,
+        max_tokens: 512,
       });
       for (const key of [
-        'max_tokens',
+        'max_completion_tokens',
         'thinking',
         'reasoning_effort',
         'response_format',
@@ -400,7 +398,7 @@ it('persists service inference settings and keeps legacy roles until the service
 });
 
 it.each(['deepseek', 'ollama', 'compatible'] as const)(
-  'adapts output length fields for %s while preserving custom compatibility',
+  'ignores legacy tokenField for %s and saves cleanly',
   (type) => {
     const saved = validateProvider({
       name: 'Field mapping',
@@ -408,9 +406,7 @@ it.each(['deepseek', 'ollama', 'compatible'] as const)(
       baseUrl: type === 'compatible' ? 'https://example.com/v1' : undefined,
       tokenField: 'max_completion_tokens',
     });
-    expect(saved.tokenField).toBe(
-      type === 'compatible' ? 'max_completion_tokens' : 'max_tokens',
-    );
-    expect(validateProvider(saved).tokenField).toBe(saved.tokenField);
+    expect((saved as Record<string, unknown>).tokenField).toBeUndefined();
+    expect(validateProvider(saved, saved)).toEqual(saved);
   },
 );

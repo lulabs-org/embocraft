@@ -701,8 +701,6 @@
       "thinkingDisabled": "关闭",
       "thinkingEnabled": "开启",
       "reasoningEffortLabel": "推理强度",
-      "tokenFieldLabel": "输出上限字段",
-      "tokenFieldHint": "仅在接口报参数不支持时调整；输出上限数值在上方“最大输出 tokens”中设置。",
       "openaiCompatibleHint": "支持 OpenAI Chat Completions 兼容接口。保存配置不会启动推理；新建或继续运行 Agent 时使用最新配置。",
       "saveProvider": "保存模型服务",
       "deleteProvider": "删除模型服务"

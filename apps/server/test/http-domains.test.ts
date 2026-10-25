@@ -181,8 +181,16 @@ it('protects each management domain and retains transport policies after path mi
 });
 
 it('routes resource IDs and request bodies to their owning domain without old Agent aliases', async () => {
-  const models = vi.fn(async () => ['fixture-model']);
-  const server = await createTestServer({ origin, modelQuery: models });
+  const originalFetch = globalThis.fetch;
+  const fetchSpy = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async (input, init) => {
+      if (typeof input === 'string' && input.includes('11434')) {
+        return Response.json({ data: [{ id: 'fixture-model' }] });
+      }
+      return originalFetch(input, init);
+    });
+  const server = await createTestServer({ origin });
   try {
     const createProvider = await fetch(server.httpUrl + '/providers', {
       method: 'POST',
@@ -202,8 +210,12 @@ it('routes resource IDs and request bodies to their owning domain without old Ag
         })
       ).json(),
     ).toEqual({ models: ['fixture-model'] });
-    expect(models).toHaveBeenCalledWith(
-      expect.objectContaining({ id: provider.id }),
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:11434/v1/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer ollama' },
+        redirect: 'error',
+      }),
     );
     expect(
       (

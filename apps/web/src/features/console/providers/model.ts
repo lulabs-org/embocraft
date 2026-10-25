@@ -1,8 +1,4 @@
-import type {
-  ProviderInference,
-  ProviderType,
-  ProviderView,
-} from '@voxel/shared';
+import type { ProviderInference, ProviderType } from '@voxel/shared';
 export const presets = {
   deepseek: {
     name: 'DeepSeek',
@@ -28,7 +24,5 @@ export const freshProvider = (type: ProviderType = 'compatible') => ({
   type,
   apiKey: '',
   inference: { ...defaultInference },
-  jsonMode: true,
-  tokenField: 'max_tokens' as ProviderView['tokenField'],
 });
 export type ProviderDraft = ReturnType<typeof freshProvider>;

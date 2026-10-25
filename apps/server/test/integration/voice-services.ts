@@ -87,7 +87,6 @@ try {
     providers,
     voiceServices: voices,
     origin: process.env.WEB_ORIGIN,
-    modelQuery: async () => ['fixture-model'],
     agentDependencies: dependencies,
   });
   const url = server.httpUrl;
