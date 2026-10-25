@@ -1,4 +1,7 @@
-import type { ProviderType } from '@voxel/shared';
+import type { ProviderDraft, ProviderType } from '@voxel/shared';
+
+export type { ProviderDraft };
+
 export const presets = {
   deepseek: {
     name: 'DeepSeek',
@@ -12,10 +15,10 @@ export const presets = {
   },
   compatible: { name: 'OpenAI 兼容服务', baseUrl: '', defaultModel: '' },
 };
-export const freshProvider = (type: ProviderType = 'compatible') => ({
+
+export const freshProvider = (type: ProviderType = 'compatible'): ProviderDraft => ({
   ...presets[type],
   name: '',
   type,
   apiKey: '',
 });
-export type ProviderDraft = ReturnType<typeof freshProvider>;
