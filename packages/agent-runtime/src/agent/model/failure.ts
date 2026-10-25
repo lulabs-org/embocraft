@@ -16,15 +16,24 @@ export function streamFailure(input: {
   expired: boolean;
   status: number;
 }): StreamFailure {
+  if (input.aborted) {
+    return { stopReason: 'aborted', message: 'Agent 已停止。' };
+  }
+
+  if (input.expired) {
+    return { stopReason: 'error', message: '模型请求超时，已停止本次处理。' };
+  }
+
+  if (input.status >= 400) {
+    return {
+      stopReason: 'error',
+      message: `模型服务 HTTP ${input.status}，请检查模型、工具调用支持及凭据。`,
+    };
+  }
+
   return {
-    stopReason: input.aborted ? 'aborted' : 'error',
-    message: input.aborted
-      ? 'Agent 已停止。'
-      : input.expired
-        ? '模型请求超时，已停止本次处理。'
-        : input.status >= 400
-          ? `模型服务 HTTP ${input.status}，请检查模型、工具调用支持及凭据。`
-          : '模型请求失败，请检查服务及工具调用支持。',
+    stopReason: 'error',
+    message: '模型请求失败，请检查服务及工具调用支持。',
   };
 }
 
@@ -34,13 +43,16 @@ export function streamFailure(input: {
  * transcript.
  */
 export function thrownFailure(error: unknown, aborted: boolean): StreamFailure {
+  if (error instanceof AgentRuntimeError) {
+    return { stopReason: 'error', message: error.message };
+  }
+
+  if (aborted) {
+    return { stopReason: 'error', message: 'Agent 已停止。' };
+  }
+
   return {
     stopReason: 'error',
-    message:
-      error instanceof AgentRuntimeError
-        ? error.message
-        : aborted
-          ? 'Agent 已停止。'
-          : '模型请求失败，已停止本次处理。',
+    message: '模型请求失败，已停止本次处理。',
   };
 }

@@ -61,15 +61,18 @@ packages/agent-runtime/
     │   ├── task/           # 纯策略：实体、命令、授权、租约、预算
     │   │   └── task.ts policy.ts lease.ts budget.ts commands.ts
     │   ├── turn/           # 一次决策的生命周期
-    │   │   ├── turn.ts     # 显式 Turn：lease/budget/observation/flags + 方法
+    │   │   ├── turn.ts     # 显式 Turn：租约/预算/配置切换/动作槽，实现 ToolHost
     │   │   ├── wake.ts     # 一次唤醒的事件循环
-    │   │   ├── prepare.ts  # 观察与待确认效果核对、可见任务计算
+    │   │   ├── event.ts    # 事件认领与结算
+    │   │   ├── prepare.ts  # 观察、跳过未变化的等待、可见任务计算
+    │   │   ├── reconcile.ts # 未确认效果与未完成建造的核对
     │   │   ├── options.ts  # RunOptions：一次唤醒的输入
     │   │   ├── decide.ts   # Pi Agent 装配
     │   │   ├── guards.ts   # 批次边界、截断、协议纠正
     │   │   ├── input.ts    # 模型输入构造
     │   │   ├── health.ts   # 连续失败与无进展检测
     │   │   ├── window.ts   # 转录裁剪：只保留完整交互组
+    │   │   ├── transcript.ts # 转录脱敏、按受众保留与检查点写入
     │   │   └── checkpoint.ts
     │   ├── tools/          # 模型可见能力：schema + handler
     │   │   ├── port.ts     # ToolHost 接口，由 Turn 实现
@@ -87,22 +90,22 @@ packages/agent-runtime/
 
 ## 目录职责
 
-| 目录             | 职责                                                      | 不负责                           |
-| ---------------- | --------------------------------------------------------- | -------------------------------- |
-| `api/`           | 门面、事件接入、只读投影、端口组装                        | 决策、工具实现、世界执行         |
-| `contracts/`     | 跨层 DTO、存档形状、配置与错误类型                        | 行为、IO、版本迁移               |
-| `world/session/` | 会话端口与 Colyseus 实现、重连                            | 任务策略、模型请求               |
-| `world/observe/` | 观察提取、注意力过滤、结果核对谓词                        | 写回内存、调度唤醒               |
-| `world/actions/` | 动作解析、权限校验、单动作/批执行、建造                   | 任务归属、模型循环               |
-| `world/nav/`     | 局部地图、可站立节点搜索、可取消的位置闭环                | 任务状态、跟随意图               |
-| `agent/task/`    | 任务实体、命令与授权、租约、预算计算                      | 发起模型请求、执行世界写操作     |
-| `agent/turn/`    | 一次决策的状态机、输入构造、转录裁剪、守卫与检查点        | 宿主协议、具体连接实现           |
-| `agent/tools/`   | 工具 schema 与 handler，只依赖 `ToolHost` 接口            | 直接访问 Session、任务持久化细节 |
-| `agent/action/`  | 任务绑定的动作执行、后台动作槽、跟随 tick、时间与取消原语 | 模型决策                         |
-| `agent/prompt/`  | 系统提示词、技能指引、模型视图                            | 工具执行                         |
-| `agent/model/`   | 模型端口、Pi/Ollama 适配、请求计量与超时                  | 工具执行、任务状态转换           |
-| `persistence/`   | 存档序列化与版本迁移                                      | 运行时决策、世界访问             |
-| `testing/`       | 确定性夹具，供包内单测和 CLI 使用                         | 生产代码依赖                     |
+| 目录             | 职责                                                                 | 不负责                           |
+| ---------------- | -------------------------------------------------------------------- | -------------------------------- |
+| `api/`           | 门面、事件接入、只读投影、端口组装                                   | 决策、工具实现、世界执行         |
+| `contracts/`     | 跨层 DTO、存档形状、配置与错误类型                                   | 行为、IO、版本迁移               |
+| `world/session/` | 会话端口与 Colyseus 实现、重连                                       | 任务策略、模型请求               |
+| `world/observe/` | 观察提取、注意力过滤、结果核对谓词                                   | 写回内存、调度唤醒               |
+| `world/actions/` | 动作解析、权限校验、单动作/批执行、建造                              | 任务归属、模型循环               |
+| `world/nav/`     | 局部地图、可站立节点搜索、可取消的位置闭环                           | 任务状态、跟随意图               |
+| `agent/task/`    | 任务实体、命令与授权、租约、预算计算                                 | 发起模型请求、执行世界写操作     |
+| `agent/turn/`    | 一次决策的状态机、事件与转录、观察与效果核对、输入构造、守卫与检查点 | 宿主协议、具体连接实现           |
+| `agent/tools/`   | 工具 schema 与 handler，只依赖 `ToolHost` 接口                       | 直接访问 Session、任务持久化细节 |
+| `agent/action/`  | 任务绑定的动作执行、后台动作槽、跟随 tick、时间与取消原语            | 模型决策                         |
+| `agent/prompt/`  | 系统提示词、技能指引、模型视图                                       | 工具执行                         |
+| `agent/model/`   | 模型端口、Pi/Ollama 适配、请求计量与超时                             | 工具执行、任务状态转换           |
+| `persistence/`   | 存档序列化与版本迁移                                                 | 运行时决策、世界访问             |
+| `testing/`       | 确定性夹具，供包内单测和 CLI 使用                                    | 生产代码依赖                     |
 
 ## 依赖方向
 
@@ -138,8 +141,8 @@ flowchart TD
 1. **接入**：`api/runtime.ts` 注入 `RuntimePorts`，保证一个角色只有一个执行槽，重复唤醒直接拒绝。
 2. **归一**：`api/intake.ts` 把聊天、控制、计划到期、动作完成统一成 `CharacterEvent`。去重 id 只在这里生成，鉴权只走 `agent/task/policy`，先落盘再入队；队列满时标记 `unknown` 而不是丢弃后重试。
 3. **唤醒**：`agent/turn/wake.ts` 取事件；有已保存的跟随意图且无新消息时推进一次本地跟随；后台动作未结束时等它结束或等新消息，不并发发起第二次决策。
-4. **决策**：`agent/turn/turn.ts` 按 `attach → prepare → decide → settle` 推进。`input.ts` 构造模型输入，`decide.ts` 装配 Pi Agent，`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
-5. **工具**：`agent/tools/*` 的 schema 是模型契约，handler 只依赖 `ToolHost`（定义在 `tools/port.ts`，由 `Turn` 实现：observe/save/attach/send/launch/stopAction/onTaskCommitted）。任务命令走 `policy` 与 `lease`，世界动作交给执行器。
+4. **决策**：`agent/turn/turn.ts` 按 `attach → prepare → decide → settle` 推进。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`input.ts` 构造模型输入，`decide.ts` 装配 Pi Agent，`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
+5. **工具**：`agent/tools/*` 的 schema 是模型契约，handler 只依赖 `ToolHost`（定义在 `tools/port.ts`，由 `Turn` 实现：prepared/observe/save/attach/respond/commitTask/launch）。工具只转发意图，不直接改 host 配置或 lease；任务命令走 `policy` 与 `lease`，配置切换与记账由 `Turn.commitTask` 统一完成，世界动作交给执行器。
 6. **动作**：`agent/action/executor.ts` 在每次执行前校验 lease，同步动作在 turn 内完成；`goto`/`build`/`house` 进入 `background.ts`，结束后投递 `action_result` 事件回到接入层；`follow` 由宿主 tick 经 `follow.ts` 推进，不请求模型。
 7. **收尾**：任务进入结束态后清空可重放状态，`snapshot()` 提供只读投影，`store` 原子保存。宿主只持久化投影，不解析内部字段。
 

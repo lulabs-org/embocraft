@@ -1,6 +1,7 @@
 import type { AICharacterTask, AICharacterUsage } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
+import { isEndedTask } from './state';
 
 export class BudgetExhausted extends AgentRuntimeError {
   constructor(message: string) {
@@ -77,7 +78,7 @@ export class RequestBudget {
   attach(task: AICharacterTask) {
     if (this.attached === task) return;
     if (this.attached) {
-      if (!['completed', 'cancelled'].includes(this.attached.status))
+      if (!isEndedTask(this.attached))
         throw new AgentRuntimeError('不能转移未结束任务的预算。', true);
       // The completed request remains charged to the old activity. Only future
       // requests accrue to the replacement; the character total never resets.

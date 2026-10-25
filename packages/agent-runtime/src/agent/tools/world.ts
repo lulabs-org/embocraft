@@ -2,7 +2,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { aiCharacterPermissions } from '@voxel/shared';
 import { AgentRuntimeError } from '../../contracts/errors';
 import { mergeSignals } from '../../kernel/abort';
-import { checkBudgetCap } from '../task/budget';
+import { isActiveTask } from '../task/state';
 import { toolSchemas } from './schema';
 import { createTaskTools } from './task';
 import { executeTaskActions } from '../action/executor';
@@ -33,15 +33,7 @@ export function createRuntimeWorldTools(o: ToolHost): AgentTool[] {
     execute: async (id, value, ...rest) => {
       if (name === 'chat' && o.message) {
         const args = value as { text: string; relatedToTask?: boolean };
-        if (
-          args.relatedToTask &&
-          o.memory.task.current &&
-          ['running', 'waiting'].includes(o.memory.task.current.status) &&
-          !checkBudgetCap(o.memory.task.current, o.userConfig)
-        )
-          o.attach();
-        await o.send(args.text);
-        o.state.terminal = true;
+        await o.respond(args.text, args.relatedToTask);
         return result({ replied: true });
       }
       if (name === 'observe') {
@@ -52,14 +44,11 @@ export function createRuntimeWorldTools(o: ToolHost): AgentTool[] {
         });
       }
       o.authorize();
-      if (o.actionRunning() || o.isLaunched())
+      if (o.actionBusy())
         throw new AgentRuntimeError(
           '当前动作尚未结束，请读取进度或先明确停止。',
         );
-      if (
-        !o.memory.task.current ||
-        !['running', 'waiting'].includes(o.memory.task.current.status)
-      )
+      if (!isActiveTask(o.memory.task.current))
         throw new AgentRuntimeError(
           'No active running task. For a NEW human action request, call start_task(goal) FIRST, then retry the world tool. Do not claim completion: no world action was executed. A paused or exhausted task must be resumed, never recreated.',
         );
@@ -163,7 +152,6 @@ export function createRuntimeWorldTools(o: ToolHost): AgentTool[] {
           await o.save();
         });
       o.launch(id, controller, work);
-      o.onLaunched();
       o.state.terminal = true;
       return result({ actionId: id, status: 'running' });
     },

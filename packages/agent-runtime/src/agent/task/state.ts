@@ -21,6 +21,16 @@ export function newTask(
   };
 }
 
+/** A task the runtime may still advance without an operator command. */
+export function isActiveTask(task?: AICharacterTask): task is AICharacterTask {
+  return !!task && (task.status === 'running' || task.status === 'waiting');
+}
+
+/** A task that can never make progress again on its own. */
+export function isEndedTask(task?: AICharacterTask): boolean {
+  return !task || task.status === 'completed' || task.status === 'cancelled';
+}
+
 /** Restore batch history only; in-flight effects remain unknown and never replay automatically. */
 export function restoreBatchHistory(value: unknown): BatchResult | undefined {
   if (!value || typeof value !== 'object') return undefined;

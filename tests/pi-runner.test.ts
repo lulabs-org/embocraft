@@ -315,6 +315,18 @@ describe('Pi world tool runtime', () => {
     expect(f.request).toHaveBeenCalledTimes(3);
     expect(f.memory.task.current?.status).toBe('blocked');
   });
+  it('treats a refreshed observation as progress instead of the stale decision snapshot', async () => {
+    const edits = Array.from({ length: 8 }, (_, index) => [
+      {
+        name: 'edit',
+        arguments: { x: index - 4, y: 3, z: 0, material: 'wood' },
+      },
+    ]);
+    const f = fixture(edits);
+    await f.run();
+    expect(f.request).toHaveBeenCalledTimes(9);
+    expect(f.memory.task.current?.status).toBe('blocked');
+  });
   it('restores unknown in-flight effects without replaying or keeping incomplete tool groups', () => {
     const f = fixture([]);
     f.memory.checkpoint.pi = {

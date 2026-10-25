@@ -4,7 +4,7 @@ import type { AgentConfig } from '../../contracts';
 import type { AgentRunState } from '../../contracts/state';
 import { AgentRuntimeError } from '../../contracts/errors';
 import { checkBudgetCap, type RequestBudget } from './budget';
-import { newTask } from './state';
+import { isEndedTask, newTask } from './state';
 
 export type TaskCommand =
   | { type: 'start'; goal: string }
@@ -66,7 +66,7 @@ export class TaskService {
       (message.data as ChatData).scope !== 'public' ? message.actor : undefined;
     if (
       task &&
-      !['completed', 'cancelled'].includes(task.status) &&
+      !isEndedTask(task) &&
       ((task.owner && task.owner !== message.actor) ||
         (task.privateTo && task.privateTo !== privateTo))
     )
@@ -89,7 +89,7 @@ export class TaskService {
         throw new AgentRuntimeError('任务目标无效。');
     }
     if (command.type === 'start') {
-      if (task && !['completed', 'cancelled'].includes(task.status))
+      if (!isEndedTask(task))
         throw new AgentRuntimeError(
           '已有正在执行或未结束的任务，请修改或取消原任务。',
         );
@@ -122,7 +122,7 @@ export class TaskService {
       return task;
     }
     if (!task) throw new AgentRuntimeError('没有可控制的任务，请先布置任务。');
-    if (['completed', 'cancelled'].includes(task.status)) {
+    if (isEndedTask(task)) {
       if (command.type === 'pause' || command.type === 'cancel') return task;
       throw new AgentRuntimeError(
         '任务已结束，请在控制台重新执行或布置新任务。',

@@ -1,0 +1,168 @@
+import { key } from '@voxel/shared';
+import type {
+  ActionExecution,
+  BatchResult,
+  PlannedEdit,
+} from '../../contracts/action';
+import type { Observation } from '../../contracts/observation';
+import type { AgentRunState } from '../../contracts/state';
+import { arrived, observedEmpty } from '../../world/observe/verify';
+
+/**
+ * Repairs world-write bookkeeping against a fresh observation before the model
+ * decides again. Both reconcilers mutate `memory.effects` in place and are
+ * idempotent: an effect proven by the observation is dropped, everything else
+ * stays pending and is shown to the model on the next turn.
+ */
+
+/** Drops blueprint blocks that the observation proves are already in place. */
+export function reconcileUnfinishedBuild(
+  memory: AgentRunState,
+  observation: Observation,
+) {
+  const build = memory.effects.unfinishedBuild;
+  if (!build) return;
+  const observed = observedMaterials(observation);
+  const remaining = build.result.remaining.filter((block) =>
+    block.material === null
+      ? !observedEmpty(observation, block)
+      : observed.get(key(block)) !== block.material,
+  );
+  if (!remaining.length) {
+    memory.effects.unfinishedBuild = undefined;
+    return;
+  }
+  build.result.remaining = remaining;
+  build.result.uncertain = build.result.uncertain?.filter((block) =>
+    remaining.some((other) => key(other) === key(block)),
+  );
+}
+
+/** Observed materials by block key; the observation is host-supplied, so tolerate gaps. */
+function observedMaterials(observation: Observation) {
+  return new Map(
+    (observation.blocks ?? []).map((block) => [key(block), block.material]),
+  );
+}
+
+/** Drops a pending batch once every unacknowledged effect is observable. */
+export function reconcilePendingEffects(
+  memory: AgentRunState,
+  observation: Observation,
+) {
+  const pending = memory.effects.pendingEffects;
+  if (!pending) return;
+  const correctedArrival = replacementArrived(
+    observation,
+    memory.effects.previous as BatchResult | undefined,
+  );
+  const resolved = pending.results
+    .filter((execution) => !['pending', 'succeeded'].includes(execution.status))
+    .every((execution) =>
+      effectResolved(memory, observation, execution, correctedArrival),
+    );
+  if (!resolved) return;
+  clearReconciledUnknownEffect(memory, pending);
+  delete memory.effects.pendingEffects;
+}
+
+/** Whether one unacknowledged execution can be seen in the current world. */
+function effectResolved(
+  memory: AgentRunState,
+  observation: Observation,
+  execution: ActionExecution,
+  correctedArrival: boolean,
+): boolean {
+  const { action } = execution;
+  switch (action.type) {
+    case 'edit':
+      return editVisible(observation, action);
+    case 'goto':
+      return (
+        arrived(observation, action) ||
+        (failedNavigation(execution) && correctedArrival)
+      );
+    case 'follow':
+      return (
+        !!memory.effects.follow &&
+        memory.effects.follow.taskStartedAt === memory.task.current?.startedAt
+      );
+    case 'move':
+      return movedSince(observation, execution.before);
+    case 'build':
+    case 'house':
+      return !memory.effects.unfinishedBuild;
+    default:
+      return false;
+  }
+}
+
+/** An edit is confirmed by its material being present, or proven absence for removals. */
+function editVisible(observation: Observation, edit: PlannedEdit): boolean {
+  if (edit.material === null) return observedEmpty(observation, edit);
+  return observation.blocks.some(
+    (block) => key(block) === key(edit) && block.material === edit.material,
+  );
+}
+
+/** A failed navigation only reconciles behind a later verified arrival. */
+function failedNavigation(execution: ActionExecution): boolean {
+  const { result } = execution;
+  return (
+    execution.status === 'failed' &&
+    !!result &&
+    'status' in result &&
+    result.status === 'failed'
+  );
+}
+
+/** A movement is confirmed by any displacement from its recorded start position. */
+function movedSince(
+  observation: Observation,
+  before: ActionExecution['before'],
+): boolean {
+  return (
+    !!before &&
+    Math.hypot(
+      observation.self.x - before.x,
+      observation.self.y - before.y,
+      observation.self.z - before.z,
+    ) >= 0.05
+  );
+}
+
+/** A verified replacement destination supersedes a known navigation failure. */
+function replacementArrived(
+  observation: Observation,
+  latest: BatchResult | undefined,
+): boolean {
+  return !!latest?.results?.some((execution) => {
+    const { action } = execution;
+    if (action.type !== 'goto' || execution.status !== 'succeeded')
+      return false;
+    const { result } = execution;
+    return (
+      !!result &&
+      result.ok &&
+      'status' in result &&
+      result.status === 'arrived' &&
+      arrived(observation, action)
+    );
+  });
+}
+
+/** Forgets an unknown effect once its own batch has finished reconciling. */
+function clearReconciledUnknownEffect(
+  memory: AgentRunState,
+  pending: BatchResult,
+) {
+  const unknown = memory.checkpoint.unknownEffect;
+  if (!unknown || unknown.name === 'chat') return;
+  const ownsUnknownEffect = pending.results.some(
+    (execution) => execution.action.type === unknown.name,
+  );
+  if (!ownsUnknownEffect) return;
+  delete memory.checkpoint.unknownEffect;
+  if (memory.checkpoint.pi?.inFlight?.id === unknown.id)
+    delete memory.checkpoint.pi.inFlight;
+}
