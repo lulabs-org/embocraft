@@ -1,7 +1,6 @@
 import type { Model, OpenAICompletionsOptions } from '@earendil-works/pi-ai';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { ollamaCompletion } from './ollama';
-import { providerPayload } from './payload';
 
 /** Inputs shared by every provider call of one model stream. */
 export type ProviderRequest = {
@@ -48,14 +47,19 @@ export function providerOptions(
   input: ProviderRequest,
   onStatus: (status: number) => void,
 ): Omit<OpenAICompletionsOptions, 'signal' | 'maxTokens'> {
-  const { config } = input;
+  const { config, endpoint } = input;
   return {
     apiKey: config.apiKey || 'ollama',
     maxRetries: 0,
     toolChoice: 'required',
     timeoutMs: config.timeoutMs,
     cacheRetention: 'none',
+    reasoningEffort:
+      endpoint.type === 'deepseek' &&
+      config.thinking === 'enabled' &&
+      config.reasoningEffort !== 'none'
+        ? (config.reasoningEffort as OpenAICompletionsOptions['reasoningEffort'])
+        : undefined,
     fetch: providerFetch(input, onStatus),
-    onPayload: (payload) => providerPayload(config, input.endpoint, payload),
   };
 }

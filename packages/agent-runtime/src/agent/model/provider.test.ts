@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { createModel } from './pi';
-import { providerPayload } from './payload';
 import { providerFetch, providerOptions } from './provider';
 import { ollamaCompletion } from './ollama';
+import { normalizeContext } from '@earendil-works/pi-ai';
+import { stream } from '@earendil-works/pi-ai/api/openai-completions';
 
 vi.mock('./ollama', () => ({ ollamaCompletion: vi.fn() }));
 
@@ -41,37 +42,24 @@ function endpoint(type: ModelEndpoint['type']): ModelEndpoint {
   };
 }
 
-describe('provider payload policy', () => {
-  it('adds thinking controls for DeepSeek', () => {
-    const body = { model: 'deepseek-flash', reasoning_effort: 'low' };
-    expect(
-      providerPayload(
-        config({ thinking: 'enabled', reasoningEffort: 'high' }),
-        endpoint('deepseek'),
-        body,
-      ),
-    ).toMatchObject({
-      model: 'deepseek-flash',
-      thinking: { type: 'enabled' },
-      reasoning_effort: 'high',
+describe('model definition and thinking policy', () => {
+  it('configures DeepSeek thinking format and reasoning capability', () => {
+    const deepseekModel = createModel(
+      config({ thinking: 'enabled' }),
+      endpoint('deepseek'),
+    );
+    expect(deepseekModel.reasoning).toBe(true);
+    expect(deepseekModel.compat).toMatchObject({
+      thinkingFormat: 'deepseek',
+      supportsReasoningEffort: true,
     });
   });
 
-  it('removes reasoning effort when DeepSeek thinking is disabled', () => {
-    const body = { model: 'deepseek-flash', reasoning_effort: 'high' };
-    const payload = providerPayload(
-      config({ thinking: 'disabled' }),
-      endpoint('deepseek'),
-      body,
-    );
-    expect(payload.thinking).toEqual({ type: 'disabled' });
-    expect(payload.reasoning_effort).toBeUndefined();
-  });
-
-  it('leaves other providers untouched', () => {
-    const body = { model: 'qwen3:8b' };
-    expect(providerPayload(config(), endpoint('ollama'), body)).toBe(body);
-    expect(providerPayload(config(), endpoint('compatible'), body)).toBe(body);
+  it('keeps non-DeepSeek endpoints free of DeepSeek thinkingFormat', () => {
+    const ollamaModel = createModel(config(), endpoint('ollama'));
+    const compatModel = createModel(config(), endpoint('compatible'));
+    expect(ollamaModel.compat?.thinkingFormat).toBeUndefined();
+    expect(compatModel.compat?.thinkingFormat).toBeUndefined();
   });
 });
 
@@ -145,7 +133,7 @@ describe('provider request options', () => {
     });
   });
 
-  it('applies the provider payload policy through onPayload', () => {
+  it('sets reasoningEffort for DeepSeek when thinking is enabled', () => {
     const options = providerOptions(
       {
         config: config({ thinking: 'enabled', reasoningEffort: 'low' }),
@@ -155,11 +143,92 @@ describe('provider request options', () => {
       },
       () => {},
     );
-    expect(
-      options.onPayload?.({ model: 'deepseek-flash' }, undefined as never),
-    ).toMatchObject({
-      thinking: { type: 'enabled' },
-      reasoning_effort: 'low',
+    expect(options.reasoningEffort).toBe('low');
+  });
+
+  it('omits reasoningEffort when DeepSeek thinking is disabled', () => {
+    const options = providerOptions(
+      {
+        config: config({ thinking: 'disabled', reasoningEffort: 'high' }),
+        endpoint: endpoint('deepseek'),
+        model: createModel(config(), endpoint('deepseek')),
+        request: vi.fn<typeof fetch>(),
+      },
+      () => {},
+    );
+    expect(options.reasoningEffort).toBeUndefined();
+  });
+
+  it('omits reasoningEffort for non-DeepSeek endpoints', () => {
+    const options = providerOptions(
+      {
+        config: config({ thinking: 'enabled', reasoningEffort: 'high' }),
+        endpoint: endpoint('compatible'),
+        model: createModel(config(), endpoint('compatible')),
+        request: vi.fn<typeof fetch>(),
+      },
+      () => {},
+    );
+    expect(options.reasoningEffort).toBeUndefined();
+  });
+});
+
+describe('end-to-end thinking payload via pi-ai stream', () => {
+  it('injects thinking and reasoning_effort into request body for DeepSeek when enabled', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const request = vi.fn<typeof fetch>(async (_url, init) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return new Response(JSON.stringify({ id: '1', choices: [] }));
     });
+    const cfg = config({ thinking: 'enabled', reasoningEffort: 'high' });
+    const ep = endpoint('deepseek');
+    const model = createModel(cfg, ep);
+    const options = providerOptions(
+      { config: cfg, endpoint: ep, model, request },
+      () => {},
+    );
+    const s = stream(
+      model,
+      normalizeContext({
+        messages: [{ role: 'user', content: 'test', timestamp: 1 }],
+      }),
+      options,
+    );
+    for await (const event of s) {
+      expect(event).toBeDefined();
+    }
+    expect(capturedBody).toMatchObject({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+    });
+  });
+
+  it('disables thinking and omits reasoning_effort for DeepSeek when disabled', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const request = vi.fn<typeof fetch>(async (_url, init) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return new Response(JSON.stringify({ id: '1', choices: [] }));
+    });
+    const cfg = config({ thinking: 'disabled', reasoningEffort: 'high' });
+    const ep = endpoint('deepseek');
+    const model = createModel(cfg, ep);
+    const options = providerOptions(
+      { config: cfg, endpoint: ep, model, request },
+      () => {},
+    );
+    const s = stream(
+      model,
+      normalizeContext({
+        messages: [{ role: 'user', content: 'test', timestamp: 1 }],
+      }),
+      options,
+    );
+    for await (const event of s) {
+      expect(event).toBeDefined();
+    }
+    expect(capturedBody).toMatchObject({
+      thinking: { type: 'disabled' },
+    });
+    expect(capturedBody?.reasoning_effort).toBeUndefined();
   });
 });
