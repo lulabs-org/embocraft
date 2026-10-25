@@ -232,9 +232,6 @@ importers:
       colyseus.js:
         specifier: ^0.16.19
         version: 0.16.22
-      openai:
-        specifier: ^7.34.0
-        version: 7.34.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@4.6.7)
 
   packages/shared: {}
 
@@ -3454,30 +3451,6 @@ packages:
 
   openai@7.19.0:
     resolution: {integrity: sha512-MX2s3u2L5racTO0CC/SWpCOasJQBCJrqLKXK+l82cAhdeF8mPMBEe/gxMm0ZFa2xpKpOFLRjxv5afYEZbBXmbQ==}
-    engines: {node: '>=22.0.0'}
-    peerDependencies:
-      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
-      '@smithy/hash-node': '>=4.3.0 <5'
-      '@smithy/signature-v4': '>=5.4.0 <6'
-      undici: '>=5 <9'
-      ws: ^8.21.0
-      zod: ^3.25 || ^4.0
-    peerDependenciesMeta:
-      '@aws-sdk/credential-provider-node':
-        optional: true
-      '@smithy/hash-node':
-        optional: true
-      '@smithy/signature-v4':
-        optional: true
-      undici:
-        optional: true
-      ws:
-        optional: true
-      zod:
-        optional: true
-
-  openai@7.34.0:
-    resolution: {integrity: sha512-PMwuTQ/3cVyWZJOVpb6bzlrQj17uImlnUGQWqh5zHlN/snwK5ww4ZUHW8NYGtH6f9PQOEPxyD/f8WJVIHp1q2A==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
@@ -7969,14 +7942,6 @@ snapshots:
       regex-recursion: 6.0.2
 
   openai@7.19.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@4.6.7):
-    optionalDependencies:
-      '@aws-sdk/credential-provider-node': 3.972.86
-      '@smithy/signature-v4': 5.7.4
-      undici: 8.12.3
-      ws: 8.22.0
-      zod: 4.6.7
-
-  openai@7.34.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@4.6.7):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.86
       '@smithy/signature-v4': 5.7.4
