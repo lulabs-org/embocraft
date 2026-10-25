@@ -29,10 +29,7 @@ import { GatewayAuth } from './modules/gateway/auth';
 import { installGatewaySocket } from './modules/gateway/socket';
 
 import { ProviderStore } from './modules/providers/provider-store';
-import {
-  ModelCatalog,
-  type ModelQuery,
-} from './modules/providers/model-catalog';
+import { ModelCatalog } from './modules/providers/model-catalog';
 
 import { WorldRoom } from './modules/world/room';
 import { WorldStore } from './modules/world/store';
@@ -45,7 +42,6 @@ export type ServerOptions = {
   speech?: LocalSpeech;
   worldStore?: WorldStore;
   agentDependencies?: AICharacterDependencies;
-  modelQuery?: ModelQuery;
   databaseCheck?: (url: string) => Promise<void>;
   asrBridge?: AsrBridge;
 };
@@ -99,7 +95,7 @@ export async function createServer(options: ServerOptions = {}) {
     options.agentDependencies,
     voiceServices,
   );
-  const modelCatalog = new ModelCatalog(providers, options.modelQuery);
+  const modelCatalog = new ModelCatalog(providers);
   const speech = options.speech ?? new LocalSpeech();
   const app = createApp({
     origin: config.webOrigin,

@@ -7,6 +7,4 @@ export type AgentConfig = Omit<AICharacterSettings, 'providerId'> & {
 export type ModelEndpoint = {
   type: ProviderType;
   baseUrl: string;
-  jsonMode: boolean;
-  tokenField: 'max_tokens' | 'max_completion_tokens';
 };

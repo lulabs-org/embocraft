@@ -29,7 +29,6 @@ let agent: Session | undefined, human: Session | undefined;
 try {
   server = await createTestServer({
     directory: dir,
-    modelQuery: async () => ['fixture-model'],
     agentDependencies: {
       session: (endpoint) => new Session(endpoint),
       runner: () =>

@@ -1,4 +1,4 @@
-import type { ChatData } from '@voxel/shared';
+import { LIMIT, type ChatData } from '@voxel/shared';
 import {
   startTask,
   controlRun as controlManagedRun,
@@ -223,7 +223,6 @@ try {
     providers: store,
     origin: process.env.WEB_ORIGIN,
     port: preview ? 2578 : 0,
-    modelQuery: async () => ['fixture-model'],
     agentDependencies: dependencies,
   });
   const room = server.world,
@@ -502,18 +501,22 @@ try {
 
     const player = room.state.players.get(current().sessionId!)!;
     const position = { x: player.x, y: player.y, z: player.z };
-    player.x = 11.7;
+    player.x = LIMIT - 0.3;
     player.z = 0;
     player.y =
       Math.max(
         ...[...room.blocks.values()]
-          .filter((b) => b.x === 12 && b.z === 0)
+          .filter((b) => b.x === LIMIT && b.z === 0)
           .map((b) => b.y),
       ) + 0.5;
     await delay(300);
     await controlManagedRun(manager, job.id, 'cancel');
     await startTask(manager, job.id, { goal: '批次受阻' });
-    await until(() => current().task?.status === 'needs_input');
+    await until(
+      () =>
+        current().task?.goal === '批次受阻' &&
+        current().task?.status === 'needs_input',
+    );
     assert.equal(
       prompts.at(-1)!.previous.previous.stopReason,
       'movement_stalled',

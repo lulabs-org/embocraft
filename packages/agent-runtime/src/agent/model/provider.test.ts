@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
-import { createModel } from './pi';
+import { createModel, resolveMaxTokensField } from './pi';
 import { providerFetch, providerOptions } from './provider';
 import { ollamaCompletion } from './ollama';
 import { normalizeContext } from '@earendil-works/pi-ai';
@@ -40,8 +40,6 @@ function endpoint(type: ModelEndpoint['type']): ModelEndpoint {
       type === 'deepseek'
         ? 'https://api.deepseek.com'
         : 'http://localhost:11434',
-    jsonMode: true,
-    tokenField: 'max_tokens',
   };
 }
 
@@ -60,6 +58,23 @@ describe('model definition and thinking policy', () => {
     const compatModel = createModel(config(), endpoint('compatible'));
     expect(ollamaModel.compat?.thinkingFormat).toBeUndefined();
     expect(compatModel.compat?.thinkingFormat).toBeUndefined();
+  });
+
+  it('automatically resolves maxTokensField based on model name', () => {
+    expect(resolveMaxTokensField('o1')).toBe('max_completion_tokens');
+    expect(resolveMaxTokensField('o1-mini')).toBe('max_completion_tokens');
+    expect(resolveMaxTokensField('o1-preview')).toBe('max_completion_tokens');
+    expect(resolveMaxTokensField('o3-mini')).toBe('max_completion_tokens');
+    expect(resolveMaxTokensField('openai/o1')).toBe('max_completion_tokens');
+    expect(resolveMaxTokensField('gpt-4o')).toBe('max_tokens');
+    expect(resolveMaxTokensField('deepseek-chat')).toBe('max_tokens');
+    expect(resolveMaxTokensField('qwen2.5:7b')).toBe('max_tokens');
+
+    const o1Model = createModel(config({ model: 'o1-mini' }), endpoint('compatible'));
+    expect(o1Model.compat?.maxTokensField).toBe('max_completion_tokens');
+
+    const standardModel = createModel(config({ model: 'gpt-4o' }), endpoint('compatible'));
+    expect(standardModel.compat?.maxTokensField).toBe('max_tokens');
   });
 });
 

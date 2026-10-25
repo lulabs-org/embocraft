@@ -1,9 +1,5 @@
 import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRelay';
-import type {
-  AICharacterSettings,
-  ProviderType,
-  ProviderView,
-} from '@voxel/shared';
+import type { AICharacterSettings, ProviderType } from '@voxel/shared';
 import { useI18n } from '../../../i18n/context';
 import type { ConsoleController } from '../useConsoleController';
 import { freshProvider } from './model';
@@ -298,30 +294,6 @@ export function ProviderEditor({
               </div>
             )}
 
-            {draft.type === 'compatible' && (
-              <>
-                <label>
-                  {t('console.providers.tokenFieldLabel')}
-                  <select
-                    aria-describedby="provider-token-field-hint"
-                    value={draft.tokenField}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        tokenField: e.target
-                          .value as ProviderView['tokenField'],
-                      })
-                    }
-                  >
-                    <option>max_tokens</option>
-                    <option>max_completion_tokens</option>
-                  </select>
-                </label>
-                <p id="provider-token-field-hint" className="agent-hint">
-                  {t('console.providers.tokenFieldHint')}
-                </p>
-              </>
-            )}
           </section>
           <p className="agent-hint">
             {t('console.providers.openaiCompatibleHint')}

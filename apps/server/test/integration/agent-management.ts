@@ -19,6 +19,7 @@ let manager: AICharacterManager | undefined;
 let calls = 0;
 const observations: Observation[] = [];
 let speaker: Session | undefined;
+const originalFetch = globalThis.fetch;
 try {
   const store = new ProviderStore(join(dir, 'providers.json'));
   await store.load({ DEEPSEEK_API_KEY: 'fixture-secret' });
@@ -59,11 +60,16 @@ try {
       { headers: { 'Content-Type': 'application/json' } },
     );
   };
+  globalThis.fetch = (async (input, init) => {
+    if (typeof input === 'string' && input.includes('api.deepseek.com')) {
+      return Response.json({ data: [{ id: 'fixture-model' }] });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
   server = await createTestServer({
     directory: dir,
     providers: store,
     origin: process.env.WEB_ORIGIN,
-    modelQuery: async () => ['fixture-model'],
     agentDependencies: {
       session: (url) => new Session(url),
       runner: fixtureRunnerFactory((config, provider) => {
@@ -686,6 +692,7 @@ try {
     'PASS: origin guard, credential redaction, task completion stays online, reuse preserves player identity/position, task replacement, idle spends no inference, close/rejoin, canonical capabilities, atomic permission rejection, silent chat denial, online capacity and restart restoration without inference. Model responses are fixtures.',
   );
 } finally {
+  globalThis.fetch = originalFetch;
   await speaker?.close();
   await manager?.close();
   await server?.close();

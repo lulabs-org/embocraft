@@ -12,7 +12,6 @@ const output = resolve(
 const results: unknown[] = [];
 let calls = 0;
 const server = await createTestServer({
-  modelQuery: async () => [process.env.EVENTS_MODEL ?? 'qwen3:8b'],
   agentDependencies: {
     session: (url) => new Session(url),
     runner: (_config, endpoint) => ({
