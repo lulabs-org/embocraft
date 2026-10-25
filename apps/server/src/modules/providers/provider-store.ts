@@ -2,23 +2,11 @@ import { env } from '../../config/env';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { type ProviderView } from '@voxel/shared';
-import {
-  validateProvider,
-  type SavedProvider,
-} from './provider-validation';
+import { validateProvider } from './provider-validation';
 import { AppError } from '../../common/errors';
+import { toProviderView, type SavedProvider } from './domain/model';
 
-/**
- * 将持久化配置转换为对外安全的脱敏视图（去除明文 apiKey）
- */
-export function toProviderView(provider: SavedProvider): ProviderView {
-  const { apiKey, ...view } = provider;
-  return {
-    ...view,
-    hasApiKey: !!apiKey,
-  };
-}
+export { toProviderView } from './domain/model';
 
 export class ProviderStore {
   private values: SavedProvider[] = [];

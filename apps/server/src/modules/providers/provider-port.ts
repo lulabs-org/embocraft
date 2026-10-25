@@ -1,5 +1,5 @@
 import type { ProviderView } from '@voxel/shared';
-import type { SavedProvider } from './provider-validation';
+import type { SavedProvider } from './domain/model';
 
 export interface ProviderPort {
   list(): ProviderView[];
