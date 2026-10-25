@@ -1,10 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { AppError } from '../../common/errors';
-import { validateProvider, providerView } from './provider-validation';
+import { validateProvider } from './provider-validation';
+import { toProviderView } from './provider-store';
 import { ProviderService } from './provider-service';
 
 function fixture(referenced = false) {
-  const view = providerView(
+  const view = toProviderView(
     validateProvider({ name: 'Local', type: 'ollama' }),
   );
   const store = {

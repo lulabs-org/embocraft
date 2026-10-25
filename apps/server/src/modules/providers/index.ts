@@ -1,8 +1,7 @@
-export { ProviderStore } from './provider-store';
+export { ProviderStore, toProviderView } from './provider-store';
 export {
   validateProvider,
   validateInference,
-  providerView,
   type SavedProvider,
 } from './provider-validation';
 export type { ProviderPort } from './provider-port';

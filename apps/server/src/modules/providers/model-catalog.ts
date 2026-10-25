@@ -5,15 +5,17 @@ import type { ProviderPort } from './provider-port';
 export class ModelCatalog {
   private probing = new Set<string>();
 
-  constructor(private providers: Pick<ProviderPort, 'get'>) {}
+  constructor(private providers: Pick<ProviderPort, 'get'>) { }
 
   async models(id: string) {
     if (this.probing.has(id))
       throw new AppError('正在连接此模型服务，请稍候。', 429);
     const provider = this.providers.get(id);
+
     if (provider.type !== 'ollama' && !provider.apiKey)
       throw new AppError('请先配置 API Key。');
     this.probing.add(id);
+
     try {
       const res = await fetch(
         `${provider.baseUrl.replace(/\/+$/, '')}/models`,
