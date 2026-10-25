@@ -2,12 +2,23 @@ import { env } from '../../config/env';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { type ProviderView } from '@voxel/shared';
 import {
-  providerView,
   validateProvider,
   type SavedProvider,
 } from './provider-validation';
 import { AppError } from '../../common/errors';
+
+/**
+ * 将持久化配置转换为对外安全的脱敏视图（去除明文 apiKey）
+ */
+export function toProviderView(provider: SavedProvider): ProviderView {
+  const { apiKey, ...view } = provider;
+  return {
+    ...view,
+    hasApiKey: !!apiKey,
+  };
+}
 
 export class ProviderStore {
   private values: SavedProvider[] = [];
@@ -16,43 +27,49 @@ export class ProviderStore {
   constructor(readonly path = env.dataPath('agent-providers.json')) {}
 
   async load(envVars?: NodeJS.ProcessEnv) {
+    let content: string;
     try {
-      const saved = JSON.parse(await readFile(this.path, 'utf8'));
-      if (!Array.isArray(saved) || saved.length > 20) throw Error('invalid');
-      this.values = saved.map((p: SavedProvider) => {
-        if (typeof p.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(p.id))
-          throw Error('invalid');
-        return { ...validateProvider(p), id: p.id };
-      });
+      content = await readFile(this.path, 'utf8');
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw new AppError('无法读取模型服务配置，请检查本地配置文件。', 500);
+      }
       const defaults = env.readProviders(envVars);
       this.values = [
         {
-          ...validateProvider({
-            name: 'DeepSeek',
-            type: 'deepseek',
-            apiKey: defaults.deepseekApiKey,
-            defaultModel: defaults.deepseekModel,
-          }),
           id: 'deepseek',
+          name: 'DeepSeek',
+          type: 'deepseek',
+          apiKey: defaults.deepseekApiKey,
+          defaultModel: defaults.deepseekModel,
         },
         {
-          ...validateProvider({
-            name: 'Ollama',
-            type: 'ollama',
-            defaultModel: defaults.ollamaModel,
-          }),
           id: 'ollama',
+          name: 'Ollama',
+          type: 'ollama',
+          defaultModel: defaults.ollamaModel,
         },
-      ];
+      ].map((p) => ({ ...validateProvider(p), id: p.id }));
+
       await this.persist(this.values);
+      return;
+    }
+
+    try {
+      const saved = JSON.parse(content);
+      if (!Array.isArray(saved) || saved.length > 20) throw Error();
+      this.values = saved.map((p: SavedProvider) => {
+        if (typeof p?.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(p.id))
+          throw Error();
+        return { ...validateProvider(p), id: p.id };
+      });
+    } catch {
+      throw new AppError('无法读取模型服务配置，请检查本地配置文件。', 500);
     }
   }
 
   list() {
-    return this.values.map(providerView);
+    return this.values.map(toProviderView);
   }
 
   get(id: string) {
@@ -91,7 +108,7 @@ export class ProviderStore {
         : [...this.values, provider];
       await this.persist(next);
       this.values = next;
-      return providerView(provider);
+      return toProviderView(provider);
     });
   }
 
