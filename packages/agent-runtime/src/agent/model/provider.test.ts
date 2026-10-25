@@ -36,23 +36,23 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 function endpoint(type: ModelEndpoint['type']): ModelEndpoint {
   return {
     type,
-    baseUrl: 'http://localhost:11434',
+    baseUrl:
+      type === 'deepseek'
+        ? 'https://api.deepseek.com'
+        : 'http://localhost:11434',
     jsonMode: true,
     tokenField: 'max_tokens',
   };
 }
 
 describe('model definition and thinking policy', () => {
-  it('configures DeepSeek thinking format and reasoning capability', () => {
+  it('configures DeepSeek reasoning capability and delegates compat to pi-ai detectCompat', () => {
     const deepseekModel = createModel(
       config({ thinking: 'enabled' }),
       endpoint('deepseek'),
     );
     expect(deepseekModel.reasoning).toBe(true);
-    expect(deepseekModel.compat).toMatchObject({
-      thinkingFormat: 'deepseek',
-      supportsReasoningEffort: true,
-    });
+    expect(deepseekModel.compat).toBeUndefined();
   });
 
   it('keeps non-DeepSeek endpoints free of DeepSeek thinkingFormat', () => {

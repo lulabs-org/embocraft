@@ -477,9 +477,13 @@ describe('Pi provider and recovery boundaries', () => {
       await new AgentRunner(
         {
           type,
-          baseUrl: 'http://localhost:11434/v1',
+          baseUrl:
+            type === 'deepseek'
+              ? 'https://api.deepseek.com'
+              : 'http://localhost:11434/v1',
           jsonMode: true,
-          tokenField: 'max_completion_tokens',
+          tokenField:
+            type === 'deepseek' ? 'max_tokens' : 'max_completion_tokens',
         },
         request,
       ).run({
@@ -495,7 +499,9 @@ describe('Pi provider and recovery boundaries', () => {
       expect(String(url)).toBe(
         type === 'ollama'
           ? 'http://localhost:11434/api/chat'
-          : 'http://localhost:11434/v1/chat/completions',
+          : type === 'deepseek'
+            ? 'https://api.deepseek.com/chat/completions'
+            : 'http://localhost:11434/v1/chat/completions',
       );
       expect(init?.redirect).toBe('error');
       expect(new Headers(init?.headers).get('Authorization')).toBe(
@@ -510,6 +516,9 @@ describe('Pi provider and recovery boundaries', () => {
           num_ctx: 32768,
           num_predict: f.config.maxTokens,
         });
+      } else if (type === 'deepseek') {
+        expect(body.tool_choice).toBe('required');
+        expect(body.max_tokens).toBe(f.config.maxTokens);
       } else {
         expect(body.tool_choice).toBe('required');
         expect(body.max_completion_tokens).toBe(f.config.maxTokens);

@@ -8,30 +8,32 @@ export const defaultEndpoint: ModelEndpoint = {
   tokenField: 'max_tokens',
 };
 
+const MODEL_DEFAULTS = {
+  api: 'openai-completions' as const,
+  input: ['text' as const],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 32768,
+};
+
 /** Create a Model definition for the unified agent runner from config and endpoint. */
 export function createModel(
   config: AgentConfig,
   endpoint: ModelEndpoint,
 ): Model<'openai-completions'> {
   return {
+    ...MODEL_DEFAULTS,
     id: config.model,
     name: config.model,
-    api: 'openai-completions',
     provider: endpoint.type,
     baseUrl: endpoint.baseUrl,
     reasoning: endpoint.type === 'deepseek' || config.thinking === 'enabled',
-    input: ['text'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 32768,
     maxTokens: config.maxTokens,
-    compat: {
-      maxTokensField: endpoint.tokenField,
-      supportsDeveloperRole: false,
-      supportsStore: false,
-      ...(endpoint.type === 'deepseek' && {
-        thinkingFormat: 'deepseek',
-        supportsReasoningEffort: true,
-      }),
-    },
+    ...(endpoint.type !== 'deepseek' && {
+      compat: {
+        maxTokensField: endpoint.tokenField,
+        supportsDeveloperRole: false,
+        supportsStore: false,
+      },
+    }),
   };
 }

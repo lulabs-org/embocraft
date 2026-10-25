@@ -131,12 +131,16 @@ export function ProviderEditor({
             API Base URL
             <input
               type="url"
-              value={draft.baseUrl}
+              value={draft.type === 'deepseek' ? 'https://api.deepseek.com' : draft.baseUrl}
               required
+              disabled={draft.type === 'deepseek'}
               placeholder="https://api.example.com/v1"
               onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
             />
           </label>
+          {draft.type === 'deepseek' && (
+            <p className="agent-hint">{t('console.providers.deepseekHint')}</p>
+          )}
           {draft.type === 'ollama' && (
             <p className="agent-hint">{t('console.providers.ollamaHint')}</p>
           )}
