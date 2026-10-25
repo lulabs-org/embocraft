@@ -44,7 +44,6 @@ try {
       apiKey: '',
       baseUrl: process.env.EVENTS_MODEL_URL ?? 'http://127.0.0.1:11434/v1',
       defaultModel: process.env.EVENTS_MODEL ?? 'qwen3:8b',
-      inference: { maxTokens: 4096, timeoutMs: 120000, thinking: 'disabled' },
     },
     'ollama',
   );

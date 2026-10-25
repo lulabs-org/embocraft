@@ -6,22 +6,38 @@ import {
   resolvePermissions,
   type AICharacterPermissions,
   type AICharacterSkillId,
+  type ProviderType,
 } from '@voxel/shared';
 import { AppError } from '../../../common/errors';
 import { object, text, integer, boolean } from '../../../common/validation';
-import {
-  validateInference,
-  type SavedProvider,
-} from '../../providers/provider-validation';
+import { type SavedProvider } from '../../providers/provider-validation';
+
+const ALLOWED_REASONING_EFFORTS = ['none', 'low', 'high', 'max'] as const;
+
+export function resolveInferenceDefaults(
+  model: string,
+  providerType: ProviderType,
+): {
+  timeoutMs: number;
+  maxTokens: number;
+  thinking: 'enabled' | 'disabled';
+  reasoningEffort: 'none' | 'low' | 'high' | 'max';
+} {
+  const isReasoning = /(reasoner|r1|^o[134])/i.test(model);
+  const thinking = isReasoning ? 'enabled' : 'disabled';
+  return {
+    thinking,
+    reasoningEffort: 'high',
+    timeoutMs: providerType === 'ollama' ? 120000 : 60000,
+    maxTokens: thinking === 'enabled' ? 4096 : 512,
+  };
+}
 
 export function validateAICharacter(
   value: unknown,
   provider: SavedProvider,
 ): AICharacterSettings {
-  const input: Record<string, unknown> = {
-    ...object(value),
-    ...provider.inference,
-  };
+  const input = object(value);
   const model = text(input.model, '模型', 128, provider.defaultModel);
   if (!model || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,127}$/.test(model))
     throw new AppError('请输入有效模型 ID。');
@@ -32,7 +48,40 @@ export function validateAICharacter(
   const name = text(input.name, '玩家昵称', 24);
   const goal = text(input.goal, '任务目标', 2000);
   if (!name) throw new AppError('请填写玩家昵称。');
-  const inference = validateInference(input, provider.type);
+
+  const defaults = resolveInferenceDefaults(model, provider.type);
+  const thinking = input.thinking ?? defaults.thinking;
+  const reasoningEffort = input.reasoningEffort ?? defaults.reasoningEffort;
+
+  if (thinking !== 'enabled' && thinking !== 'disabled') {
+    throw new AppError('思考模式无效。');
+  }
+  if (
+    typeof reasoningEffort !== 'string' ||
+    !ALLOWED_REASONING_EFFORTS.includes(
+      reasoningEffort as (typeof ALLOWED_REASONING_EFFORTS)[number],
+    )
+  ) {
+    throw new AppError('推理强度无效。');
+  }
+  if (provider.type !== 'deepseek' && thinking !== 'disabled') {
+    throw new AppError('此模型服务暂不提供 DeepSeek 思考参数。');
+  }
+
+  const timeoutMs = integer(input.timeoutMs, '推理超时', defaults.timeoutMs, 1000, 120000);
+  const maxTokens = integer(
+    input.maxTokens,
+    '输出长度',
+    thinking === 'enabled' ? 4096 : defaults.maxTokens,
+    128,
+    16384,
+  );
+  const inference = {
+    thinking: thinking as AICharacterSettings['thinking'],
+    reasoningEffort: reasoningEffort as AICharacterSettings['reasoningEffort'],
+    timeoutMs,
+    maxTokens,
+  };
   const intervalMode = input.intervalMode ?? 'fixed';
   if (intervalMode !== 'fixed' && intervalMode !== 'random')
     throw new AppError('轮询方式无效。');

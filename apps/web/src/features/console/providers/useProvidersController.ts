@@ -3,7 +3,7 @@ import type { ProviderView } from '@voxel/shared';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ConsoleFeedback } from '../useConsoleFeedback';
 import { providersApi } from './api';
-import { defaultInference, freshProvider } from './model';
+import { freshProvider } from './model';
 export function useProvidersController(
   open: boolean,
   tab: string,
@@ -97,7 +97,6 @@ export function useProvidersController(
             baseUrl: p.baseUrl,
             defaultModel: p.defaultModel,
             apiKey: '',
-            inference: p.inference ?? { ...defaultInference },
           }
         : freshProvider(),
     );

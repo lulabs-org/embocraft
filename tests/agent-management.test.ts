@@ -348,50 +348,45 @@ it('migrates legacy permissions and validates canonical capability settings', ()
     expect(() => validateAICharacter({ ...input, ...invalid }, p)).toThrow();
 });
 
-it('persists service inference settings and keeps legacy roles until the service is configured', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'provider-inference-'));
+it('persists provider configurations cleanly and resolves character inference defaults automatically', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'provider-clean-'));
   try {
     const path = join(dir, 'providers.json');
     const store = new ProviderStore(path);
     await store.load({ DEEPSEEK_API_KEY: 'fixture' });
-    const role = {
-      name: 'Legacy',
-      maxTokens: 2048,
-      timeoutMs: 45000,
-      thinking: 'enabled',
-    };
-    expect(validateAICharacter(role, store.get('deepseek'))).toMatchObject(
-      role,
+
+    await store.save(
+      { ...store.get('deepseek'), defaultModel: 'deepseek-reasoner' },
+      'deepseek',
     );
-    const inference = {
-      maxTokens: 8192,
-      timeoutMs: 90000,
-      thinking: 'enabled',
-      reasoningEffort: 'low',
-    };
-    await store.save({ ...store.get('deepseek'), inference }, 'deepseek');
     const restored = new ProviderStore(path);
     await restored.load({});
-    expect(restored.list().find((p) => p.id === 'deepseek')?.inference).toEqual(
-      inference,
+    const provider = restored.get('deepseek');
+    expect(provider.defaultModel).toBe('deepseek-reasoner');
+    expect('inference' in provider).toBe(false);
+
+    const reasoningRole = validateAICharacter({ name: 'ReasoningBot' }, provider);
+    expect(reasoningRole.thinking).toBe('enabled');
+    expect(reasoningRole.maxTokens).toBe(4096);
+    expect(reasoningRole.timeoutMs).toBe(60000);
+
+    const chatProvider = { ...provider, defaultModel: 'deepseek-chat' };
+    const chatRole = validateAICharacter({ name: 'ChatBot' }, chatProvider);
+    expect(chatRole.thinking).toBe('disabled');
+    expect(chatRole.maxTokens).toBe(512);
+
+    const ollamaProvider = restored.get('ollama');
+    const ollamaRole = validateAICharacter({ name: 'LocalBot', model: 'llama3' }, ollamaProvider);
+    expect(ollamaRole.timeoutMs).toBe(120000);
+    expect(ollamaRole.maxTokens).toBe(512);
+
+    const customRole = validateAICharacter(
+      { name: 'Custom', timeoutMs: 45000, maxTokens: 2048, thinking: 'enabled' },
+      chatProvider,
     );
-    expect(validateAICharacter(role, restored.get('deepseek'))).toMatchObject(
-      inference,
-    );
-    for (const invalid of [
-      null,
-      { maxTokens: 0 },
-      { timeoutMs: 0 },
-      { thinking: 'yes' },
-      { reasoningEffort: 'other' },
-    ]) {
-      expect(() =>
-        validateProvider({ ...store.get('deepseek'), inference: invalid }),
-      ).toThrow();
-    }
-    expect(() =>
-      validateProvider({ name: 'local', type: 'ollama', inference }),
-    ).toThrow('思考参数');
+    expect(customRole.timeoutMs).toBe(45000);
+    expect(customRole.maxTokens).toBe(2048);
+    expect(customRole.thinking).toBe('enabled');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

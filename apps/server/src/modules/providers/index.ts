@@ -1,7 +1,6 @@
 export { ProviderStore, toProviderView } from './provider-store';
 export {
   validateProvider,
-  validateInference,
   type SavedProvider,
 } from './provider-validation';
 export type { ProviderPort } from './provider-port';

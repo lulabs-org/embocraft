@@ -1,12 +1,8 @@
 import { AppError } from '../../common/errors';
-import { object, text, integer } from '../../common/validation';
+import { object, text } from '../../common/validation';
 import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
-import {
-  type AICharacterSettings,
-  type ProviderInference,
-  type ProviderView,
-} from '@voxel/shared';
+import { type ProviderView } from '@voxel/shared';
 
 export type SavedProvider = Omit<ProviderView, 'hasApiKey'> & {
   apiKey: string;
@@ -149,19 +145,6 @@ function resolveApiKey(
   return apiKey || previous?.apiKey || '';
 }
 
-function resolveInference(
-  inputInference: unknown,
-  previous: SavedProvider | undefined,
-  type: ProviderType,
-): ProviderInference | undefined {
-  if (inputInference !== undefined) {
-    return validateInference(object(inputInference), type);
-  }
-  return previous?.inference
-    ? validateInference(previous.inference, type)
-    : undefined;
-}
-
 // ---------------------------------------------------------------------------
 // 4. 外部导出校验入口
 // ---------------------------------------------------------------------------
@@ -186,44 +169,5 @@ export function validateProvider(
     baseUrl,
     apiKey,
     defaultModel: text(input.defaultModel, '默认模型', 128),
-    inference: resolveInference(input.inference, previous, input.type),
-  };
-}
-
-const ALLOWED_REASONING_EFFORTS = ['none', 'low', 'high', 'max'] as const;
-
-export function validateInference(
-  input: Record<string, unknown>,
-  type: ProviderView['type'],
-): ProviderInference {
-  const thinking = input.thinking ?? 'disabled';
-  const reasoningEffort = input.reasoningEffort ?? 'high';
-
-  if (thinking !== 'enabled' && thinking !== 'disabled') {
-    throw new AppError('思考模式无效。');
-  }
-  if (
-    typeof reasoningEffort !== 'string' ||
-    !ALLOWED_REASONING_EFFORTS.includes(
-      reasoningEffort as (typeof ALLOWED_REASONING_EFFORTS)[number],
-    )
-  ) {
-    throw new AppError('推理强度无效。');
-  }
-  if (type !== 'deepseek' && thinking !== 'disabled') {
-    throw new AppError('此模型服务暂不提供 DeepSeek 思考参数。');
-  }
-
-  return {
-    thinking,
-    reasoningEffort: reasoningEffort as AICharacterSettings['reasoningEffort'],
-    timeoutMs: integer(input.timeoutMs, '推理超时', 60000, 1000, 120000),
-    maxTokens: integer(
-      input.maxTokens,
-      '输出长度',
-      thinking === 'enabled' ? 4096 : 512,
-      128,
-      16384,
-    ),
   };
 }

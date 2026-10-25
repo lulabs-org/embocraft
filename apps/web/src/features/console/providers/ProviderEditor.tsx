@@ -1,5 +1,5 @@
 import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRelay';
-import type { AICharacterSettings, ProviderType } from '@voxel/shared';
+import type { ProviderType } from '@voxel/shared';
 import { useI18n } from '../../../i18n/context';
 import type { ConsoleController } from '../useConsoleController';
 import { freshProvider } from './model';
@@ -193,108 +193,7 @@ export function ProviderEditor({
               {t('console.providers.testConnectionHint')}
             </p>
           )}
-          <section className="agents-form-section">
-            <h4>{t('console.providers.inferenceSectionTitle')}</h4>
-            <p className="agent-hint">
-              {t('console.providers.inferenceSectionHint')}
-            </p>
-            {editingProvider && !editingProvider.inference && (
-              <p className="agent-hint">
-                {t('console.providers.inferenceNotUnifiedHint')}
-              </p>
-            )}
-            <div className="agent-grid">
-              <label>
-                {t('console.providers.timeoutLabel')}
-                <input
-                  type="number"
-                  min={1000}
-                  max={120000}
-                  step={1000}
-                  required
-                  value={draft.inference.timeoutMs}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      inference: {
-                        ...draft.inference,
-                        timeoutMs: e.target.valueAsNumber,
-                      },
-                    })
-                  }
-                />
-              </label>
-              <label>
-                {t('console.providers.maxTokensLabel')}
-                <input
-                  type="number"
-                  min={128}
-                  max={16384}
-                  required
-                  value={draft.inference.maxTokens}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      inference: {
-                        ...draft.inference,
-                        maxTokens: e.target.valueAsNumber,
-                      },
-                    })
-                  }
-                />
-              </label>
-            </div>
-            {draft.type === 'deepseek' && (
-              <div className="agent-grid">
-                <label>
-                  {t('console.providers.thinkingLabel')}
-                  <select
-                    value={draft.inference.thinking}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        inference: {
-                          ...draft.inference,
-                          thinking: e.target
-                            .value as AICharacterSettings['thinking'],
-                          maxTokens: e.target.value === 'enabled' ? 4096 : 512,
-                        },
-                      })
-                    }
-                  >
-                    <option value="disabled">
-                      {t('console.providers.thinkingDisabled')}
-                    </option>
-                    <option value="enabled">
-                      {t('console.providers.thinkingEnabled')}
-                    </option>
-                  </select>
-                </label>
-                <label>
-                  {t('console.providers.reasoningEffortLabel')}
-                  <select
-                    disabled={draft.inference.thinking !== 'enabled'}
-                    value={draft.inference.reasoningEffort}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        inference: {
-                          ...draft.inference,
-                          reasoningEffort: e.target
-                            .value as AICharacterSettings['reasoningEffort'],
-                        },
-                      })
-                    }
-                  >
-                    {['none', 'low', 'high', 'max'].map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
 
-          </section>
           <p className="agent-hint">
             {t('console.providers.openaiCompatibleHint')}
           </p>

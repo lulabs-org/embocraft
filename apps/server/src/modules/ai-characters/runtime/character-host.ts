@@ -14,6 +14,7 @@ import {
   beginChatExecution,
 } from '../../tasks/runtime/execution';
 import { executionState } from '../domain/task-adapter';
+import { resolveInferenceDefaults } from '../domain/validation';
 import { handleWorldEvent } from './world-event-handler';
 import type { ExecutionContext } from './execution-context';
 
@@ -48,9 +49,10 @@ export class AICharacterHost {
       await ctx.save();
       if (job.abort.signal.aborted || ctx.closing()) return;
 
+      const inferenceDefaults = resolveInferenceDefaults(job.view.model, provider.type);
       const config: AgentConfig = {
+        ...inferenceDefaults,
         ...job.view,
-        ...provider.inference,
         ...executionConfigOverrides(executionState(job)),
         apiKey: provider.apiKey,
       };
@@ -112,8 +114,8 @@ export class AICharacterHost {
           session: job.session,
           config,
           defaults: {
+            ...inferenceDefaults,
             ...job.view,
-            ...provider.inference,
             apiKey: provider.apiKey,
           },
           signal: job.abort.signal,
