@@ -7,3 +7,7 @@ export {
 } from './provider-validation';
 export type { ProviderPort } from './provider-port';
 export { installProviderRoutes } from './providers.routes';
+export {
+  ModelCatalog,
+  type ModelQuery,
+} from './model-catalog';

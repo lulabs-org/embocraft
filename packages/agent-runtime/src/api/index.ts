@@ -31,8 +31,6 @@ export {
   executeBuild,
 } from '../world/actions/build';
 
-export { listModels } from '../agent/model/catalog';
-
 export { AgentAttention } from '../world/observe/attention';
 
 export { newTask, restoreBatchHistory } from '../agent/task/state';

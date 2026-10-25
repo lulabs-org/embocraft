@@ -7,9 +7,10 @@ import { join } from 'node:path';
 import {
   ProviderStore,
   validateProvider,
+  ModelCatalog,
 } from '../apps/server/src/modules/providers';
 import { validateAICharacter } from '../apps/server/src/modules/ai-characters';
-import { listModels, type Observation } from '@voxel/agent-runtime';
+import type { Observation } from '@voxel/agent-runtime';
 
 const folders: string[] = [];
 afterEach(async () => {
@@ -244,19 +245,24 @@ describe('multi-provider SDK requests', () => {
     },
   );
   it('discovers model IDs through the configured SDK endpoint', async () => {
-    const request = vi
-      .fn<typeof fetch>()
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValue(
         new Response(
           JSON.stringify({ data: [{ id: 'z' }, { id: 'a' }, { id: 'a' }] }),
           { headers: { 'Content-Type': 'application/json' } },
         ),
       );
-    expect(await listModels(provider(), 'fixture', request)).toEqual([
-      'a',
-      'z',
-    ]);
-    expect(request.mock.calls[0][0]).toBe('https://api.deepseek.com/models');
+    try {
+      const catalog = new ModelCatalog({ get: () => provider() });
+      expect(await catalog.models('fixture')).toEqual(['a', 'z']);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://api.deepseek.com/models',
+        expect.objectContaining({ redirect: 'error' }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
 

@@ -58,3 +58,26 @@ it('hides provider failures, forwards saved configuration and releases failed qu
   expect(query).toHaveBeenCalledWith(saved);
   await expect(catalog.models(saved.id)).resolves.toEqual(['recovered']);
 });
+
+it('fetches, deduplicates and sorts model IDs using default fetch when no custom query provided', async () => {
+  const saved = provider('deepseek', 'fixture-secret');
+  const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(
+      JSON.stringify({ data: [{ id: 'z' }, { id: 'a' }, { id: 'a' }] }),
+      { headers: { 'Content-Type': 'application/json' } },
+    ),
+  );
+  try {
+    const catalog = new ModelCatalog({ get: () => saved });
+    await expect(catalog.models(saved.id)).resolves.toEqual(['a', 'z']);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.deepseek.com/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer fixture-secret' },
+        redirect: 'error',
+      }),
+    );
+  } finally {
+    fetchSpy.mockRestore();
+  }
+});
