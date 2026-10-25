@@ -351,6 +351,62 @@ it('routes resource IDs and request bodies to their owning domain without old Ag
   }
 });
 
+it('keeps a stopped character provider until the character is removed', async () => {
+  const server = await createTestServer({ origin });
+  const changed = vi.fn();
+  const off = server.characters.events.on(changed);
+  const providerUrl = server.httpUrl + '/providers/deepseek';
+  try {
+    const created = await fetch(server.httpUrl + '/ai-characters', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        providerId: 'deepseek',
+        name: 'Stopped fixture',
+        joinWorld: false,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const character = await created.json();
+    expect(server.characters.hasProviderReference('deepseek')).toBe(true);
+
+    const blocked = await fetch(providerUrl, { method: 'DELETE', headers });
+    expect(blocked.status).toBe(409);
+    expect(
+      changed.mock.calls.filter(([event]) => event.resource === 'providers'),
+    ).toHaveLength(0);
+
+    expect(
+      (
+        await fetch(`${server.httpUrl}/ai-characters/${character.id}`, {
+          method: 'DELETE',
+          headers,
+        })
+      ).status,
+    ).toBe(204);
+    expect(server.characters.hasProviderReference('deepseek')).toBe(false);
+
+    const deleteHeaders = { ...headers, 'Idempotency-Key': 'delete-deepseek' };
+    expect(
+      (await fetch(providerUrl, { method: 'DELETE', headers: deleteHeaders }))
+        .status,
+    ).toBe(204);
+    expect(
+      (await fetch(providerUrl, { method: 'DELETE', headers: deleteHeaders }))
+        .status,
+    ).toBe(204);
+    expect(
+      changed.mock.calls.filter(([event]) => event.resource === 'providers'),
+    ).toHaveLength(1);
+    expect(
+      (await fetch(providerUrl, { method: 'DELETE', headers })).status,
+    ).toBe(404);
+  } finally {
+    off();
+    await server.close();
+  }
+});
+
 it('returns one persisted result for concurrent HTTP commands and protects receipt lookup', async () => {
   const server = await createTestServer({ origin });
   const body = {

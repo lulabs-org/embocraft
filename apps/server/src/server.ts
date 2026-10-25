@@ -30,6 +30,7 @@ import { installGatewaySocket } from './modules/gateway/socket';
 
 import { ProviderStore } from './modules/providers/provider-store';
 import { ModelCatalog } from './modules/providers/model-catalog';
+import { ProviderService } from './modules/providers/provider-service';
 
 import { WorldRoom } from './modules/world/room';
 import { WorldStore } from './modules/world/store';
@@ -96,6 +97,12 @@ export async function createServer(options: ServerOptions = {}) {
     voiceServices,
   );
   const modelCatalog = new ModelCatalog(providers);
+  const providerService = new ProviderService(
+    providers,
+    modelCatalog,
+    (id) => characters.hasProviderReference(id),
+    () => characters.events.publish('providers'),
+  );
   const speech = options.speech ?? new LocalSpeech();
   const app = createApp({
     origin: config.webOrigin,
@@ -104,12 +111,7 @@ export async function createServer(options: ServerOptions = {}) {
       authenticate: gatewayAuth.middleware,
       characters,
       tasks: characters.tasks,
-      providers: {
-        store: providers,
-        models: (id) => modelCatalog.models(id),
-        remove: (id) => characters.removeProvider(id),
-        changed: () => characters.events.publish('providers'),
-      },
+      providers: providerService,
     },
     audio: {
       authenticateManagement: gatewayAuth.middleware,

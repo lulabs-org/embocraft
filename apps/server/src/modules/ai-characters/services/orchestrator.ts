@@ -593,13 +593,8 @@ export class AICharacterOrchestrator {
     }
   }
 
-  async removeProvider(id: string) {
-    if ([...this.jobs.values()].some((j) => j.view.providerId === id))
-      throw new AppError(
-        '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
-        409,
-      );
-    await this.providers.remove(id);
+  hasProviderReference(id: string) {
+    return [...this.jobs.values()].some((job) => job.view.providerId === id);
   }
 
   async removeVoiceService(id: string) {
