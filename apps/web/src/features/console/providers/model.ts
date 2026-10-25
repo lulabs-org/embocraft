@@ -1,4 +1,4 @@
-import type { ProviderInference, ProviderType } from '@voxel/shared';
+import type { ProviderType } from '@voxel/shared';
 export const presets = {
   deepseek: {
     name: 'DeepSeek',
@@ -12,17 +12,10 @@ export const presets = {
   },
   compatible: { name: 'OpenAI 兼容服务', baseUrl: '', defaultModel: '' },
 };
-export const defaultInference: ProviderInference = {
-  timeoutMs: 60000,
-  maxTokens: 512,
-  thinking: 'disabled',
-  reasoningEffort: 'high',
-};
 export const freshProvider = (type: ProviderType = 'compatible') => ({
   ...presets[type],
   name: '',
   type,
   apiKey: '',
-  inference: { ...defaultInference },
 });
 export type ProviderDraft = ReturnType<typeof freshProvider>;

@@ -996,7 +996,7 @@ it('applies task budgets on assignment and renewal, rejecting invalid budgets be
   });
 });
 
-it('uses newly saved provider inference settings on the next decision without resetting progress', async () => {
+it('uses newly saved provider configuration on the next decision without resetting progress', async () => {
   const s = fakeSession();
   const configs: unknown[] = [];
   manager = new AICharacterManager(store, 'ws://fixture', {
@@ -1013,13 +1013,10 @@ it('uses newly saved provider inference settings on the next decision without re
   });
   const job = manager.create({ ...settings, goal: '', maxTokens: 777 });
   await vi.waitFor(() => expect(manager!.list()[0].status).toBe('idle'));
-  const inference = {
-    timeoutMs: 30000,
-    maxTokens: 3072,
-    thinking: 'enabled',
-    reasoningEffort: 'low',
-  };
-  await store.save({ ...store.get('deepseek'), inference }, 'deepseek');
+  await store.save(
+    { ...store.get('deepseek'), apiKey: 'updated-key' },
+    'deepseek',
+  );
   expect(configs).toHaveLength(0);
   await manager.tasks.createTaskPlan(job.id, {
     name: 'Wait',
@@ -1030,7 +1027,7 @@ it('uses newly saved provider inference settings on the next decision without re
   await vi.waitFor(() =>
     expect(manager!.list()[0].task?.status).toBe('completed'),
   );
-  expect(configs[0]).toMatchObject(inference);
+  expect((configs[0] as { apiKey: string }).apiKey).toBe('updated-key');
 });
 
 it('migrates a legacy archive and reloads 500 timestamped activity records without truncating to the old limit', async () => {
