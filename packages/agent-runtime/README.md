@@ -203,7 +203,7 @@ await runtime.stop();
 
 包内测试覆盖纯规则与状态机：任务命令与租约、预算、动作解析与建造规划、转录裁剪、事件去重、turn 状态迁移、存档往返与旧档迁移。测试夹具在 `testing/`，不依赖真实网络和真实模型。
 
-`src/**/*.boundaries.test.ts`（迁移前为 `tests/agent-runtime-boundaries.test.ts`）检查依赖方向与循环依赖，`tests/pi-runner.test.ts` 通过真实 Pi 循环与可控模型响应检查预算、取消、工具顺序、隔离和检查点恢复。`tests/support/decision-*` 是旧业务用例的确定性适配器，不是生产执行路径。
+`packages/agent-runtime/test/boundaries.test.ts` 检查依赖方向与循环依赖，`packages/agent-runtime/test/pi-runner.test.ts` 通过真实 Pi 循环与可控模型响应检查预算、取消、工具顺序、隔离和检查点恢复。`tests/support/decision-*` 是旧业务用例的确定性适配器，不是生产执行路径。
 
 在仓库根目录运行：
 
@@ -217,7 +217,7 @@ pnpm test:voice:services
 pnpm test:agent:deepseek   # Pi 工具与世界连接
 ```
 
-模型及语音集成使用 fixtures，不能替代真实服务验证；`tests/task-service.test.ts` 覆盖修订、保存失败和旧存档迁移。
+模型及语音集成使用 fixtures，不能替代真实服务验证；`apps/server/test/task-service.test.ts` 覆盖修订、保存失败和旧存档迁移。
 
 CLI 多客户端回归 `pnpm test:integration` 会连接 `SERVER_URL` 指向的现有世界并编辑固定坐标，且要求 PostgreSQL 持久化。必须先准备独立测试世界，再显式设置地址，例如 `SERVER_URL=ws://127.0.0.1:12567 pnpm test:integration`，不要直接对正在使用的世界运行。
 
@@ -229,7 +229,7 @@ Docker 验证需单独构建服务端，在隔离实例或短暂停机备份后�
 
 `agent/action/follow.ts` 在宿主唤醒时推进已保存的跟随意图，不发起模型请求。新消息仍走正常任务归属流程；暂停/取消中止动作，失败时停止，不重放历史方向输入。
 
-验证：`pnpm test:navigation` 启动临时端口的独立内存世界，覆盖真实 WebSocket 和服务端物理；`pnpm bench:navigation` 报告本机地图构建及搜索耗时。`tests/navigation.test.ts` 覆盖确定性物理、动态障碍、未知空间、取消以及 Pi 到跟随调度的链路。
+验证：`pnpm test:navigation` 启动临时端口的独立内存世界，覆盖真实 WebSocket 和服务端物理；`pnpm bench:navigation` 报告本机地图构建及搜索耗时。`packages/agent-runtime/test/navigation.test.ts` 覆盖确定性物理、动态障碍、未知空间、取消以及 Pi 到跟随调度的链路。
 
 真实模型验收：`NAVIGATION_PROVIDERS=/absolute/path/providers.json pnpm test:navigation:live`。显式读取已有服务配置并产生真实模型费用，在隔离的 Colyseus 世界向托管角色私聊“到我这里来”，断言任务创建、绕墙/上台阶、实际到达和持久化完成；每场景至多 8 次请求；另验收持续跟随期间不请求模型、普通问答保留任务及独立计费、修改目标后实际到达。默认使用 `deepseek` 服务，可用 `NAVIGATION_PROVIDER` 选择其他已配置服务。结果写入忽略目录 `artifacts/navigation-live-model.json`，不输出凭据。详细规则见 [统一运行时](../../docs/agent/runtime.md)。
 
