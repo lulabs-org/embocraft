@@ -6,7 +6,7 @@ import type {
   ModelEndpoint,
   Observation,
 } from '../../packages/agent-runtime/src/contracts';
-import type { RequestAccounting } from '../../packages/agent-runtime/src/agent/model/port';
+import type { RequestAccounting } from '../../packages/agent-runtime/src/agent/model/charge';
 import { AgentRuntimeError } from '../../packages/agent-runtime/src/contracts/errors';
 import { parseDecision } from './decision-decision';
 import { buildMessages } from './decision-prompts';
