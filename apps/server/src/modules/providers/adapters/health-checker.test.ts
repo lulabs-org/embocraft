@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { AppError } from '../../../common/errors';
-import { validateProvider } from '../domain/model';
+import { validateProvider } from '../domain/validation';
 import { ProviderHealthChecker } from './health-checker';
 
 it('preserves missing-provider and missing-credential errors without probing', async () => {

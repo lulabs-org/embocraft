@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { ModelCatalog } from './model-catalog';
-import { validateProvider } from '../domain/model';
+import { validateProvider } from '../domain/validation';
 import { AppError } from '../../../common/errors';
 
 const provider = (type = 'ollama', apiKey = '') =>

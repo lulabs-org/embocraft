@@ -13,17 +13,21 @@ export type InferenceSettings = {
 
 const ALLOWED_REASONING_EFFORTS = ['none', 'low', 'high', 'max'] as const;
 
-/** Provider and model capabilities determine defaults for a new inference configuration. */
+export const DEFAULT_INFERENCE_TIMEOUT_MS = 60000;
+export const OLLAMA_INFERENCE_TIMEOUT_MS = 120000;
+
+/** Model capabilities and provider defaults determine a new inference configuration. */
 export function resolveInferenceDefaults(
   model: string,
-  providerType: ProviderType,
+  providerType?: ProviderType,
 ): InferenceSettings {
-  const { timeoutMs, supportsThinking } =
-    PROVIDER_SPECS[providerType].inference;
-  const thinking =
-    supportsThinking && /(reasoner|r1|^o[134])/i.test(model)
-      ? 'enabled'
-      : 'disabled';
+  const timeoutMs =
+    providerType === 'ollama'
+      ? OLLAMA_INFERENCE_TIMEOUT_MS
+      : DEFAULT_INFERENCE_TIMEOUT_MS;
+  const thinking = /(reasoner|r1|^o[134])/i.test(model)
+    ? 'enabled'
+    : 'disabled';
   return {
     thinking,
     reasoningEffort: 'high',
@@ -51,7 +55,7 @@ export function validateProviderModel(
 export function validateInferenceSettings(
   input: Record<string, unknown>,
   model: string,
-  providerType: ProviderType,
+  providerType?: ProviderType,
 ): InferenceSettings {
   const defaults = resolveInferenceDefaults(model, providerType);
   const thinking = input.thinking ?? defaults.thinking;
@@ -66,11 +70,6 @@ export function validateInferenceSettings(
     )
   )
     throw new AppError('推理强度无效。');
-  if (
-    !PROVIDER_SPECS[providerType].inference.supportsThinking &&
-    thinking !== 'disabled'
-  )
-    throw new AppError('此模型服务暂不提供 DeepSeek 思考参数。');
 
   return {
     thinking,
