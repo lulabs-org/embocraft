@@ -5,11 +5,7 @@ import {
   type AgentTurnContext,
   type AgentTurnDecision,
 } from '@earendil-works/pi-agent-core';
-import {
-  createInitialSystemMessage,
-  type AssistantMessage,
-  type Message,
-} from '@earendil-works/pi-ai';
+import type { Message } from '@earendil-works/pi-ai';
 import type { ToolState } from '../../contracts/tool-state';
 import { TOOL_PROTOCOL_CORRECTION } from '../prompt/system';
 import type { AgentConfig, ModelEndpoint } from '../../contracts';
@@ -55,23 +51,17 @@ class PiDecision {
   constructor(private readonly options: DecisionLoopOptions) {
     this.contextEpoch = options.contextEpoch?.();
     this.agent = this.createAgent();
-    // Truncated and policy-blocked calls never reach afterToolCall, so the
-    // event stream is the complete signal for a failed batch.
+    // End events cover validation, blocked, truncated, and execution failures.
     this.agent.subscribe((event) => {
       if (event.type === 'tool_execution_end' && event.isError)
         failBatch(this.options.state);
     });
   }
 
-  /** Replays the persisted transcript and runs Pi until this decision ends. */
+  /** Runs Pi until this decision ends. */
   async run() {
     const { agent } = this;
     const { budget, signal, state, transcript, input } = this.options;
-    agent.state.messages = [
-      createInitialSystemMessage(this.options.prompt, this.options.tools)!,
-      ...(this.options.history ?? []),
-    ];
-
     const abort = () => agent.abort();
     signal.addEventListener('abort', abort, { once: true });
     try {
@@ -95,6 +85,7 @@ class PiDecision {
         model: createModel(this.options.config, this.options.endpoint),
         systemPrompt: this.options.prompt,
         tools: this.options.tools,
+        messages: this.options.history,
       },
       streamFn: (_model, context, streamOptions) => {
         const { config, endpoint, budget, signal, request, save } =
@@ -114,11 +105,12 @@ class PiDecision {
       },
       toolExecution: 'sequential',
       transformContext: (messages) => this.transformContext(messages),
-      beforeToolCall: async ({ assistantMessage }) =>
-        this.gateBatch(assistantMessage),
-      afterToolCall: async ({ isError }) => {
-        if (isError) failBatch(this.options.state);
-        return undefined;
+      beforeToolCall: async ({ assistantMessage }) => {
+        const block = toolBlockReason(
+          this.options,
+          assistantMessage.stopReason === 'length',
+        );
+        return block && { block: true, ...block };
       },
       prepareRequest: () => this.beginRequest(),
       finishTurn: (turn) => this.finishTurn(turn),
@@ -132,15 +124,6 @@ class PiDecision {
     state.skipBatch = false;
     state.hadError = false;
     await save();
-  }
-
-  /** Refuses the rest of a batch once it is stopped, truncated or out of time. */
-  private async gateBatch(assistantMessage: AssistantMessage) {
-    const block = toolBlockReason(
-      this.options,
-      assistantMessage.stopReason === 'length',
-    );
-    return block && { block: true, ...block };
   }
 
   /** Applies the session window and the one-shot protocol correction per request. */
