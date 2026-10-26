@@ -685,7 +685,7 @@
       "namePlaceholder": "请输入服务名称",
       "providerTypeLabel": "模型服务商",
       "deepseekHint": "DeepSeek 使用官方地址（固定为 https://api.deepseek.com）。第三方网关请选择 OpenAI 兼容服务。",
-      "ollamaHint": "支持本机或局域网私有 IP，例如 http://192.168.31.1:11434/v1。地址须能从游戏服务器访问，模型须已安装在目标 Ollama 服务上。",
+      "ollamaHint": "支持可从游戏服务器访问的 HTTP 或 HTTPS 地址，例如 http://192.168.31.1:11434/v1。模型须已安装在目标 Ollama 服务上。",
       "keyPlaceholderSaved": "已配置，留空保持现有密钥",
       "keyPlaceholderInput": "输入服务商 API Key",
       "defaultModelLabel": "默认模型 ID",

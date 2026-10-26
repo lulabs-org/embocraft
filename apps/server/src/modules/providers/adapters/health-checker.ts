@@ -1,5 +1,6 @@
 import { AppError } from '../../../common/errors';
 import type { ProviderQueryPort } from '../ports';
+import { PROVIDER_SPECS } from '../domain/specs';
 import { ProviderHttpClient } from './client';
 
 export type ProviderHealth = {
@@ -16,7 +17,7 @@ export class ProviderHealthChecker {
 
   async check(id: string): Promise<ProviderHealth> {
     const provider = this.providers.get(id);
-    if (provider.type !== 'ollama' && !provider.apiKey)
+    if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
       throw new AppError('请先配置 API Key。');
 
     try {

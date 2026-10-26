@@ -3,7 +3,12 @@ import type { ProviderType } from '@voxel/shared';
 
 export interface ProviderSpec {
   defaultUrl: string;
-  validate?: (url: URL, isPrivateOrLoopback: boolean) => void;
+  requiresApiKey: boolean;
+  inference: {
+    timeoutMs: number;
+    supportsThinking: boolean;
+  };
+  validate?: (url: URL) => void;
   formatBaseUrl?: (url: URL) => string;
 }
 
@@ -11,6 +16,11 @@ export interface ProviderSpec {
 export const PROVIDER_SPECS: Record<ProviderType, ProviderSpec> = {
   deepseek: {
     defaultUrl: 'https://api.deepseek.com',
+    requiresApiKey: true,
+    inference: {
+      timeoutMs: 60000,
+      supportsThinking: true,
+    },
     validate: (url) => {
       if (url.origin !== 'https://api.deepseek.com') {
         throw new AppError(
@@ -22,11 +32,18 @@ export const PROVIDER_SPECS: Record<ProviderType, ProviderSpec> = {
   },
   ollama: {
     defaultUrl: 'http://127.0.0.1:11434/v1',
-    validate: (_url, isPrivateOrLoopback) => {
-      if (!isPrivateOrLoopback) {
-        throw new AppError('Ollama 仅支持本机或局域网私有 IP 地址。');
-      }
+    requiresApiKey: false,
+    inference: {
+      timeoutMs: 120000,
+      supportsThinking: false,
     },
   },
-  compatible: { defaultUrl: '' },
+  compatible: {
+    defaultUrl: '',
+    requiresApiKey: true,
+    inference: {
+      timeoutMs: 60000,
+      supportsThinking: false,
+    },
+  },
 };

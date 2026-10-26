@@ -1,5 +1,6 @@
 import { AppError } from '../../../common/errors';
 import type { ProviderQueryPort } from '../ports';
+import { PROVIDER_SPECS } from '../domain/specs';
 import { ProviderHttpClient } from './client';
 
 /** Model discovery belongs to providers and does not require a character session. */
@@ -16,7 +17,7 @@ export class ModelCatalog {
       throw new AppError('正在连接此模型服务，请稍候。', 429);
     const provider = this.providers.get(id);
 
-    if (provider.type !== 'ollama' && !provider.apiKey)
+    if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
       throw new AppError('请先配置 API Key。');
     this.probing.add(id);
 

@@ -14,7 +14,7 @@ import {
   beginChatExecution,
 } from '../../tasks/runtime/execution';
 import { executionState } from '../domain/task-adapter';
-import { resolveInferenceDefaults } from '../domain/validation';
+import { resolveInferenceDefaults } from '../../providers/domain/inference';
 import { handleWorldEvent } from './world-event-handler';
 import type { ExecutionContext } from './execution-context';
 

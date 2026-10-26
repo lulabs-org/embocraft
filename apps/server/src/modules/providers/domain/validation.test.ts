@@ -32,13 +32,13 @@ it('enforces provider-specific URL and protocol rules', () => {
       baseUrl: 'https://gateway.example.com',
     }),
   ).toThrow('DeepSeek 使用官方地址');
-  expect(() =>
+  expect(
     validateProviderInput({
       name: 'Ollama',
       type: 'ollama',
       baseUrl: 'https://public.example.com/v1',
-    }),
-  ).toThrow('Ollama 仅支持本机或局域网私有 IP 地址。');
+    }).baseUrl,
+  ).toBe('https://public.example.com/v1');
   expect(
     validateProviderInput({
       name: 'Ollama',
