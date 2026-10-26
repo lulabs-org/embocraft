@@ -229,7 +229,7 @@ Docker 验证需单独构建服务端，在隔离实例或短暂停机备份后�
 
 `agent/action/follow.ts` 在宿主唤醒时推进已保存的跟随意图，不发起模型请求。新消息仍走正常任务归属流程；暂停/取消中止动作，失败时停止，不重放历史方向输入。
 
-验证：`pnpm test:navigation` 启动临时端口的独立内存世界，覆盖真实 WebSocket 和服务端物理；`pnpm bench:navigation` 报告本机地图构建及搜索耗时。`packages/agent-runtime/test/navigation.test.ts` 覆盖确定性物理、动态障碍、未知空间、取消以及 Pi 到跟随调度的链路。
+验证：`pnpm test:navigation` 启动临时端口的独立内存世界，覆盖真实 WebSocket 和服务端物理；`pnpm bench:navigation` 报告本机地图构建及搜索耗时。`packages/agent-runtime/src/world/nav/{map,astar,controller}.test.ts` 覆盖确定性物理、动态障碍、未知空间和取消；`packages/agent-runtime/test/navigation.test.ts` 覆盖 Pi 到跟随调度的跨模块链路。
 
 真实模型验收：`NAVIGATION_PROVIDERS=/absolute/path/providers.json pnpm test:navigation:live`。显式读取已有服务配置并产生真实模型费用，在隔离的 Colyseus 世界向托管角色私聊“到我这里来”，断言任务创建、绕墙/上台阶、实际到达和持久化完成；每场景至多 8 次请求；另验收持续跟随期间不请求模型、普通问答保留任务及独立计费、修改目标后实际到达。默认使用 `deepseek` 服务，可用 `NAVIGATION_PROVIDER` 选择其他已配置服务。结果写入忽略目录 `artifacts/navigation-live-model.json`，不输出凭据。详细规则见 [统一运行时](../../docs/agent/runtime.md)。
 
