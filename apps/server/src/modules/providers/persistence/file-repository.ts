@@ -5,10 +5,9 @@ import { dirname } from 'node:path';
 import { AppError } from '../../../common/errors';
 import {
   toProviderView,
-  validateProvider,
-  restoreSavedProvider,
   type SavedProvider,
 } from '../domain/model';
+import { validateProvider } from '../domain/validation';
 import type { ProviderRepository } from './repository.port';
 
 /** Atomic JSON implementation of the provider repository. */
@@ -25,7 +24,11 @@ export class FileProviderRepository implements ProviderRepository {
   async load(): Promise<boolean> {
     try {
       const content = await readFile(this.path, 'utf8');
-      this.values = this.parse(content);
+      const list = JSON.parse(content);
+      if (!Array.isArray(list) || list.length > 20) {
+        throw new AppError('模型服务配置格式错误。');
+      }
+      this.values = list.map((item) => validateProvider(item));
       return true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -36,18 +39,10 @@ export class FileProviderRepository implements ProviderRepository {
     }
   }
 
-  private parse(content: string): SavedProvider[] {
-    const list = JSON.parse(content);
-    if (!Array.isArray(list) || list.length > 20) {
-      throw new AppError('模型服务配置格式错误。');
-    }
-    return list.map(restoreSavedProvider);
-  }
-
   /** Seed initial providers and persist them to disk. */
   async seed(initial: SavedProvider[]): Promise<void> {
     return this.mutate(async () => {
-      this.values = initial.map(restoreSavedProvider);
+      this.values = initial.map((item) => validateProvider(item));
       await this.persist(this.values);
     });
   }
@@ -94,6 +89,9 @@ export class FileProviderRepository implements ProviderRepository {
         value,
         id ? this.getRuntime(id) : undefined,
       );
+      if (!id && this.values.some((p) => p.id === provider.id)) {
+        throw new AppError('已存在相同 ID 的模型服务。', 409);
+      }
       const next = id
         ? this.values.map((p) => (p.id === id ? provider : p))
         : [...this.values, provider];

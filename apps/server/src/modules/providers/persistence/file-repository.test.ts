@@ -95,4 +95,28 @@ describe('FileProviderRepository and bootstrapProviders', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('rejects creating a provider with an already existing ID', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'voxel-repo-test-'));
+    try {
+      const repo = new FileProviderRepository(join(dir, 'providers.json'));
+      await repo.save({
+        id: 'my-custom-provider',
+        name: 'Custom 1',
+        type: 'compatible',
+        baseUrl: 'https://custom.api.com',
+      });
+
+      await expect(
+        repo.save({
+          id: 'my-custom-provider',
+          name: 'Custom 2',
+          type: 'compatible',
+          baseUrl: 'https://custom.api.com',
+        }),
+      ).rejects.toThrow('已存在相同 ID 的模型服务。');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

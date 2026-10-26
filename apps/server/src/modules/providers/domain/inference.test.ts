@@ -4,7 +4,7 @@ import {
   validateInferenceSettings,
   validateProviderModel,
 } from './inference';
-import { validateProvider } from './model';
+import { validateProvider } from './validation';
 
 describe('provider model capabilities', () => {
   it('resolves defaults from the provider and selected model', () => {
@@ -21,13 +21,24 @@ describe('provider model capabilities', () => {
       },
     );
     expect(resolveInferenceDefaults('qwen-r1', 'ollama')).toMatchObject({
+      thinking: 'enabled',
+      timeoutMs: 120000,
+      maxTokens: 4096,
+    });
+    expect(resolveInferenceDefaults('llama3', 'ollama')).toMatchObject({
       thinking: 'disabled',
       timeoutMs: 120000,
       maxTokens: 512,
     });
     expect(resolveInferenceDefaults('o1', 'compatible')).toMatchObject({
+      thinking: 'enabled',
+      timeoutMs: 60000,
+      maxTokens: 4096,
+    });
+    expect(resolveInferenceDefaults('gpt-4o', 'compatible')).toMatchObject({
       thinking: 'disabled',
       timeoutMs: 60000,
+      maxTokens: 512,
     });
   });
 
@@ -52,7 +63,7 @@ describe('provider model capabilities', () => {
     ).toThrow('API Key');
   });
 
-  it('keeps explicit inference settings and rejects unsupported thinking', () => {
+  it('keeps explicit inference settings across providers', () => {
     expect(
       validateInferenceSettings(
         { thinking: 'enabled', reasoningEffort: 'low', timeoutMs: 45000 },
@@ -65,8 +76,15 @@ describe('provider model capabilities', () => {
       timeoutMs: 45000,
       maxTokens: 4096,
     });
-    expect(() =>
+    expect(
       validateInferenceSettings({ thinking: 'enabled' }, 'llama3', 'ollama'),
-    ).toThrow('此模型服务暂不提供 DeepSeek 思考参数。');
+    ).toMatchObject({
+      thinking: 'enabled',
+      timeoutMs: 120000,
+      maxTokens: 4096,
+    });
+    expect(() =>
+      validateInferenceSettings({ thinking: 'invalid' }, 'llama3', 'ollama'),
+    ).toThrow('思考模式无效。');
   });
 });

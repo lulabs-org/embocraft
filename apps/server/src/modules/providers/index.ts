@@ -1,11 +1,8 @@
 export { FileProviderRepository } from './persistence/file-repository';
 export type { ProviderRepository } from './persistence/repository.port';
 export { bootstrapProviders, createDefaultProviders } from './bootstrap';
-export {
-  toProviderView,
-  validateProvider,
-  restoreSavedProvider,
-} from './domain/model';
+export { toProviderView } from './domain/model';
+export { validateProvider } from './domain/validation';
 export type { ProviderType } from '@voxel/shared';
 export type { SavedProvider } from './domain/model';
 export type {

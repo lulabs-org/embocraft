@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { AppError } from '../../../common/errors';
-import { validateProvider, toProviderView } from '../domain/model';
+import { toProviderView } from '../domain/model';
+import { validateProvider } from '../domain/validation';
 import { ProviderService } from './provider-service';
 
 function fixture(referenced = false) {

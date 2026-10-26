@@ -151,8 +151,11 @@ describe('provider configuration boundary', () => {
       defaultModel: 'qwen3:8b',
     });
     expect(validateAICharacter(input, local).model).toBe('qwen3:8b');
+    expect(
+      validateAICharacter({ ...input, thinking: 'enabled' }, local).thinking,
+    ).toBe('enabled');
     expect(() =>
-      validateAICharacter({ ...input, thinking: 'enabled' }, local),
+      validateAICharacter({ ...input, thinking: 'invalid' }, local),
     ).toThrow();
   });
   it('accepts optional role guidance without treating it as a task or permission', () => {
