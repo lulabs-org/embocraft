@@ -31,7 +31,7 @@ const move = {
   name: 'goto',
   arguments: { x: 1, y: 2.5, z: 0 },
 };
-// These tests isolate Pi lifecycle policy. Navigation physics is exercised in navigation.test.ts.
+// These tests isolate Pi lifecycle policy. Navigation physics is exercised in src/world/nav/controller.test.ts.
 vi.mock('../src/world/nav/controller', async (original) => ({
   ...(await original<typeof import('../src/world/nav/controller')>()),
   navigate: async (session: AgentSession, action: AgentAction) => {

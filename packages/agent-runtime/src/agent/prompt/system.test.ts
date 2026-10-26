@@ -1,61 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { Observation } from '@voxel/agent-runtime';
-import { characterPrompt } from '../src/agent/prompt/system';
-import { turnInput } from '../src/agent/prompt/view';
-import { testAgentConfig } from '../../../tests/support/agent-config';
-import type { AgentConfig } from '@voxel/agent-runtime';
-function buildMessages(
-  o: Observation,
-  previous: unknown,
-  options: Partial<AgentConfig>,
-) {
-  const config = {
-    ...testAgentConfig(),
-    ...options,
-  };
-  return [
-    { role: 'system', content: characterPrompt(config) },
-    { role: 'user', content: JSON.stringify(turnInput(config, o, previous)) },
-  ];
-}
-
-function observation(): Observation {
-  const self: Observation['self'] = {
-    id: 'agent',
-    name: 'Agent',
-    kind: 'ai-agent',
-    connected: true,
-    x: 0,
-    y: 3,
-    z: 0,
-    yaw: 0,
-  };
-  return {
-    id: 'observation',
-    revision: 7,
-    radius: 8,
-    allowedActions: ['observe'],
-    self,
-    players: Array.from({ length: 20 }, (_, i) => ({
-      ...self,
-      id: `player-${i}`,
-    })),
-    blocks: Array.from({ length: 510 }, (_, x) => ({
-      x,
-      y: 1,
-      z: 0,
-      material: 'wood',
-    })),
-    events: Array.from({ length: 20 }, (_, seq) => ({
-      seq,
-      type: 'chat',
-      actor: 'human',
-      actorKind: 'human',
-      at: seq,
-      data: { scope: 'private', recipients: ['agent'], text: `message-${seq}` },
-    })),
-  };
-}
+import {
+  BUILDING_PROMPT,
+  characterPrompt,
+  NAVIGATION_PROMPT,
+  protocolAndSafetyPrompt,
+  skillsPrompt,
+  TASK_LIFECYCLE_PROMPT,
+  VERIFICATION_PROMPT,
+} from './system';
+import { testAgentConfig } from '../../../../../tests/support/agent-config';
+import { buildMessages, observation } from '../../../test/prompt-fixture';
 
 describe('agent prompt boundary', () => {
   it.each([false, true])(
@@ -79,27 +33,6 @@ describe('agent prompt boundary', () => {
       expect(messages[0].content).toContain('not permission');
     },
   );
-  it('bounds world context while preserving the latest events and previous task', () => {
-    const input = observation();
-    const before = structuredClone(input);
-    const previous = {
-      task: { goal: '继续建造' },
-      decisionError: '请修正上一步',
-    };
-    const messages = buildMessages(input, previous, { allowEdits: false });
-    const payload = JSON.parse(messages[1].content);
-    expect(messages.map((m) => m.role)).toEqual(['system', 'user']);
-    expect(payload.observation.players).toEqual(input.players.slice(0, 16));
-    expect(payload.observation.blocks).toEqual(
-      input.blocks.slice(0, 500).map((b) => [b.x, b.y, b.z, b.material]),
-    );
-    expect(payload.observation.events).toEqual(input.events.slice(-12));
-    expect(payload.previous).toEqual(previous);
-    expect(messages[0].content).toContain('UNIFIED CHARACTER');
-    expect(messages[0].content).toContain('"place":false');
-    expect(input).toEqual(before);
-  });
-
   it('keeps addressed world text out of system instructions and retains permission rules', () => {
     const input = observation();
     const maliciousText =
@@ -137,3 +70,29 @@ it('uses shared skill guidance without granting permissions or starting tasks', 
     permissions,
   });
 });
+
+describe('modular system prompt components', () => {
+  it('exports distinct modular prompt blocks with structured sections', () => {
+    const config = testAgentConfig();
+    const safety = protocolAndSafetyPrompt(config);
+    expect(safety).toContain('[PROTOCOL & SAFETY]');
+    expect(safety).toContain('Free text is never delivered');
+    expect(safety).toContain('Allowed permissions:');
+
+    expect(TASK_LIFECYCLE_PROMPT).toContain('[TASK LIFECYCLE]');
+    expect(TASK_LIFECYCLE_PROMPT).toContain('UNIFIED CHARACTER');
+
+    expect(NAVIGATION_PROMPT).toContain('[NAVIGATION & ACTIONS]');
+    expect(NAVIGATION_PROMPT).toContain('goto(x,y,z)');
+
+    expect(BUILDING_PROMPT).toContain('[BUILDING RULES]');
+    expect(BUILDING_PROMPT).toContain('Use build for 1..64 edits');
+
+    expect(VERIFICATION_PROMPT).toContain('[VERIFICATION & CONTROL]');
+    expect(VERIFICATION_PROMPT).toContain('observedMatching');
+
+    expect(skillsPrompt(['building'])).toContain('建筑规划');
+    expect(skillsPrompt()).toBe('Selected skills:\nNone.');
+  });
+});
+

@@ -1,6 +1,6 @@
 import type { Room } from 'colyseus.js';
 import { describe, expect, it, vi } from 'vitest';
-import { Session } from '../src/world/session/colyseus';
+import { Session } from './colyseus';
 
 describe('agent movement heading', () => {
   it('faces each world-space movement direction and keeps its heading when stopped', () => {

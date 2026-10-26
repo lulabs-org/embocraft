@@ -5,8 +5,8 @@ import {
   type AgentRunState,
   type BatchResult,
 } from '@voxel/agent-runtime';
-import { prepareDecision } from '../src/agent/turn/prepare';
-import { navigationWorld } from '../../../tests/support/navigation-world';
+import { prepareDecision } from './prepare';
+import { navigationWorld } from '../../../../../tests/support/navigation-world';
 
 function fixture() {
   const w = navigationWorld({ x: 4, y: 3.5, z: 0 });
