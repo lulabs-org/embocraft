@@ -67,7 +67,7 @@ services:
       PIPER_API_URL: '${PIPER_API_URL:-}'
       ASR_PROVIDER: '${ASR_PROVIDER:-auto}'
       ASR_MODEL_DIR: '${ASR_MODEL_DIR:-/app/models}'
-      SENSE_VOICE_MODEL: '${SENSE_VOICE_MODEL:-}'
+      SENSE_VOICE_MODEL: '${SENSE_VOICE_MODEL:-sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17}'
       ASR_THREADS: '${ASR_THREADS:-2}'
       DEEPSEEK_API_KEY: '${DEEPSEEK_API_KEY:-}'
       DEEPSEEK_MODEL: '${DEEPSEEK_MODEL:-deepseek-flash}'
@@ -75,8 +75,8 @@ services:
       OLLAMA_MODEL: '${OLLAMA_MODEL:-}'
     volumes:
       - server_data:/app/.data
-      # Optional SenseVoice packs; an empty host folder keeps the Whisper fallback.
-      - ./models:/app/models:ro
+      # SenseVoice 模型已内置到镜像；如需额外模型包，可再只读挂载（会覆盖镜像内 /app/models）：
+      # - ./models:/app/models:ro
     ports:
       - '${SERVER_PORT:-2567}:2567'
 

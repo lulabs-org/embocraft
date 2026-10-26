@@ -14,6 +14,7 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "voice:setup": "node scripts/setup-local-voice.mjs",
+    "voice:sensevoice": "node scripts/fetch-sense-voice.mjs",
     "db:start": "node scripts/database.mjs",
     "db:stop": "node scripts/database.mjs stop",
     "db:generate": "pnpm --filter @voxel/server exec prisma generate",

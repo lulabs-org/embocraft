@@ -38,12 +38,21 @@ pnpm docker:up
 docker compose up -d --build
 ```
 
+默认不要求本地模型，克隆后可直接构建。需要离线语音识别（SenseVoice）时，先下载模型包再构建，server 镜像会把它打包进去：
+
+```sh
+pnpm voice:sensevoice   # 从 k2-fsa 发布页下载约 150 MiB 模型包并解压到 models/
+pnpm docker:up          # 或 docker compose up -d --build
+```
+
+`models/` 只提交 `.gitkeep` 空目录，模型包不入库；未下载模型时镜像照常构建并打印跳过提示，识别自动回退 Speaches Whisper（首次识别联网下载模型）。
+
 启动完成后：
 
 - **Web 前端**：打开浏览器访问 `http://localhost`（默认 80 端口，前端通过 Nginx 自动反代 API 与 WebSocket）
 - **Swagger API 文档**：访问 `http://localhost:2567/api-docs`
 - **数据库**：PostgreSQL 数据自动持久化在 `voxel_postgres_data` 数据卷中，宿主机端口 `55432`
-- **语音服务 ASR / TTS**：内置共享 `voxel-speech`（Speaches，Compose 服务名 `speech`）容器，CPU 使用 int8 推理，模型缓存在 `voxel_whisper_cache` 卷中。Whisper 首次识别需要联网下载模型，下载后可离线识别；模型加载后常驻内存，避免空闲后重复冷启动。服务器也可选用本地 SenseVoice（sherpa-onnx）：将模型包放入 `models/` 即可离线识别，详见 [语音配置](docs/VOICE.md)。
+- **语音服务 ASR / TTS**：内置共享 `voxel-speech`（Speaches，Compose 服务名 `speech`）容器，CPU 使用 int8 推理，模型缓存在 `voxel_whisper_cache` 卷中。Whisper 首次识别需要联网下载模型，下载后可离线识别；模型加载后常驻内存，避免空闲后重复冷启动。服务器也可选用本地 SenseVoice（sherpa-onnx）：先运行 `pnpm voice:sensevoice` 下载模型包，server 镜像构建时会把 `models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/` 打包进镜像，无需再挂载；未下载模型时镜像照常构建，识别回退 Whisper。详见 [语音配置](docs/VOICE.md)。
 - **Piper TTS**：控制台选择中文 Huayan / 超文 Chaowen 或英文 Lessac，点击“安装模型”，安装后可离线合成。旧 macOS 服务自动迁移，保留 Agent 绑定；原配置备份为 `voice-services.json.pre-piper.bak`。
 - **服务配置**：模型、ASR 与 TTS 配置保存在 `voxel_server_data` 卷中，重建容器会保留。旧部署升级前，请先备份旧容器的 `/app/.data` 并迁入该卷。
 

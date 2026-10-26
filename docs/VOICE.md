@@ -63,7 +63,7 @@ Agent 使用浏览器服务时，服务器沿用私聊接收者、距离和收�
 准备工作：
 
 1. 服务器已安装依赖 `sherpa-onnx-node@1.13.8`（随 `pnpm install` 安装，含 macOS、Linux 平台原生库）。
-2. 将 k2-fsa 的 SenseVoice 模型包放入项目根目录 `models/`，例如 `models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/`，其中至少包含 `tokens.txt` 与 `model.int8.onnx`（或 `model.onnx`）。目录名须以 `sherpa-onnx-sense-voice` 开头，模型不会自动下载。
+2. 运行 `pnpm voice:sensevoice` 从 k2-fsa 发布页下载 `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17` 并解压到项目根目录 `models/`（约 150 MiB，无需账号或 API key）；也可手动放入其他 k2-fsa 模型包，或用 `pnpm voice:sensevoice <包名>` 下载指定包。目录须包含 `tokens.txt` 与 `model.int8.onnx`（或 `model.onnx`），目录名须以 `sherpa-onnx-sense-voice` 开头。只有 `models/.gitkeep` 会入库，模型包本身不入库。
 3. 启动服务器后，在控制台 **添加识别服务**，**服务类型** 选择 **本地 SenseVoice（服务器离线）**，选择模型与识别语言并保存。
 
 可配置项：
@@ -80,7 +80,7 @@ Agent 使用浏览器服务时，服务器沿用私聊接收者、距离和收�
 
 环境变量：`ASR_PROVIDER=auto|whisper|sense-voice`（默认 `auto`，按模型是否安装选择默认引擎）、`ASR_MODEL_DIR`（默认项目根目录 `models/`）、`SENSE_VOICE_MODEL`（默认模型目录名）、`ASR_THREADS`（1–16，默认 2）、`FFMPEG_BIN`。
 
-Docker 部署时镜像不打包模型，应把宿主机的 `models/` 只读挂载到容器的 `/app/models` 并设置 `ASR_MODEL_DIR=/app/models`；未挂载时 `auto` 自动回退到 Speaches Whisper。
+Docker 部署时 `Dockerfile.server` 会在构建阶段把 `models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/` 打包进镜像 `/app/models`，并默认 `ASR_MODEL_DIR=/app/models`、`SENSE_VOICE_MODEL` 指向该包，运行时不依赖宿主机挂载。模型包**不是构建必需项**：未运行 `pnpm voice:sensevoice` 的干净克隆也能构建成功，构建日志会提示跳过打包，运行时 `auto` 自动回退到 Speaches Whisper；需要离线识别时先下载模型再重建镜像。换用其他模型包时，用 `pnpm voice:sensevoice <包名>` 准备后执行 `docker compose build --build-arg SENSE_VOICE_PACK=<目录名> server`；包目录存在但缺少 `tokens.txt` 或 `model*.onnx` 时构建会明确报错并中止。若仍挂载宿主机的 `models/`，挂载内容会覆盖镜像内模型；没有任何模型时 `auto` 自动回退到 Speaches Whisper。
 
 ### 阿里云实时识别
 

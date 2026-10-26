@@ -4,8 +4,12 @@ node_modules
 .vscode
 .playwright-cli
 .pnpm-store
-# SenseVoice packs are mounted at runtime, never baked into the image.
-models
+# 只把 SenseVoice 模型包放进构建上下文供 Dockerfile.server 打包；
+# 其余模型（TTS、KWS、声纹等）与压缩包仍排除。
+models/*
+!models/.gitkeep
+!models/sherpa-onnx-sense-voice-*
+models/sherpa-onnx-sense-voice-*.tar.bz2
 output
 artifacts
 dist

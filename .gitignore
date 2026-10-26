@@ -11,4 +11,6 @@ artifacts/
 .playwright-cli/
 output/
 .vscode/
-models/
+# 模型包不入库，但保留空目录，克隆后即可直接构建镜像。
+models/*
+!models/.gitkeep
