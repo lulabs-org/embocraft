@@ -9,7 +9,11 @@ import { stream } from '@earendil-works/pi-ai/api/openai-completions';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { mergeSignals, withDeadline } from '../../kernel/abort';
-import { estimateTokens, RequestCharge, type RequestAccounting } from './charge';
+import {
+  estimateTokens,
+  RequestCharge,
+  type RequestAccounting,
+} from './charge';
 import { streamFailure, thrownFailure, type StreamFailure } from './failure';
 import { createModel } from './pi';
 
@@ -38,25 +42,17 @@ type RelayRequest = ModelStreamOptions & {
 };
 
 /**
- * Streams one provider request into the decision loop.
- *
- * No shared auth store, hidden retries, redirects, or raw provider errors in
- * transcripts. The composed deadline is the only timer that cancels a call, and
- * the request is charged exactly once whether it succeeds, fails or is aborted.
+ * Streams one provider request into Pi's decision loop. The request model is
+ * rebuilt from the turn config so mutable Pi state cannot change its identity.
  */
-export function createModelStream(options: ModelStreamOptions): StreamFn {
-  // The loop's model is derived from the same config on every run, so this layer
-  // rebuilds it: request identity must follow the turn config, not mutable agent state.
-  return (_model, context, callerOptions) => {
-    const output = createAssistantMessageEventStream();
-    void relay({
-      ...options,
-      context,
-      callerSignal: callerOptions?.signal,
-      output,
-    });
-    return output;
-  };
+export function streamModel(
+  options: ModelStreamOptions,
+  context: StreamFnArgs[1],
+  callerSignal?: AbortSignal,
+): AssistantMessageEventStream {
+  const output = createAssistantMessageEventStream();
+  void relay({ ...options, context, callerSignal, output });
+  return output;
 }
 
 /** Runs one model call and relays its events until a terminal event or failure. */

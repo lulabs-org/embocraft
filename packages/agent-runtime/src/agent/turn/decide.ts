@@ -15,7 +15,7 @@ import { TOOL_PROTOCOL_CORRECTION } from '../prompt/system';
 import type { AgentConfig, ModelEndpoint } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
 import { createModel } from '../model/pi';
-import { createModelStream } from '../model/stream';
+import { streamModel } from '../model/stream';
 import type { RequestBudget } from '../task/budget';
 import {
   failBatch,
@@ -42,26 +42,17 @@ export type DecisionLoopOptions = {
   shouldYield: () => boolean;
   afterTurn?: () => void;
   transcript?: (messages: Message[]) => Promise<void>;
-  sessionKey?: object;
   interactionHistory?: boolean;
   contextEpoch?: () => string;
 };
 
-/**
- * One reused Pi agent per character session.
- *
- * Pi captures the lifecycle callbacks when the agent is constructed, so the
- * callbacks read `this.options` at call time and `open()` swaps in the next
- * turn's options. That keeps one agent, and its transcript, alive across turns.
- */
-class DecisionSession {
-  private options: DecisionLoopOptions;
+/** One Pi agent for this decision; persisted history is replayed into each run. */
+class PiDecision {
   private readonly agent: Agent;
   private readonly correction = new ToolProtocolCorrection();
   private contextEpoch: string | undefined;
 
-  constructor(options: DecisionLoopOptions) {
-    this.options = options;
+  constructor(private readonly options: DecisionLoopOptions) {
     this.contextEpoch = options.contextEpoch?.();
     this.agent = this.createAgent();
     // Truncated and policy-blocked calls never reach afterToolCall, so the
@@ -72,20 +63,10 @@ class DecisionSession {
     });
   }
 
-  /** Advances a reused session to the next turn and clears per-turn guard state. */
-  open(options: DecisionLoopOptions) {
-    this.options = options;
-    this.contextEpoch = options.contextEpoch?.();
-    this.correction.reset();
-  }
-
-  /** Rebuilds the transcript and runs Pi until the loop ends or the host stops it. */
-  async run(input: string) {
+  /** Replays the persisted transcript and runs Pi until this decision ends. */
+  async run() {
     const { agent } = this;
-    const { budget, signal, state, transcript } = this.options;
-    agent.reset();
-    agent.state.model = createModel(this.options.config, this.options.endpoint);
-    agent.state.tools = this.options.tools;
+    const { budget, signal, state, transcript, input } = this.options;
     agent.state.messages = [
       createInitialSystemMessage(this.options.prompt, this.options.tools)!,
       ...(this.options.history ?? []),
@@ -115,17 +96,21 @@ class DecisionSession {
         systemPrompt: this.options.prompt,
         tools: this.options.tools,
       },
-      streamFn: (model, context, streamOptions) => {
+      streamFn: (_model, context, streamOptions) => {
         const { config, endpoint, budget, signal, request, save } =
           this.options;
-        return createModelStream({
-          config,
-          endpoint,
-          budget,
-          signal,
-          request,
-          persistAdmission: save,
-        })(model, context, streamOptions);
+        return streamModel(
+          {
+            config,
+            endpoint,
+            budget,
+            signal,
+            request,
+            persistAdmission: save,
+          },
+          context,
+          streamOptions?.signal,
+        );
       },
       toolExecution: 'sequential',
       transformContext: (messages) => this.transformContext(messages),
@@ -217,23 +202,7 @@ class DecisionSession {
   }
 }
 
-const sessions = new WeakMap<object, DecisionSession>();
-
 /** Runs the cognitive decision loop for the current character turn. */
 export async function runDecisionLoop(options: DecisionLoopOptions) {
-  await sessionFor(options).run(options.input);
-}
-
-/** Reuses the agent bound to the session key; unkeyed runs always get a fresh one. */
-function sessionFor(options: DecisionLoopOptions): DecisionSession {
-  const { sessionKey } = options;
-  if (!sessionKey) return new DecisionSession(options);
-  const cached = sessions.get(sessionKey);
-  if (cached) {
-    cached.open(options);
-    return cached;
-  }
-  const session = new DecisionSession(options);
-  sessions.set(sessionKey, session);
-  return session;
+  await new PiDecision(options).run();
 }

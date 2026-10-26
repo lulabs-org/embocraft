@@ -1,7 +1,10 @@
 import type { ModelEndpoint } from '../../contracts';
 import type { WorldEvent } from '@voxel/shared';
+import { AgentRuntimeError } from '../../contracts/errors';
+import type { AgentRunState } from '../../contracts/state';
 import { BackgroundActionTracker } from '../action/background';
 import { runFollowStep } from '../action/follow';
+import { defaultEndpoint } from '../model/pi';
 import { checkBudgetCap } from '../task/budget';
 import { isActiveTask } from '../task/state';
 import { restoreCheckpoint } from './checkpoint';
@@ -10,18 +13,29 @@ import { Turn, type RunOptions, type TurnActions } from './turn';
 /** What advancing a saved follow intent asks the wake loop to do next. */
 type FollowStep = 'idle' | 'resume' | 'stop';
 
-/**
- * One wake-up: follow ticks and background actions first, then event decisions.
- * A queued message always gets its own turn; an unattended turn runs only while
- * the task is active or right after a background action settles.
- */
-export class CharacterRunner {
+const running = new WeakSet<AgentRunState>();
+
+/** The single serialized execution entrypoint for a character's wake-up. */
+export class AgentRunner {
   constructor(
-    private endpoint: ModelEndpoint,
-    private request: typeof fetch,
+    private endpoint: ModelEndpoint = defaultEndpoint,
+    private request: typeof fetch = fetch,
   ) {}
 
-  async run(o: RunOptions) {
+  async run(o: RunOptions): Promise<void> {
+    if (running.has(o.memory))
+      throw new AgentRuntimeError('Agent 已在运行。', true);
+    running.add(o.memory);
+    try {
+      o.signal.throwIfAborted();
+      await this.runWake(o);
+    } finally {
+      running.delete(o.memory);
+    }
+  }
+
+  /** Follow ticks and background actions precede event decisions. */
+  private async runWake(o: RunOptions) {
     const { memory, signal } = o;
     const background = new BackgroundActionTracker();
     let message = o.attention?.take();

@@ -1,6 +1,5 @@
 import type { AICharacterTask, WorldEvent } from '@voxel/shared';
 import type { ModelEndpoint } from '../contracts/config';
-import { AgentRuntimeError } from '../contracts/errors';
 import type { AgentConfig } from '../contracts/config';
 import { emptyState, type AgentRunState } from '../contracts/state';
 import { defaultEndpoint } from '../agent/model/pi';
@@ -10,33 +9,13 @@ import {
   type TaskAuthority,
   type TaskCommand,
 } from '../agent/task/service';
-import { CharacterRunner } from '../agent/turn/wake';
-import type { RunOptions } from '../agent/turn/turn';
+import { AgentRunner } from '../agent/turn/wake';
 import { AgentAttention } from '../world/observe/attention';
 import type { RuntimePorts, RuntimeRunOptions } from './ports';
 
 export type { RuntimePorts, RuntimeRunOptions, RuntimeStore } from './ports';
 export type { RunOptions } from '../agent/turn/turn';
-
-const running = new WeakSet<AgentRunState>();
-/** Stable host entrypoint; one serialized execution slot per Agent, shared across host wake-ups. */
-export class AgentRunner {
-  constructor(
-    private endpoint: ModelEndpoint = defaultEndpoint,
-    private request: typeof fetch = fetch,
-  ) {}
-  async run(options: RunOptions): Promise<void> {
-    if (running.has(options.memory))
-      throw new AgentRuntimeError('Agent 已在运行。', true);
-    running.add(options.memory);
-    try {
-      options.signal.throwIfAborted();
-      await new CharacterRunner(this.endpoint, this.request).run(options);
-    } finally {
-      running.delete(options.memory);
-    }
-  }
-}
+export { AgentRunner } from '../agent/turn/wake';
 
 /**
  * Host facade: owns the event queue, the state projection and the single

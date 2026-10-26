@@ -148,7 +148,9 @@ describe('agent runtime dependency boundaries', () => {
 
   it('routes every decision through one turn loop and keeps task commands in the service', () => {
     const slot = readFileSync(resolve(runtime, 'api/runtime.ts'), 'utf8');
-    expect(slot).toContain('CharacterRunner');
+    const runner = readFileSync(resolve(runtime, 'agent/turn/wake.ts'), 'utf8');
+    expect(slot).toContain("export { AgentRunner } from '../agent/turn/wake'");
+    expect(runner).toContain('export class AgentRunner');
     for (const path of graph.keys())
       expect(path).not.toMatch(
         /(?:conversation-runner|task-runner|conversation-tools)\.ts$/,
