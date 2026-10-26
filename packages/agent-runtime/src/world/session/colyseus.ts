@@ -39,6 +39,7 @@ export class Session {
   private roomOpen = false;
   private closing?: Promise<void>;
   private pending = new Map<string, (value: unknown) => void>();
+  private yaw = 0;
 
   /** Discover active world room via HTTP, connect over WebSocket, and wait for initial snapshot. */
   async join(name: string, kind = 'scripted-agent') {
@@ -107,10 +108,13 @@ export class Session {
 
   /** Fire-and-forget directional movement and jump control. */
   move(x: number, z: number, jump = false) {
+    // Inputs use world axes; face the direction of travel and retain that
+    // heading when navigation briefly releases the movement input.
+    if (Math.hypot(x, z) > 0.001) this.yaw = Math.atan2(-x, -z);
     this.room.send('action', {
       id: `move-${++this.id}`,
       type: 'move',
-      payload: { x, z, jump, yaw: 0 },
+      payload: { x, z, jump, yaw: this.yaw },
     });
   }
 
