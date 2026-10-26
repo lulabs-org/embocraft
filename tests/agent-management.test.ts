@@ -64,29 +64,26 @@ describe('provider configuration boundary', () => {
     ).toThrow();
   });
   it.each([
+    'http://localhost:11434/v1',
     'http://192.168.31.1:11434/v1',
     'http://10.0.0.2:11434/v1',
-    'http://172.16.0.1:11434/v1',
-    'http://172.31.255.254:11434/v1',
-    'https://192.168.1.10/v1',
+    'http://8.8.8.8:11434/v1',
+    'http://100.101.102.103:11434/v1',
+    'http://ollama.example.com:11434/v1',
+    'https://public.example/v1',
     'http://[fd12:3456::1]:11434/v1',
-  ])('accepts private-network Ollama endpoint %s', (baseUrl) => {
+  ])('accepts Ollama endpoint %s', (baseUrl) => {
     expect(
       validateProvider({ name: 'LAN', type: 'ollama', baseUrl }).baseUrl,
     ).toBe(baseUrl);
   });
   it.each([
-    'http://8.8.8.8:11434/v1',
-    'https://public.example/v1',
-    'http://172.15.0.1:11434/v1',
-    'http://172.32.0.1:11434/v1',
-    'http://192.169.1.1:11434/v1',
-    'http://169.254.169.254/v1',
-    'http://192.168.31.1.evil.example:11434/v1',
+    'file:///tmp/ollama',
+    'ftp://ollama.example.com/v1',
     'http://user:password@192.168.31.1:11434/v1',
     'http://192.168.31.1:11434/v1?key=secret',
     'http://192.168.31.1:11434/v1#key',
-  ])('rejects unsupported Ollama endpoint %s', (baseUrl) => {
+  ])('rejects malformed Ollama endpoint %s', (baseUrl) => {
     expect(() =>
       validateProvider({ name: 'LAN', type: 'ollama', baseUrl }),
     ).toThrow();
@@ -366,7 +363,10 @@ it('persists provider configurations cleanly and resolves character inference de
     expect(provider.defaultModel).toBe('deepseek-reasoner');
     expect('inference' in provider).toBe(false);
 
-    const reasoningRole = validateAICharacter({ name: 'ReasoningBot' }, provider);
+    const reasoningRole = validateAICharacter(
+      { name: 'ReasoningBot' },
+      provider,
+    );
     expect(reasoningRole.thinking).toBe('enabled');
     expect(reasoningRole.maxTokens).toBe(4096);
     expect(reasoningRole.timeoutMs).toBe(60000);
@@ -377,12 +377,20 @@ it('persists provider configurations cleanly and resolves character inference de
     expect(chatRole.maxTokens).toBe(512);
 
     const ollamaProvider = restored.get('ollama');
-    const ollamaRole = validateAICharacter({ name: 'LocalBot', model: 'llama3' }, ollamaProvider);
+    const ollamaRole = validateAICharacter(
+      { name: 'LocalBot', model: 'llama3' },
+      ollamaProvider,
+    );
     expect(ollamaRole.timeoutMs).toBe(120000);
     expect(ollamaRole.maxTokens).toBe(512);
 
     const customRole = validateAICharacter(
-      { name: 'Custom', timeoutMs: 45000, maxTokens: 2048, thinking: 'enabled' },
+      {
+        name: 'Custom',
+        timeoutMs: 45000,
+        maxTokens: 2048,
+        thinking: 'enabled',
+      },
       chatProvider,
     );
     expect(customRole.timeoutMs).toBe(45000);

@@ -17,5 +17,11 @@ export { installProviderRoutes } from './routes/providers.routes';
 export { ModelCatalog } from './adapters/model-catalog';
 export { ProviderHealthChecker } from './adapters/health-checker';
 export { ProviderService } from './services/provider-service';
+export {
+  resolveInferenceDefaults,
+  validateInferenceSettings,
+  validateProviderModel,
+} from './domain/inference';
+export type { InferenceSettings } from './domain/inference';
 export { PROVIDERS_CHANGED } from './services/events';
 export type { ProviderChangedEvent } from './services/events';
