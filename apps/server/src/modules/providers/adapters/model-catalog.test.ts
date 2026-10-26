@@ -16,16 +16,16 @@ it('requires credentials only for remote providers and preserves missing-provide
     .mockImplementation(async () =>
       Response.json({ data: [{ id: 'fixture-model' }] }),
     );
-  const get = vi.fn(() => provider('deepseek'));
-  const catalog = new ModelCatalog({ get });
+  const getRuntime = vi.fn(() => provider('deepseek'));
+  const catalog = new ModelCatalog({ getRuntime });
   await expect(catalog.models('remote')).rejects.toMatchObject({
     status: 400,
     message: '请先配置 API Key。',
   });
   expect(fetchSpy).not.toHaveBeenCalled();
-  get.mockReturnValue(provider());
+  getRuntime.mockReturnValue(provider());
   await expect(catalog.models('local')).resolves.toEqual(['fixture-model']);
-  get.mockImplementation(() => {
+  getRuntime.mockImplementation(() => {
     throw new AppError('服务不存在。', 404);
   });
   await expect(catalog.models('missing')).rejects.toMatchObject({
@@ -42,7 +42,7 @@ it('bounds queries per provider, allows other providers and releases successful 
         finish = resolve;
       }),
   );
-  const catalog = new ModelCatalog({ get: () => provider() });
+  const catalog = new ModelCatalog({ getRuntime: () => provider() });
   const first = catalog.models('a');
   await expect(catalog.models('a')).rejects.toMatchObject({ status: 429 });
   fetchSpy.mockImplementation(async () =>
@@ -62,7 +62,7 @@ it('hides provider failures, forwards saved configuration and releases failed qu
     .mockImplementation(async () =>
       Response.json({ data: [{ id: 'recovered' }] }),
     );
-  const catalog = new ModelCatalog({ get: () => saved });
+  const catalog = new ModelCatalog({ getRuntime: () => saved });
   await expect(catalog.models(saved.id)).rejects.toMatchObject({
     status: 502,
     message:
@@ -84,7 +84,7 @@ it('fetches, deduplicates and sorts model IDs using fetch', async () => {
     .mockImplementation(async () =>
       Response.json({ data: [{ id: 'z' }, { id: 'a' }, { id: 'a' }] }),
     );
-  const catalog = new ModelCatalog({ get: () => saved });
+  const catalog = new ModelCatalog({ getRuntime: () => saved });
   await expect(catalog.models(saved.id)).resolves.toEqual(['a', 'z']);
   expect(fetchSpy).toHaveBeenCalledWith(
     'https://api.deepseek.com/models',

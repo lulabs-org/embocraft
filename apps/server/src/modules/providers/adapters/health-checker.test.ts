@@ -7,7 +7,7 @@ it('preserves missing-provider and missing-credential errors without probing', a
   const getModels = vi.fn();
   const missing = new ProviderHealthChecker(
     {
-      get: () => {
+      getRuntime: () => {
         throw new AppError('模型服务不存在。', 404);
       },
     },
@@ -16,7 +16,9 @@ it('preserves missing-provider and missing-credential errors without probing', a
   await expect(missing.check('missing')).rejects.toMatchObject({ status: 404 });
 
   const unconfigured = new ProviderHealthChecker(
-    { get: () => validateProvider({ name: 'Remote', type: 'deepseek' }) },
+    {
+      getRuntime: () => validateProvider({ name: 'Remote', type: 'deepseek' }),
+    },
     { getModels },
   );
   await expect(unconfigured.check('remote')).rejects.toMatchObject({
@@ -34,7 +36,7 @@ it('separates network reachability from model-list support', async () => {
     .mockResolvedValueOnce(new Response(null, { status: 404 }))
     .mockRejectedValueOnce(new Error('connection refused'));
   const checker = new ProviderHealthChecker(
-    { get: () => saved },
+    { getRuntime: () => saved },
     { getModels },
   );
 
