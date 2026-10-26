@@ -1,4 +1,4 @@
-import type { AICharacterView, VoiceServiceView } from '@voxel/shared';
+import type { AICharacterView } from '@voxel/shared';
 import type {
   AgentAttention,
   AgentRunState,
@@ -6,7 +6,6 @@ import type {
 } from '@voxel/agent-runtime';
 import type { PlanService } from '../../tasks/persistence/service';
 import type { SavedProvider } from '../../providers/domain/model';
-import type { TaskBook } from '../../tasks/domain/types';
 
 export interface HostedAICharacter {
   run(provider: SavedProvider, run?: boolean): Promise<void>;
@@ -27,20 +26,6 @@ export type Job = {
   controlling?: boolean;
   storageFailed?: boolean;
 };
-
-export type CharacterRecord = AICharacterView & {
-  runtime?: AgentRunState;
-  taskBook?: TaskBook; // Legacy read only.
-  currentRunId?: string;
-};
-
-export interface VoiceServicePort {
-  list(): VoiceServiceView[];
-  get(id: string): unknown;
-  bind(sessionId: string, serviceId: string): void;
-  unbind(sessionId: string): void;
-  remove(id: string, inUse: () => boolean): Promise<void>;
-}
 
 export const active = (status: AICharacterView['status']) =>
   ['joining', 'running', 'stopping'].includes(status);

@@ -10,17 +10,11 @@ import { emptyState } from '@voxel/agent-runtime';
 import type { ProviderRuntimePort } from '../../providers/ports';
 import type { ArchivePort } from '../../../persistence/archive';
 import { ManagementEvents } from '../../management/events';
-import { FileProviderRepository } from '../../providers/persistence/file-repository';
-import type { VoiceServiceStore } from '../../audio/tts/voice-services';
 import {
-  readManagementArchive,
-  writeManagementArchive,
-} from '../../../persistence/archive-file';
-import {
-  Session,
   AgentAttention,
-  AgentRunner,
   nextIntervalMs,
+  type Session,
+  type AgentRunner,
   type AgentConfig,
 } from '@voxel/agent-runtime';
 
@@ -38,16 +32,16 @@ import {
   isJobBusy,
   canWakeJob,
   type Job,
-  type VoiceServicePort,
   AICharacterRegistry,
-} from '../domain/types';
+} from '../runtime/job';
+import type { VoiceServicePort } from '../ports';
 import {
   pauseTaskForHost,
   markJoined,
   markOffline,
   modelChanged,
 } from '../../tasks/runtime/execution';
-import { executionState } from '../domain/task-adapter';
+import { executionState } from '../runtime/task-adapter';
 import { restoreAICharacterJob } from '../persistence/restore';
 import { AICharacterHost } from '../runtime/character-host';
 import type { ExecutionContext } from '../runtime/execution-context';
@@ -639,24 +633,3 @@ export type AICharacterDependencies = {
     provider: SavedProvider,
   ) => Pick<AgentRunner, 'run'>;
 };
-
-/** AICharacterManager is the concrete orchestrator in the server with file-based persistence defaults. */
-export class AICharacterManager extends AICharacterOrchestrator {
-  declare readonly voiceServices: VoiceServiceStore | undefined;
-
-  constructor(
-    providers: FileProviderRepository,
-    serverUrl: string | (() => string),
-    dependencies: AICharacterDependencies = {
-      session: (url) => new Session(url),
-      runner: (_config, provider) => new AgentRunner(provider),
-    },
-    voiceServices?: VoiceServiceStore,
-  ) {
-    const path = `${providers.path}.agents.json`;
-    super(providers, serverUrl, dependencies, voiceServices, {
-      load: () => readManagementArchive(path),
-      save: (records) => writeManagementArchive(path, records),
-    });
-  }
-}

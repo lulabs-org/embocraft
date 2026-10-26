@@ -7,7 +7,7 @@ import { ManagementEvents } from '../modules/management/events';
 import {
   AICharacterRegistry,
   type Job,
-} from '../modules/ai-characters/domain/types';
+} from '../modules/ai-characters/runtime/job';
 import { AICharacterWakeScheduler } from '../modules/ai-characters/runtime/wake-scheduler';
 import { PlanService } from '../modules/tasks/persistence/service';
 import { newPlan, newRun } from '../modules/tasks/domain/model';

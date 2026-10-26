@@ -3,7 +3,8 @@ import {
   type AICharacterSettings,
 } from '@voxel/shared';
 import { AppError } from '../../../common/errors';
-import type { VoiceServicePort, Job } from '../domain/types';
+import type { VoiceServicePort } from '../ports';
+import type { Job } from '../runtime/job';
 import type { Session } from '@voxel/agent-runtime';
 
 /**

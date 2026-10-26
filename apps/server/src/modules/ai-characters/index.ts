@@ -1,8 +1,8 @@
 export {
-  AICharacterManager,
   AICharacterOrchestrator,
   type AICharacterDependencies,
 } from './services/orchestrator';
+export { AICharacterManager } from './manager';
 export { CharacterVoiceCoordinator } from './services/voice-coordinator';
 export { validateAICharacter } from './domain/validation';
 export {
@@ -14,14 +14,14 @@ export {
   AICharacterRegistry,
   type Job,
   type HostedAICharacter,
-  type VoiceServicePort,
-  type CharacterRecord,
   active,
   resident,
   isJobBusy,
   canWakeJob,
-} from './domain/types';
-export { taskExecutionState, executionState } from './domain/task-adapter';
+} from './runtime/job';
+export type { VoiceServicePort } from './ports';
+export type { CharacterRecord } from './persistence/record';
+export { taskExecutionState, executionState } from './runtime/task-adapter';
 export { AICharacterWakeScheduler } from './runtime/wake-scheduler';
 export { AICharacterHost } from './runtime/character-host';
 export type { ExecutionContext } from './runtime/execution-context';

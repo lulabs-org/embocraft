@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { AICharacterManager } from '../../src/modules/ai-characters';
 import { reserveRun } from '../../src/modules/tasks/runtime/execution';
-import { executionState } from '../../src/modules/ai-characters/domain/task-adapter';
+import { executionState } from '../../src/modules/ai-characters/runtime/task-adapter';
 import { FileProviderRepository } from '../../src/modules/providers';
 import {
   AgentRunner,

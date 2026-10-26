@@ -7,6 +7,10 @@ import { Server, matchMaker } from '@colyseus/core';
 import { createApp } from './app';
 import { env, type ServerConfig } from './config';
 import { checkStartupDatabase } from './startup';
+import {
+  readManagementArchive,
+  writeManagementArchive,
+} from './persistence/archive-file';
 
 import type { SocketRoutes } from './transport/socket-routes';
 import { RoutedWebSocketTransport } from './transport/websocket.transport';
@@ -94,11 +98,16 @@ export async function createServer(options: ServerOptions = {}) {
   const store = options.worldStore ?? new WorldStore(config.databaseUrl);
   let world: WorldRoom | undefined;
   let url = '';
+  const archivePath = `${providers.path}.agents.json`;
   const characters = new AICharacterManager(
     providers,
     () => url,
     options.agentDependencies,
     voiceServices,
+    {
+      load: () => readManagementArchive(archivePath),
+      save: (records) => writeManagementArchive(archivePath, records),
+    },
   );
   const modelCatalog = new ModelCatalog(providers);
   const providerHealth = new ProviderHealthChecker(providers);
