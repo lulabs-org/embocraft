@@ -8,12 +8,13 @@ import {
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../common/errors';
 import type { ProviderRuntimePort } from '../../providers/ports';
-import type { CharacterRecord, Job } from '../domain/types';
+import type { CharacterRecord } from './record';
+import type { Job } from '../runtime/job';
 import {
   restoreTaskExecution,
   restoreTaskMemory,
 } from '../../tasks/persistence/restore';
-import { executionState } from '../domain/task-adapter';
+import { executionState } from '../runtime/task-adapter';
 
 export function restoreAICharacterJob(
   view: CharacterRecord,

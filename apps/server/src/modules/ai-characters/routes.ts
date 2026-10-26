@@ -7,7 +7,7 @@ import {
   type AICharacterLogPage,
 } from '@voxel/shared';
 import type { PublicAICharacterView } from '@voxel/shared/management';
-import type { AICharacterManager } from './services/orchestrator';
+import type { AICharacterOrchestrator } from './services/orchestrator';
 import { asyncRoute as route } from '../../http/middleware/async-route';
 
 /** Opaque, versioned cursor wrapping a newest-first page offset. */
@@ -28,7 +28,7 @@ const decodeLogCursor = (cursor: unknown): number => {
 };
 
 export type AICharacterRoutePort = Pick<
-  AICharacterManager,
+  AICharacterOrchestrator,
   | 'assertWritable'
   | 'create'
   | 'flush'
@@ -42,7 +42,7 @@ export type AICharacterRoutePort = Pick<
   | 'stop'
   | 'storageRevision'
   | 'update'
-> & { readonly events: Pick<AICharacterManager['events'], 'version'> };
+> & { readonly events: Pick<AICharacterOrchestrator['events'], 'version'> };
 
 /**
  * 安装 AI 角色基础配置与生命周期控制相关 HTTP REST 路由

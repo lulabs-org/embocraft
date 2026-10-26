@@ -5,10 +5,8 @@ import type {
   TaskLease,
 } from '@voxel/agent-runtime';
 import type { WorldEvent } from '@voxel/shared';
-import type {
-  Job,
-  VoiceServicePort as VoiceServiceStore,
-} from '../domain/types';
+import type { Job } from './job';
+import type { VoiceServicePort as VoiceServiceStore } from '../ports';
 import type { SavedProvider } from '../../providers/domain/model';
 
 /** AI 角色在游戏世界中的会话运行时执行上下文契约 */

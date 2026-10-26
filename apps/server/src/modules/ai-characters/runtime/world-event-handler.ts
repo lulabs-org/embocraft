@@ -10,7 +10,7 @@ import {
   TaskService,
   type Session,
 } from '@voxel/agent-runtime';
-import type { Job } from '../domain/types';
+import type { Job } from './job';
 import type { ExecutionContext } from './execution-context';
 
 /**
