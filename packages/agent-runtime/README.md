@@ -137,10 +137,10 @@ flowchart TD
 
 ## 执行路径
 
-1. **接入**：宿主通过 `api/runtime.ts` 导出的 `AgentRunner.run()` 执行；`agent/turn/wake.ts` 保证一个角色只有一个执行槽，重复唤醒直接拒绝。
+1. **入口**：宿主通过 `api/runtime.ts` 导出的 `AgentRunner.run()` 执行；`agent/turn/wake.ts` 保证一个角色只有一个执行槽，重复唤醒直接拒绝。
 2. **接入**：宿主或 `AgentRuntime.submit()` 接收聊天消息；`agent/task/inbox.ts` 生成去重 id 并记录事件，保存后再入队，队列满时标记 `unknown`。任务控制由 `TaskService` 授权和提交；`api/intake.ts` 只导出这些接入辅助函数。
-3. **唤醒**：`agent/turn/wake.ts` 取事件；有已保存的跟随意图且无新消息时推进一次本地跟随；后台动作未结束时等它结束或等新消息，不并发发起第二次决策。
-4. **决策**：`agent/turn/turn.ts` 按 `attach → prepare → decide → settle` 推进。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`input.ts` 构造模型输入。`decide.ts` 每次创建 Pi Agent、回放已保存的历史、调用 `prompt()`，其 `streamFn` 直接调用 `agent/model/stream.ts` 的 `streamModel()`；`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
+3. **唤醒**：`agent/turn/wake.ts` 用消息、任务推进、继续决策三种原因驱动循环；有已保存的跟随意图且无新消息时推进一次本地跟随；后台动作未结束时等它结束或等新消息，不并发发起第二次决策。
+4. **决策**：`agent/turn/turn.ts` 按 `claim → prepare → decide → settle` 推进；`binding.ts` 持有当前配置、预算和租约，并处理聊天转任务时的切换。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`input.ts` 构造模型输入。`decide.ts` 每次创建 Pi Agent、回放已保存的历史、调用 `prompt()`，其 `streamFn` 直接调用 `agent/model/stream.ts` 的 `streamModel()`；`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
 5. **工具**：`agent/tools/*` 的 schema 是模型契约，handler 只依赖 `ToolHost`（定义在 `tools/port.ts`，由 `Turn` 实现）。`TaskService` 处理任务授权、命令与租约；世界工具把动作交给执行器。
 6. **动作**：`agent/action/executor.ts` 在执行时校验租约并保存进度。`goto`/`build`/`house` 作为后台动作运行，由 `agent/action/background.ts` 跟踪，结束后记录 `action_result` 事件；`follow` 由 `agent/action/follow.ts` 推进，不请求模型。
 7. **收尾**：任务进入结束态后清空可重放状态，`snapshot()` 提供只读投影，`store` 原子保存。宿主只持久化投影，不解析内部字段。

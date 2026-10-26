@@ -108,13 +108,14 @@ function fixture(replies: { name: string; arguments: unknown }[][]) {
   );
   const abort = new AbortController();
   const checkpoint = vi.fn(async () => {});
-  const run = () =>
+  const run = (defaults?: typeof config) =>
     new AgentRunner(undefined, request).run({
       session: {
         ...session,
         request: session.request as AgentSession['request'],
       },
       config,
+      defaults,
       signal: abort.signal,
       memory,
       attention,
@@ -921,6 +922,25 @@ it('resumes a running task after a reply without adding the conversation to task
   expect(String(f.request.mock.calls[1][1]!.body)).not.toContain(
     'conversation-only-marker',
   );
+});
+
+it('switches the model and credential when a chat turn joins its task', async () => {
+  const f = fixture([[move], [complete()]]);
+  const defaults = { ...f.config, model: 'chat-model', apiKey: 'chat-key' };
+  f.config.model = 'task-model';
+  f.config.apiKey = 'task-key';
+  f.message('private', 'human', '继续任务');
+  await f.run(defaults);
+
+  expect(f.request).toHaveBeenCalledTimes(2);
+  const requests = f.request.mock.calls.map(([, init]) => ({
+    model: JSON.parse(String(init?.body)).model,
+    authorization: new Headers(init?.headers).get('authorization'),
+  }));
+  expect(requests).toEqual([
+    { model: 'chat-model', authorization: 'Bearer chat-key' },
+    { model: 'task-model', authorization: 'Bearer task-key' },
+  ]);
 });
 
 it('bounds dialogue requests even when task limits are disabled', async () => {
