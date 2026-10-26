@@ -1,0 +1,105 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { Player } from '@voxel/shared';
+import type { LocalSpeech } from '../audio/asr/local-speech';
+import { WorldChat } from './chat';
+import { ChatSpeechService } from './speech-service';
+
+const player = (id: string): Player => ({
+  id,
+  name: id,
+  kind: 'human',
+  connected: true,
+  voiceSending: true,
+  x: 0,
+  y: 2,
+  z: 0,
+  yaw: 0,
+});
+
+function setup() {
+  const emit = vi.fn();
+  const chat = new WorldChat(() => [player('actor')], emit);
+  const token = chat.issue('actor');
+  const bytes = Buffer.from('audio');
+  const normalize = vi.fn().mockResolvedValue({ bytes, durationMs: 1000 });
+  const transcribe = vi.fn().mockResolvedValue('hello');
+  const speech = { normalize, transcribe } as unknown as LocalSpeech;
+  return {
+    chat,
+    token,
+    bytes,
+    emit,
+    normalize,
+    transcribe,
+    service: new ChatSpeechService(speech),
+  };
+}
+
+describe('chat speech coordination', () => {
+  it('publishes audio without a transcript when ASR fails and releases the upload slot', async () => {
+    const { chat, token, bytes, emit, transcribe, service } = setup();
+    transcribe.mockRejectedValue(new Error('ASR unavailable'));
+    const data = await service.publishAudio({
+      chat,
+      actor: 'actor',
+      route: { scope: 'public', recipients: [] },
+      bytes,
+      contentType: 'audio/wav',
+      language: 'en',
+      token,
+      signal: new AbortController().signal,
+    });
+    expect(data.transcriptAvailable).toBe(false);
+    expect(emit).toHaveBeenCalledOnce();
+    expect(() => chat.beginUpload('actor', {})).not.toThrow();
+    chat.endUpload('actor');
+  });
+
+  it('does not publish audio after its chat token is rotated', async () => {
+    const { chat, token, bytes, emit, transcribe, service } = setup();
+    transcribe.mockImplementation(async () => {
+      chat.issue('actor');
+      return 'hello';
+    });
+    await expect(
+      service.publishAudio({
+        chat,
+        actor: 'actor',
+        route: { scope: 'public', recipients: [] },
+        bytes,
+        contentType: 'audio/wav',
+        language: 'zh',
+        token,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(emit).not.toHaveBeenCalled();
+    expect(() => chat.beginUpload('actor', {})).not.toThrow();
+    chat.endUpload('actor');
+  });
+
+  it('keeps previews unpublished and consumes the final spatial ticket', async () => {
+    const { chat, token, bytes, emit, service } = setup();
+    const id = chat.beginSpatial('actor');
+    const input = {
+      chat,
+      actor: 'actor',
+      id,
+      bytes,
+      contentType: 'audio/wav',
+      token,
+      signal: new AbortController().signal,
+    };
+    await expect(
+      service.transcribeSpatial({ ...input, partial: true }),
+    ).resolves.toEqual({
+      text: 'hello',
+    });
+    expect(emit).not.toHaveBeenCalled();
+    await expect(
+      service.transcribeSpatial({ ...input, partial: false }),
+    ).resolves.toMatchObject({ scope: 'nearby', text: 'hello' });
+    expect(emit).toHaveBeenCalledOnce();
+    expect(() => chat.claimSpatial('actor', id)).toThrow();
+  });
+});

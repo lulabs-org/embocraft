@@ -9,7 +9,7 @@ import { type WorldChat } from './chat';
 import { LocalSpeech } from '../audio/asr/local-speech';
 import { AppError } from '../../common/errors';
 import type { AgentSpeech } from '../audio/tts/agent-speech';
-import { scheduleSpeech } from '../audio/asr/speech-scheduler';
+import { ChatSpeechService } from './speech-service';
 export function installChatRoutes(
   app: Express,
   getChat: () => WorldChat | undefined,
@@ -17,6 +17,7 @@ export function installChatRoutes(
   getAgentSpeech: () => AgentSpeech | undefined = () => undefined,
   origin = env.webOrigin(),
 ) {
+  const speechService = new ChatSpeechService(speech);
   app.use(
     '/chat',
     createOriginGuard({
@@ -101,45 +102,21 @@ export function installChatRoutes(
         if (!res.writableEnded) abort.abort();
       };
       res.on('close', cancel);
-      let started = false;
       try {
-        chat.beginUpload(actor, route);
-        started = true;
-        const normalized = await speech.normalize(
-          Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-          req.headers['content-type'] ?? '',
-          abort.signal,
-        );
-        let text = '';
-        try {
-          text = await scheduleSpeech(speech).transcribe(
-            normalized.bytes,
-            'audio/wav',
-            req.query.language === 'en' ? 'en' : 'zh',
-            abort.signal,
-          );
-        } catch {
-          abort.signal.throwIfAborted();
-        }
-        abort.signal.throwIfAborted();
-        chat.authenticate(
-          (req.headers.authorization ?? '').replace(/^Bearer /, ''),
-        );
-        res
-          .status(201)
-          .json(
-            chat.publishAudio(
-              actor,
-              route,
-              normalized.bytes,
-              normalized.durationMs,
-              text,
-            ),
-          );
+        const data = await speechService.publishAudio({
+          chat,
+          actor,
+          route,
+          bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+          contentType: req.headers['content-type'] ?? '',
+          language: req.query.language === 'en' ? 'en' : 'zh',
+          token: (req.headers.authorization ?? '').replace(/^Bearer /, ''),
+          signal: abort.signal,
+        });
+        res.status(201).json(data);
       } catch (e) {
         if (!abort.signal.aborted) next(e);
       } finally {
-        if (started) chat.endUpload(actor);
         res.off('close', cancel);
       }
     }),
@@ -265,31 +242,21 @@ export function installChatRoutes(
       };
       res.on('close', cancel);
       try {
-        const signal = AbortSignal.any([
-          abort.signal,
-          partial
-            ? chat.previewSpatial(actor, id)
-            : chat.claimSpatial(actor, id),
-        ]);
-        const text = await scheduleSpeech(speech).transcribe(
-          Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-          req.headers['content-type'] ?? '',
-          'zh',
-          signal,
-          partial,
+        res.json(
+          await speechService.transcribeSpatial({
+            chat,
+            actor,
+            id,
+            bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+            contentType: req.headers['content-type'] ?? '',
+            partial,
+            token: (req.headers.authorization ?? '').replace(/^Bearer /, ''),
+            signal: abort.signal,
+          }),
         );
-        signal.throwIfAborted();
-        chat.authenticate(
-          (req.headers.authorization ?? '').replace(/^Bearer /, ''),
-        );
-        if (partial) {
-          chat.previewSpatial(actor, id);
-          res.json({ text });
-        } else res.json(chat.publishSpatial(actor, id, text));
       } catch (e) {
         if (!abort.signal.aborted) next(e);
       } finally {
-        if (!partial) chat.endSpatial(actor, id);
         res.off('close', cancel);
       }
     }),
