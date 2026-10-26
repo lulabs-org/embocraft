@@ -1,52 +1,50 @@
 import { AppError } from '../../common/errors';
-import { randomBytes, randomUUID } from 'node:crypto';
 import {
   CHAT_MIN_INTERVAL_MS,
   parseChatRoute,
-  spatialMix,
-  SPEECH_HEARING_THRESHOLD,
   type ChatData,
   type Player,
-  type WorldEvent,
 } from '@voxel/shared';
-import { visibleEvent } from './visibility';
+import { ChatCredentials } from './credentials';
+import { ChatAudioClips } from './audio-clips';
+import { SpatialSpeech } from './spatial-speech';
 
-type Clip = { bytes: Buffer; actor: string; data: ChatData; expires: number };
-type SpeechTicket = {
-  actor: string;
-  recipients: string[];
-  expires: number;
-  controller: AbortController;
-  claimed: boolean;
-};
+/** Room-facing chat API; each stateful concern owns its own lifecycle. */
 export class WorldChat {
-  private speechTickets = new Map<string, SpeechTicket>();
-  private tokens = new Map<string, string>();
-  private clips = new Map<string, Clip>();
-  private uploads = new Set<string>();
+  private credentials: ChatCredentials;
+  private audioClips: ChatAudioClips;
+  private spatialSpeech: SpatialSpeech;
   private sent = new Map<string, number>();
+
   constructor(
     private players: () => Iterable<Player>,
     private emit: (actor: string, data: ChatData) => void,
-  ) {}
+  ) {
+    this.credentials = new ChatCredentials(players);
+    this.audioClips = new ChatAudioClips(
+      players,
+      (actor, value) => this.route(actor, value),
+      emit,
+    );
+    this.spatialSpeech = new SpatialSpeech(players, emit);
+  }
+
   issue(id: string) {
-    this.revoke(id);
-    const token = randomBytes(32).toString('hex');
-    this.tokens.set(token, id);
-    return token;
-  }
-  revoke(id: string) {
-    this.cancelSpatial(id);
+    this.spatialSpeech.cancel(id);
     this.sent.delete(id);
-    for (const [token, owner] of this.tokens)
-      if (owner === id) this.tokens.delete(token);
+    return this.credentials.issue(id);
   }
+
+  revoke(id: string) {
+    this.spatialSpeech.cancel(id);
+    this.sent.delete(id);
+    this.credentials.revoke(id);
+  }
+
   authenticate(token: string) {
-    const id = this.tokens.get(token);
-    if (!id || ![...this.players()].some((p) => p.id === id && p.connected))
-      throw new AppError('游戏连接已失效，请重新进入。', 401);
-    return id;
+    return this.credentials.authenticate(token);
   }
+
   route(actor: string, value: unknown) {
     const route = parseChatRoute(value),
       players = [...this.players()];
@@ -98,14 +96,13 @@ export class WorldChat {
     });
   }
   beginUpload(actor: string, value: unknown) {
-    this.route(actor, value);
-    if (this.uploads.has(actor))
-      throw new AppError('上一段语音仍在处理中。', 429);
-    this.uploads.add(actor);
+    return this.audioClips.beginUpload(actor, value);
   }
+
   endUpload(actor: string) {
-    this.uploads.delete(actor);
+    return this.audioClips.endUpload(actor);
   }
+
   publishAudio(
     actor: string,
     value: unknown,
@@ -113,150 +110,41 @@ export class WorldChat {
     durationMs: number,
     text: string,
   ) {
-    const route = this.route(actor, value);
-    this.prune();
-    while (
-      this.clips.size >= 100 ||
-      [...this.clips.values()].reduce((n, c) => n + c.bytes.length, 0) +
-        bytes.length >
-        32 * 1024 * 1024
-    )
-      this.clips.delete(this.clips.keys().next().value!);
-    const audioId = randomUUID(),
-      data: ChatData = {
-        ...route,
-        name: [...this.players()].find((p) => p.id === actor)!.name,
-        kind: 'audio',
-        audioId,
-        durationMs,
-        text: text || '[语音消息：暂无文字转写]',
-        transcriptAvailable: !!text,
-      };
-    this.clips.set(audioId, {
-      bytes,
-      actor,
-      data,
-      expires: Date.now() + 10 * 60 * 1000,
-    });
-    this.emit(actor, data);
-    return data;
+    return this.audioClips.publishAudio(actor, value, bytes, durationMs, text);
   }
-  private speaker(actor: string) {
-    const p = [...this.players()].find(
-      (p) =>
-        p.id === actor && p.connected && p.kind === 'human' && p.voiceSending,
-    );
-    if (!p) throw new AppError('附近麦克风已关闭，转写已停止。', 409);
-    return p;
-  }
-  private hearing(actor: string) {
-    const speaker = this.speaker(actor);
-    return [...this.players()]
-      .filter(
-        (p) =>
-          p.id !== actor &&
-          p.connected &&
-          (p.kind !== 'human' || p.voiceListening) &&
-          spatialMix(p, speaker).gain >= SPEECH_HEARING_THRESHOLD,
-      )
-      .map((p) => p.id);
-  }
+
   beginSpatial(actor: string) {
-    this.pruneSpeech();
-    const recipients = this.hearing(actor);
-    if (
-      [...this.speechTickets.values()].filter((t) => t.actor === actor)
-        .length >= 4
-    )
-      throw new AppError('转写队列已满，请稍候。', 429);
-    const id = randomUUID();
-    this.speechTickets.set(id, {
-      actor,
-      recipients,
-      expires: Date.now() + 45000,
-      controller: new AbortController(),
-      claimed: false,
-    });
-    return id;
+    return this.spatialSpeech.begin(actor);
   }
+
   claimSpatial(actor: string, id: string) {
-    const signal = this.previewSpatial(actor, id);
-    this.speechTickets.get(id)!.claimed = true;
-    return signal;
+    return this.spatialSpeech.claim(actor, id);
   }
-  /** Authorize a preview without consuming the ticket or emitting a chat event. */
+
   previewSpatial(actor: string, id: string) {
-    this.pruneSpeech();
-    this.speaker(actor);
-    const ticket = this.speechTickets.get(id);
-    if (!ticket || ticket.actor !== actor || ticket.claimed)
-      throw new AppError('该语音片段已过期或处理过。', 409);
-    return ticket.controller.signal;
+    return this.spatialSpeech.preview(actor, id);
   }
+
   publishSpatial(actor: string, id: string, text: string) {
-    this.pruneSpeech();
-    const ticket = this.speechTickets.get(id);
-    if (
-      !ticket ||
-      ticket.actor !== actor ||
-      !ticket.claimed ||
-      ticket.controller.signal.aborted
-    )
-      throw new AppError('语音片段已取消。', 409);
-    const current = new Set(this.hearing(actor));
-    const recipients = ticket.recipients.filter((id) => current.has(id));
-    if (!text.trim() || text.length > 240)
-      throw new AppError('识别结果为空或过长。');
-    const data: ChatData = {
-      scope: 'nearby',
-      recipients,
-      kind: 'text',
-      name: this.speaker(actor).name,
-      text,
-      transcriptAvailable: true,
-    };
-    this.speechTickets.delete(id);
-    this.emit(actor, data);
-    return data;
+    return this.spatialSpeech.publish(actor, id, text);
   }
+
   endSpatial(actor: string, id: string) {
-    const ticket = this.speechTickets.get(id);
-    if (ticket?.actor === actor) {
-      ticket.controller.abort();
-      this.speechTickets.delete(id);
-    }
+    return this.spatialSpeech.end(actor, id);
   }
+
   cancelSpatial(actor: string) {
-    for (const [id, ticket] of this.speechTickets)
-      if (ticket.actor === actor) this.endSpatial(actor, id);
+    return this.spatialSpeech.cancel(actor);
   }
-  private pruneSpeech() {
-    for (const [id, ticket] of this.speechTickets)
-      if (ticket.expires <= Date.now()) this.endSpatial(ticket.actor, id);
-  }
+
   audio(id: string, viewer: string) {
-    this.prune();
-    const clip = this.clips.get(id);
-    if (
-      !clip ||
-      !visibleEvent(
-        { type: 'chat', actor: clip.actor, data: clip.data } as WorldEvent,
-        viewer,
-      )
-    )
-      throw new AppError('语音已过期或不可访问。', 404);
-    return clip.bytes;
+    return this.audioClips.audio(id, viewer);
   }
-  private prune() {
-    for (const [id, c] of this.clips)
-      if (c.expires < Date.now()) this.clips.delete(id);
-  }
+
   clear() {
-    for (const ticket of this.speechTickets.values()) ticket.controller.abort();
-    this.speechTickets.clear();
-    this.tokens.clear();
-    this.clips.clear();
-    this.uploads.clear();
+    this.spatialSpeech.clear();
+    this.credentials.clear();
+    this.audioClips.clear();
     this.sent.clear();
   }
 }
