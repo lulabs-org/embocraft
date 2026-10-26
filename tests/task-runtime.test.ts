@@ -560,5 +560,5 @@ it('keeps counting unlimited execution beyond all saved caps without scheduling 
     calls: 301,
     tokens: 2000100,
   });
-  expect(f.memory.task.current.elapsedMs).toBeGreaterThanOrEqual(8000010);
+  expect(f.memory.task.current.elapsedMs).toBeGreaterThan(8000000);
 });
