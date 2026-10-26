@@ -62,11 +62,11 @@ packages/agent-runtime/
     │   │   └── task.ts policy.ts lease.ts budget.ts commands.ts
     │   ├── turn/           # 一次决策的生命周期
     │   │   ├── turn.ts     # 显式 Turn：租约/预算/配置切换/动作槽，实现 ToolHost
-    │   │   ├── wake.ts     # 一次唤醒的事件循环（包含 RunOptions）
+    │   │   ├── wake.ts     # AgentRunner.run：执行槽与一次唤醒的事件循环
     │   │   ├── event.ts    # 事件认领与结算
     │   │   ├── prepare.ts  # 观察、跳过未变化的等待、可见任务计算
     │   │   ├── reconcile.ts # 未确认效果与未完成建造的核对
-    │   │   ├── decide.ts   # Pi Agent 装配
+    │   │   ├── decide.ts   # 每次决策装配 Pi Agent、调用 prompt 并接入模型流
     │   │   ├── guards.ts   # 批次边界、截断、协议纠正
     │   │   ├── input.ts    # 模型输入构造
     │   │   ├── health.ts   # 连续失败与无进展检测
@@ -102,7 +102,7 @@ packages/agent-runtime/
 | `agent/tools/`   | 工具 schema 与 handler，只依赖 `ToolHost` 接口                       | 直接访问 Session、任务持久化细节 |
 | `agent/action/`  | 任务绑定的动作执行、后台动作槽、跟随 tick、时间与取消原语            | 模型决策                         |
 | `agent/prompt/`  | 系统提示词、技能指引、模型视图                                       | 工具执行                         |
-| `agent/model/`   | 模型端口、Pi/Ollama 适配、请求计量与超时                             | 工具执行、任务状态转换           |
+| `agent/model/`   | Pi 模型配置、OpenAI Completions 请求流、请求计量与失败处理           | 工具执行、任务状态转换           |
 | `persistence/`   | 存档序列化与版本迁移                                                 | 运行时决策、世界访问             |
 | `testing/`       | 确定性夹具，供包内单测和 CLI 使用                                    | 生产代码依赖                     |
 
@@ -137,30 +137,41 @@ flowchart TD
 
 ## 执行路径
 
-1. **接入**：`api/runtime.ts` 注入 `RuntimePorts`，保证一个角色只有一个执行槽，重复唤醒直接拒绝。
-2. **归一**：`api/intake.ts` 把聊天、控制、计划到期、动作完成统一成 `CharacterEvent`。去重 id 只在这里生成，鉴权只走 `agent/task/policy`，先落盘再入队；队列满时标记 `unknown` 而不是丢弃后重试。
+1. **接入**：宿主通过 `api/runtime.ts` 导出的 `AgentRunner.run()` 执行；`agent/turn/wake.ts` 保证一个角色只有一个执行槽，重复唤醒直接拒绝。
+2. **接入**：宿主或 `AgentRuntime.submit()` 接收聊天消息；`agent/task/inbox.ts` 生成去重 id 并记录事件，保存后再入队，队列满时标记 `unknown`。任务控制由 `TaskService` 授权和提交；`api/intake.ts` 只导出这些接入辅助函数。
 3. **唤醒**：`agent/turn/wake.ts` 取事件；有已保存的跟随意图且无新消息时推进一次本地跟随；后台动作未结束时等它结束或等新消息，不并发发起第二次决策。
-4. **决策**：`agent/turn/turn.ts` 按 `attach → prepare → decide → settle` 推进。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`input.ts` 构造模型输入，`decide.ts` 装配 Pi Agent，`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
-5. **工具**：`agent/tools/*` 的 schema 是模型契约，handler 只依赖 `ToolHost`（定义在 `tools/port.ts`，由 `Turn` 实现：prepared/observe/save/attach/respond/commitTask/launch）。工具只转发意图，不直接改 host 配置或 lease；任务命令走 `policy` 与 `lease`，配置切换与记账由 `Turn.commitTask` 统一完成，世界动作交给执行器。
-6. **动作**：`agent/action/executor.ts` 在每次执行前校验 lease，同步动作在 turn 内完成；`goto`/`build`/`house` 进入 `background.ts`，结束后投递 `action_result` 事件回到接入层；`follow` 由宿主 tick 经 `follow.ts` 推进，不请求模型。
+4. **决策**：`agent/turn/turn.ts` 按 `attach → prepare → decide → settle` 推进。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`input.ts` 构造模型输入。`decide.ts` 每次创建 Pi Agent、回放已保存的历史、调用 `prompt()`，其 `streamFn` 直接调用 `agent/model/stream.ts` 的 `streamModel()`；`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
+5. **工具**：`agent/tools/*` 的 schema 是模型契约，handler 只依赖 `ToolHost`（定义在 `tools/port.ts`，由 `Turn` 实现）。`TaskService` 处理任务授权、命令与租约；世界工具把动作交给执行器。
+6. **动作**：`agent/action/executor.ts` 在执行时校验租约并保存进度。`goto`/`build`/`house` 作为后台动作运行，由 `agent/action/background.ts` 跟踪，结束后记录 `action_result` 事件；`follow` 由 `agent/action/follow.ts` 推进，不请求模型。
 7. **收尾**：任务进入结束态后清空可重放状态，`snapshot()` 提供只读投影，`store` 原子保存。宿主只持久化投影，不解析内部字段。
+
+建房工具的执行链是 `agent/tools/world.ts` → `agent/tools/task.ts` → `agent/action/executor.ts` → `world/actions/batch.ts` → `world/actions/execute.ts` → `world/actions/build.ts`。工具绑定当前任务，执行器校验租约并保存进度，世界动作层展开蓝图并逐块调用 `session.request('edit')`；逐块施工不会逐块请求模型。
 
 headless 场景由 `agent/schedule.ts` 驱动：语义与宿主完全一致，只额外负责等待下一次唤醒。CLI 不直接调用 `turn`，也不另建第二套任务入口。
 
 ## 公共入口
 
-```ts
-import { createAgentRuntime } from '@voxel/agent-runtime';
+模型服务由宿主提供：`AgentRunner` 只接收服务类型和 Base URL；模型名与 API Key 由本次运行的 `config` 提供。DeepSeek、Ollama 与 OpenAI 兼容服务都通过 Pi 的 OpenAI Completions 流接口请求。
 
-const runtime = createAgentRuntime({ session, model, store, clock, log });
-await runtime.start({ character, model, limits });
-runtime.submit(worldEvent); // 聊天、控制、计划、动作结果都走这里
-await runtime.control({ type: 'pause', by: 'operator' });
-const state = runtime.snapshot(); // 只读投影，用于存档与控制台
-await runtime.stop();
+```ts
+import { AgentRunner } from '@voxel/agent-runtime';
+
+const runner = new AgentRunner({
+  type: provider.type,
+  baseUrl: provider.baseUrl,
+});
+await runner.run({
+  session,
+  config,
+  signal,
+  memory,
+  attention,
+  checkpoint: save,
+});
 ```
 
-- 宿主不得拼事件 id、不得解析控制指令、不得改动 `AgentState` 字段；需要新输入时只调用 `submit`。
+- `config` 包含选定的模型名和 API Key；角色宿主在调用 `run()` 前准备会话、状态和注意力队列。
+- 需要 `submit/control/snapshot` 门面的宿主可使用 `createAgentRuntime()`；它的 `run()` 仍调用同一个 `AgentRunner`。
 - 包内测试与 CLI 夹具使用 `@voxel/agent-runtime/testing`，不复制生产实现。
 - 构建与类型检查依赖包内 `tsconfig.json`；`exports` 只保留 `.` 和 `./testing` 两个入口。
 

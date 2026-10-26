@@ -20,7 +20,8 @@ export class AICharacterManager extends AICharacterOrchestrator {
     serverUrl: string | (() => string),
     dependencies: AICharacterDependencies = {
       session: (url) => new Session(url),
-      runner: (_config, provider) => new AgentRunner(provider),
+      runner: (_config, provider) =>
+        new AgentRunner({ type: provider.type, baseUrl: provider.baseUrl }),
     },
     voiceServices?: VoiceServiceStore,
     archive?: ArchivePort,

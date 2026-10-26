@@ -322,7 +322,6 @@ export class Turn implements ToolHost {
       budget: this.budget,
       signal: this.activeSignal,
       state: this.state,
-      sessionKey: this.session,
       interactionHistory: !!this.message,
       prompt: characterPrompt(this.currentConfig),
       tools: [
