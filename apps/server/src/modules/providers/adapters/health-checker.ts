@@ -1,5 +1,5 @@
 import { AppError } from '../../../common/errors';
-import type { ProviderQueryPort } from '../ports';
+import type { ProviderRuntimePort } from '../ports';
 import { PROVIDER_SPECS } from '../domain/specs';
 import { ProviderHttpClient } from './client';
 
@@ -11,12 +11,12 @@ export type ProviderHealth = {
 /** Probe connectivity and whether the upstream exposes its model catalog. */
 export class ProviderHealthChecker {
   constructor(
-    private readonly providers: Pick<ProviderQueryPort, 'get'>,
+    private readonly providers: ProviderRuntimePort,
     private readonly client = new ProviderHttpClient(),
   ) {}
 
   async check(id: string): Promise<ProviderHealth> {
-    const provider = this.providers.get(id);
+    const provider = this.providers.getRuntime(id);
     if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
       throw new AppError('请先配置 API Key。');
 

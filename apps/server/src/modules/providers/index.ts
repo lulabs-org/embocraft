@@ -11,6 +11,7 @@ export type { SavedProvider } from './domain/model';
 export type {
   ProviderPort,
   ProviderQueryPort,
+  ProviderRuntimePort,
   ProviderCommandPort,
 } from './ports';
 export { installProviderRoutes } from './routes/providers.routes';

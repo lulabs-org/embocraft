@@ -34,16 +34,19 @@ describe('FileProviderRepository and bootstrapProviders', () => {
         id: 'deepseek',
         name: 'DeepSeek',
         type: 'deepseek',
-        apiKey: 'test-key',
+        hasApiKey: true,
         defaultModel: 'custom-model',
       });
+      expect(repo.get('deepseek')).not.toHaveProperty('apiKey');
+      expect(repo.getRuntime('deepseek').apiKey).toBe('test-key');
 
       // Subsequent instance loads persisted data directly from disk
       const freshRepo = new FileProviderRepository(path);
       const loaded = await freshRepo.load();
       expect(loaded).toBe(true);
       expect(freshRepo.list()).toHaveLength(2);
-      expect(freshRepo.get('deepseek').apiKey).toBe('test-key');
+      expect(freshRepo.get('deepseek')).not.toHaveProperty('apiKey');
+      expect(freshRepo.getRuntime('deepseek').apiKey).toBe('test-key');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -57,7 +60,7 @@ describe('FileProviderRepository and bootstrapProviders', () => {
       await bootstrapProviders(repo, { DEEPSEEK_API_KEY: 'bootstrap-key' });
 
       expect(repo.list()).toHaveLength(2);
-      expect(repo.get('deepseek').apiKey).toBe('bootstrap-key');
+      expect(repo.getRuntime('deepseek').apiKey).toBe('bootstrap-key');
 
       // Bootstrapping again on an existing repo does not overwrite modifications
       await repo.save(
@@ -65,7 +68,7 @@ describe('FileProviderRepository and bootstrapProviders', () => {
         'deepseek',
       );
       await bootstrapProviders(repo, { DEEPSEEK_API_KEY: 'another-key' });
-      expect(repo.get('deepseek').apiKey).toBe('new-key');
+      expect(repo.getRuntime('deepseek').apiKey).toBe('new-key');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

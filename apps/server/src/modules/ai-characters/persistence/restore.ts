@@ -7,7 +7,7 @@ import {
 } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../common/errors';
-import type { ProviderQueryPort } from '../../providers/ports';
+import type { ProviderRuntimePort } from '../../providers/ports';
 import type { CharacterRecord, Job } from '../domain/types';
 import {
   restoreTaskExecution,
@@ -17,11 +17,11 @@ import { executionState } from '../domain/task-adapter';
 
 export function restoreAICharacterJob(
   view: CharacterRecord,
-  providers: ProviderQueryPort,
+  providers: ProviderRuntimePort,
   checkVoice: (settings: AICharacterSettings) => void,
   ledger: PlanService,
 ): { job: Job; voiceWarning?: string; shouldAutoJoin: boolean } {
-  const provider = providers.get(view.providerId);
+  const provider = providers.getRuntime(view.providerId);
   const settings = validateAICharacter(view, provider);
   let voiceWarning = '';
   try {

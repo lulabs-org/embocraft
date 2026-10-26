@@ -41,10 +41,13 @@ describe('provider configuration boundary', () => {
       'deepseek',
     );
     expect(saved.name).toBe('Updated');
-    expect(store.get('deepseek').apiKey).toBe('fixture-secret');
+    expect(store.get('deepseek')).toMatchObject({ hasApiKey: true });
+    expect(store.get('deepseek')).not.toHaveProperty('apiKey');
+    expect(store.getRuntime('deepseek').apiKey).toBe('fixture-secret');
     const reloaded = new FileProviderRepository(path);
     await bootstrapProviders(reloaded, { DEEPSEEK_API_KEY: 'different' });
-    expect(reloaded.get('deepseek').apiKey).toBe('fixture-secret');
+    expect(reloaded.get('deepseek')).not.toHaveProperty('apiKey');
+    expect(reloaded.getRuntime('deepseek').apiKey).toBe('fixture-secret');
     await Promise.all([
       store.save({ name: 'A', type: 'ollama' }),
       store.save({ name: 'B', type: 'ollama' }),
@@ -250,7 +253,7 @@ describe('multi-provider SDK requests', () => {
         ),
       );
     try {
-      const catalog = new ModelCatalog({ get: () => provider() });
+      const catalog = new ModelCatalog({ getRuntime: () => provider() });
       expect(await catalog.models('fixture')).toEqual(['a', 'z']);
       expect(fetchSpy).toHaveBeenCalledWith(
         'https://api.deepseek.com/models',
@@ -359,7 +362,7 @@ it('persists provider configurations cleanly and resolves character inference de
     );
     const restored = new FileProviderRepository(path);
     await bootstrapProviders(restored);
-    const provider = restored.get('deepseek');
+    const provider = restored.getRuntime('deepseek');
     expect(provider.defaultModel).toBe('deepseek-reasoner');
     expect('inference' in provider).toBe(false);
 
@@ -376,7 +379,7 @@ it('persists provider configurations cleanly and resolves character inference de
     expect(chatRole.thinking).toBe('disabled');
     expect(chatRole.maxTokens).toBe(512);
 
-    const ollamaProvider = restored.get('ollama');
+    const ollamaProvider = restored.getRuntime('ollama');
     const ollamaRole = validateAICharacter(
       { name: 'LocalBot', model: 'llama3' },
       ollamaProvider,

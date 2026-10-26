@@ -57,6 +57,10 @@ export class FileProviderRepository implements ProviderRepository {
   }
 
   get(id: string) {
+    return toProviderView(this.getRuntime(id));
+  }
+
+  getRuntime(id: string) {
     const provider = this.values.find((p) => p.id === id);
     if (!provider) throw new AppError('模型服务不存在。', 404);
     return { ...provider };
@@ -86,7 +90,10 @@ export class FileProviderRepository implements ProviderRepository {
     return this.mutate(async () => {
       if (!id && this.values.length >= 20)
         throw new AppError('最多保存 20 个模型服务。');
-      const provider = validateProvider(value, id ? this.get(id) : undefined);
+      const provider = validateProvider(
+        value,
+        id ? this.getRuntime(id) : undefined,
+      );
       const next = id
         ? this.values.map((p) => (p.id === id ? provider : p))
         : [...this.values, provider];
@@ -98,7 +105,7 @@ export class FileProviderRepository implements ProviderRepository {
 
   remove(id: string) {
     return this.mutate(async () => {
-      this.get(id);
+      this.getRuntime(id);
       const next = this.values.filter((p) => p.id !== id);
       await this.persist(next);
       this.values = next;

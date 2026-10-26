@@ -1,10 +1,15 @@
 import type { ProviderView } from '@voxel/shared';
 import type { SavedProvider } from './domain/model';
 
-/** Read-only access for character scheduling and runtime configuration. */
+/** Public provider reads never expose API keys. */
 export interface ProviderQueryPort {
   list(): ProviderView[];
-  get(id: string): SavedProvider;
+  get(id: string): ProviderView;
+}
+
+/** Trusted server components use this port when an upstream API key is required. */
+export interface ProviderRuntimePort {
+  getRuntime(id: string): SavedProvider;
 }
 
 /** Mutations available to provider management. */
@@ -13,4 +18,7 @@ export interface ProviderCommandPort {
   remove(id: string): Promise<void>;
 }
 
-export interface ProviderPort extends ProviderQueryPort, ProviderCommandPort {}
+export interface ProviderPort
+  extends ProviderQueryPort,
+    ProviderRuntimePort,
+    ProviderCommandPort {}

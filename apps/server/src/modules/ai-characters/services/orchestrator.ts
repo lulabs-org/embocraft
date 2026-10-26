@@ -7,7 +7,7 @@ import {
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { emptyState } from '@voxel/agent-runtime';
-import type { ProviderQueryPort } from '../../providers/ports';
+import type { ProviderRuntimePort } from '../../providers/ports';
 import type { ArchivePort } from '../../../persistence/archive';
 import { ManagementEvents } from '../../management/events';
 import { FileProviderRepository } from '../../providers/persistence/file-repository';
@@ -69,7 +69,7 @@ export class AICharacterOrchestrator {
   private shutdownPresence = new Map<string, Job['view']['status']>();
 
   constructor(
-    readonly providers: ProviderQueryPort,
+    private readonly providers: ProviderRuntimePort,
     private serverUrl: string | (() => string),
     private dependencies: AICharacterDependencies,
     readonly voiceServices: VoiceServicePort | undefined,
@@ -96,7 +96,7 @@ export class AICharacterOrchestrator {
         const job = this.taskJob(id);
         const settings = validateAICharacter(
           { ...job.view, ...overrides },
-          this.providers.get(job.view.providerId),
+          this.providers.getRuntime(job.view.providerId),
         );
         this.checkVoice(settings);
         return settings;
@@ -207,7 +207,7 @@ export class AICharacterOrchestrator {
       job.view.status = 'joining';
       job.done = this.execute(
         job,
-        this.providers.get(job.view.providerId),
+        this.providers.getRuntime(job.view.providerId),
         false,
       );
       await job.done;
@@ -288,13 +288,18 @@ export class AICharacterOrchestrator {
     this.taskScheduler.cancel(job.view.id);
     job.view.status = 'running';
     job.abort = new AbortController();
-    job.done = this.execute(job, this.providers.get(job.view.providerId));
+    job.done = this.execute(
+      job,
+      this.providers.getRuntime(job.view.providerId),
+    );
   }
 
   create(value: unknown) {
     if (this.closing) throw new AppError('世界服务正在关闭。', 503);
     const input = aiCharacterProfileInput(value);
-    const provider = this.providers.get(text(input.providerId, '模型服务', 80));
+    const provider = this.providers.getRuntime(
+      text(input.providerId, '模型服务', 80),
+    );
     const settings = validateAICharacter({ ...input, goal: '' }, provider);
     const joinWorld = boolean(input.joinWorld, true);
     this.checkVoice(settings);
@@ -339,7 +344,7 @@ export class AICharacterOrchestrator {
         '最多同时在线 4 个 Agent，请先让一个角色离开世界。',
         409,
       );
-    const provider = this.providers.get(job.view.providerId);
+    const provider = this.providers.getRuntime(job.view.providerId);
     const settings = validateAICharacter(job.view, provider);
     this.checkVoice(settings);
     this.taskScheduler.cancel(job.view.id);
@@ -362,7 +367,7 @@ export class AICharacterOrchestrator {
     const input = aiCharacterProfileInput(value);
     if (active(job.view.status) || isJobBusy(job))
       throw new AppError('请等待 Agent 待命，或关闭后再修改参数。', 409);
-    const provider = this.providers.get(
+    const provider = this.providers.getRuntime(
       text(input.providerId, '模型服务', 80, job.view.providerId),
     );
     const currentGoal = job.memory.task.current?.goal ?? job.view.goal;
@@ -471,7 +476,10 @@ export class AICharacterOrchestrator {
     this.taskScheduler.cancel(job.view.id);
     job.view.status = 'running';
     job.abort = new AbortController();
-    job.done = this.execute(job, this.providers.get(job.view.providerId));
+    job.done = this.execute(
+      job,
+      this.providers.getRuntime(job.view.providerId),
+    );
   }
 
   private schedule(job: Job) {
