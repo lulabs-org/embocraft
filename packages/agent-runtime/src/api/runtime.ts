@@ -11,12 +11,12 @@ import {
   type TaskCommand,
 } from '../agent/task/service';
 import { CharacterRunner } from '../agent/turn/wake';
-import type { RunOptions } from '../agent/turn/options';
+import type { RunOptions } from '../agent/turn/turn';
 import { AgentAttention } from '../world/observe/attention';
 import type { RuntimePorts, RuntimeRunOptions } from './ports';
 
 export type { RuntimePorts, RuntimeRunOptions, RuntimeStore } from './ports';
-export type { RunOptions } from '../agent/turn/options';
+export type { RunOptions } from '../agent/turn/turn';
 
 const running = new WeakSet<AgentRunState>();
 /** Stable host entrypoint; one serialized execution slot per Agent, shared across host wake-ups. */

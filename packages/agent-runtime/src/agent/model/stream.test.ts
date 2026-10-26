@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { createModel, resolveMaxTokensField } from './pi';
-import { providerFetch, providerOptions } from './provider';
-import { ollamaCompletion } from './ollama';
+import { providerOptions } from './stream';
 import { normalizeContext } from '@earendil-works/pi-ai';
 import { stream } from '@earendil-works/pi-ai/api/openai-completions';
-
-vi.mock('./ollama', () => ({ ollamaCompletion: vi.fn() }));
 
 /** Explicit inputs; independent of CLI defaults and the developer's environment. */
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -78,21 +75,22 @@ describe('model definition and thinking policy', () => {
   });
 });
 
-describe('provider transport', () => {
+describe('provider transport and options', () => {
   it('rejects redirects and reports the HTTP status', async () => {
     const request = vi.fn<typeof fetch>(
       async () => new Response('{}', { status: 503 }),
     );
     const statuses: number[] = [];
-    const response = await providerFetch(
-      {
-        config: config(),
-        endpoint: endpoint('compatible'),
-        model: createModel(config(), endpoint('compatible')),
-        request,
-      },
+    const options = providerOptions(
+      config(),
+      endpoint('compatible'),
+      request,
       (status) => statuses.push(status),
-    )('https://example.test/v1/chat/completions', { method: 'POST' });
+    );
+    const response = await options.fetch!(
+      'https://example.test/v1/chat/completions',
+      { method: 'POST' },
+    );
     expect(response.status).toBe(503);
     expect(statuses).toEqual([503]);
     expect(request).toHaveBeenCalledWith(
@@ -101,42 +99,11 @@ describe('provider transport', () => {
     );
   });
 
-  it('routes Ollama through the native chat adapter', async () => {
-    const request = vi.fn<typeof fetch>();
-    const response = new Response('{}', { status: 200 });
-    vi.mocked(ollamaCompletion).mockResolvedValue(response);
-    const statuses: number[] = [];
-    const init = { method: 'POST', body: '{}' };
-    await providerFetch(
-      {
-        config: config({ thinking: 'enabled' }),
-        endpoint: endpoint('ollama'),
-        model: createModel(config(), endpoint('ollama')),
-        request,
-      },
-      (status) => statuses.push(status),
-    )('http://localhost:11434/v1/chat/completions', init);
-    expect(ollamaCompletion).toHaveBeenCalledWith(
-      'http://localhost:11434/v1/chat/completions',
-      init,
-      request,
-      32768,
-      true,
-    );
-    expect(request).not.toHaveBeenCalled();
-    expect(statuses).toEqual([200]);
-  });
-});
-
-describe('provider request options', () => {
   it('pins the request policy for one model call', () => {
     const options = providerOptions(
-      {
-        config: config({ apiKey: '' }),
-        endpoint: endpoint('deepseek'),
-        model: createModel(config(), endpoint('deepseek')),
-        request: vi.fn<typeof fetch>(),
-      },
+      config({ apiKey: '' }),
+      endpoint('deepseek'),
+      vi.fn<typeof fetch>(),
       () => {},
     );
     expect(options).toMatchObject({
@@ -150,12 +117,9 @@ describe('provider request options', () => {
 
   it('sets reasoningEffort for DeepSeek when thinking is enabled', () => {
     const options = providerOptions(
-      {
-        config: config({ thinking: 'enabled', reasoningEffort: 'low' }),
-        endpoint: endpoint('deepseek'),
-        model: createModel(config(), endpoint('deepseek')),
-        request: vi.fn<typeof fetch>(),
-      },
+      config({ thinking: 'enabled', reasoningEffort: 'low' }),
+      endpoint('deepseek'),
+      vi.fn<typeof fetch>(),
       () => {},
     );
     expect(options.reasoningEffort).toBe('low');
@@ -163,12 +127,9 @@ describe('provider request options', () => {
 
   it('omits reasoningEffort when DeepSeek thinking is disabled', () => {
     const options = providerOptions(
-      {
-        config: config({ thinking: 'disabled', reasoningEffort: 'high' }),
-        endpoint: endpoint('deepseek'),
-        model: createModel(config(), endpoint('deepseek')),
-        request: vi.fn<typeof fetch>(),
-      },
+      config({ thinking: 'disabled', reasoningEffort: 'high' }),
+      endpoint('deepseek'),
+      vi.fn<typeof fetch>(),
       () => {},
     );
     expect(options.reasoningEffort).toBeUndefined();
@@ -176,12 +137,9 @@ describe('provider request options', () => {
 
   it('omits reasoningEffort for non-DeepSeek endpoints', () => {
     const options = providerOptions(
-      {
-        config: config({ thinking: 'enabled', reasoningEffort: 'high' }),
-        endpoint: endpoint('compatible'),
-        model: createModel(config(), endpoint('compatible')),
-        request: vi.fn<typeof fetch>(),
-      },
+      config({ thinking: 'enabled', reasoningEffort: 'high' }),
+      endpoint('compatible'),
+      vi.fn<typeof fetch>(),
       () => {},
     );
     expect(options.reasoningEffort).toBeUndefined();
@@ -199,7 +157,9 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
     const ep = endpoint('deepseek');
     const model = createModel(cfg, ep);
     const options = providerOptions(
-      { config: cfg, endpoint: ep, model, request },
+      cfg,
+      ep,
+      request,
       () => {},
     );
     const s = stream(
@@ -228,7 +188,9 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
     const ep = endpoint('deepseek');
     const model = createModel(cfg, ep);
     const options = providerOptions(
-      { config: cfg, endpoint: ep, model, request },
+      cfg,
+      ep,
+      request,
       () => {},
     );
     const s = stream(

@@ -3,16 +3,15 @@ import {
   type AssistantMessage,
   type AssistantMessageEventStream,
   type Model,
+  type OpenAICompletionsOptions,
 } from '@earendil-works/pi-ai';
 import { stream } from '@earendil-works/pi-ai/api/openai-completions';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { mergeSignals, withDeadline } from '../../kernel/abort';
-import { estimateTokens, RequestCharge } from './charge';
+import { estimateTokens, RequestCharge, type RequestAccounting } from './charge';
 import { streamFailure, thrownFailure, type StreamFailure } from './failure';
 import { createModel } from './pi';
-import type { RequestAccounting } from './port';
-import { providerOptions } from './provider';
 
 /** Everything one character turn needs to make provider requests. */
 export type ModelStreamOptions = {
@@ -90,12 +89,9 @@ async function relay(request: RelayRequest) {
     combined.throwIfAborted();
     const source = stream(model, request.context, {
       ...providerOptions(
-        {
-          config,
-          endpoint,
-          model,
-          request: request.request ?? fetch,
-        },
+        config,
+        endpoint,
+        request.request ?? fetch,
         (next) => (status = next),
       ),
       signal: combined,
@@ -151,5 +147,37 @@ function errorMessage(
     stopReason: failure.stopReason,
     errorMessage: failure.message,
     timestamp: Date.now(),
+  };
+}
+
+/**
+ * Static request options shared by every provider call of one stream.
+ *
+ * Every value here is a policy decision rather than a provider default: no
+ * hidden retries, no prompt cache retention, and tool calls are required.
+ */
+export function providerOptions(
+  config: AgentConfig,
+  endpoint: ModelEndpoint,
+  request: typeof fetch,
+  onStatus: (status: number) => void,
+): Omit<OpenAICompletionsOptions, 'signal' | 'maxTokens'> {
+  return {
+    apiKey: config.apiKey || 'ollama',
+    maxRetries: 0,
+    toolChoice: 'required',
+    timeoutMs: config.timeoutMs,
+    cacheRetention: 'none',
+    reasoningEffort:
+      endpoint.type === 'deepseek' &&
+      config.thinking === 'enabled' &&
+      config.reasoningEffort !== 'none'
+        ? (config.reasoningEffort as OpenAICompletionsOptions['reasoningEffort'])
+        : undefined,
+    fetch: async (url, init) => {
+      const response = await request(url, { ...init, redirect: 'error' });
+      onStatus(response.status);
+      return response;
+    },
   };
 }

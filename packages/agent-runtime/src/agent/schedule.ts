@@ -4,7 +4,7 @@ import type { AgentSession } from '../world/session/port';
 import type { AgentAttention } from '../world/observe/attention';
 import { emptyState, type AgentRunState } from '../contracts/state';
 import { newTask } from './task/state';
-import type { RunOptions } from './turn/options';
+import type { RunOptions } from './turn/turn';
 
 /** Draw a fresh inclusive interval after a completed turn; requests never overlap. */
 export function nextIntervalMs(

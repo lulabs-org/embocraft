@@ -207,16 +207,11 @@ class DecisionSession {
   }
 
   /**
-   * Local models sometimes answer in prose after a tool result. Spend exactly one
+   * Models sometimes answer in prose after a tool result. Spend exactly one
    * nudge; a second prose answer fails the turn instead of being parsed as an action.
    */
   private correctToolProtocol(): boolean {
-    if (
-      this.options.endpoint.type !== 'ollama' ||
-      !this.correction.available ||
-      turnStopped(this.options)
-    )
-      return false;
+    if (!this.correction.available || turnStopped(this.options)) return false;
     this.correction.request();
     return true;
   }

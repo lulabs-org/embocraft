@@ -1,12 +1,11 @@
-import type { ModelEndpoint } from '../../contracts/config';
+import type { ModelEndpoint } from '../../contracts';
 import type { WorldEvent } from '@voxel/shared';
 import { BackgroundActionTracker } from '../action/background';
 import { runFollowStep } from '../action/follow';
 import { checkBudgetCap } from '../task/budget';
 import { isActiveTask } from '../task/state';
 import { restoreCheckpoint } from './checkpoint';
-import type { RunOptions } from './options';
-import { Turn, type TurnActions } from './turn';
+import { Turn, type RunOptions, type TurnActions } from './turn';
 
 /** What advancing a saved follow intent asks the wake loop to do next. */
 type FollowStep = 'idle' | 'resume' | 'stop';
