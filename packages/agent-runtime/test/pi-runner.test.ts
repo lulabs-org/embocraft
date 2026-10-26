@@ -355,20 +355,42 @@ describe('Pi provider and recovery boundaries', () => {
   const nativeResponse = (
     tools: { name: string; arguments: unknown }[] = [],
     content = '',
-  ) =>
-    new Response(
-      JSON.stringify({
-        done: true,
-        done_reason: 'stop',
-        message: {
-          role: 'assistant',
-          content,
-          tool_calls: tools.map((tool) => ({ function: tool })),
+    tokens = 100,
+  ) => {
+    const delta = {
+      role: 'assistant',
+      content,
+      tool_calls: tools.map((t, index) => ({
+        index,
+        id: `call-${index}`,
+        type: 'function',
+        function: { name: t.name, arguments: JSON.stringify(t.arguments) },
+      })),
+    };
+    const chunks = [
+      { id: 'fixture', choices: [{ index: 0, delta, finish_reason: null }] },
+      {
+        id: 'fixture',
+        choices: [
+          {
+            index: 0,
+            delta: {},
+            finish_reason: tools.length ? 'tool_calls' : 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: tokens - 10,
+          completion_tokens: 10,
+          total_tokens: tokens,
         },
-        prompt_eval_count: 90,
-        eval_count: 10,
-      }),
+      },
+    ];
+    return new Response(
+      chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') +
+        'data: [DONE]\n\n',
+      { headers: { 'content-type': 'text/event-stream' } },
     );
+  };
   const localEndpoint = {
     type: 'ollama' as const,
     baseUrl: 'http://localhost:11434/v1',
@@ -398,9 +420,11 @@ describe('Pi provider and recovery boundaries', () => {
       f.session.request.mock.calls.filter(([name]) => name === 'edit'),
     ).toHaveLength(1);
     const lastBody = JSON.parse(String(request.mock.calls[2][1]?.body));
-    expect(lastBody.messages.at(-1).content).toContain(
-      'Do not repeat successful world actions',
-    );
+    const lastContent =
+      typeof lastBody.messages.at(-1).content === 'string'
+        ? lastBody.messages.at(-1).content
+        : JSON.stringify(lastBody.messages.at(-1).content);
+    expect(lastContent).toContain('Do not repeat successful world actions');
   });
   it('stops after one local protocol correction and never executes prose', async () => {
     const f = fixture([]);
@@ -444,28 +468,7 @@ describe('Pi provider and recovery boundaries', () => {
     async (type) => {
       const f = fixture([]);
       const request = vi.fn<typeof fetch>(async () =>
-        type === 'ollama'
-          ? new Response(
-              JSON.stringify({
-                done: true,
-                done_reason: 'stop',
-                message: {
-                  role: 'assistant',
-                  content: '',
-                  tool_calls: [
-                    {
-                      function: {
-                        name: 'complete_task',
-                        arguments: { summary: '进展' },
-                      },
-                    },
-                  ],
-                },
-                prompt_eval_count: 90,
-                eval_count: 10,
-              }),
-            )
-          : toolResponse([complete()]),
+        toolResponse([complete()]),
       );
       await new AgentRunner(
         {
@@ -487,11 +490,9 @@ describe('Pi provider and recovery boundaries', () => {
       });
       const [url, init] = request.mock.calls[0];
       expect(String(url)).toBe(
-        type === 'ollama'
-          ? 'http://localhost:11434/api/chat'
-          : type === 'deepseek'
-            ? 'https://api.deepseek.com/chat/completions'
-            : 'http://localhost:11434/v1/chat/completions',
+        type === 'deepseek'
+          ? 'https://api.deepseek.com/chat/completions'
+          : 'http://localhost:11434/v1/chat/completions',
       );
       expect(init?.redirect).toBe('error');
       expect(new Headers(init?.headers).get('Authorization')).toBe(
@@ -499,17 +500,9 @@ describe('Pi provider and recovery boundaries', () => {
       );
       const body = JSON.parse(init!.body as string);
       expect(body.response_format).toBeUndefined();
-      expect(body.stream).toBe(type !== 'ollama');
-      if (type === 'ollama') {
-        expect(body.think).toBe(false);
-        expect(body.options).toMatchObject({
-          num_ctx: 32768,
-          num_predict: f.config.maxTokens,
-        });
-      } else {
-        expect(body.tool_choice).toBe('required');
-        expect(body.max_tokens).toBe(f.config.maxTokens);
-      }
+      expect(body.stream).toBe(true);
+      expect(body.tool_choice).toBe('required');
+      expect(body.max_tokens).toBe(f.config.maxTokens);
       if (type === 'deepseek')
         expect(body.thinking).toEqual({ type: 'disabled' });
       else expect(body.thinking).toBeUndefined();

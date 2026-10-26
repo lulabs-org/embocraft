@@ -22,13 +22,9 @@ export function resolveMaxTokensField(
   model: string,
 ): 'max_tokens' | 'max_completion_tokens' {
   const normalized = model.toLowerCase();
-  if (
-    /(^|\/|\b)(o[134](-preview|-mini)?)(\b|$)/.test(normalized) ||
-    /(^|\/)o[134](-|$)/.test(normalized)
-  ) {
-    return 'max_completion_tokens';
-  }
-  return 'max_tokens';
+  return /(^|\/)o[134](-|$)/.test(normalized)
+    ? 'max_completion_tokens'
+    : 'max_tokens';
 }
 
 /** Create a Model definition for the unified agent runner from config and endpoint. */

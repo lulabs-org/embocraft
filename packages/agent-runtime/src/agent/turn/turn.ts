@@ -27,9 +27,25 @@ import { runDecisionLoop } from './decide';
 import { claimEvent, settleEvent } from './event';
 import { TurnHealthMonitor } from './health';
 import { buildDecisionPayload } from './input';
-import type { RunOptions } from './options';
 import { prepareDecision } from './prepare';
 import { persistTranscript } from './transcript';
+
+export type RunOptions = {
+  session: AgentSession;
+  config: AgentConfig;
+  defaults?: AgentConfig;
+  signal: AbortSignal;
+  memory: AgentRunState;
+  attention?: AgentAttention;
+  log?: (message: string) => void;
+  checkpoint?: () => void | Promise<void>;
+  hooks?: {
+    beforeNewTask?: (
+      task: AICharacterTask,
+      previous: AgentRunState,
+    ) => Promise<void>;
+  };
+};
 
 /** The single background-action slot a turn may launch into and stop. */
 export type TurnActions = {

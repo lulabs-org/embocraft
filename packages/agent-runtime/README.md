@@ -62,11 +62,10 @@ packages/agent-runtime/
     │   │   └── task.ts policy.ts lease.ts budget.ts commands.ts
     │   ├── turn/           # 一次决策的生命周期
     │   │   ├── turn.ts     # 显式 Turn：租约/预算/配置切换/动作槽，实现 ToolHost
-    │   │   ├── wake.ts     # 一次唤醒的事件循环
+    │   │   ├── wake.ts     # 一次唤醒的事件循环（包含 RunOptions）
     │   │   ├── event.ts    # 事件认领与结算
     │   │   ├── prepare.ts  # 观察、跳过未变化的等待、可见任务计算
     │   │   ├── reconcile.ts # 未确认效果与未完成建造的核对
-    │   │   ├── options.ts  # RunOptions：一次唤醒的输入
     │   │   ├── decide.ts   # Pi Agent 装配
     │   │   ├── guards.ts   # 批次边界、截断、协议纠正
     │   │   ├── input.ts    # 模型输入构造
@@ -80,7 +79,7 @@ packages/agent-runtime/
     │   ├── action/         # 任务绑定的动作推进
     │   │   └── executor.ts background.ts follow.ts chat-pacing.ts
     │   ├── prompt/{system,skills,view}.ts
-    │   ├── model/{port,pi,stream,ollama,catalog}.ts
+    │   ├── model/{pi,stream,charge,failure}.ts
     │   └── schedule.ts     # headless 循环，仅 CLI 使用
     ├── persistence/        # 存档格式与迁移
     │   ├── migrate.ts      # v1/v2 → v3，唯一认识旧结构的地方
