@@ -160,6 +160,6 @@ pnpm agent:ctl watch <characterId>    # 实时监听角色的事件与执行日�
 
 ## 持久化存档与安全保障
 
-- **聚合存档结构**：保存在 `.data/agent-providers.json.agents.json` 中，包含 `{ version: 3, characters, plans, runs, requests }`；
-- **原子提交机制**：所有写操作先写入临时文件，经过校验后再进行原子替换（Atomic Rename），杜绝断电损坏；
+- **管理数据存储**：模型服务配置、角色、任务计划、运行记录及请求映射分别保存在 PostgreSQL 中；旧 `.data/agent-providers.json*` 文件不会自动导入或删除；
+- **原子提交机制**：角色与任务变更在同一数据库事务内提交，提交成功后才发布管理事件；
 - **服务优雅关闭**：服务端接收到退出信号时，首先停止任务调度器，向正在运行的 Agent 下发取消动作并等待物理停止，随后持久化已暂停状态，最后安全关闭世界连接。

@@ -18,3 +18,44 @@ model BlockEdit {
  world World @relation(fields:[worldId], references:[id], onDelete: Cascade)
  @@id([worldId,x,y,z])
 }
+
+model AgentProvider {
+ id String @id
+ position Int
+ name String
+ type String
+ baseUrl String
+ apiKey String
+ defaultModel String
+ characters AgentCharacter[]
+}
+
+// Distinguishes an intentionally empty provider catalog from a fresh database.
+model AgentProviderState {
+ id Int @id
+}
+
+model AgentCharacter {
+ id String @id
+ providerId String
+ position Int
+ data Json
+ provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+}
+
+model AgentPlan {
+ id String @id
+ position Int
+ data Json
+}
+
+model AgentRun {
+ id String @id
+ position Int
+ data Json
+}
+
+model AgentRequest {
+ key String @id
+ planId String
+}

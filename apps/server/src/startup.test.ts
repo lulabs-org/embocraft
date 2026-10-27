@@ -5,6 +5,12 @@ const db = vi.hoisted(() => ({
   $connect: vi.fn(),
   $disconnect: vi.fn(),
   world: { findFirst: vi.fn() },
+  agentProvider: { findFirst: vi.fn() },
+  agentProviderState: { findFirst: vi.fn() },
+  agentCharacter: { findFirst: vi.fn() },
+  agentPlan: { findFirst: vi.fn() },
+  agentRun: { findFirst: vi.fn() },
+  agentRequest: { findFirst: vi.fn() },
 }));
 const createClient = vi.hoisted(() => vi.fn());
 vi.mock('@prisma/client', () => ({ PrismaClient: createClient }));
@@ -19,6 +25,15 @@ describe('database startup diagnostics', () => {
     db.$connect.mockResolvedValue(undefined);
     db.$disconnect.mockResolvedValue(undefined);
     db.world.findFirst.mockResolvedValue(null);
+    for (const table of [
+      db.agentProvider,
+      db.agentProviderState,
+      db.agentCharacter,
+      db.agentPlan,
+      db.agentRun,
+      db.agentRequest,
+    ])
+      table.findFirst.mockResolvedValue(null);
     vi.stubEnv('DATABASE_URL', localUrl);
   });
   afterEach(() => {
@@ -61,14 +76,10 @@ describe('database startup diagnostics', () => {
     await expect(checkStartupDatabase()).rejects.toThrow('身份验证');
   });
 
-  it('warns explicitly in memory mode without creating a database client', async () => {
+  it('requires a configured database without creating a client', async () => {
     vi.stubEnv('DATABASE_URL', '');
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await checkStartupDatabase();
+    await expect(checkStartupDatabase()).rejects.toThrow('DATABASE_URL');
     expect(createClient).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('服务重启后世界编辑会丢失'),
-    );
   });
 
   it('does not suggest starting the project database for an external database', () => {

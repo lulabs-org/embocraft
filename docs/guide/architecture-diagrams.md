@@ -454,15 +454,15 @@ graph LR
     subgraph PG["PostgreSQL（Prisma）"]
         WorldT["World<br/>revision"]
         EditT["BlockEdit<br/>增量方块编辑"]
+        Prov["模型供应商配置"]
+        Chars["AI 角色快照 · 活动日志"]
+        TaskF["任务计划 · 执行快照"]
     end
 
     subgraph Files[".data/ JSON 文件"]
-        Prov["providers"]
         VoiceF["voice-services"]
         ASRF["asr / whisper settings"]
         Token["gateway token"]
-        Chars["AI 角色快照 · 活动日志"]
-        TaskF["任务计划 · 执行快照"]
         Rec["聊天录音 / 语音缓存"]
     end
 
@@ -473,7 +473,7 @@ graph LR
 
     WorldStoreN["WorldStore"] --> WorldT
     WorldStoreN --> EditT
-    FileProviderRepoN["FileProviderRepository"] --> Prov
+    DatabaseProviderRepoN["DatabaseProviderRepository"] --> Prov
     VSN["VoiceServiceStore"] --> VoiceF
     ASN["AsrSettingsStore"] --> ASRF
     GAN["GatewayAuth"] --> Token
@@ -484,4 +484,4 @@ graph LR
     RoomN --> EvBuf
 ```
 
-> 世界存储在数据库不可用时可回退为内存模式；管理类数据统一落盘在 `server_data` 卷（容器内 `/app/.data`）。
+> 服务需要 PostgreSQL。模型供应商与 Agent 管理数据保存在数据库；语音设置和网关令牌仍保存在 `server_data` 卷（容器内 `/app/.data`）。

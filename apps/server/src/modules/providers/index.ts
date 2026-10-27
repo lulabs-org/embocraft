@@ -1,4 +1,5 @@
 export { FileProviderRepository } from './persistence/file-repository';
+export { DatabaseProviderRepository } from './persistence/database-repository';
 export type { ProviderRepository } from './persistence/repository.port';
 export { bootstrapProviders, createDefaultProviders } from './bootstrap';
 export { toProviderView } from './domain/model';
