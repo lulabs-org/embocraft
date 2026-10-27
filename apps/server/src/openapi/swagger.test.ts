@@ -1,4 +1,8 @@
 import { expect, it } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { swaggerSpec } from './swagger';
 
 type Schema = {
@@ -36,6 +40,62 @@ const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
     })),
 );
 
+it('documents every statically registered HTTP route', () => {
+  const serverSrc = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const routeFiles: string[] = [];
+  function collect(directory: string) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) collect(path);
+      else if (entry.name === 'routes.ts' || entry.name.endsWith('.routes.ts'))
+        routeFiles.push(path);
+    }
+  }
+  collect(join(serverSrc, 'http'));
+  collect(join(serverSrc, 'modules'));
+
+  let routeCount = 0;
+  for (const file of routeFiles) {
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    function visit(node: ts.Node) {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'app' &&
+        ['get', 'post', 'put', 'patch', 'delete'].includes(
+          node.expression.name.text,
+        )
+      ) {
+        const method = node.expression.name.text;
+        const first = node.arguments[0];
+        const paths = ts.isArrayLiteralExpression(first)
+          ? first.elements
+          : [first];
+        for (const pathNode of paths) {
+          expect(ts.isStringLiteral(pathNode), file).toBe(true);
+          if (!ts.isStringLiteral(pathNode)) continue;
+          routeCount++;
+          const path = pathNode.text.replace(/:([\w]+)/g, '{$1}');
+          expect(
+            spec.paths[path]?.[method],
+            `${method} ${path} (${file})`,
+          ).toBeDefined();
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(source);
+  }
+  expect(routeCount).toBeGreaterThan(0);
+  expect(operations).toHaveLength(routeCount);
+});
+
 it('includes agent and task endpoints from domain routes.ts files', () => {
   for (const [path, methods] of [
     ['/ai-characters', ['get', 'post']],
@@ -50,10 +110,29 @@ it('includes agent and task endpoints from domain routes.ts files', () => {
   }
 });
 
+it('documents the spatial text, command receipt, and OpenAPI JSON endpoints', () => {
+  const spatial = spec.paths['/chat/spatial/{id}/text']?.post;
+  expect(spatial).toBeDefined();
+  expect(
+    spatial.requestBody.content['application/json'].schema.properties.text,
+  ).toMatchObject({ type: 'string', maxLength: 240 });
+  expect(spatial.responses?.['200']).toBeDefined();
+
+  const receipt = spec.paths['/management/commands/{id}']?.get;
+  expect(receipt).toBeDefined();
+  expect(receipt.responses?.['200']).toBeDefined();
+
+  const document = spec.paths['/api-docs.json']?.get;
+  expect(document).toBeDefined();
+  expect(document.tags).toEqual(['System']);
+  expect(document.security).toBeUndefined();
+});
+
 it('documents resource ownership, management and chat credentials, with no global auth on public APIs', () => {
   expect(spec.servers).toEqual([{ url: '/', description: '当前服务器' }]);
   expect(spec.security).toBeUndefined();
   const management = [
+    ['/management', 'Management'],
     ['/ai-characters', 'AI Characters'],
     ['/providers', 'Providers'],
     ['/tasks', 'Tasks'],
