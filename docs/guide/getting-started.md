@@ -11,18 +11,42 @@
 
 ---
 
+## 统一配置入口
+
+本地开发与 Docker Compose 共用根目录的 `.env.example`。首次运行时复制为 `.env`；已有文件按需补充：
+
+```bash
+cp -n .env.example .env
+```
+
+示例按运行范围分组：
+
+| 分组           | 配置内容                                             | 使用方式                             |
+| -------------- | ---------------------------------------------------- | ------------------------------------ |
+| 通用配置       | 前端来源、语音服务地址、管理网关令牌与允许来源       | 按需取消注释并填写                   |
+| 本地开发       | 数据库连接串、服务端监听地址与端口、本机语音工具路径 | 配合 `pnpm dev` 与本地数据库脚本使用 |
+| Docker Compose | 宿主机映射端口、数据库初始化账号和密码               | 由 Compose 生成容器内部连接配置      |
+
+`WEB_ORIGIN` 和 `SPEECH_API_URL` 保持注释时，各运行方式使用自己的默认值：
+
+| 配置                      | 本地开发                   | Docker Compose          |
+| ------------------------- | -------------------------- | ----------------------- |
+| 前端来源 `WEB_ORIGIN`     | `http://127.0.0.1:5173`    | `*`                     |
+| 语音服务 `SPEECH_API_URL` | `http://127.0.0.1:8000/v1` | `http://speech:8000/v1` |
+
+使用域名或自定义 Web 端口时，设置对应的 `WEB_ORIGIN` 和 `AGENT_GATEWAY_ALLOWED_ORIGINS`，后者支持逗号分隔的多个来源。覆盖语音服务地址时，填写从服务端所在环境可访问的地址。
+
+模型服务凭据、托管 Agent 行为及 TTS/ASR 参数在 Web 控制台保存；独立 AI 玩家的参数见 [Agent 玩家文档](/agent/players#deepseek-命令行模式-cli-独立接入)。
+
+---
+
 ## 本地裸机极速开发
 
 通过项目内置的本地数据库启停脚本，无需安装 Docker 即可在本地完整运行全栈世界。
 
 ### 1. 依赖安装与数据库初始化
 
-本地开发与 Docker 部署统一使用根目录的 `.env.example`。首次配置时复制为 `.env`；已有 `.env` 可按示例补充所需选项。
-
 ```bash
-# 首次配置（保留已有 .env）
-cp -n .env.example .env
-
 # 1. 冻结锁文件严格安装依赖
 pnpm install --frozen-lockfile
 
@@ -102,12 +126,9 @@ pnpm agent:mock
 
 ### 2. 一键启动指令
 
-首次部署时使用同一份 `.env.example`，按需修改其中的 Docker Compose 配置区，设置数据库密码与对外端口。
+完成上方统一配置后，在 `.env` 的 Docker Compose 配置区设置数据库密码，按需调整对外端口。
 
 ```bash
-# 首次配置（保留已有 .env）
-cp -n .env.example .env
-
 # 使用 pnpm 快捷脚本一键构建并后台启动
 pnpm docker:up
 
@@ -135,18 +156,21 @@ pnpm docker:down
 docker compose down -v
 ```
 
-### 4. 关键环境变量配置清单
+### 4. Docker 端口与数据库配置
 
-参考根目录 `.env.example` 的通用配置和 Docker Compose 配置区（模型凭据及 Agent 行为在 Web 控制台配置）。`WEB_ORIGIN` 和语音服务地址默认保持注释：本地运行使用本机地址，Compose 使用容器网络地址和自己的跨域默认值；需要覆盖时填写服务器所在环境可访问的地址。
+下表为 Compose 的默认值。端口变量控制宿主机映射；容器内部监听地址、端口和数据库连接串由 Compose 配置。
 
-示例中的 `DATABASE_URL`、`HOST`、`PORT` 用于本地运行。Compose 使用 `POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB` 生成容器内数据库连接串，并固定容器监听地址和端口。调整宿主机端口请使用 `WEB_PORT`、`SERVER_PORT`、`POSTGRES_PORT`、`SPEECH_PORT`。
+| 环境变量            | 默认值          | 用途                         |
+| ------------------- | --------------- | ---------------------------- |
+| `WEB_PORT`          | `80`            | Web 界面与 Nginx 反代入口    |
+| `SERVER_PORT`       | `2567`          | 服务端直接访问端口           |
+| `POSTGRES_PORT`     | `55432`         | 数据库宿主机访问端口         |
+| `SPEECH_PORT`       | `8000`          | 语音服务宿主机访问端口       |
+| `POSTGRES_USER`     | `voxel`         | 数据库初始化用户             |
+| `POSTGRES_PASSWORD` | `voxelpassword` | 数据库初始化密码，部署前修改 |
+| `POSTGRES_DB`       | `voxel`         | 数据库名称                   |
 
-| 环境变量         | 默认值                  | 作用说明                                   |
-| :--------------- | :---------------------- | :----------------------------------------- |
-| `WEB_PORT`       | `80`                    | Web 界面宿主机对外访问端口                 |
-| `WEB_ORIGIN`     | `*`                     | 生产环境下建议配置为严格的前端域名         |
-| `SPEECH_API_URL` | `http://speech:8000/v1` | 指向全栈编排内的语音识别与合成统一服务入口 |
-| `DATABASE_URL`   | 容器内部网络连接串      | 自动注入，无需手动修改                     |
+Compose 使用 `POSTGRES_*` 生成服务端的容器内 `DATABASE_URL`。示例的本地 `DATABASE_URL`、`HOST`、`PORT` 适用于本地开发。
 
 ---
 

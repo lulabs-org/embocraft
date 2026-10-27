@@ -20,6 +20,14 @@
 
 ## 快速运行
 
+本地开发与 Docker Compose 共用 [.env.example](.env.example)。首次使用时复制为 `.env`，已有文件按需补充：
+
+```sh
+cp -n .env.example .env
+```
+
+按示例中的通用、本地开发、Docker Compose 分组配置。Docker 部署前设置数据库密码；详细默认值和覆盖方式见 [统一配置入口](docs/guide/getting-started.md#统一配置入口)。
+
 ### 1. 本地开发环境
 
 环境要求：Node 22.13+、pnpm 10、PostgreSQL 17 二进制。无需云账号即可完整运行。
@@ -37,7 +45,8 @@ pnpm db:migrate    # 执行 Prisma 数据迁移
 pnpm dev
 
 # 4. 在另一个终端启动 AI 玩家（或无 AI 的测试机器人）
-pnpm agent:ai      # 测试机器人：pnpm agent:mock
+pnpm agent:ai --api-key sk-your-deepseek-api-key
+# 无 AI 的测试机器人：pnpm agent:mock
 ```
 
 启动后在浏览器中打开 http://127.0.0.1:5173，可用两个独立无痕窗口以不同昵称加入世界测试多人互动。
@@ -62,7 +71,7 @@ pnpm docker:down
 - **Web 前端**：访问 `http://localhost`
 - **Swagger API 文档**：访问 `http://localhost:2567/api-docs`
 
-> 详细容器配置、旧版本升级与麦克风权限排查请参阅 [Docker 部署文档](docs/guide/getting-started.md#docker-容器化部署)。
+> 详细容器配置、旧版本升级与麦克风权限排查请参阅 [Docker 部署文档](docs/guide/getting-started.md#docker-全栈一键部署)。
 
 ---
 
