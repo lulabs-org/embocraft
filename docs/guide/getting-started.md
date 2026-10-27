@@ -17,7 +17,12 @@
 
 ### 1. 依赖安装与数据库初始化
 
+本地开发与 Docker 部署统一使用根目录的 `.env.example`。首次配置时复制为 `.env`；已有 `.env` 可按示例补充所需选项。
+
 ```bash
+# 首次配置（保留已有 .env）
+cp -n .env.example .env
+
 # 1. 冻结锁文件严格安装依赖
 pnpm install --frozen-lockfile
 
@@ -49,8 +54,8 @@ pnpm dev
 在另一个终端中，可选择启动常驻的 AI 玩家或测试机器人进入世界协作：
 
 ```bash
-# 启动智能 AI 代理（自动根据配置驱动思考与交互）
-pnpm agent:ai
+# 启动智能 AI 代理（更多命令行参数见 Agent 玩家文档）
+pnpm agent:ai --api-key sk-your-deepseek-api-key
 
 # 或启动仅进行随机行为测试的 Mock 机器人
 pnpm agent:mock
@@ -97,7 +102,12 @@ pnpm agent:mock
 
 ### 2. 一键启动指令
 
+首次部署时使用同一份 `.env.example`，按需修改其中的 Docker Compose 配置区，设置数据库密码与对外端口。
+
 ```bash
+# 首次配置（保留已有 .env）
+cp -n .env.example .env
+
 # 使用 pnpm 快捷脚本一键构建并后台启动
 pnpm docker:up
 
@@ -127,7 +137,9 @@ docker compose down -v
 
 ### 4. 关键环境变量配置清单
 
-参考根目录 `.env.docker.example`，主要配置项如下（模型凭据及 Agent 行为在 Web 控制台配置）：
+参考根目录 `.env.example` 的通用配置和 Docker Compose 配置区（模型凭据及 Agent 行为在 Web 控制台配置）。`WEB_ORIGIN` 和语音服务地址默认保持注释：本地运行使用本机地址，Compose 使用容器网络地址和自己的跨域默认值；需要覆盖时填写服务器所在环境可访问的地址。
+
+示例中的 `DATABASE_URL`、`HOST`、`PORT` 用于本地运行。Compose 使用 `POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB` 生成容器内数据库连接串，并固定容器监听地址和端口。调整宿主机端口请使用 `WEB_PORT`、`SERVER_PORT`、`POSTGRES_PORT`、`SPEECH_PORT`。
 
 | 环境变量         | 默认值                  | 作用说明                                   |
 | :--------------- | :---------------------- | :----------------------------------------- |

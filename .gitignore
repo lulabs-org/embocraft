@@ -4,7 +4,6 @@ dist/
 .env
 .env.*
 !.env.example
-!.env.docker.example
 .data/
 artifacts/
 *.log
