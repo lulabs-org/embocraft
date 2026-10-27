@@ -1,4 +1,4 @@
-import { publicError } from '../modules/management/errors';
+import { publicError } from '../modules/management';
 import express, { type Express, type RequestHandler } from 'express';
 import { identifier } from '../core/http/validation';
 import { AppError } from '../core/errors/app-error';

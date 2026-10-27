@@ -1,13 +1,15 @@
-import type { BailianConfig } from '../realtime/bailian-session';
 import { env } from '../../core/config/env';
-import { RealtimeHub } from '../realtime/hub';
-import { WorldChat } from '../chat/chat';
-import { AgentSpeech } from '../audio/tts/agent-speech';
-import type { VoiceServiceStore } from '../audio/tts/voice-services';
-import { PiperTts } from '../audio/tts/piper-tts';
-import { createVoiceProvider, type VoiceProvider } from '../audio/session';
-import { VoiceSessions } from '../audio/session/voice-sessions';
-import { createSpatialSignaling } from '../audio/spatial/signaling';
+import { RealtimeHub, type BailianConfig } from '../realtime';
+import { WorldChat, visibleEvent } from '../chat';
+import {
+  AgentSpeech,
+  PiperTts,
+  createVoiceProvider,
+  VoiceSessions,
+  createSpatialSignaling,
+  type VoiceProvider,
+  type VoiceServiceStore,
+} from '../audio';
 import { WorldStore } from './store';
 import { Room, Client, ServerError } from '@colyseus/core';
 import { Avatar, WorldState } from './schema';
@@ -31,7 +33,6 @@ import {
   PLAYER_NAME_TAKEN,
 } from './player-name';
 import { validateEdit, parseInput } from './validation';
-import { visibleEvent } from '../chat/visibility';
 const zero: Input = { x: 0, z: 0, jump: false, yaw: 0 };
 let activeRoom = false;
 export class WorldRoom extends Room<WorldState> {

@@ -1,4 +1,4 @@
-import { ManagementCommands } from '../../management/commands';
+import { ManagementCommands } from '../../management';
 import type { Express } from 'express';
 import type { ProviderService } from '../services/provider-service';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';

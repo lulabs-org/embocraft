@@ -4,8 +4,8 @@ import type {
   AgentRunState,
   Session,
 } from '@voxel/agent-runtime';
-import type { PlanService } from '../../tasks/persistence/service';
-import type { SavedProvider } from '../../providers/domain/model';
+import type { PlanService } from '../../tasks';
+import type { SavedProvider } from '../../providers';
 
 export interface HostedAICharacter {
   run(provider: SavedProvider, run?: boolean): Promise<void>;

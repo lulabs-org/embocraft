@@ -14,12 +14,9 @@ import { errorHandler } from './core/http/middleware/error-handler';
 import {
   installAudioRoutes,
   type AudioRouteDependencies,
-} from './modules/audio/routes';
-import { installChatRoutes } from './modules/chat/chat.routes';
-import {
-  installWorldRoutes,
-  installPresenceRoutes,
-} from './modules/world/world.routes';
+} from './modules/audio';
+import { installChatRoutes } from './modules/chat';
+import { installWorldRoutes, installPresenceRoutes } from './modules/world';
 
 export type AppDependencies = {
   origin: string;

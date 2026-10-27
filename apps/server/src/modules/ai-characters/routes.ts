@@ -1,4 +1,4 @@
-import { ManagementCommands } from '../management/commands';
+import { ManagementCommands } from '../management';
 import { AppError } from '../../core/errors/app-error';
 import type { Express, Request } from 'express';
 import {
