@@ -7,6 +7,7 @@ import express, { type Express } from 'express';
 import { type WorldChat } from './chat';
 
 import { LocalSpeech } from '../audio/asr/local-speech';
+import { AsrSettingsStore } from '../audio/asr/asr-settings';
 import { AppError } from '../../common/errors';
 import type { AgentSpeech } from '../audio/tts/agent-speech';
 import { ChatSpeechService } from './speech-service';
@@ -16,8 +17,9 @@ export function installChatRoutes(
   speech = new LocalSpeech(),
   getAgentSpeech: () => AgentSpeech | undefined = () => undefined,
   origin = env.webOrigin(),
+  asrSettings = new AsrSettingsStore(),
 ) {
-  const speechService = new ChatSpeechService(speech);
+  const speechService = new ChatSpeechService(speech, asrSettings);
   app.use(
     '/chat',
     createOriginGuard({
@@ -73,6 +75,11 @@ export function installChatRoutes(
    *         schema:
    *           type: string
    *           default: zh
+   *       - in: query
+   *         name: serviceId
+   *         schema:
+   *           type: string
+   *         description: 可选的已保存 Whisper 识别服务 ID
    *     requestBody:
    *       required: true
    *       content:
@@ -110,6 +117,10 @@ export function installChatRoutes(
           bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
           contentType: req.headers['content-type'] ?? '',
           language: req.query.language === 'en' ? 'en' : 'zh',
+          serviceId:
+            typeof req.query.serviceId === 'string'
+              ? req.query.serviceId
+              : undefined,
           token: (req.headers.authorization ?? '').replace(/^Bearer /, ''),
           signal: abort.signal,
         });
@@ -178,6 +189,32 @@ export function installChatRoutes(
     );
     res.sendStatus(204);
   });
+
+  app.post(
+    '/chat/spatial/:id/text',
+    express.json({ limit: '2kb' }),
+    (req, res, next) => {
+      const chat = res.locals.chat as WorldChat;
+      const actor = res.locals.actor as string;
+      const id = String(req.params.id);
+      let claimed = false;
+      try {
+        if (
+          typeof req.body?.text !== 'string' ||
+          !req.body.text.trim() ||
+          req.body.text.length > 240
+        )
+          throw new AppError('识别文字无效。');
+        chat.claimSpatial(actor, id);
+        claimed = true;
+        res.json(chat.publishSpatial(actor, id, req.body.text));
+      } catch (error) {
+        next(error);
+      } finally {
+        if (claimed) chat.endSpatial(actor, id);
+      }
+    },
+  );
 
   /**
    * @openapi
@@ -251,6 +288,10 @@ export function installChatRoutes(
             contentType: req.headers['content-type'] ?? '',
             partial,
             token: (req.headers.authorization ?? '').replace(/^Bearer /, ''),
+            serviceId:
+              typeof req.query.serviceId === 'string'
+                ? req.query.serviceId
+                : undefined,
             signal: abort.signal,
           }),
         );

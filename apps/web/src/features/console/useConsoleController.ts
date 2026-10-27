@@ -5,7 +5,7 @@ import { useConsoleFeedback } from './useConsoleFeedback';
 import { useVoiceServices } from './voice/useVoiceServices';
 export function useConsoleController(open: boolean, initialTab?: 'characters') {
   const [tab, setTab] = useState<
-    'characters' | 'plans' | 'providers' | 'voice' | 'asr'
+    'characters' | 'plans' | 'providers' | 'voice' | 'asr' | 'asrInput'
   >('characters');
   const body = useRef<HTMLDivElement>(null);
   const feedback = useConsoleFeedback();

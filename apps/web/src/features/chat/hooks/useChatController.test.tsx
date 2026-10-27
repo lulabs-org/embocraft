@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 
 import type { ChatEntry } from '@voxel/shared';
 
@@ -11,6 +11,7 @@ import { useChatController, type ChatController } from './useChatController';
 
 import { installReactMount } from '../../../../test/helpers/react-mount';
 const mount = installReactMount();
+beforeEach(() => localStorage.clear());
 
 it('keeps chat recording alive across rerenders and cancels on disconnect and unmount', async () => {
   const connection = new Connection();
@@ -50,4 +51,34 @@ it('keeps chat recording alive across rerenders and cancels on disconnect and un
   expect(recorder).toHaveBeenCalledOnce();
   await mount.unmount();
   expect(dictation).toHaveBeenCalledTimes(2);
+});
+
+it('requires an explicit service for dictation and recorded voice', async () => {
+  class TestURL extends URL {
+    static createObjectURL() {
+      return 'blob:recording';
+    }
+    static revokeObjectURL() {}
+  }
+  vi.stubGlobal('URL', TestURL);
+  const connection = new Connection();
+  connection.status = 'connected';
+  let controller!: ChatController;
+  function Harness() {
+    controller = useChatController(connection);
+    return null;
+  }
+  await mount.render(<Harness />);
+  const dictation = vi.spyOn(controller.dictation, 'start');
+  const recorder = vi.spyOn(controller.recorder, 'start');
+  await act(async () => controller.record('text'));
+  expect(controller.error).toContain('选择对应的识别服务');
+  expect(dictation).not.toHaveBeenCalled();
+  await act(async () => controller.record('audio'));
+  expect(controller.error).toContain('选择对应的识别服务');
+  expect(recorder).not.toHaveBeenCalled();
+  await act(async () => controller.setClip(new Blob(['audio'])));
+  await act(async () => controller.send());
+  expect(controller.error).toContain('聊天录语音转文字');
+  expect(controller.clip).toBeDefined();
 });

@@ -6,7 +6,15 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react';
-import { ClipRecorder, LiveRecorder } from '../../../audio';
+import {
+  BailianSpeechSession,
+  BrowserRecognitionSession,
+  ClipRecorder,
+  LiveRecorder,
+  LiveSpeechSession,
+  speechTransport,
+} from '../../../audio';
+import { useAsrSelection } from '../../voice';
 import type { Connection } from '../../../network/connection';
 import { chatApi } from '../api';
 import { consumeMention, mentionQuery } from '../chat-mentions';
@@ -48,6 +56,7 @@ export function useChatController(connection: Connection, expanded = true) {
   const [partial, setPartial] = useState('');
   const [overflow, setOverflow] = useState('');
   const dictated = useRef('');
+  const activeDictation = useRef<'browser' | 'server'>('server');
   const [clipDuration, setClipDuration] = useState(0);
   const [clip, setClip] = useState<Blob>(),
     [preview, setPreview] = useState('');
@@ -55,7 +64,10 @@ export function useChatController(connection: Connection, expanded = true) {
     list = useRef<HTMLDivElement>(null),
     upload = useRef<AbortController | undefined>(undefined);
   const [dictation] = useState(() => new LiveRecorder()),
+    [browserDictation] = useState(() => new BrowserRecognitionSession()),
     [recorder] = useState(() => new ClipRecorder());
+  const asr = useAsrSelection('chat');
+  const clipAsr = useAsrSelection('clip');
   const connected = connection.status === 'connected',
     busy = mode !== 'idle';
   const candidates = connection.players
@@ -98,24 +110,26 @@ export function useChatController(connection: Connection, expanded = true) {
   }, [clip]);
   const cancel = useCallback(() => {
     dictation.cancel();
+    browserDictation.cancel();
     recorder.cancel();
     upload.current?.abort();
     connection.chatRecording = false;
     setMode('idle');
     setPartial('');
     setStatus('');
-  }, [connection, dictation, recorder]);
+  }, [connection, dictation, browserDictation, recorder]);
   useEffect(() => {
     if (!connected) cancel();
   }, [connected, cancel]);
   useEffect(
     () => () => {
       dictation.cancel();
+      browserDictation.cancel();
       recorder.cancel();
       upload.current?.abort();
       connection.chatRecording = false;
     },
-    [connection, dictation, recorder],
+    [connection, dictation, browserDictation, recorder],
   );
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight });
@@ -182,6 +196,10 @@ export function useChatController(connection: Connection, expanded = true) {
       setError('请先结束语音设置中的录音。');
       return;
     }
+    if (!(kind === 'text' ? asr.selected.id : clipAsr.selected.id)) {
+      setError('请先在控制台的“识别服务选择”中选择对应的识别服务。');
+      return;
+    }
     connection.stopSpatialInput();
     connection.chatRecording = true;
     setError('');
@@ -193,9 +211,13 @@ export function useChatController(connection: Connection, expanded = true) {
       setError(message);
       setStatus('');
     };
-    if (kind === 'text')
-      void dictation.start('zh-CN', {
-        onState: (state) => {
+    if (kind === 'text') {
+      const service = asr.selected;
+      activeDictation.current =
+        service.provider === 'browser' ? 'browser' : 'server';
+      const language = service.language ?? 'zh-CN';
+      const callbacks = {
+        onState: (state: 'listening' | 'thinking') => {
           setMode(state === 'listening' ? 'dictating' : 'transcribing');
           setStatus(
             state === 'listening'
@@ -205,10 +227,11 @@ export function useChatController(connection: Connection, expanded = true) {
         },
         onPartial: setPartial,
         onStatus: setStatus,
-        onFinal: (value) => {
+        onFinal: (value: string) => {
           const next = (dictated.current + ' ' + value).trim();
           if (next.length > 240) {
             dictation.cancel();
+            browserDictation.cancel();
             setPartial('');
             setOverflow(value);
             fail('输入框最多 240 字，听写已停止。本句保留在下方，请分开发送。');
@@ -225,8 +248,32 @@ export function useChatController(connection: Connection, expanded = true) {
           setStatus('已转为文字，请确认后发送。');
         },
         onError: fail,
-      });
-    else
+      };
+      if (service.provider === 'browser') {
+        setMode('dictating');
+        browserDictation.start(language, {
+          ...callbacks,
+          onStatus: setStatus,
+        });
+      } else {
+        void dictation.start(
+          language,
+          {
+            ...callbacks,
+            onStatus: setStatus,
+          },
+          undefined,
+          undefined,
+          service.provider === 'bailian'
+            ? (events) => new BailianSpeechSession(service.id, language, events)
+            : (events) =>
+                new LiveSpeechSession(
+                  speechTransport(language, undefined, undefined, service.id),
+                  events,
+                ),
+        );
+      }
+    } else
       void recorder.start(
         (blob, durationMs) => {
           connection.chatRecording = false;
@@ -244,6 +291,10 @@ export function useChatController(connection: Connection, expanded = true) {
   };
   const send = async () => {
     setError('');
+    if (clip && !clipAsr.selected.id) {
+      setError('请先在控制台为“聊天录语音转文字”选择识别服务。');
+      return;
+    }
     const ids = recipients.map((p) => p.id);
     if (scope === 'private' && !ids.length) {
       setError('请先通过 @ 选择私聊对象。');
@@ -273,6 +324,7 @@ export function useChatController(connection: Connection, expanded = true) {
             ids,
             connection.chatToken,
             abort.signal,
+            clipAsr.selected.id,
           );
           setStatus(
             data.transcriptAvailable
@@ -343,6 +395,10 @@ export function useChatController(connection: Connection, expanded = true) {
     candidates,
     activeChoice,
     cancel,
+    finishDictation: () => {
+      if (activeDictation.current === 'browser') browserDictation.finish();
+      else void dictation.finish();
+    },
     openPicker,
     select,
     onKey,

@@ -20,12 +20,15 @@ export const chatApi = {
     recipients: string[],
     token: string,
     signal: AbortSignal,
+    serviceId: string,
   ): Promise<{ transcriptAvailable: boolean }> {
+    if (!serviceId) throw Error('请先选择识别服务。');
     const params = new URLSearchParams({
       scope,
       to: recipients.join(','),
       language: 'zh',
     });
+    params.set('serviceId', serviceId);
     const response = await fetch(`${serverHttpUrl()}/chat/audio?${params}`, {
       method: 'POST',
       headers: { 'Content-Type': clip.type, Authorization: `Bearer ${token}` },

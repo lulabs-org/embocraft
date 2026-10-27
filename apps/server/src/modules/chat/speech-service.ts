@@ -1,6 +1,8 @@
 import { LocalSpeech } from '../audio/asr/local-speech';
 import { scheduleSpeech } from '../audio/asr/speech-scheduler';
 import type { WorldChat } from './chat';
+import { AsrSettingsStore } from '../audio/asr/asr-settings';
+import { AppError } from '../../common/errors';
 
 type AudioInput = {
   chat: WorldChat;
@@ -9,6 +11,7 @@ type AudioInput = {
   bytes: Buffer;
   contentType: string;
   language: 'en' | 'zh';
+  serviceId?: string;
   token: string;
   signal: AbortSignal;
 };
@@ -16,11 +19,15 @@ type AudioInput = {
 type SpatialInput = Omit<AudioInput, 'route' | 'language'> & {
   id: string;
   partial: boolean;
+  serviceId?: string;
 };
 
 /** Coordinates ASR with chat authorization and ticket lifetimes. */
 export class ChatSpeechService {
-  constructor(private speech: LocalSpeech) {}
+  constructor(
+    private speech: LocalSpeech,
+    private asrSettings = new AsrSettingsStore(),
+  ) {}
 
   async publishAudio({
     chat,
@@ -29,6 +36,7 @@ export class ChatSpeechService {
     bytes,
     contentType,
     language,
+    serviceId,
     token,
     signal,
   }: AudioInput) {
@@ -41,12 +49,25 @@ export class ChatSpeechService {
       );
       let text = '';
       try {
-        text = await scheduleSpeech(this.speech).transcribe(
-          normalized.bytes,
-          'audio/wav',
-          language,
-          signal,
-        );
+        const selected = serviceId
+          ? this.asrSettings.acquire(serviceId)
+          : undefined;
+        try {
+          if (selected && selected.settings.provider !== 'whisper')
+            throw new AppError('录制语音只能使用 Whisper 识别服务。');
+          text = await scheduleSpeech(this.speech).transcribe(
+            normalized.bytes,
+            'audio/wav',
+            language,
+            signal,
+            false,
+            selected?.settings.provider === 'whisper'
+              ? selected.settings
+              : undefined,
+          );
+        } finally {
+          selected?.release();
+        }
       } catch {
         signal.throwIfAborted();
       }
@@ -71,10 +92,16 @@ export class ChatSpeechService {
     bytes,
     contentType,
     partial,
+    serviceId,
     token,
     signal: requestSignal,
   }: SpatialInput) {
+    const selected = serviceId
+      ? this.asrSettings.acquire(serviceId)
+      : undefined;
     try {
+      if (selected && selected.settings.provider !== 'whisper')
+        throw new AppError('请选择 Whisper 服务。');
       const signal = AbortSignal.any([
         requestSignal,
         partial ? chat.previewSpatial(actor, id) : chat.claimSpatial(actor, id),
@@ -85,6 +112,9 @@ export class ChatSpeechService {
         'zh',
         signal,
         partial,
+        selected?.settings.provider === 'whisper'
+          ? selected.settings
+          : undefined,
       );
       signal.throwIfAborted();
       chat.authenticate(token);
@@ -94,6 +124,7 @@ export class ChatSpeechService {
       }
       return chat.publishSpatial(actor, id, text);
     } finally {
+      selected?.release();
       if (!partial) chat.endSpatial(actor, id);
     }
   }

@@ -313,3 +313,26 @@ it('routes Whisper live snapshots to the selected profile with cancellation', as
     expect.objectContaining({ signal }),
   );
 });
+
+it('passes the selected Whisper profile through nearby authenticated recognition', async () => {
+  const request = vi.fn(
+    async (url: string) =>
+      new Response(
+        JSON.stringify(
+          url.endsWith('/start') ? { id: 'ticket' } : { text: '识别' },
+        ),
+      ),
+  );
+  const transport = speechTransport(
+    'zh-CN',
+    () => 'chat-token',
+    request as typeof fetch,
+    'whisper/A',
+  );
+  const signal = new AbortController().signal;
+  const id = await transport.begin(signal);
+  await transport.recognize(id, new Blob(['audio']), false, signal);
+  expect(request.mock.calls[1][0]).toContain(
+    '/chat/spatial/ticket?serviceId=whisper%2FA',
+  );
+});

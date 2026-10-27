@@ -10,6 +10,7 @@ import type { SpeechAnchor } from '../../graphics/speech-anchor';
 import { useI18n } from '../../i18n';
 import type { Connection } from '../../network/connection';
 import { SpeechCaption } from './SpeechCaption';
+import { useAsrSelection } from './asr-selection';
 
 export function SpatialVoicePanel({
   connection,
@@ -19,6 +20,9 @@ export function SpatialVoicePanel({
   speechAnchor: (actor: string) => SpeechAnchor | null;
 }) {
   const { t } = useI18n();
+  const asr = useAsrSelection('spatial');
+  const selectedAsr = useRef(asr.selected);
+  selectedAsr.current = asr.selected;
   const [state, setState] = useState<SpatialStatus>({
     sending: false,
     listening: false,
@@ -40,8 +44,15 @@ export function SpatialVoicePanel({
       setTranscript,
     );
     voice.onMicrophone = (stream) => {
-      if (stream) void transcriber.start(stream);
-      else transcriber.stop();
+      if (stream) {
+        if (selectedAsr.current.id)
+          void transcriber.start(stream, selectedAsr.current);
+        else
+          setTranscript((previous) => ({
+            ...previous,
+            error: '请先在控制台为附近麦克风选择识别服务；语音通话仍可使用。',
+          }));
+      } else transcriber.stop();
     };
     engine.current = voice;
     connection.onSpatialSignal = voice.signal;
@@ -51,9 +62,9 @@ export function SpatialVoicePanel({
     window.addEventListener('pagehide', unload);
     return () => {
       window.removeEventListener('pagehide', unload);
-      connection.onSpatialSignal = () => { };
-      connection.onAgentSpeech = () => { };
-      connection.stopSpatialInput = () => { };
+      connection.onSpatialSignal = () => {};
+      connection.onAgentSpeech = () => {};
+      connection.stopSpatialInput = () => {};
       voice.dispose();
       transcriber.stop();
       engine.current = null;
@@ -87,6 +98,7 @@ export function SpatialVoicePanel({
         target &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
           target.isContentEditable)
       )
         return;
@@ -139,11 +151,7 @@ export function SpatialVoicePanel({
             title={micLabel + ' (V)'}
             aria-pressed={state.sending}
             className={
-              state.sending
-                ? 'mic-live'
-                : state.pending
-                  ? 'mic-pending'
-                  : ''
+              state.sending ? 'mic-live' : state.pending ? 'mic-pending' : ''
             }
             disabled={micDisabled}
             onClick={toggleMic}
@@ -157,11 +165,7 @@ export function SpatialVoicePanel({
             disabled={listenDisabled}
             onClick={toggleListen}
           >
-            {state.listening ? (
-              <Volume2 size={16} />
-            ) : (
-              <VolumeX size={16} />
-            )}
+            {state.listening ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
         </div>
       </section>

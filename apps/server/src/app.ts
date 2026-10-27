@@ -49,6 +49,7 @@ export function createApp(deps: AppDependencies) {
     deps.chat.speech,
     deps.chat.getAgentSpeech,
     deps.origin,
+    deps.audio.asrSettings,
   );
   installPresenceRoutes(app, deps.world.presence, deps.origin);
   app.use(errorHandler());

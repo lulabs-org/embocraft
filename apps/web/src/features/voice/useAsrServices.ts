@@ -6,6 +6,11 @@ import {
 } from '@voxel/shared';
 import { voiceApi } from './api';
 import {
+  initializeAsrSelections,
+  syncAsrChoice,
+  toAsrChoice,
+} from './asr-selection';
+import {
   deleteBrowserAsrService,
   migrateBrowserAsrServices,
   saveBrowserAsrService,
@@ -93,6 +98,7 @@ export function useAsrServices(active: boolean) {
       .then((values) => {
         if (abort.signal.aborted) return;
         setRemoteServices(values);
+        initializeAsrSelections(values.map(toAsrChoice));
         setLoaded(true);
         setForm((previous) => {
           // A delayed list response must not overwrite a new/edited/local draft.
@@ -150,6 +156,7 @@ export function useAsrServices(active: boolean) {
           setBrowserServices(
             deleteBrowserAsrService(window.localStorage, form.id),
           );
+          syncAsrChoice(form.id);
           setForm({ id: 'new', draft: fresh('browser'), dirty: true });
           setNotice('浏览器识别服务已删除。');
         } else {
@@ -159,6 +166,7 @@ export function useAsrServices(active: boolean) {
             form.id === 'new' ? undefined : form.id,
           );
           setBrowserServices(values);
+          syncAsrChoice(saved.id, saved);
           setForm(formFor(saved.id, saved));
           setNotice('已保存到当前浏览器。可继续添加其他语言配置，或录音试用。');
         }
@@ -179,6 +187,12 @@ export function useAsrServices(active: boolean) {
         await voiceApi.deleteAsrService(form.id, signal);
         if (abort.signal.aborted) return;
         setRemoteServices((values) => values.filter((v) => v.id !== form.id));
+        syncAsrChoice(form.id);
+        initializeAsrSelections(
+          remoteServices
+            .filter((service) => service.id !== form.id)
+            .map(toAsrChoice),
+        );
         setForm({ id: 'new', draft: fresh(form.draft.provider), dirty: true });
         setNotice('识别服务已删除。');
       } else {
@@ -193,8 +207,12 @@ export function useAsrServices(active: boolean) {
             ? values.map((v) => (v.id === saved.id ? saved : v))
             : [...values, saved],
         );
+        syncAsrChoice(saved.id, saved);
+        initializeAsrSelections([toAsrChoice(saved)]);
         setForm(formFor(saved.id, saved));
-        setNotice('识别服务已保存。可从左侧添加更多服务，或开始录音试用当前服务。');
+        setNotice(
+          '识别服务已保存。可从左侧添加更多服务，或开始录音试用当前服务。',
+        );
       }
     } catch (e) {
       if (!abort.signal.aborted)
