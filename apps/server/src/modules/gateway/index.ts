@@ -1,2 +1,2 @@
-export * from './auth';
-export * from './socket';
+export * from './auth.service';
+export * from './gateway.socket';

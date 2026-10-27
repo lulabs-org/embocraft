@@ -48,6 +48,8 @@ Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/a
 
 `ai-characters/services/` 集中角色管理器、编排器、宿主、唤醒调度与语音协调；服务使用 `*.service.ts` 命名，生产装配包装器为 `character.manager.ts`。`job.ts`、`execution-context.ts`、`task-adapter.ts` 与 `world-event-handler.ts` 是同层运行时辅助文件，保留会话、Runner 与任务状态适配职责。HTTP 路由和 OpenAPI 注解位于 `routes/ai-characters.routes.ts`，纯校验与日志留在 `domain/`，角色快照留在 `persistence/`。模块根部 `index.ts` 保留全部公开导出；目录调整不改变角色生命周期、唤醒时序、语音行为、接口或存档格式。
 
+`gateway` 保持轻量目录：`auth.service.ts` 负责令牌加载与 HTTP 鉴权，`gateway.socket.ts` 负责管理通知握手、事件订阅与连接清理，`validation.ts` 校验握手数据。根部 `index.ts` 保留全部公开导出，令牌读取顺序、Origin 策略、通知协议和关闭行为保持不变。跨管理模块与共享客户端的 `test/gateway.test.ts` 保留在集成测试目录，并通过 gateway 门面引用。
+
 `ModelCatalog` 由 `createServer` 创建并直接注入 Provider 路由，角色编排器不再持有它。`agentDependencies` 仅配置角色的 session 与 runner。删除模型或音色服务仍经角色管理器检查关联约束。
 
 Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端。服务端与 CLI 都通过 `AgentRunner.run()` 进入统一协调器；对话、任务服务和任务执行使用独立职责，CLI 的 `runAgent` 保留自身调度循环。

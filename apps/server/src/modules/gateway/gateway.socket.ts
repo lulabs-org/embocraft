@@ -9,7 +9,7 @@ import {
 } from '@voxel/shared/management';
 import { parseEventConnect } from './validation';
 import { publicError } from '../management';
-import type { GatewayAuth } from './auth';
+import type { GatewayAuth } from './auth.service';
 import type { SocketRoutes } from '../../core/transport/socket-routes';
 
 /** The socket owns only notifications. Snapshots and all commands use authenticated HTTP. */
