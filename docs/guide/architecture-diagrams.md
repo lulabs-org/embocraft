@@ -130,7 +130,7 @@ graph TB
     subgraph Modules["modules/ 领域模块"]
         World["world<br/>room · schema · terrain<br/>store · validation · routes"]
         AIC["ai-characters<br/>domain · services · runtime<br/>persistence · routes"]
-        Tasks["tasks<br/>domain · runtime（scheduler/coordinator/execution）<br/>persistence · command-policy"]
+        Tasks["tasks<br/>domain · services（scheduler/coordinator/execution）<br/>persistence · routes · ports"]
         Mgmt["management<br/>command-router · commands · events"]
         GW["gateway<br/>auth · socket · validation"]
         Prov["providers<br/>store · catalog · validation · routes"]

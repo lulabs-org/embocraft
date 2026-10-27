@@ -1,5 +1,5 @@
-import { PlanService } from '../persistence/service';
-import { TaskScheduler } from './scheduler';
+import { PlanService } from '../persistence/plan-store';
+import { TaskScheduler } from './scheduler.service';
 import { validatePlan } from '../domain/validation';
 import {
   newPlan,
@@ -16,7 +16,7 @@ import { hasPlanTokenLimit } from '../domain/limits';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import { object } from '../../../core/http/validation';
 import { AppError } from '../../../core/errors/app-error';
-import type { TaskExecutionState, TaskHostPort } from './execution-port';
+import type { TaskExecutionState, TaskHostPort } from '../ports';
 import {
   commitExecution,
   captureTask,
@@ -28,7 +28,7 @@ import {
   taskBusy,
   executeTaskPlanControl,
   executeTaskRunControl,
-} from './execution';
+} from './execution.service';
 export class TaskCoordinator {
   readonly plans = new PlanService();
   readonly committedPlans = new PlanService();

@@ -20,7 +20,7 @@ import {
 import { object } from '../../../core/http/validation';
 import { taskLimits } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
-import type { TaskExecutionState } from './execution-port';
+import type { TaskExecutionState } from '../ports';
 import type { AICharacterSettings } from '@voxel/shared';
 const active = (status: TaskExecutionState['view']['status']) =>
   ['joining', 'running', 'stopping'].includes(status);

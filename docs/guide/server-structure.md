@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -182,18 +182,20 @@ apps/server/
         │   │   ├── timing.ts            # Cron 周期与下一次触发时间纯计算
         │   │   ├── limits.ts            # Token 配额与并发约束
         │   │   ├── validation.ts        # 任务参数格式纯校验
-        │   │   └── command-policy.ts    # 【归位】：任务指令白名单与前置条件校验纯规则
-        │   ├── services/                # 【对齐规范】：业务流程与调度引擎（原 runtime）
+        │   │   ├── types.ts            # 计划、执行历史与查询类型
+        │   │   └── command-policy.ts    # 幂等命令指纹的请求体规整纯函数
+        │   ├── services/                # 业务流程与调度引擎
         │   │   ├── coordinator.service.ts # 跨角色任务协调器
         │   │   ├── scheduler.service.ts   # 计划触发与时间窗口调度器
         │   │   └── execution.service.ts   # 任务单次执行与重试流水线
         │   ├── persistence/             # 任务计划快照捕获与状态仓储
         │   │   ├── snapshots.ts         # 存档快照序列化
         │   │   ├── restore.ts           # 历史快照还原
-        │   │   └── plan-store.ts        # 计划与执行历史状态仓储（原 service.ts 正名）
+        │   │   ├── archive-migration.ts # 历史任务快照迁移
+        │   │   └── plan-store.ts        # 计划与执行历史内存状态仓储
         │   ├── routes/                  # HTTP REST API
         │   │   └── tasks.routes.ts      # /tasks 与 /task-runs 路由
-        │   ├── ports.ts                 # 外部执行宿主与时钟端口契约抽象
+        │   ├── ports.ts                 # TaskPort、TaskHostPort 与 TaskExecutionState 契约
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
         └── world/                       # ── 9. 权威体素世界房间与物理模拟 ──
@@ -399,7 +401,7 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 ```mermaid
 graph LR
     Client[Web 控制台 / Agent 客户端] -->|POST /management| Router[CommandRouter]
-    Router -->|校验 Payload| Policy[CommandPolicy 白名单]
+    Router -->|规整请求体| Policy[命令指纹规整]
     Policy -->|执行状态修改| Commands[ManagementCommands]
     Commands -->|发布状态变更| Events[ManagementEvents]
     Events -->|推送更新| WS[WebSocket: /ai-characters/gateway]
@@ -408,8 +410,8 @@ graph LR
 
 - **统一变更指令入口（Command Bus）**：
   所有对 Character、Provider、Task 的状态修改，统一经过 `ManagementCommands` / `command-router.ts` 分发处理，杜绝外部散乱调用底层 Service。该总线纯粹负责应用层指令路由、泳道并发隔离与幂等校验，与底层存储持久化彻底解耦。
-- **指令白名单与 Payload 守卫**：
-  如任务执行指令必须经过 `tasks/domain/command-policy.ts` 白名单校验，过滤未受信任的非法字段。
+- **命令指纹规整与输入校验**：
+  `tasks/domain/command-policy.ts` 的 `taskCommandBody` 仅从幂等指纹中剔除 `expectedTask`、`expectedPlanRevision`，使重试可以沿用原回执；它不修改实际请求体，也不执行字段白名单校验。输入合法性及执行前置条件仍由任务领域校验和服务层负责。
 - **全双工审计与通知总线（`ManagementEvents`）**：
   任何领域状态发生跃迁（如模型创建、角色上线、任务推进），由 `ManagementEvents.publish()` 统一发布事件，并直推给连接到 `/ai-characters/gateway` 的管理客户端。**前端控制台通过事件流实时驱动界面更新，杜绝低效的 HTTP 短轮询**。
 

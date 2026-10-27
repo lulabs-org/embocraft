@@ -4,12 +4,12 @@ import { vi } from 'vitest';
 
 import type { WorldEvent } from '@voxel/shared';
 
-import { TaskCoordinator } from '../../src/modules/tasks/runtime/coordinator';
+import { TaskCoordinator } from '../../src/modules/tasks/services/coordinator.service';
 
 import type {
   TaskExecutionState,
   TaskHostPort,
-} from '../../src/modules/tasks/runtime/execution-port';
+} from '../../src/modules/tasks/ports';
 
 export function taskExecutionFixture() {
   let afterInterrupt = async () => {};
