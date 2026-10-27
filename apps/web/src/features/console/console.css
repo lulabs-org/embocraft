@@ -211,6 +211,32 @@
   background: var(--color-hud-ink);
   color: white;
 }
+.asr-input-settings {
+  min-width: 0;
+}
+.agent-form .asr-input-choice {
+  display: grid;
+  gap: 8px;
+  max-width: 440px;
+  margin: 0;
+}
+.asr-input-choice strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.asr-input-choice small {
+  color: #66796e;
+  font-size: 11px;
+}
+.asr-input-choice select {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #cdd9c6;
+  border-radius: var(--radius-control);
+  background: #fff;
+  font-size: 12px;
+}
 .voice-key-field {
   margin-bottom: 13px;
   font-size: 12px;

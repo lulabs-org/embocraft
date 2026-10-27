@@ -15,6 +15,7 @@ import {
   openGateway,
 } from '../../network/gateway';
 import { SpeechRecognitionPanel } from '../voice';
+import { AsrInputSettings } from './asr/AsrInputSettings';
 import { AICharacters } from './ai-characters';
 import { ConsoleHelp } from './ConsoleHelp';
 import { GatewayAccess } from './GatewayAccess';
@@ -159,6 +160,12 @@ export function ControlConsole({
             <button aria-pressed={tab === 'asr'} onClick={() => setTab('asr')}>
               {t('console.tabs.asr')}
             </button>
+            <button
+              aria-pressed={tab === 'asrInput'}
+              onClick={() => setTab('asrInput')}
+            >
+              {t('console.tabs.asrInput')}
+            </button>
           </nav>
         </div>
 
@@ -187,7 +194,19 @@ export function ControlConsole({
                 active={open && status === 'ready' && tab === 'asr'}
               />
             </div>
-            <div hidden={tab === 'voice' || tab === 'asr' || tab === 'plans'}>
+            <div hidden={tab !== 'asrInput'}>
+              <AsrInputSettings
+                active={open && status === 'ready' && tab === 'asrInput'}
+              />
+            </div>
+            <div
+              hidden={
+                tab === 'voice' ||
+                tab === 'asr' ||
+                tab === 'asrInput' ||
+                tab === 'plans'
+              }
+            >
               {tab === 'providers' ? (
                 <ProviderEditor {...controller} />
               ) : (

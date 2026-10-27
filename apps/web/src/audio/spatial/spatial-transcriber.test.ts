@@ -1,6 +1,8 @@
 import { expect, it, vi } from 'vitest';
 import { SpatialTranscriber } from './spatial-transcriber';
 import { LiveRecorder, type SpeechCapture } from '../recording/live-recorder';
+import type { BrowserRecognitionSession } from '../services/browser-recognition';
+import type { LiveSpeechEvents } from '../services/live-speech';
 const flush = async () => {
   for (let i = 0; i < 18; i++) await Promise.resolve();
 };
@@ -115,4 +117,49 @@ it('aborts in-flight recognition and ignores late results on stop', async () => 
       ([state]) => state.text === 'late' || state.partial === 'late',
     ),
   ).toBe(false);
+});
+
+it('publishes browser recognition only after a confirmed final result', async () => {
+  const t = setup();
+  let events!: LiveSpeechEvents;
+  const browser = {
+    start: vi.fn((_language: string, callbacks: LiveSpeechEvents) => {
+      events = callbacks;
+    }),
+    cancel: vi.fn(),
+  } as unknown as BrowserRecognitionSession;
+  const transcriber = new SpatialTranscriber(
+    () => 'token',
+    t.changed,
+    t.request as typeof fetch,
+    new LiveRecorder(t.capture as unknown as SpeechCapture),
+    () => browser,
+  );
+  await transcriber.start(t.stream, {
+    id: 'browser-1',
+    name: 'Browser',
+    provider: 'browser',
+    language: 'en-US',
+  });
+  expect(browser.start).toHaveBeenCalledWith('en-US', expect.any(Object));
+  expect(t.capture.start).not.toHaveBeenCalled();
+  events.onPartial('unconfirmed');
+  expect(t.request).not.toHaveBeenCalled();
+  events.onFinal('confirmed');
+  await vi.waitFor(() =>
+    expect(t.request).toHaveBeenCalledWith(
+      expect.stringContaining('/chat/spatial/1/text'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ text: 'confirmed' }),
+      }),
+    ),
+  );
+  await vi.waitFor(() =>
+    expect(t.changed).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'confirmed' }),
+    ),
+  );
+  transcriber.stop();
+  expect(browser.cancel).toHaveBeenCalled();
 });

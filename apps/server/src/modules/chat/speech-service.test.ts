@@ -3,6 +3,8 @@ import type { Player } from '@voxel/shared';
 import type { LocalSpeech } from '../audio/asr/local-speech';
 import { WorldChat } from './chat';
 import { ChatSpeechService } from './speech-service';
+import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import type { AsrSettingsStore } from '../audio/asr/asr-settings';
 
 const player = (id: string): Player => ({
   id,
@@ -31,6 +33,7 @@ function setup() {
     emit,
     normalize,
     transcribe,
+    speech,
     service: new ChatSpeechService(speech),
   };
 }
@@ -101,5 +104,77 @@ describe('chat speech coordination', () => {
     ).resolves.toMatchObject({ scope: 'nearby', text: 'hello' });
     expect(emit).toHaveBeenCalledOnce();
     expect(() => chat.claimSpatial('actor', id)).toThrow();
+  });
+
+  it('uses and releases the selected Whisper profile for nearby transcription', async () => {
+    const { chat, token, bytes, transcribe, speech } = setup();
+    const release = vi.fn();
+    const settings = {
+      ...DEFAULT_WHISPER_ASR,
+      id: 'selected',
+      name: 'Selected Whisper',
+      provider: 'whisper' as const,
+    };
+    const store = {
+      acquire: vi.fn(() => ({ settings, release })),
+    } as unknown as AsrSettingsStore;
+    const service = new ChatSpeechService(speech, store);
+    const id = chat.beginSpatial('actor');
+    await service.transcribeSpatial({
+      chat,
+      actor: 'actor',
+      id,
+      bytes,
+      contentType: 'audio/wav',
+      partial: false,
+      serviceId: 'selected',
+      token,
+      signal: new AbortController().signal,
+    });
+    expect(store.acquire).toHaveBeenCalledWith('selected');
+    expect(transcribe).toHaveBeenCalledWith(
+      bytes,
+      'audio/wav',
+      'zh',
+      expect.any(AbortSignal),
+      settings,
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('uses and releases the selected Whisper profile for recorded chat audio', async () => {
+    const { chat, token, bytes, transcribe, speech } = setup();
+    const release = vi.fn();
+    const settings = {
+      ...DEFAULT_WHISPER_ASR,
+      id: 'recording-whisper',
+      name: 'Recording Whisper',
+      provider: 'whisper' as const,
+    };
+    const store = {
+      acquire: vi.fn(() => ({ settings, release })),
+    } as unknown as AsrSettingsStore;
+    const service = new ChatSpeechService(speech, store);
+    const data = await service.publishAudio({
+      chat,
+      actor: 'actor',
+      route: { scope: 'public', recipients: [] },
+      bytes,
+      contentType: 'audio/wav',
+      language: 'zh',
+      serviceId: 'recording-whisper',
+      token,
+      signal: new AbortController().signal,
+    });
+    expect(data.transcriptAvailable).toBe(true);
+    expect(store.acquire).toHaveBeenCalledWith('recording-whisper');
+    expect(transcribe).toHaveBeenCalledWith(
+      bytes,
+      'audio/wav',
+      'zh',
+      expect.any(AbortSignal),
+      settings,
+    );
+    expect(release).toHaveBeenCalledOnce();
   });
 });

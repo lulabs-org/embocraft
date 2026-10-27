@@ -50,7 +50,7 @@ export function ChatPanel({
     preview,
     input,
     upload,
-    dictation,
+    finishDictation,
     recorder,
     connected,
     busy,
@@ -124,7 +124,9 @@ export function ChatPanel({
           ref={entry}
           className="chat-entry"
           aria-label={t('chat.expandAria', {
-            unread: unread ? `，${t('chat.unreadCount', { count: unread })}` : '',
+            unread: unread
+              ? `，${t('chat.unreadCount', { count: unread })}`
+              : '',
           })}
           aria-expanded={expanded}
           onClick={() => onExpandedChange(true)}
@@ -140,7 +142,11 @@ export function ChatPanel({
       <div className="chat-expanded" hidden={collapsed}>
         <div className="chat-title">
           <strong>{t('chat.title')}</strong>
-          <div className="chat-scope" role="group" aria-label={t('chat.sendMode')}>
+          <div
+            className="chat-scope"
+            role="group"
+            aria-label={t('chat.sendMode')}
+          >
             <button
               type="button"
               aria-label={t('chat.publicLabel')}
@@ -178,7 +184,10 @@ export function ChatPanel({
         </div>
         <ChatMessages {...controller} />
         {recipients.length > 0 && (
-          <div className="chat-recipients" aria-label={t('chat.selectedRecipientsAria')}>
+          <div
+            className="chat-recipients"
+            aria-label={t('chat.selectedRecipientsAria')}
+          >
             <span className="recipient-label">
               {scope === 'private' ? t('chat.sendTo') : t('chat.remind')}
             </span>
@@ -314,7 +323,7 @@ export function ChatPanel({
               onClick={() => {
                 if (mode === 'dictating') {
                   setMode('transcribing');
-                  void dictation.finish();
+                  finishDictation();
                 } else recorder.finish();
               }}
             >
