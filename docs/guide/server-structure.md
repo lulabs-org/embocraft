@@ -4,7 +4,7 @@
 
 ::: tip 核心设计原则
 1. **Core 与 Modules 严格分立**：非业务的通用平台底座统一收归 `src/core/`；所有具体沙盒与智能体业务逻辑严格在 `src/modules/<domain>/` 内部自闭环。
-2. **领域持久化各自闭环**：业务模块自身的存储与存档（如快照、配置归档）归入对应模块的 `persistence/`，不混淆为顶层通用持久化。
+2. **持久化职责清晰分层**：单一模块私有数据存储严格内聚于各模块的 `persistence/`；跨模块协调的全局状态快照与数据库驱动统一下沉至 `src/persistence/`。
 3. **业务路由内聚装配**：业务接口由各模块内部自治管理并导出挂载契约，顶层 `app.ts` / `server.ts` 仅负责声明式装配。
 4. **统一模块门面导出**：所有模块对外统一通过根部 `index.ts` 暴露公共接口，严禁跨模块深层相对路径引用（No Deep Import）。
 5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务统一为 `*.service.ts`；单测文件严格与源码同目录就近共置（`*.test.ts`）。
@@ -20,8 +20,8 @@
 
 ```text
 apps/server/
-├── prisma/                              # Prisma ORM 定义与迁移（PostgreSQL 领域存储）
-│   └── schema.prisma                    # World 状态与 BlockEdit 增量编辑历史表
+├── prisma/                              # Prisma ORM 定义与迁移（PostgreSQL 全局领域存储）
+│   └── schema.prisma                    # 全局关系表定义（World/BlockEdit、Provider、Character、Task/Run、TTS/ASR）
 ├── package.json                         # 服务端运行时与依赖
 ├── tsconfig.json                        # TypeScript 规范
 └── src/
@@ -153,7 +153,7 @@ apps/server/
         ├── providers/                   # ── 6. 大模型提供商管理（DDD 标杆） ──
         │   ├── adapters/                # 外部适配器（健康探测、模型目录）
         │   ├── domain/                  # 实体、规范、纯校验函数
-        │   ├── persistence/             # providers.json 文件仓储
+        │   ├── persistence/             # 提供商仓储（PostgreSQL 数据库主干 + providers.json 兼容实现）
         │   ├── services/                # 核心业务服务与事件
         │   │   ├── provider.service.ts  # 提供商生命周期与健康检测调度
         │   │   └── events.ts
@@ -217,7 +217,7 @@ apps/server/
 ### 2.1 模块标准分层拓扑
 - **`domain/`（纯规则与实体）**：实体契约、纯数学计算与无状态编解码（如音频 PCM 规整、方块空间校验），**100% 零外部依赖与零 Mock 毫秒级单测**。
 - **`services/`（业务流程与调度引擎）**：核心业务调度、状态机协调、外部厂商引擎适配（如 Whisper/Piper/百炼）。
-- **`persistence/`（可选，状态持久化）**：若模块持有持久化数据，其文件存储或数据库访问严格内聚于此（如 `store.ts`、`providers.json` 仓储）。
+- **`persistence/`（可选，状态持久化）**：若模块持有独立持久化数据，其数据库访问或兼容文件存储严格内聚于此（如 `store.ts`、`database-repository.ts` 与兼容性 `file-repository.ts`）。
 - **`routes/`（HTTP API 路由）**：模块对外的所有 REST 接口声明，统一命名为 `*.routes.ts`，由 `src/app.ts` 集中挂载。
 - **`sockets/`（可选，WebSocket 端点）**：若模块提供对外实时流式通信（如 `audio`, `gateway`），统一放入 `sockets/` 目录或按规范命名为 `*.socket.ts`。
 - **`ports.ts`（可选，依赖端口抽象）**：外部依赖契约反转接口，实现 Clean Architecture 解耦。
@@ -331,7 +331,7 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 
 ## 4. 数据库与持久化可靠性标准（Database & Persistence Standards）
 
-服务端兼具 PostgreSQL 关系型持久化与文件型 JSON 状态归档，各自遵循严谨的可靠性设计：
+服务端全面以 PostgreSQL 作为生产核心数据源（Single Source of Truth），同时为离线开发和测试提供文件型 JSON 兼容层，各自遵循严谨的可靠性设计：
 
 ### 4.1 Prisma 与 PostgreSQL 持久化与健康检查策略
 - **统一数据库基础设施（`core/database/client.ts`）**：
