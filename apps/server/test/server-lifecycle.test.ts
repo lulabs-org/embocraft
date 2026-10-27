@@ -10,7 +10,7 @@ import { env } from '../src/core/config/env';
 import { FileProviderRepository } from '../src/modules/providers';
 import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
 import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';
-import { whisperModelsDirectory } from '../src/modules/audio/asr/whisper-settings';
+import { whisperModelsDirectory } from '../src/modules/audio/services/asr/whisper-settings';
 import { join } from 'node:path';
 import { WorldStore } from '../src/modules/world/persistence/store';
 

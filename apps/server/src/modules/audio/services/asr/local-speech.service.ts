@@ -1,6 +1,6 @@
-import { env } from '../../../core/config/env';
-import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../speech-endpoint';
+import { env } from '../../../../core/config/env';
+import { AppError } from '../../../../core/errors/app-error';
+import { speechEndpoint } from '../../speech-endpoint';
 import type { WhisperAsrSettings } from '@voxel/shared';
 import { whisperModelPath } from './whisper-settings';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -10,14 +10,14 @@ import {
   executable,
   runCommand,
   type CommandRunner,
-} from '../services/processing/command';
-import { validatePcmWav } from '../domain/pcm-wav';
+} from '../processing/command';
+import { validatePcmWav } from '../../domain/pcm-wav';
 import {
   audioFormats,
   MAX_AUDIO_BYTES,
   normalizeRecording,
   convertToPcmWav,
-} from '../services/processing/normalize';
+} from '../processing/normalize';
 
 function whisperPrompt(language: string, settings?: WhisperAsrSettings) {
   return (

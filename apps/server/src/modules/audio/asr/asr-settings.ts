@@ -8,7 +8,7 @@ import {
   type AsrServiceDraft,
   type AsrServiceView,
 } from '@voxel/shared';
-import { validateWhisperSettings } from './whisper-settings';
+import { validateWhisperSettings } from '../services/asr/whisper-settings';
 import { AppError } from '../../../core/errors/app-error';
 
 export function validateAsrSettings(

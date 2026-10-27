@@ -5,8 +5,8 @@ export {
 export { AsrSettingsStore } from './asr/asr-settings';
 export { DatabaseAsrServicePersistence } from './asr/database-asr-services';
 export { installAsrSocket, type AsrBridge } from './sockets/asr.socket';
-export { LocalSpeech } from './asr/local-speech';
-export { scheduleSpeech } from './asr/speech-scheduler';
+export { LocalSpeech } from './services/asr/local-speech.service';
+export { scheduleSpeech } from './services/asr/speech-scheduler.service';
 export { createVoiceProvider, type VoiceProvider } from './services/sessions';
 export { VoiceSessions } from './services/sessions/voice-sessions.service';
 export { createSpatialSignaling } from './services/spatial/signaling.service';

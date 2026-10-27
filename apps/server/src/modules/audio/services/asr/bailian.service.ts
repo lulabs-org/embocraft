@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { AsrEvent, BailianAsrDraft } from '@voxel/shared';
-import { asrEndpoint } from './asr-settings';
+import { asrEndpoint } from '../../asr/asr-settings';
 
 function handshakeFailure(status: number | undefined) {
   if (status === 401)

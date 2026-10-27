@@ -6,7 +6,7 @@ import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { AsrSettingsStore } from '../asr/asr-settings';
-import { LocalSpeech } from '../asr/local-speech';
+import { LocalSpeech } from '../services/asr/local-speech.service';
 import { PiperModels } from '../tts/piper-models';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 

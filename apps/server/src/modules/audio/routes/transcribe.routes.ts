@@ -5,10 +5,10 @@ import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { AsrSettingsStore } from '../asr/asr-settings';
 import express, { type Express } from 'express';
-import { LocalSpeech } from '../asr/local-speech';
+import { LocalSpeech } from '../services/asr/local-speech.service';
 import { MAX_AUDIO_BYTES } from '../services/processing/normalize';
 import { AppError } from '../../../core/errors/app-error';
-import { scheduleSpeech } from '../asr/speech-scheduler';
+import { scheduleSpeech } from '../services/asr/speech-scheduler.service';
 export function installTranscribeRoutes(
   app: Express,
   speech = new LocalSpeech(),

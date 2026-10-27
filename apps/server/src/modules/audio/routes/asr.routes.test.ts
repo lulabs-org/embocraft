@@ -15,7 +15,7 @@ import { installAsrRoutes } from './asr.routes.ts';
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
 import { createAsrSocket } from '../sockets/asr.socket';
 import { installCapabilitiesRoutes } from './capabilities.routes';
-import { LocalSpeech } from '../asr/local-speech';
+import { LocalSpeech } from '../services/asr/local-speech.service';
 
 let server: Server,
   transport: RoutedWebSocketTransport,

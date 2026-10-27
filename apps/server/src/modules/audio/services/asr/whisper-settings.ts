@@ -1,8 +1,8 @@
-import { env } from '../../../core/config/env';
+import { env } from '../../../../core/config/env';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WhisperAsrSettings } from '@voxel/shared';
-import { AppError } from '../../../core/errors/app-error';
+import { AppError } from '../../../../core/errors/app-error';
 
 export const whisperModelsDirectory = env.dataPath('voice/');
 const modelName = /^ggml-[a-zA-Z0-9][a-zA-Z0-9._-]{0,90}\.bin$/;
