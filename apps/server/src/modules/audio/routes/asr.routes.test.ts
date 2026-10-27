@@ -10,12 +10,12 @@ import {
   DEFAULT_WHISPER_ASR,
   type BailianAsrDraft,
 } from '@voxel/shared';
-import { AsrSettingsStore } from './asr-settings';
+import { AsrSettingsStore } from '../asr/asr-settings';
 import { installAsrRoutes } from './asr.routes.ts';
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
-import { createAsrSocket } from './asr.socket';
-import { installCapabilitiesRoutes } from '../capabilities.routes';
-import { LocalSpeech } from './local-speech';
+import { createAsrSocket } from '../sockets/asr.socket';
+import { installCapabilitiesRoutes } from './capabilities.routes';
+import { LocalSpeech } from '../asr/local-speech';
 
 let server: Server,
   transport: RoutedWebSocketTransport,

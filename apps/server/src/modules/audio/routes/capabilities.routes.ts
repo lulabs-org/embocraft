@@ -1,14 +1,14 @@
-import { asyncRoute } from '../../core/http/middleware/async-route';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
 import cors from 'cors';
-import { env } from '../../core/config/env';
-import { createOriginGuard } from '../../core/http/middleware/origin-guard';
-import { AsrSettingsStore } from './asr/asr-settings';
-import { listWhisperModels } from './asr/whisper-settings';
+import { env } from '../../../core/config/env';
+import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
+import { AsrSettingsStore } from '../asr/asr-settings';
+import { listWhisperModels } from '../asr/whisper-settings';
 import type { Express } from 'express';
-import { LocalSpeech } from './asr/local-speech';
-import { AppError } from '../../core/errors/app-error';
-import { createVoiceProvider } from './session';
-import { PiperModels } from './tts/piper-models';
+import { LocalSpeech } from '../asr/local-speech';
+import { AppError } from '../../../core/errors/app-error';
+import { createVoiceProvider } from '../session';
+import { PiperModels } from '../tts/piper-models';
 export function installCapabilitiesRoutes(
   app: Express,
   speech = new LocalSpeech(),
