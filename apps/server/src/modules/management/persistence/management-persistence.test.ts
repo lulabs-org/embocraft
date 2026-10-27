@@ -2,24 +2,21 @@ import { emptyState } from '@voxel/agent-runtime';
 import { expect, it, vi } from 'vitest';
 import { DEFAULT_TASK_LIMITS } from '@voxel/shared';
 import { ManagementPersistence } from './management-persistence';
-import type { ManagementArchive } from './archive';
-import { ManagementEvents } from '../modules/management/events';
+import type { ManagementArchive } from '../domain/archive';
+import { ManagementEvents } from '../events';
 import {
   AICharacterRegistry,
   type Job,
-} from '../modules/ai-characters/runtime/job';
-import { AICharacterWakeScheduler } from '../modules/ai-characters/runtime/wake-scheduler';
-import { PlanService } from '../modules/tasks/persistence/service';
-import { newPlan, newRun } from '../modules/tasks/domain/model';
+  AICharacterWakeScheduler,
+  executionState,
+} from '../../ai-characters';
+import { CharacterSnapshots } from '../../ai-characters/persistence/snapshots';
+import { PlanService, TaskSnapshots, newPlan, newRun } from '../../tasks';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const plans = new PlanService();
   const committed = new PlanService();
   const events = new ManagementEvents();
-  const persistence = new ManagementPersistence(
-    { load: async () => undefined, save },
-    events,
-  );
   const jobs = new AICharacterRegistry();
   for (const id of ['a', 'b'])
     jobs.set(id, {
@@ -31,16 +28,36 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const scheduler = new AICharacterWakeScheduler();
   const cancel = vi.spyOn(scheduler, 'cancel');
   const presence = new Map<string, 'idle'>();
-  const persist = () =>
-    persistence.persist(
-      jobs,
-      plans,
-      committed,
-      scheduler,
-      () =>
-        [...jobs.values()].map((job) => structuredClone(job.view)).reverse(),
-      presence,
-    );
+  const characters = new CharacterSnapshots();
+  const tasks = new TaskSnapshots();
+  const persistence = new ManagementPersistence(
+    { load: async () => undefined, save },
+    events,
+    {
+      characters,
+      tasks,
+      captureExecutions: () =>
+        tasks.captureExecutions([...jobs.values()].map(executionState)),
+      captureCharacters: () =>
+        characters.capture(
+          jobs,
+          () =>
+            [...jobs.values()]
+              .map((job) => structuredClone(job.view))
+              .reverse(),
+          presence,
+        ),
+      captureTasks: () => tasks.capture(plans),
+      rejectTasks: (snapshot) => tasks.reject(snapshot, committed),
+      rejectCharacters: (records, affected) =>
+        characters.reject(records, jobs, affected, (id) =>
+          scheduler.cancel(id),
+        ),
+      commitCharacters: (records, views) => characters.commit(records, views),
+      restoreTasks: (snapshot) => tasks.restore(committed, snapshot),
+    },
+  );
+  const persist = () => persistence.persist();
   return {
     plans,
     committed,

@@ -11,9 +11,9 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readManagementArchive, writeManagementArchive } from './archive-file';
-import type { ManagementArchive } from './archive';
+import type { ManagementArchive } from '../domain/archive';
 import { migrateArchive } from './migrate-archive';
-import { newPlan, newRun } from '../modules/tasks';
+import { newPlan, newRun } from '../../tasks';
 import { DEFAULT_TASK_LIMITS } from '@voxel/shared';
 
 vi.mock('node:fs/promises', async (importOriginal) => {

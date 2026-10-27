@@ -1,7 +1,27 @@
-import type { TaskPlan } from '@voxel/shared';
-import type { StoredRun } from '../modules/tasks/domain/types';
-import type { CharacterRecord } from '../modules/ai-characters/persistence/record';
-export type { CharacterRecord } from '../modules/ai-characters/persistence/record';
+import type { AICharacterView, TaskPlan, TaskRun } from '@voxel/shared';
+import type { AgentRunState } from '@voxel/agent-runtime';
+
+type StoredRun = TaskRun & {
+  runtime?: AgentRunState;
+  accountedTokens: number;
+  requestId?: string;
+  lastBatch?: string;
+};
+
+type LegacyTaskBook = {
+  version: 1;
+  plans: TaskPlan[];
+  runs: StoredRun[];
+  currentRunId?: string;
+  requests?: Record<string, string>;
+};
+
+/** Archive wire shape. The owning modules use structurally matching runtime types. */
+export type CharacterRecord = AICharacterView & {
+  runtime?: AgentRunState;
+  taskBook?: LegacyTaskBook;
+  currentRunId?: string;
+};
 
 export type ManagementArchive = {
   version: 2 | 3;
