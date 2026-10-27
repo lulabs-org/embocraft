@@ -2,7 +2,7 @@ import { it, expect, vi, afterEach } from 'vitest';
 
 import { OllamaVoiceProvider } from './ollama';
 
-import type { VoiceEvent } from './types';
+import type { VoiceEvent } from '../domain/types';
 
 afterEach(() => vi.useRealTimers());
 

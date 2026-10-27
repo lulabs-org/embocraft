@@ -66,6 +66,8 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `spatial/signaling.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。音频引擎、会话与持久化目录将在后续批次整理。
 
+`audio/domain/types.ts` 集中语音状态、事件、输入、会话与 Provider 契约，`session/index.ts` 保留原有类型重导出，audio 根部门面保持不变。`domain/pcm-wav.ts` 只执行无 I/O 的 PCM WAV 格式、时长与音量校验，复用通用 `AppError`，不负责 WAV 封包。`services/processing/` 集中 `normalize.ts`、`command.ts` 及已有测试，负责 FFmpeg、子进程与临时文件处理；转换参数、时长限制、超时、取消、错误语义及清理行为保持不变。
+
 `AgentSpeech` 位于 `modules/audio/tts/agent-speech.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
 
 ## 状态与测试

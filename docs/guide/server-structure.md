@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频领域规则、引擎、会话与持久化的目录仍待后续整理。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频会话类型与 PCM 校验已归入 `audio/domain/`，音频处理与就近测试已归入 `audio/services/processing/`；音频引擎、会话实现与持久化的目录仍待后续整理。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -97,12 +97,14 @@ apps/server/
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
         ├── audio/                       # ── 2. 全双工音频管线与语音引擎 ──
-        │   ├── domain/                  # 纯音频领域实体、模型与 DSP 编解码（零外部依赖）
-        │   │   ├── types.ts             # 音频会话/转写/合成核心契约与类型
-        │   │   └── pcm-wav.ts           # PCM WAV 校验与标准 WAV 封包纯函数
+        │   ├── domain/                  # 音频会话契约与无 I/O 的校验规则
+        │   │   ├── types.ts             # 语音状态、事件、输入、会话与 Provider 契约
+        │   │   └── pcm-wav.ts           # PCM WAV 格式、时长与音量校验（复用 AppError）
         │   ├── services/                # 具体的音频服务调度与引擎实现
         │   │   ├── processing/          # FFmpeg 转码与临时文件生命周期（有 I/O）
-        │   │   │   └── normalize.ts     # 录音/合成音频规整，复用 domain 的 WAV 校验
+        │   │   │   ├── command.ts       # 子进程执行与可执行文件查找
+        │   │   │   ├── normalize.ts     # 录音/合成音频规整，复用 domain 的 WAV 校验
+        │   │   │   └── normalize.test.ts
         │   │   ├── asr/                 # 语音识别引擎（Whisper 本地识别、百炼云端流式 ASR）
         │   │   │   ├── whisper.service.ts
         │   │   │   ├── bailian.service.ts
@@ -237,7 +239,7 @@ apps/server/
 每个业务模块均遵循统一的标准水平分层组织逻辑，包含以下核心要素：
 
 ### 2.1 模块标准分层拓扑
-- **`domain/`（纯规则与实体）**：实体契约、纯数学计算与无状态编解码（如音频 PCM 规整、方块空间校验），**100% 零外部依赖与零 Mock 毫秒级单测**。
+- **`domain/`（纯规则与实体）**：实体契约、纯数学计算与无 I/O 的校验（如 PCM WAV 校验、方块空间校验），可复用通用类型与 `AppError`，不访问网络、文件系统或数据库；规则测试无需 I/O Mock。
 - **`services/`（业务流程与调度引擎）**：核心业务调度、状态机协调、外部厂商引擎适配（如 Whisper/Piper/百炼）。
 - **`persistence/`（可选，状态持久化）**：若模块持有独立持久化数据，其数据库访问或兼容文件存储严格内聚于此（如 `store.ts`、`database-repository.ts` 与兼容性 `file-repository.ts`）。
 - **`routes/`（HTTP API 路由）**：模块对外的所有 REST 接口声明，统一命名为 `*.routes.ts`，由 `src/app.ts` 集中挂载。
@@ -438,8 +440,10 @@ graph LR
 
 音频模块实现了实时多模态交互全双工闭环，遵循标准分层架构：
 
-- **领域音频规则（目标 `domain/`）**：
-  WAV 封包与校验等纯内存操作归领域层（`pcm-wav.ts`）。当前 `processing/normalize.ts` 使用临时文件与 FFmpeg 进行采样率、位深和声道转换，属于有 I/O 的服务流程，应迁入服务或适配层，不能直接归入纯领域层。
+- **领域音频规则（`domain/`）**：
+  `types.ts` 定义语音状态、事件、输入、会话与 Provider 契约，`session/index.ts` 保留原有类型重导出。`pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；它不负责 WAV 封包，也不执行 I/O。
+- **音频处理（`services/processing/`）**：
+  `normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行与可执行文件查找，已有测试随源码共置。录音与合成音频各自的参数、时长限制、超时、取消传播和清理行为保持不变。
 - **多引擎服务调度（目标 `services/`）**：
   - **ASR 识别引擎**：支持通过配置在 Whisper 本地离线识别与阿里云百炼 WebSocket 双工流式识别之间平滑切换；
   - **TTS 合成引擎**：支持本地 Piper 离线轻量音色（优先低延迟）与远端大模型 TTS 服务按需调度；

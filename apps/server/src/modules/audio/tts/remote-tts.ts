@@ -1,4 +1,4 @@
-import { normalizeSpeech } from '../processing/normalize';
+import { normalizeSpeech } from '../services/processing/normalize';
 import type { VoiceServiceDraft } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import type { SpeechSynthesizer } from './speech-synthesizer';

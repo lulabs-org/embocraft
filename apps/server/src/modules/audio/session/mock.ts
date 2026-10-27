@@ -3,7 +3,7 @@ import type {
   VoiceProvider,
   VoiceSession,
   VoiceState,
-} from './types';
+} from '../domain/types';
 
 export class MockVoiceProvider implements VoiceProvider {
   readonly id = 'mock-text-no-audio';

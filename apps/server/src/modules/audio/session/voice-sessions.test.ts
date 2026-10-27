@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { VoiceSessions } from './voice-sessions';
-import type { VoiceProvider, VoiceSession } from './types';
+import type { VoiceProvider, VoiceSession } from '../domain/types';
 
 function fixture() {
   const opened: VoiceSession[] = [];

@@ -2,7 +2,7 @@ import { createTestServer } from '../helpers/test-server';
 import assert from 'node:assert/strict';
 import { AgentSpeech } from '../../src/modules/audio/tts/agent-speech';
 import { PiperTts } from '../../src/modules/audio/tts/piper-tts';
-import { validatePcmWav } from '../../src/modules/audio/processing/pcm-wav';
+import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
 import { Session, until, delay } from '@voxel/agent-runtime';
 import type { AgentSpeechEvent } from '@voxel/shared';
 process.env.DATABASE_URL = '';

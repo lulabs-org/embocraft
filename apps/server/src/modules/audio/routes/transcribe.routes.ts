@@ -6,7 +6,7 @@ import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { AsrSettingsStore } from '../asr/asr-settings';
 import express, { type Express } from 'express';
 import { LocalSpeech } from '../asr/local-speech';
-import { MAX_AUDIO_BYTES } from '../processing/normalize';
+import { MAX_AUDIO_BYTES } from '../services/processing/normalize';
 import { AppError } from '../../../core/errors/app-error';
 import { scheduleSpeech } from '../asr/speech-scheduler';
 export function installTranscribeRoutes(
