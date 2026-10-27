@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import { tmpdir } from 'node:os';
 
-import { VoiceServiceStore, validateVoiceService } from './voice-services';
+import { VoiceServiceStore, validateVoiceService } from './voice-service-store';
 
 import { PiperTts } from '../services/tts/piper.service';
 

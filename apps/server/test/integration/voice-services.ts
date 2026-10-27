@@ -18,7 +18,7 @@ import {
   FileProviderRepository,
   bootstrapProviders,
 } from '../../src/modules/providers';
-import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
+import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
 import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
 
 process.env.DATABASE_URL = '';

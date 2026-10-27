@@ -5,7 +5,7 @@ import { createServer, type Server } from 'node:http';
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import { AsrSettingsStore } from '../asr/asr-settings';
+import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { LocalSpeech } from '../services/asr/local-speech.service';
 import { PiperModels } from '../services/tts/piper-models.service';
 import { installCapabilitiesRoutes } from './capabilities.routes';

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 
 import { join } from 'node:path';
 
-import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
+import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
 
 import { AgentSpeech } from '../src/modules/audio/services/tts/agent-speech.service';
 

@@ -6,10 +6,10 @@ import { DatabaseProviderRepository } from '../src/modules/providers/persistence
 import { bootstrapProviders } from '../src/modules/providers/bootstrap';
 import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { AICharacterManager } from '../src/modules/ai-characters';
-import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
-import { DatabaseVoiceServicePersistence } from '../src/modules/audio/tts/database-voice-services';
-import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';
-import { DatabaseAsrServicePersistence } from '../src/modules/audio/asr/database-asr-services';
+import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
+import { DatabaseVoiceServicePersistence } from '../src/modules/audio/persistence/database-voice-services';
+import { AsrSettingsStore } from '../src/modules/audio/persistence/asr-settings-store';
+import { DatabaseAsrServicePersistence } from '../src/modules/audio/persistence/database-asr-services';
 import type { ManagementArchive } from '../src/persistence/archive';
 import { createServer } from '../src/server';
 import { env } from '../src/core/config';

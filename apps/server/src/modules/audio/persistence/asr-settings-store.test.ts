@@ -6,7 +6,7 @@ import {
   AsrSettingsStore,
   asrEndpoint,
   validateAsrSettings,
-} from './asr-settings';
+} from './asr-settings-store';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 const dirs: string[] = [];
 afterEach(async () => {

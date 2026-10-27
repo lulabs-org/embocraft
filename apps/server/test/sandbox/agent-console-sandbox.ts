@@ -10,7 +10,7 @@ import {
   FileProviderRepository,
   bootstrapProviders,
 } from '../../src/modules/providers';
-import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
+import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
 process.env.DATABASE_URL = '';
 process.env.VOICE_PROVIDER = 'mock';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5189';
