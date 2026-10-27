@@ -111,7 +111,7 @@ graph TD
     Colyseus --> Room["define('world', WorldRoom)"]
 
     ACM -.->|tasks| Tasks["tasks 模块"]
-    ACM -.->|events| Events["management/events"]
+    ACM -.->|events| Events["management/services/events.service"]
     PS --> ACM
     VS --> ACM
     PS --> MC
@@ -131,7 +131,7 @@ graph TB
         World["world<br/>room · schema · terrain<br/>store · validation · routes"]
         AIC["ai-characters<br/>domain · services<br/>persistence · routes"]
         Tasks["tasks<br/>domain · services（scheduler/coordinator/execution）<br/>persistence · routes · ports"]
-        Mgmt["management<br/>command-router · commands · events"]
+        Mgmt["management<br/>services（command-router · commands · events · public-error）<br/>routes"]
         GW["gateway<br/>auth · socket · validation"]
         Prov["providers<br/>store · catalog · validation · routes"]
         Chat["chat<br/>domain（visibility） · services<br/>routes（chats.routes）"]
@@ -432,7 +432,7 @@ sequenceDiagram
     participant Console as Web 控制台 / CLI
     participant GW as /ai-characters/gateway
     participant Auth as GatewayAuth
-    participant Router as management/command-router
+    participant Router as management/services/command-router.service
     participant ACM as AICharacterManager
     participant Tasks as tasks 模块
 

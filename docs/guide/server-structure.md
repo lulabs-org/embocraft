@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -146,12 +146,12 @@ apps/server/
         │   └── index.ts                 # 暴露 GatewayAuth, installGatewaySocket
         │
         ├── management/                  # ── 5. 统一管理控制台与指令/事件总线 ──
-        │   ├── domain/                  # 控制台指令契约与回执模型
-        │   │   └── command.ts           # 指令回执状态（pending/committed/rejected）与请求模型
         │   ├── services/                # CQRS 指令与事件调度总线
-        │   │   ├── command-router.service.ts # 指令路由器（泳道并发隔离与 FIFO 队列）
+        │   │   ├── command-router.service.ts # 为 core 的通用队列提供管理错误策略
         │   │   ├── commands.service.ts       # 控制台修改命令执行器与 Idempotency-Key 幂等校验
-        │   │   └── events.service.ts         # 全双工管理事件广播总线（Diff 计算与 WebSocket 推送）
+        │   │   ├── commands.service.test.ts
+        │   │   ├── events.service.ts         # 快照差异计算与订阅者通知
+        │   │   └── public-error.ts           # 管理错误到公开响应数据的映射
         │   ├── routes/                  # 控制台 HTTP 路由与守卫
         │   │   ├── management.http.ts        # 管理 HTTP 管线、共享命令实例与注入式路由装配
         │   │   ├── managements.routes.ts     # /management/commands/:id 回执查询
@@ -414,7 +414,9 @@ graph LR
 ```
 
 - **统一变更指令入口（Command Bus）**：
-  所有对 Character、Provider、Task 的状态修改，统一经过 `ManagementCommands` / `command-router.ts` 分发处理，杜绝外部散乱调用底层 Service。该总线纯粹负责应用层指令路由、泳道并发隔离与幂等校验，与底层存储持久化彻底解耦。
+  所有对 Character、Provider、Task 的状态修改，统一经过 `ManagementCommands` / `services/command-router.service.ts` 分发处理，杜绝外部散乱调用底层 Service。该总线纯粹负责应用层指令路由、泳道并发隔离与幂等校验，与底层存储持久化彻底解耦。
+- **队列与契约归属**：
+  通用排队、指纹计算和内部回执状态由 `core/concurrency/command-queue.ts` 负责；`CommandRouter` 注入管理错误策略，`ManagementCommands` 处理 HTTP 请求与执行前校验。公共 `CommandReceipt`、`ManagementErrorData` 和 `ManagementError` 继续由 `@voxel/shared/management` 定义，management 模块通过 `services/public-error.ts` 映射错误，不重复声明公共回执模型。
 - **命令指纹规整与输入校验**：
   `tasks/domain/command-policy.ts` 的 `taskCommandBody` 仅从幂等指纹中剔除 `expectedTask`、`expectedPlanRevision`，使重试可以沿用原回执；它不修改实际请求体，也不执行字段白名单校验。输入合法性及执行前置条件仍由任务领域校验和服务层负责。
 - **全双工审计与通知总线（`ManagementEvents`）**：

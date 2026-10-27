@@ -1,9 +1,9 @@
-import { CommandQueue } from '../../core/concurrency/command-queue';
+import { CommandQueue } from '../../../core/concurrency/command-queue';
 import {
   ManagementError,
   type ManagementErrorData,
 } from '@voxel/shared/management';
-import { publicError } from './errors';
+import { publicError } from './public-error';
 
 export class CommandRouter extends CommandQueue<ManagementErrorData> {
   constructor() {
