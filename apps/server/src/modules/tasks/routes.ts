@@ -1,8 +1,16 @@
-import { ManagementCommands } from '../management';
 import type { Express, Request } from 'express';
 import { asyncRoute as route } from '../../core/http/middleware/async-route';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import type { TaskPort } from './port';
+
+type CommandExecutor = {
+  execute<T>(
+    request: Request,
+    lane: string,
+    action: (commandId: string) => Promise<T>,
+    validate?: () => void,
+  ): Promise<T>;
+};
 
 /** 命令重试沿用首次请求的 requestId，缺省时注入本次命令 ID */
 function withRequestId(
@@ -23,7 +31,7 @@ function queryText(value: unknown): string | undefined {
 export function installTaskRoutes(
   app: Express,
   tasks: TaskPort,
-  commands: ManagementCommands,
+  commands: CommandExecutor,
 ) {
   // ---------------------------------------------------------------------------
   // 任务计划与执行运行的 HTTP 适配

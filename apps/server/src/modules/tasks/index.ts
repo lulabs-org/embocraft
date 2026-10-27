@@ -8,6 +8,11 @@ export { taskCommandBody } from './command-policy';
 // 3. 仓储与内存存储服务
 export { TaskPlanService, PlanService } from './persistence/service';
 export { restoreTaskExecution, restoreTaskMemory } from './persistence/restore';
+export { TaskSnapshots } from './persistence/snapshots';
+export {
+  migrateBinding,
+  migrateCharacterTasks,
+} from './persistence/archive-migration';
 
 // 4. 定时调度器
 export { TaskScheduler } from './runtime/scheduler';

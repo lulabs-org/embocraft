@@ -96,7 +96,7 @@ it('keeps infrastructure independent of business modules and modules independent
     const name = relative(root, file);
     for (const dep of deps) {
       const target = relative(root, dep);
-      if (target.startsWith('modules/') && !name.startsWith('persistence/')) {
+      if (target.startsWith('modules/')) {
         const domain = target.split('/')[1];
         const owner = name.startsWith('modules/')
           ? name.split('/')[1]
@@ -164,14 +164,6 @@ it('keeps infrastructure independent of business modules and modules independent
           target.startsWith('modules/management/'),
           `${name} -> ${target}`,
         ).toBe(false);
-      if (
-        name.startsWith('modules/management/') &&
-        target.startsWith('persistence/')
-      )
-        // Event snapshot comparison is the remaining joint-commit dependency, handled separately.
-        expect(`${name} -> ${target}`).toBe(
-          'modules/management/events.ts -> persistence/archive.ts',
-        );
     }
     if (!name.startsWith('core/config/'))
       expect(readFileSync(file, 'utf8'), name).not.toMatch(/process\.env/);

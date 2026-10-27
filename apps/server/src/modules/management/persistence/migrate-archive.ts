@@ -1,13 +1,10 @@
-import { AppError } from '../core/errors/app-error';
+import { AppError } from '../../../core/errors/app-error';
 import type {
   CharacterRecord,
   ManagementArchive,
   LegacyAgentArchive,
-} from './archive';
-import {
-  migrateBinding,
-  migrateCharacterTasks,
-} from '../modules/tasks/persistence/archive-migration';
+} from '../domain/archive';
+import { migrateBinding, migrateCharacterTasks } from '../../tasks';
 
 /** Pure, repeatable migration; disk backup and atomic replacement belong to the host. */
 export function migrateArchive(

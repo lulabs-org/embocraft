@@ -1,4 +1,9 @@
-import { migrateArchive } from '../../../persistence/migrate-archive';
+import {
+  ManagementEvents,
+  ManagementPersistence,
+  migrateArchive,
+  type ArchivePort,
+} from '../../management';
 import { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
 import { appendAICharacterLog } from '../domain/activity-log';
 import {
@@ -8,8 +13,6 @@ import {
 import { randomUUID } from 'node:crypto';
 import { emptyState } from '@voxel/agent-runtime';
 import type { ProviderRuntimePort, SavedProvider } from '../../providers';
-import type { ArchivePort } from '../../../persistence/archive';
-import { ManagementEvents } from '../../management';
 import {
   AgentAttention,
   nextIntervalMs,
@@ -40,19 +43,23 @@ import {
   markOffline,
   modelChanged,
   TaskCoordinator,
+  TaskSnapshots,
 } from '../../tasks';
 import { executionState } from '../runtime/task-adapter';
 import { restoreAICharacterJob } from '../persistence/restore';
 import { AICharacterHost } from '../runtime/character-host';
 import type { ExecutionContext } from '../runtime/execution-context';
-import { ManagementPersistence } from '../../../persistence/management-persistence';
+import { CharacterSnapshots } from '../persistence/snapshots';
 import { CharacterVoiceCoordinator } from './voice-coordinator';
 
 export class AICharacterOrchestrator {
   readonly jobs = new AICharacterRegistry();
   readonly events = new ManagementEvents();
   readonly taskScheduler = new AICharacterWakeScheduler();
-  readonly persistence: ManagementPersistence;
+  readonly persistence: ManagementPersistence<
+    CharacterSnapshots,
+    TaskSnapshots
+  >;
   readonly tasks: TaskCoordinator;
   readonly voiceCoordinator: CharacterVoiceCoordinator;
 
@@ -68,7 +75,24 @@ export class AICharacterOrchestrator {
     readonly voiceServices: VoiceServicePort | undefined,
     private archive: ArchivePort,
   ) {
-    this.persistence = new ManagementPersistence(this.archive, this.events);
+    const characters = new CharacterSnapshots();
+    const tasks = new TaskSnapshots();
+    this.persistence = new ManagementPersistence(this.archive, this.events, {
+      characters,
+      tasks,
+      captureExecutions: () =>
+        tasks.captureExecutions([...this.jobs.values()].map(executionState)),
+      captureCharacters: () =>
+        characters.capture(this.jobs, () => this.list(), this.shutdownPresence),
+      captureTasks: () => tasks.capture(this.plans),
+      rejectTasks: (snapshot) => tasks.reject(snapshot, this.committedPlans),
+      rejectCharacters: (records, affected) =>
+        characters.reject(records, this.jobs, affected, (id) =>
+          this.taskScheduler.cancel(id),
+        ),
+      commitCharacters: (records, views) => characters.commit(records, views),
+      restoreTasks: (snapshot) => tasks.restore(this.committedPlans, snapshot),
+    });
     this.voiceCoordinator = new CharacterVoiceCoordinator(this.voiceServices);
     this.tasks = new TaskCoordinator({
       execution: (id) => executionState(this.taskJob(id)),
@@ -148,14 +172,7 @@ export class AICharacterOrchestrator {
   private persist() {
     // Shutdown also runs after failed startup; never replace unread/partially restored data.
     if (this.restoreFailed) return Promise.resolve();
-    return this.persistence.persist(
-      this.jobs,
-      this.plans,
-      this.committedPlans,
-      this.taskScheduler,
-      () => this.list(),
-      this.shutdownPresence,
-    );
+    return this.persistence.persist();
   }
 
   private save(): Promise<void> {

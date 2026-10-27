@@ -12,7 +12,7 @@ import { AsrSettingsStore } from '../../src/modules/audio/asr/asr-settings';
 import {
   readManagementArchive,
   writeManagementArchive,
-} from '../../src/persistence/archive-file';
+} from '../../src/modules/management';
 
 /** Production assembly with isolated disk/world and a random loopback port by default. */
 export async function createTestServer(

@@ -5,11 +5,8 @@ import {
   AICharacterOrchestrator,
   type AICharacterDependencies,
 } from './services/orchestrator';
-import type { ArchivePort } from '../../persistence/archive';
-import {
-  readManagementArchive,
-  writeManagementArchive,
-} from '../../persistence/archive-file';
+import type { ArchivePort } from '../management';
+import { readManagementArchive, writeManagementArchive } from '../management';
 
 /** Manager wrapper; production injects a database archive, legacy tests inject files. */
 export class AICharacterManager extends AICharacterOrchestrator {

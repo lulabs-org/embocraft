@@ -12,7 +12,7 @@
 
 ## 依赖方向
 
-`core` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`；顶层 `persistence` 的归档依赖将在归档归位时处理。
+`core` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
 
 | 目录                    | 责任                                                     |
 | ----------------------- | -------------------------------------------------------- |
@@ -23,7 +23,8 @@
 | `core/openapi`          | OpenAPI schema、Swagger 文档生成与 docs 路由             |
 | `core/transport`        | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭     |
 | `http`                  | 待迁移的管理请求策略与跨模块 HTTP 装配                   |
-| `persistence`           | 角色与任务联合存档、迁移、提交及失败处理                 |
+| `persistence`           | 待迁移的数据库客户端构造函数                             |
+| `modules/management`    | 角色与任务联合存档、迁移、提交及失败处理                 |
 | `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配           |
 | `modules/providers`     | 模型提供商持久化存储与模型列表服务                       |
 | `modules/tasks`         | 任务计划、运行历史与执行控制领域服务                     |
@@ -35,7 +36,7 @@
 | `modules/realtime`      | 百炼实时会话、工具确认与离线协议模拟器                   |
 | `modules/world`         | 权威物理房间、Schema、世界持久化与在线状态 SSE           |
 
-`local-speech.ts` 属于识别流程，保留在 `asr`。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`manager.ts`、`orchestrator.ts` 位于 `ai-characters` 模块，`provider-store.ts` 归属 `providers` 模块，`port.ts`、`service.ts`、`model.ts` 与 `scheduler.ts` 归属 `tasks` 模块。角色与任务的联合存档由 `persistence` 负责：先串行保存，再更新已提交视图并发布事件；存储失败时保留现有执行保护。
+`local-speech.ts` 属于识别流程，保留在 `asr`。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`manager.ts`、`orchestrator.ts` 位于 `ai-characters` 模块，`provider-store.ts` 归属 `providers` 模块，`port.ts`、`service.ts`、`model.ts` 与 `scheduler.ts` 归属 `tasks` 模块。角色与任务的联合存档由 `modules/management/persistence` 负责：先串行保存，再更新已提交视图并发布事件；存储失败时保留现有执行保护。角色和任务快照通过注入契约参与提交。
 
 业务错误与通用异常统一使用 `core/errors/app-error.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 扫描 `core/http`、`core/openapi` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
 

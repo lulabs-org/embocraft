@@ -1,9 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { AppError } from '../core/errors/app-error';
-import type { ArchivePort, ManagementArchive } from './archive';
-import type { CharacterRecord } from '../modules/ai-characters/persistence/record';
+import { AppError } from '../../../core/errors/app-error';
+import type { ArchivePort, ManagementArchive } from '../domain/archive';
 import type { TaskPlan } from '@voxel/shared';
-import type { StoredRun } from '../modules/tasks/domain/types';
 
 type SavedRow = {
   id: string;
@@ -91,9 +89,11 @@ export class DatabaseManagementArchive implements ArchivePort {
       ]);
       const archive: ManagementArchive = {
         version: 3,
-        characters: characters.map((row) => row.data as CharacterRecord),
+        characters: characters.map(
+          (row) => row.data as ManagementArchive['characters'][number],
+        ),
         plans: plans.map((row) => row.data as TaskPlan),
-        runs: runs.map((row) => row.data as StoredRun),
+        runs: runs.map((row) => row.data as ManagementArchive['runs'][number]),
         requests: Object.fromEntries(
           requests.map((row) => [row.key, row.planId]),
         ),
