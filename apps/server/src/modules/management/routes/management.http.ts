@@ -1,5 +1,5 @@
 import type { Express, RequestHandler } from 'express';
-import { ManagementCommands } from '../commands';
+import { ManagementCommands } from '../services/commands.service';
 import { installManagementRoutes } from './managements.routes';
 import { installManagementJsonRoutes } from './management-policy';
 
