@@ -8,7 +8,7 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { installTranscribeRoutes } from './transcribe.routes';
 import { LocalSpeech } from './local-speech';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore, dir: string;
   const transcribe = vi.fn();

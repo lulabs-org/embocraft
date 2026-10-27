@@ -6,7 +6,7 @@ import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { MANAGEMENT_EVENTS_VERSION } from '@voxel/shared/management';
 import { createTestServer } from './helpers/test-server';
 import { createServer } from '../src/server';
-import { env } from '../src/config/env';
+import { env } from '../src/core/config/env';
 import { FileProviderRepository } from '../src/modules/providers';
 import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
 import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';

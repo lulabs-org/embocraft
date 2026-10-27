@@ -7,8 +7,8 @@ import {
   type AICharacterPermissions,
   type AICharacterSkillId,
 } from '@voxel/shared';
-import { AppError } from '../../../common/errors';
-import { object, text, integer, boolean } from '../../../common/validation';
+import { AppError } from '../../../core/errors/app-error';
+import { object, text, integer, boolean } from '../../../core/http/validation';
 import { type SavedProvider } from '../../providers/domain/model';
 import {
   validateInferenceSettings,

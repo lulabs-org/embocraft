@@ -9,7 +9,7 @@
 4. **统一模块门面导出**：所有模块对外统一通过根部 `index.ts` 暴露公共接口，严禁跨模块深层相对路径引用（No Deep Import）。
 5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务统一为 `*.service.ts`；单测文件严格与源码同目录就近共置（`*.test.ts`）。
 6. **API 静态契约 100% 覆盖**：所有注册路由必须有对应的 OpenAPI JSDoc 注解，由 AST 静态分析自动拦截未文档化接口。
-7. **数据持久化安全保障**：PostgreSQL 启动前脱敏探测与双模降级；JSON 文件存储采用原子写入（Atomic Write）与版本化向前迁移。
+7. **数据持久化安全保障**：PostgreSQL 启动前脱敏探测与严格校验门禁；JSON 文件存储采用原子写入（Atomic Write）与版本化向前迁移。
 :::
 
 ---
@@ -329,16 +329,16 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 
 服务端兼具 PostgreSQL 关系型持久化与文件型 JSON 状态归档，各自遵循严谨的可靠性设计：
 
-### 4.1 Prisma 与 PostgreSQL 双模运行策略
+### 4.1 Prisma 与 PostgreSQL 持久化与健康检查策略
 - **统一数据库基础设施（`core/database/client.ts`）**：
   统一采用 `@prisma/adapter-pg` 构造连接池与 PrismaClient 单例管理，业务存储（如 `modules/world/persistence/store.ts`）必须复用该统一基础设施，严禁在业务模块内散乱 `new PrismaClient` 导致连接泄漏。
-- **启动前只读探活（`core/database/health.ts`）**：
-  在系统分配网络端口与 Colyseus 房间创建前，必须执行只读查询（`world.findFirst`）探活；如果数据库未准备好，立即阻断启动，防止 Colyseus 抛出二次崩溃。
+- **启动前全量探活与阻断门禁（`core/database/health.ts` / `startup.ts`）**：
+  在系统分配网络端口与 Colyseus 房间创建前，必须执行只读查询（依次检查 `world`、`agentProvider`、`agentCharacter`、`ttsService` 等关键表）进行探活；若数据库未准备好或未完成迁移，立即阻断启动，防止 Colyseus 抛出二次崩溃。
 - **连接异常安全脱敏**：
   数据库异常信息必须通过 `databaseStartupMessage` 进行过滤清洗，**绝不允许将带有数据库用户名、密码凭据的原始连接串输出到终端或网络响应中**；对于本地开发场景（`127.0.0.1:55432`），输出友好的修复提示（如 `pnpm db:start`）。
-- **双模降级保障（Dual-Mode Fallback）**：
-  - 若显式配置了 `DATABASE_URL`，必须连通成功，严禁发生连接错误时静默降级或吞错；
-  - 若未配置 `DATABASE_URL`，系统明确打印警告并平滑回退至**内存模式（In-Memory）**，方便无数据库依赖的轻量演示与快速调试。
+- **强依赖保障与防隐式降级（Fail-Fast Enforcement）**：
+  - 系统核心状态（World、Agent、Provider、TTS/ASR 等）全面依赖关系型持久化，**必须配置 `DATABASE_URL`**；
+  - 若未配置 `DATABASE_URL` 或连接检查失败，系统严格抛错终止启动，并输出明确的修复指导（如 `pnpm db:start` 或 `pnpm db:migrate`），**绝不静默吞错，也不会自动切换到内存模式**，杜绝无持久化下的数据隐式丢失。
 - **方块编辑乐观版本控制（CAS）**：
   `BlockEdit` 实体采用 `[worldId, x, y, z]` 复合主键，与 `World.revision` 协同工作，防止多人并发修改时的数据覆盖破坏。
 

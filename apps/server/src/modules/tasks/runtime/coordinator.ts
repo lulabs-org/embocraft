@@ -10,12 +10,12 @@ import {
 } from '../domain/model';
 import { TaskService, recordEvent, type TaskLease } from '@voxel/agent-runtime';
 import type { WorldEvent } from '@voxel/shared';
-import { CommandQueue } from '../../../common/command-queue';
+import { CommandQueue } from '../../../core/concurrency/command-queue';
 import { isRepeating } from '@voxel/shared';
 import { hasPlanTokenLimit } from '../domain/limits';
 import type { PlanQueryFilter } from '@voxel/shared/management';
-import { object } from '../../../common/validation';
-import { AppError } from '../../../common/errors';
+import { object } from '../../../core/http/validation';
+import { AppError } from '../../../core/errors/app-error';
 import type { TaskExecutionState, TaskHostPort } from './execution-port';
 import {
   commitExecution,

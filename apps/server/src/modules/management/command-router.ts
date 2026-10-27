@@ -1,4 +1,4 @@
-import { CommandQueue } from '../../common/command-queue';
+import { CommandQueue } from '../../core/concurrency/command-queue';
 import {
   ManagementError,
   type ManagementErrorData,

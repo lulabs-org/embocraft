@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { originAllowed } from '../../common/origin-policy';
+import { originAllowed } from '../origin-policy';
 
 /** Reject disallowed sources before CORS preflight or business handlers run. */
 export function createOriginGuard(options: {

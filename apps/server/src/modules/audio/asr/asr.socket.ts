@@ -1,11 +1,11 @@
 import type WebSocket from 'ws';
 import type { IncomingMessage } from 'node:http';
-import { env } from '../../../config/env';
-import { originAllowed } from '../../../common/origin-policy';
-import { AppError } from '../../../common/errors';
+import { env } from '../../../core/config/env';
+import { originAllowed } from '../../../core/http/origin-policy';
+import { AppError } from '../../../core/errors/app-error';
 import type { AsrSettingsStore } from './asr-settings';
 import { bridgeBailianAsr } from './bailian-asr';
-import type { SocketRoutes } from '../../../transport/socket-routes';
+import type { SocketRoutes } from '../../../core/transport/socket-routes';
 
 export type AsrBridge = Parameters<typeof createAsrSocket>[1];
 

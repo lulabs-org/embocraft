@@ -1,5 +1,5 @@
 import type { AICharacterView } from '@voxel/shared';
-import { AppError } from '../common/errors';
+import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
 import type { ManagementEvents } from '../modules/management/events';
 import type { AICharacterRegistry } from '../modules/ai-characters/runtime/job';

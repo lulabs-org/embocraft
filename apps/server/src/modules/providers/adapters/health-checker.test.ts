@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import { validateProvider } from '../domain/validation';
 import { ProviderHealthChecker } from './health-checker';
 

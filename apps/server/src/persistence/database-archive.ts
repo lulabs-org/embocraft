@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { AppError } from '../common/errors';
+import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
 import type { CharacterRecord } from '../modules/ai-characters/persistence/record';
 import type { TaskPlan } from '@voxel/shared';

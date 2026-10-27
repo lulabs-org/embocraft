@@ -1,4 +1,4 @@
-import { env } from '../../../config/env';
+import { env } from '../../../core/config/env';
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';

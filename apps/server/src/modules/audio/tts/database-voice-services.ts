@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { SavedVoice, VoiceServicePersistence } from './voice-services';
 
 /** Persists TTS definitions; live bindings and synthesis stay in VoiceServiceStore. */

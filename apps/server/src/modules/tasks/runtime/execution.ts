@@ -17,9 +17,9 @@ import {
   emptyState,
   snapshotState,
 } from '@voxel/agent-runtime';
-import { object } from '../../../common/validation';
+import { object } from '../../../core/http/validation';
 import { taskLimits } from '../domain/validation';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { TaskExecutionState } from './execution-port';
 import type { AICharacterSettings } from '@voxel/shared';
 const active = (status: TaskExecutionState['view']['status']) =>

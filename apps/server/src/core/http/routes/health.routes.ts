@@ -1,4 +1,4 @@
-import { env, type ServerConfig } from '../config/env';
+import { env, type ServerConfig } from '../../config/env';
 import type { Express } from 'express';
 
 export type HealthConfig = Pick<ServerConfig, 'databaseUrl'> & {

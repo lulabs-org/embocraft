@@ -1,6 +1,6 @@
 import { ManagementCommands } from '../management/commands';
 import type { Express, Request } from 'express';
-import { asyncRoute as route } from '../../http/middleware/async-route';
+import { asyncRoute as route } from '../../core/http/middleware/async-route';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import type { TaskPort } from './port';
 

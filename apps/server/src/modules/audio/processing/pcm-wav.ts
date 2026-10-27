@@ -1,4 +1,4 @@
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 
 /** Validate bounded mono PCM16 audio, including duration and audible content. */
 export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {

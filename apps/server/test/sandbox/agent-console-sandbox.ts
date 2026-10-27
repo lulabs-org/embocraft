@@ -1,5 +1,5 @@
 import { createTestServer } from '../helpers/test-server';
-import { toolResponse } from './../../../../tests/support/pi-response';
+import { toolResponse } from '../../../../tests/support/pi-response';
 /** Isolated UI acceptance world: no dotenv, no production config and no paid model calls. */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';

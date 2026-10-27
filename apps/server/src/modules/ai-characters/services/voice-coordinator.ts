@@ -2,7 +2,7 @@ import {
   aiCharacterPermissions,
   type AICharacterSettings,
 } from '@voxel/shared';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { VoiceServicePort } from '../ports';
 import type { Job } from '../runtime/job';
 import type { Session } from '@voxel/agent-runtime';

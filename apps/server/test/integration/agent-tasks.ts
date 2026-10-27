@@ -4,8 +4,8 @@ import {
   controlRun as controlManagedRun,
 } from '../../../../tests/support/managed-tasks';
 import { createTestServer } from '../helpers/test-server';
-import { DecisionFixture as ModelPlanner } from './../../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from './../../../../tests/support/decision-fixture';
+import { DecisionFixture as ModelPlanner } from '../../../../tests/support/decision-fixture';
+import { fixtureRunnerFactory } from '../../../../tests/support/decision-fixture';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

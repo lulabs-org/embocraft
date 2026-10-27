@@ -1,6 +1,6 @@
 import type { ProviderType } from '@voxel/shared';
-import { AppError } from '../../../common/errors';
-import { integer, text } from '../../../common/validation';
+import { AppError } from '../../../core/errors/app-error';
+import { integer, text } from '../../../core/http/validation';
 import type { SavedProvider } from './model';
 import { PROVIDER_SPECS } from './specs';
 

@@ -1,13 +1,16 @@
 import express from 'express';
 import type { WorldPresence } from '@voxel/shared';
-import { publicCors } from './http/cors';
-import { installDocsRoutes } from './http/docs.routes';
-import { installHealthRoutes, type HealthConfig } from './http/health.routes';
+import { publicCors } from './core/http/cors';
+import { installDocsRoutes } from './core/openapi/docs.routes';
+import {
+  installHealthRoutes,
+  type HealthConfig,
+} from './core/http/routes/health.routes';
 import {
   installManagementHttp,
   type ManagementHttpDependencies,
 } from './http/management';
-import { errorHandler } from './http/middleware/error-handler';
+import { errorHandler } from './core/http/middleware/error-handler';
 import {
   installAudioRoutes,
   type AudioRouteDependencies,

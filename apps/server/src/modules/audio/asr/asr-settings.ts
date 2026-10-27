@@ -1,4 +1,4 @@
-import { env } from '../../../config/env';
+import { env } from '../../../core/config/env';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -9,7 +9,7 @@ import {
   type AsrServiceView,
 } from '@voxel/shared';
 import { validateWhisperSettings } from './whisper-settings';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 
 export function validateAsrSettings(
   value: unknown,

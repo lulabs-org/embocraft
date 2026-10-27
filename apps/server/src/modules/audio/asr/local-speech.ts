@@ -1,5 +1,5 @@
-import { env } from '../../../config/env';
-import { AppError } from '../../../common/errors';
+import { env } from '../../../core/config/env';
+import { AppError } from '../../../core/errors/app-error';
 import { speechEndpoint } from '../speech-endpoint';
 import type { WhisperAsrSettings } from '@voxel/shared';
 import { whisperModelPath } from './whisper-settings';

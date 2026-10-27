@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { AppError } from '../../../common/errors';
-import { object, text } from '../../../common/validation';
+import { AppError } from '../../../core/errors/app-error';
+import { object, text } from '../../../core/http/validation';
 import type { ProviderType } from '@voxel/shared';
 import { PROVIDER_SPECS } from './specs';
 import type { SavedProvider } from './model';
@@ -57,7 +57,10 @@ export function validateProvider(
   let id = previous?.id;
   if (!id) {
     if (input.id !== undefined) {
-      if (typeof input.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(input.id)) {
+      if (
+        typeof input.id !== 'string' ||
+        !/^[a-zA-Z0-9-]{1,80}$/.test(input.id)
+      ) {
         throw new AppError('无效的模型服务 ID。');
       }
       id = input.id;

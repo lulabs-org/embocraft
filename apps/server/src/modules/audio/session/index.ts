@@ -1,4 +1,4 @@
-import { env } from '../../../config/env';
+import { env } from '../../../core/config/env';
 import type { VoiceProvider } from './types';
 import { MockVoiceProvider } from './mock';
 import { BrowserVoiceProvider } from './browser';

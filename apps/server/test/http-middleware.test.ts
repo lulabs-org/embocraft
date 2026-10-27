@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import express, { type Response } from 'express';
 import { createServer, type Server } from 'node:http';
-import { AppError } from '../src/common/errors';
-import { asyncRoute } from '../src/http/middleware/async-route';
-import { errorHandler } from '../src/http/middleware/error-handler';
+import { AppError } from '../src/core/errors/app-error';
+import { asyncRoute } from '../src/core/http/middleware/async-route';
+import { errorHandler } from '../src/core/http/middleware/error-handler';
 import {
   managementBody,
   managementErrors,

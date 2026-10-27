@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import { toProviderView, type SavedProvider } from '../domain/model';
 import { validateProvider } from '../domain/validation';
 import type { ProviderRepository } from './repository.port';

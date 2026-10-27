@@ -1,7 +1,7 @@
 import { ManagementCommands } from '../../management/commands';
 import type { Express } from 'express';
 import type { ProviderService } from '../services/provider-service';
-import { asyncRoute as route } from '../../../http/middleware/async-route';
+import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 /**
  * 安装 Provider（模型提供商）相关 HTTP REST 路由

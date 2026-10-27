@@ -1,5 +1,5 @@
 import type { BailianConfig } from '../realtime/bailian-session';
-import { env } from '../../config/env';
+import { env } from '../../core/config/env';
 import { RealtimeHub } from '../realtime/hub';
 import { WorldChat } from '../chat/chat';
 import { AgentSpeech } from '../audio/tts/agent-speech';

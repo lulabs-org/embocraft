@@ -1,4 +1,4 @@
-import { env } from '../../config/env';
+import { env } from '../../core/config/env';
 import { BailianSession, type BailianConfig } from './bailian-session';
 import { DemoSocket } from './demo-socket';
 import type { SceneAccess } from './scene-tools';

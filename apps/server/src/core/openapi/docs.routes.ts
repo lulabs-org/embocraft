@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from '../openapi/swagger';
+import { swaggerSpec } from './swagger';
 
 export function installDocsRoutes(app: Express) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

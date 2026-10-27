@@ -3,7 +3,7 @@ import {
   PIPER_MODELS,
   type PiperModelView,
 } from '@voxel/shared';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import { speechEndpoint } from '../speech-endpoint';
 
 export function piperModel(id: unknown) {

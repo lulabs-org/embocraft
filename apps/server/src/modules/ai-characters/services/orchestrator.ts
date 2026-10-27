@@ -18,13 +18,13 @@ import {
   type AgentConfig,
 } from '@voxel/agent-runtime';
 
-import { object, text, boolean } from '../../../common/validation';
+import { object, text, boolean } from '../../../core/http/validation';
 import {
   validateAICharacter,
   aiCharacterProfileInput,
 } from '../domain/validation';
 import type { SavedProvider } from '../../providers/domain/model';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 
 import {
   active,

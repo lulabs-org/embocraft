@@ -1,4 +1,4 @@
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort } from '../ports';
 import { PROVIDER_SPECS } from '../domain/specs';
 import { ProviderHttpClient } from './client';

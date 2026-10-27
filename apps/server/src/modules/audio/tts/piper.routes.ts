@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import type { PiperModels } from './piper-models';
-import { asyncRoute as route } from '../../../http/middleware/async-route';
+import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 export function installPiperRoutes(app: Express, models: PiperModels) {
   /**

@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import type { VoiceServiceStore } from './voice-services';
-import { AppError } from '../../../common/errors';
-import { asyncRoute as route } from '../../../http/middleware/async-route';
+import { AppError } from '../../../core/errors/app-error';
+import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 export function installVoiceServiceRoutes(
   app: Express,
   getVoices: () => VoiceServiceStore | undefined,
