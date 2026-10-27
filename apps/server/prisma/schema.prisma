@@ -59,3 +59,20 @@ model AgentRequest {
  key String @id
  planId String
 }
+
+model TtsService {
+ id String @id
+ position Int
+ data Json
+}
+
+// Preserves an intentionally empty TTS catalog across restarts.
+model TtsCatalogState {
+ id Int @id
+}
+
+model AsrService {
+ id String @id
+ position Int
+ data Json
+}

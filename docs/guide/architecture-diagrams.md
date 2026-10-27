@@ -457,11 +457,11 @@ graph LR
         Prov["模型供应商配置"]
         Chars["AI 角色快照 · 活动日志"]
         TaskF["任务计划 · 执行快照"]
+        VoiceF["TTS 服务配置"]
+        ASRF["ASR 服务配置"]
     end
 
     subgraph Files[".data/ JSON 文件"]
-        VoiceF["voice-services"]
-        ASRF["asr / whisper settings"]
         Token["gateway token"]
         Rec["聊天录音 / 语音缓存"]
     end
@@ -484,4 +484,4 @@ graph LR
     RoomN --> EvBuf
 ```
 
-> 服务需要 PostgreSQL。模型供应商与 Agent 管理数据保存在数据库；语音设置和网关令牌仍保存在 `server_data` 卷（容器内 `/app/.data`）。
+> 服务需要 PostgreSQL。模型供应商、Agent 与 TTS/ASR 服务配置保存在数据库；网关令牌及本地语音模型文件仍保存在 `server_data` 卷（容器内 `/app/.data`）。旧语音配置文件不会自动导入。

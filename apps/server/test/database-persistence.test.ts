@@ -1,9 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
+import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { createDatabaseClient } from '../src/persistence/database-client';
 import { DatabaseProviderRepository } from '../src/modules/providers/persistence/database-repository';
 import { bootstrapProviders } from '../src/modules/providers/bootstrap';
 import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { AICharacterManager } from '../src/modules/ai-characters';
+import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
+import { DatabaseVoiceServicePersistence } from '../src/modules/audio/tts/database-voice-services';
+import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';
+import { DatabaseAsrServicePersistence } from '../src/modules/audio/asr/database-asr-services';
 import type { ManagementArchive } from '../src/persistence/archive';
 import { createServer } from '../src/server';
 import { env } from '../src/config';
@@ -16,6 +22,9 @@ const db = url ? createDatabaseClient(url) : undefined;
 
 describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   beforeEach(async () => {
+    await db!.ttsService.deleteMany();
+    await db!.ttsCatalogState.deleteMany();
+    await db!.asrService.deleteMany();
     await db!.agentRequest.deleteMany();
     await db!.agentRun.deleteMany();
     await db!.agentPlan.deleteMany();
@@ -26,6 +35,141 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await db!.world.deleteMany();
   });
   afterAll(async () => db?.$disconnect());
+
+  it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
+    const store = new VoiceServiceStore(
+      undefined,
+      undefined,
+      new DatabaseVoiceServicePersistence(db!),
+    );
+    await store.load();
+    expect(store.list().map((voice) => voice.id)).toEqual(['local-default']);
+    const cloud = await store.save({
+      name: 'Cloud',
+      type: 'compatible',
+      baseUrl: 'https://speech.example/v1',
+      model: 'test-tts',
+      voice: 'alloy',
+      speed: 1,
+      apiKey: 'tts-secret',
+    });
+    expect(JSON.stringify(store.list())).not.toContain('tts-secret');
+    expect(store.get(cloud.id).apiKey).toBe('tts-secret');
+    await store.save({ ...cloud, name: 'Cloud Updated', apiKey: '' }, cloud.id);
+    const restored = new VoiceServiceStore(
+      undefined,
+      undefined,
+      new DatabaseVoiceServicePersistence(db!),
+    );
+    await restored.load();
+    expect(restored.list().map((voice) => voice.id)).toEqual([
+      'local-default',
+      cloud.id,
+    ]);
+    expect(restored.get(cloud.id)).toMatchObject({
+      name: 'Cloud Updated',
+      apiKey: 'tts-secret',
+    });
+    restored.bind('actor', cloud.id);
+    await expect(restored.remove(cloud.id, () => false)).rejects.toMatchObject({
+      status: 409,
+    });
+    restored.unbind('actor');
+    await restored.remove(cloud.id, () => false);
+    await restored.remove('local-default', () => false);
+    const empty = new VoiceServiceStore(
+      undefined,
+      undefined,
+      new DatabaseVoiceServicePersistence(db!),
+    );
+    await empty.load();
+    expect(empty.list()).toEqual([]);
+  });
+
+  it('persists ASR profiles, masks credentials, and protects active recognition', async () => {
+    const store = new AsrSettingsStore(
+      undefined,
+      new DatabaseAsrServicePersistence(db!),
+    );
+    await store.load();
+    expect(store.list()).toEqual([]);
+    const whisper = await store.save({
+      ...DEFAULT_WHISPER_ASR,
+      provider: 'whisper',
+      name: 'Whisper',
+    });
+    const cloud = await store.save({
+      ...DEFAULT_BAILIAN_ASR,
+      name: 'Bailian',
+      apiKey: 'asr-secret',
+    });
+    expect(JSON.stringify(store.list())).not.toContain('asr-secret');
+    await store.save(
+      { ...DEFAULT_BAILIAN_ASR, name: 'Bailian Updated', apiKey: '' },
+      cloud.id,
+    );
+    const restored = new AsrSettingsStore(
+      undefined,
+      new DatabaseAsrServicePersistence(db!),
+    );
+    await restored.load();
+    expect(restored.list().map((service) => service.id)).toEqual([
+      whisper.id,
+      cloud.id,
+    ]);
+    expect(restored.get(cloud.id)).toMatchObject({
+      name: 'Bailian Updated',
+      apiKey: 'asr-secret',
+    });
+    const active = restored.acquire(cloud.id);
+    await expect(restored.remove(cloud.id)).rejects.toMatchObject({
+      status: 409,
+    });
+    active.release();
+    await restored.remove(cloud.id);
+    expect(restored.list().map((service) => service.id)).toEqual([whisper.id]);
+  });
+
+  it('keeps audio catalogs unchanged on database write failure without exposing details', async () => {
+    const failingDb = {
+      $transaction: async () => {
+        throw new Error('postgresql://user:secret@localhost/test');
+      },
+    } as unknown as PrismaClient;
+    const tts = new VoiceServiceStore(undefined, undefined, {
+      load: async () => [],
+      save: (values) =>
+        new DatabaseVoiceServicePersistence(failingDb).save(values),
+    });
+    await tts.load();
+    const voiceError = await tts
+      .save({ name: 'Local', type: 'piper', speed: 1 })
+      .then(
+        () => undefined,
+        (error: unknown) => error as Error,
+      );
+    expect(voiceError?.message).toBe('无法保存语音服务数据库配置。');
+    expect(tts.list()).toEqual([]);
+
+    const asr = new AsrSettingsStore(undefined, {
+      load: async () => [],
+      save: (values) =>
+        new DatabaseAsrServicePersistence(failingDb).save(values),
+    });
+    await asr.load();
+    const asrError = await asr
+      .save({
+        ...DEFAULT_BAILIAN_ASR,
+        name: 'Bailian',
+        apiKey: 'secret',
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => error as Error,
+      );
+    expect(asrError?.message).toBe('无法保存 ASR 数据库配置。');
+    expect(asr.list()).toEqual([]);
+  });
 
   it('seeds once, persists secrets privately, and does not reseed an intentionally empty catalog', async () => {
     const providers = new DatabaseProviderRepository(db!);
@@ -215,6 +359,10 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await server.listen();
       expect(server.characters.publicList()).toEqual([]);
       expect(server.providers.list()).toHaveLength(2);
+      expect(server.voiceServices.list().map((service) => service.id)).toEqual([
+        'local-default',
+      ]);
+      expect(server.asrSettings.list()).toEqual([]);
       await server.providers.save(
         { name: 'Ollama', type: 'ollama', defaultModel: 'qwen2.5:3b' },
         'ollama',
@@ -224,14 +372,25 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         name: 'Database Agent',
         providerId: 'ollama',
         joinWorld: false,
+        voiceReplies: true,
+        voiceServiceId: 'local-default',
       });
       await server.characters.flush(revision);
       await server.close();
+      // An old or deleted voice ID must not stop character restoration.
+      await db!.ttsService.deleteMany();
       server = await createServer({ config });
       await server.listen();
       expect(server.providers.list()).toHaveLength(2);
+      expect(server.voiceServices.list()).toEqual([]);
+      expect(server.asrSettings.list()).toEqual([]);
       expect(server.characters.publicList()).toEqual([
-        expect.objectContaining({ id: created.id, name: 'Database Agent' }),
+        expect.objectContaining({
+          id: created.id,
+          name: 'Database Agent',
+          voiceReplies: false,
+          voiceServiceId: '',
+        }),
       ]);
     } finally {
       await server?.close();

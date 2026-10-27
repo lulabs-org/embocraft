@@ -21,6 +21,7 @@ import {
 } from './modules/ai-characters';
 
 import { AsrSettingsStore } from './modules/audio/asr/asr-settings';
+import { DatabaseAsrServicePersistence } from './modules/audio/asr/database-asr-services';
 import {
   installAsrSocket,
   type AsrBridge,
@@ -28,6 +29,7 @@ import {
 import { LocalSpeech } from './modules/audio/asr/local-speech';
 import { createVoiceProvider } from './modules/audio/session';
 import { VoiceServiceStore } from './modules/audio/tts/voice-services';
+import { DatabaseVoiceServicePersistence } from './modules/audio/tts/database-voice-services';
 
 import { GatewayAuth } from './modules/gateway/auth';
 import { installGatewaySocket } from './modules/gateway/socket';
@@ -69,15 +71,23 @@ type CoreStores = {
   asrSettings: AsrSettingsStore;
 };
 
-/** Each store reads its own file, so loads are independent and parallel-safe. */
+/** Independent catalogs load before routes and character restoration. */
 async function loadStores(
   config: ServerConfig,
   options: ServerOptions,
   db?: PrismaClient,
 ): Promise<CoreStores> {
   const providers = options.providers ?? new DatabaseProviderRepository(db!);
-  const voiceServices = options.voiceServices ?? new VoiceServiceStore();
-  const asrSettings = options.asrSettings ?? new AsrSettingsStore();
+  const voiceServices =
+    options.voiceServices ??
+    new VoiceServiceStore(
+      undefined,
+      undefined,
+      new DatabaseVoiceServicePersistence(db!),
+    );
+  const asrSettings =
+    options.asrSettings ??
+    new AsrSettingsStore(undefined, new DatabaseAsrServicePersistence(db!));
   const [gatewayAuth] = await Promise.all([
     GatewayAuth.load(config.gateway),
     bootstrapProviders(providers),
