@@ -89,15 +89,29 @@ it('keeps joint persistence independent of management, runtime and HTTP implemen
 });
 
 /** Follow only the symbols imported from a module facade, not every re-export. */
-function usedDependencies(file: string): string[] {
+function usedDependencies(
+  file: string,
+  readSource = sourceFile,
+  resolveImport = importedFile,
+): string[] {
   const dependencies: string[] = [];
-  for (const statement of sourceFile(file).statements) {
+  for (const statement of readSource(file).statements) {
+    // Re-export-only barrels are also dependencies, including export type and export *.
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      const target = resolveImport(file, statement.moduleSpecifier.text);
+      if (target?.startsWith(root)) dependencies.push(target);
+      continue;
+    }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier)
     )
       continue;
-    const target = importedFile(file, statement.moduleSpecifier.text);
+    const target = resolveImport(file, statement.moduleSpecifier.text);
     if (!target || !target.startsWith(root)) continue;
     const bindings = statement.importClause?.namedBindings;
     if (
@@ -108,7 +122,7 @@ function usedDependencies(file: string): string[] {
       dependencies.push(target);
       continue;
     }
-    const facade = sourceFile(target);
+    const facade = readSource(target);
     for (const imported of bindings.elements) {
       const name = imported.propertyName?.text ?? imported.name.text;
       const matched = facade.statements.find(
@@ -128,7 +142,7 @@ function usedDependencies(file: string): string[] {
         matched.moduleSpecifier &&
         ts.isStringLiteral(matched.moduleSpecifier)
       ) {
-        const source = importedFile(target, matched.moduleSpecifier.text);
+        const source = resolveImport(target, matched.moduleSpecifier.text);
         if (source) dependencies.push(source);
       } else dependencies.push(target);
     }
@@ -222,6 +236,23 @@ it('keeps infrastructure independent of business modules and modules independent
       expect(readFileSync(file, 'utf8'), name).not.toMatch(/process\.env/);
   }
 });
+function assertNoRouteDependencies(
+  file: string,
+  dependencies: (file: string) => string[] = usedDependencies,
+) {
+  const visited = new Set<string>();
+  function visit(current: string, chain: string[]) {
+    if (visited.has(current)) return;
+    visited.add(current);
+    for (const dep of dependencies(current)) {
+      const path = [...chain, relative(root, dep)];
+      expect(isRoute(relative(root, dep)), path.join(' -> ')).toBe(false);
+      visit(dep, path);
+    }
+  }
+  visit(file, [relative(root, file)]);
+}
+
 it('keeps domain implementations independent of HTTP routes, including through barrels', () => {
   for (const file of graph.keys()) {
     const name = relative(root, file);
@@ -231,18 +262,65 @@ it('keeps domain implementations independent of HTTP routes, including through b
       name.endsWith('/index.ts')
     )
       continue;
-    const visited = new Set<string>();
-    function visit(current: string, chain: string[]) {
-      if (visited.has(current)) return;
-      visited.add(current);
-      for (const dep of usedDependencies(current)) {
-        const path = [...chain, relative(root, dep)];
-        expect(isRoute(relative(root, dep)), path.join(' -> ')).toBe(false);
-        visit(dep, path);
-      }
-    }
-    visit(file, [name]);
+    assertNoRouteDependencies(file);
   }
+});
+
+function fixtureDependencies(files: Record<string, string>) {
+  const contents = new Map(
+    Object.entries(files).map(([file, text]) => [resolve(root, file), text]),
+  );
+  return (file: string) =>
+    usedDependencies(
+      file,
+      (path) =>
+        ts.createSourceFile(path, contents.get(path)!, ts.ScriptTarget.Latest),
+      (from, spec) => {
+        const base = resolve(dirname(from), spec);
+        return [base, base + '.ts', base + '/index.ts'].find((path) =>
+          contents.has(path),
+        );
+      },
+    );
+}
+
+it.each([
+  "export { handler } from './routes/example.routes';",
+  "export * from './routes/example.routes';",
+  "export type { Handler } from './routes/example.routes';",
+])('rejects an indirect HTTP dependency through %s', (reexport) => {
+  const dependencies = fixtureDependencies({
+    'modules/example/services/worker.ts':
+      "import * as helpers from '../helpers';",
+    'modules/example/helpers.ts': "export * from './barrel';",
+    'modules/example/barrel.ts': reexport,
+    'modules/example/routes/example.routes.ts':
+      'export const handler = () => {}; export type Handler = typeof handler;',
+  });
+  expect(() =>
+    assertNoRouteDependencies(
+      resolve(root, 'modules/example/services/worker.ts'),
+      dependencies,
+    ),
+  ).toThrow('routes/example.routes.ts');
+});
+
+it('does not follow unrelated route exports when a service imports a named facade contract', () => {
+  const dependencies = fixtureDependencies({
+    'modules/consumer/services/worker.ts':
+      "import { Service as Alias } from '../../example';",
+    'modules/example/index.ts':
+      "export { Service } from './service'; export { handler } from './routes/example.routes';",
+    'modules/example/service.ts': 'export class Service {}',
+    'modules/example/routes/example.routes.ts':
+      'export const handler = () => {};',
+  });
+  expect(() =>
+    assertNoRouteDependencies(
+      resolve(root, 'modules/consumer/services/worker.ts'),
+      dependencies,
+    ),
+  ).not.toThrow();
 });
 it('exports server module contracts from their owning module rather than compatibility facades', () => {
   for (const file of graph.keys()) {

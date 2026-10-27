@@ -33,7 +33,7 @@ graph LR
     Web -->|反向代理| Server
     CLI -->|WS Gateway + HTTP| Server
     Server -->|Prisma + pg| DB
-    Server -->|JSON 文件| Vol
+    Server -->|令牌 / 模型文件| Vol
     Server -->|ASR / TTS| Speech
     Server -->|LLM 推理| DeepSeek
     Server -->|LLM 推理| Ollama
@@ -82,23 +82,23 @@ graph LR
 
 ## 3. 服务端装配（`apps/server/src/server.ts`）
 
-`createServer()` 是唯一的组合根：加载存储 → 构建领域服务 → 组装 HTTP 与 Socket 路由 → 定义 Colyseus 房间。
+`createServer()` 负责数据库探活、会话 Provider 校验、存储加载和服务装配；`createApp()` 负责 HTTP 装配。`listen()` 才绑定端口、创建房间并恢复角色。存储加载失败时会等待并行任务结束，再释放共享数据库客户端。
 
 ```mermaid
 graph TD
     Index["index.ts<br/>读取 env · 启动/停止"] --> Create["createServer()"]
 
-    Create --> Startup["startup.ts<br/>checkStartupDatabase"]
+    Create --> Startup["core/database/health.ts<br/>checkStartupDatabase"]
     Create --> Stores["loadStores()（并行）"]
     Stores --> GA["GatewayAuth<br/>gateway/auth.service"]
-    Stores --> PS["FileProviderRepository<br/>providers"]
+    Stores --> PS["DatabaseProviderRepository<br/>providers/persistence（默认）"]
     Stores --> VS["VoiceServiceStore<br/>audio/persistence"]
     Stores --> AS["AsrSettingsStore<br/>audio/persistence"]
 
     Create --> VP["createVoiceProvider<br/>audio/services/sessions（mock/browser/ollama）"]
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
-    Create --> MC["ModelCatalog<br/>providers/model-catalog"]
+    Create --> MC["ModelCatalog<br/>providers/adapters/model-catalog"]
     Create --> LS["LocalSpeech<br/>audio/services/asr"]
 
     Create --> App["createApp()<br/>app.ts（Express）"]
@@ -119,54 +119,51 @@ graph TD
 
 ### 服务端模块全景
 
+图中实线表示主要源码依赖；业务模块跨域引用通过各自的 `index.ts`。HTTP 路由安装回调由 `app.ts` 注入 management，传输实现通过注册表调用 Socket 处理器。
+
 ```mermaid
 graph TB
-    subgraph Entry["接入层"]
-        HTTP["http/<br/>cors · origin-guard · error-handler<br/>health · docs · management"]
-        TR["transport/<br/>websocket.transport · socket-routes"]
-        OA["openapi/<br/>swagger · schemas"]
-    end
-
+    App["app.ts<br/>HTTP 装配"]
+    Server["server.ts<br/>资源生命周期与 Socket 装配"]
+    Core["core/<br/>config · database · errors · concurrency<br/>http · openapi · transport"]
+    Persist["src/persistence/<br/>联合存档、提交与迁移"]
     subgraph Modules["modules/ 领域模块"]
         World["world<br/>world.room · world.schema<br/>domain · persistence · routes"]
         AIC["ai-characters<br/>domain · services<br/>persistence · routes"]
-        Tasks["tasks<br/>domain · services（scheduler/coordinator/execution）<br/>persistence · routes · ports"]
-        Mgmt["management<br/>services（command-router · commands · events · public-error）<br/>routes"]
+        Tasks["tasks<br/>domain · services · persistence · routes · ports"]
+        Mgmt["management<br/>services · routes"]
         GW["gateway<br/>auth.service · gateway.socket · validation"]
-        Prov["providers<br/>store · catalog · validation · routes"]
-        Chat["chat<br/>domain（visibility） · services<br/>routes（chats.routes）"]
-        Audio["audio<br/>asr · tts · session · spatial · processing"]
-        RT["realtime<br/>domain（limits）<br/>services（hub · session · scene-tools）<br/>adapters（demo-socket）"]
+        Prov["providers<br/>domain · services · adapters<br/>persistence · routes · ports"]
+        Chat["chat<br/>domain · services · routes"]
+        Audio["audio<br/>domain · services · persistence · routes · sockets"]
+        RT["realtime<br/>domain · services · adapters"]
     end
-
-    subgraph Infra["基础设施"]
-        Common["common/<br/>validation · errors · command-queue · origin-policy"]
-        Config["config/<br/>env"]
-        Persist["persistence/<br/>archive · management-persistence"]
-    end
-
-    HTTP --> Mgmt
-    HTTP --> Prov
-    HTTP --> Chat
-    HTTP --> Audio
-    HTTP --> World
-    TR --> GW
-    TR --> Audio
-    TR --> World
-
+    Server --> App
+    Server --> Core
+    Server --> Persist
+    Server --> GW
+    Server --> AIC
+    Server --> World
+    App --> Core
+    App --> Mgmt
+    App --> AIC
+    App --> Tasks
+    App --> Prov
+    App --> Chat
+    App --> Audio
+    App --> World
     GW --> Mgmt
-    Mgmt --> AIC
-    Mgmt --> Tasks
+    AIC --> Mgmt
     AIC --> Tasks
     AIC --> Prov
     AIC --> Audio
+    AIC --> Persist
+    Tasks -->|仅 HTTP 层| Mgmt
     World --> Chat
     World --> Audio
     World --> RT
-    AIC --> Persist
-    Tasks --> Persist
-    Modules --> Common
-    Modules --> Config
+    Modules --> Core
+    Persist -->|仅历史任务迁移契约| Tasks
 ```
 
 ### AI 角色模块内部（`modules/ai-characters`）
@@ -210,7 +207,7 @@ graph LR
         REST["Express REST<br/>/ai-characters · /tasks · /task-runs · /providers<br/>/management · /world · /chat · /voice/*<br/>/health · /api-docs"]
         SSE["SSE<br/>/world/presence"]
         Upg{"WS Upgrade<br/>RoutedWebSocketTransport"}
-        GWWS["/ai-characters/gateway<br/>管理事件 + 命令"]
+        GWWS["/ai-characters/gateway<br/>管理状态通知（命令使用 HTTP）"]
         ASRWS["/voice/asr/realtime<br/>流式识别"]
         COL["Colyseus 房间 'world'<br/>sync · action · state patch"]
     end
@@ -431,19 +428,25 @@ sequenceDiagram
     autonumber
     participant Console as Web 控制台 / CLI
     participant GW as /ai-characters/gateway
+    participant HTTP as 资源 HTTP 路由
     participant Auth as GatewayAuth
-    participant Router as management/services/command-router.service
-    participant ACM as AICharacterManager
-    participant Tasks as tasks 模块
+    participant Commands as ManagementCommands / CommandRouter
+    participant Domain as Character / Provider / Tasks 服务
+    participant Events as ManagementEvents
 
-    Console->>GW: WS 连接（token）
+    Console->>GW: WS 连接 + connect 握手（token）
     GW->>Auth: 校验令牌 + Origin
-    Console->>GW: command（创建角色 / 下发任务）
-    GW->>Router: 分发
-    Router->>ACM: create / update / join / leave
-    Router->>Tasks: schedule / cancel
-    ACM-->>GW: management events
-    GW-->>Console: 实时事件推送
+    GW->>Events: 订阅变更
+    GW-->>Console: connected + snapshot 刷新通知
+    Console->>HTTP: HTTP 管理请求（Bearer / Idempotency-Key）
+    HTTP->>Auth: 校验令牌 + Origin
+    HTTP->>Commands: 校验、幂等与排队
+    Commands->>Domain: 执行注入的操作
+    Domain->>Events: 提交状态或发布变更
+    Events-->>GW: changed
+    GW-->>Console: 变更通知
+    HTTP-->>Console: HTTP 操作结果 / 回执
+    Console->>HTTP: 刷新受影响资源
 ```
 
 ---
@@ -462,12 +465,12 @@ graph LR
         ASRF["ASR 服务配置"]
     end
 
-    subgraph Files[".data/ JSON 文件"]
+    subgraph Files["本地配置路径"]
         Token["gateway token"]
-        Rec["聊天录音 / 语音缓存"]
     end
 
     subgraph Memory["内存（不持久化）"]
+        Rec["聊天录音 / Agent 合成音频缓存"]
         Players["玩家位置 / 物理体"]
         EvBuf["事件环形缓存"]
     end
@@ -475,8 +478,8 @@ graph LR
     WorldStoreN["WorldStore"] --> WorldT
     WorldStoreN --> EditT
     DatabaseProviderRepoN["DatabaseProviderRepository"] --> Prov
-    VSN["VoiceServiceStore"] --> VoiceF
-    ASN["AsrSettingsStore"] --> ASRF
+    VSN["VoiceServiceStore"] --> VDB["DatabaseVoiceServicePersistence"] --> VoiceF
+    ASN["AsrSettingsStore"] --> ADB["DatabaseAsrServicePersistence"] --> ASRF
     GAN["GatewayAuth"] --> Token
     MP["management-persistence / archive"] --> Chars
     MP --> TaskF
