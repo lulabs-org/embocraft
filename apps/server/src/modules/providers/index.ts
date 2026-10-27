@@ -18,7 +18,7 @@ export {
 } from './routes/providers.routes';
 export { ModelCatalog } from './adapters/model-catalog';
 export { ProviderHealthChecker } from './adapters/health-checker';
-export { ProviderService } from './services/provider-service';
+export { ProviderService } from './services/provider.service';
 export {
   resolveInferenceDefaults,
   validateInferenceSettings,
