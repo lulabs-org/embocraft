@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { RealtimeSocket } from './bailian-session';
+import type { RealtimeSocket } from '../services/session.service';
 /** Deterministic protocol simulator, not an AI and never a network transport. */
 export class DemoSocket extends EventEmitter implements RealtimeSocket {
   bufferedAmount = 0;

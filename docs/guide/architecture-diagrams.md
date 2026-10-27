@@ -136,7 +136,7 @@ graph TB
         Prov["providers<br/>store · catalog · validation · routes"]
         Chat["chat<br/>domain（visibility） · services<br/>routes（chats.routes）"]
         Audio["audio<br/>asr · tts · session · spatial · processing"]
-        RT["realtime<br/>hub · bailian-session · scene-tools"]
+        RT["realtime<br/>domain（limits）<br/>services（hub · session · scene-tools）<br/>adapters（demo-socket）"]
     end
 
     subgraph Infra["基础设施"]

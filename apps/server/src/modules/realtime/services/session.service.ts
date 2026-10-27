@@ -1,9 +1,9 @@
 import WebSocket from 'ws';
 import { randomUUID } from 'node:crypto';
 import type { RealtimeEvent } from '@voxel/shared/communication';
-import { REALTIME_LIMITS } from './limits';
+import { REALTIME_LIMITS } from '../domain/limits';
 import type { Edit } from '@voxel/shared';
-import { SceneTools, type SceneAccess } from './scene-tools';
+import { SceneTools, type SceneAccess } from './scene-tools.service';
 
 export interface RealtimeSocket {
   bufferedAmount: number;

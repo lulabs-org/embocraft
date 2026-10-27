@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest';
 
 import type { RealtimeEvent } from '@voxel/shared/communication';
 
-import { BailianSession } from './bailian-session';
+import { BailianSession } from '../services/session.service';
 
 import { DemoSocket } from './demo-socket';
 
