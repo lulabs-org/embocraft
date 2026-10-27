@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type ChatData, type Player, type WorldEvent } from '@voxel/shared';
-import { AppError } from '../../core/errors/app-error';
-import { visibleEvent } from './visibility';
+import { AppError } from '../../../core/errors/app-error';
+import { visibleEvent } from '../domain/visibility';
 
 type Clip = { bytes: Buffer; actor: string; data: ChatData; expires: number };
 type ChatRoute = Pick<ChatData, 'scope' | 'recipients'>;

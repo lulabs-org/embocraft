@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
-import type { LocalSpeech } from '../audio';
-import { WorldChat } from './chat';
-import { ChatSpeechService } from './speech-service';
+import type { LocalSpeech } from '../../audio';
+import { WorldChat } from './chat.service';
+import { ChatSpeechService } from './speech.service';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import type { AsrSettingsStore } from '../audio';
+import type { AsrSettingsStore } from '../../audio';
 
 const player = (id: string): Player => ({
   id,

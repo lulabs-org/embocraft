@@ -2,11 +2,11 @@ import { afterEach, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import type { Player } from '@voxel/shared';
-import { installChatRoutes } from './chat.routes';
-import { WorldChat } from './chat';
-import { errorHandler } from '../../core/http/middleware/error-handler';
-import type { LocalSpeech } from '../audio';
-import type { AsrSettingsStore } from '../audio';
+import { installChatRoutes } from './chats.routes';
+import { WorldChat } from '../services/chat.service';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
+import type { LocalSpeech } from '../../audio';
+import type { AsrSettingsStore } from '../../audio';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 
 let server: Server | undefined;

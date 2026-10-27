@@ -134,7 +134,7 @@ graph TB
         Mgmt["management<br/>command-router · commands · events"]
         GW["gateway<br/>auth · socket · validation"]
         Prov["providers<br/>store · catalog · validation · routes"]
-        Chat["chat<br/>chat · visibility · routes"]
+        Chat["chat<br/>domain（visibility） · services<br/>routes（chats.routes）"]
         Audio["audio<br/>asr · tts · session · spatial · processing"]
         RT["realtime<br/>hub · bailian-session · scene-tools"]
     end
