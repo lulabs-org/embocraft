@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { AppError } from '../../../core/errors/app-error';
-import type { ArchivePort, ManagementArchive } from '../domain/archive';
+import { AppError } from '../core/errors/app-error';
+import type { ArchivePort, ManagementArchive } from './archive';
 import type { TaskPlan } from '@voxel/shared';
 
 type SavedRow = {

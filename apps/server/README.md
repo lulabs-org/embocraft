@@ -14,7 +14,7 @@
 
 ## 依赖方向
 
-`core` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
+`core` 不引用业务领域或全局持久化层；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
 
 | 目录                    | 责任                                                     |
 | ----------------------- | -------------------------------------------------------- |
@@ -26,7 +26,8 @@
 | `core/openapi`          | OpenAPI schema、Swagger 文档生成与 docs 路由             |
 | `core/transport`        | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭     |
 | `http`                  | 待迁移的管理请求策略与跨模块 HTTP 装配                   |
-| `modules/management`    | 角色与任务联合存档、迁移、提交及失败处理                 |
+| `persistence`           | 角色与任务联合存档、迁移、提交及失败处理                 |
+| `modules/management`    | 管理指令路由、幂等回执与状态变更事件                     |
 | `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配           |
 | `modules/providers`     | 模型提供商持久化存储与模型列表服务                       |
 | `modules/tasks`         | 任务计划、运行历史与执行控制领域服务                     |
@@ -38,7 +39,9 @@
 | `modules/realtime`      | 百炼实时会话、工具确认与离线协议模拟器                   |
 | `modules/world`         | 权威物理房间、Schema、世界持久化与在线状态 SSE           |
 
-`local-speech.ts` 属于识别流程，保留在 `asr`。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`manager.ts`、`orchestrator.ts` 位于 `ai-characters` 模块，`provider-store.ts` 归属 `providers` 模块，`port.ts`、`service.ts`、`model.ts` 与 `scheduler.ts` 归属 `tasks` 模块。角色与任务的联合存档由 `modules/management/persistence` 负责：先串行保存，再更新已提交视图并发布事件；存储失败时保留现有执行保护。角色和任务快照通过注入契约参与提交。
+`local-speech.ts` 属于识别流程，保留在 `asr`。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`manager.ts`、`orchestrator.ts` 位于 `ai-characters` 模块，`provider-store.ts` 归属 `providers` 模块，`port.ts`、`service.ts`、`model.ts` 与 `scheduler.ts` 归属 `tasks` 模块。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
+
+全局 `persistence/` 直接提供存档契约、数据库/文件驱动、迁移和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`；历史任务迁移通过 `modules/tasks/index.ts` 复用任务模块的迁移函数。它不依赖角色运行时、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
 
 业务错误与通用异常统一使用 `core/errors/app-error.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 扫描 `core/http`、`core/openapi` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
 
@@ -76,7 +79,7 @@ pnpm --filter @voxel/server exec tsx test/integration/realtime.ts
 
 以上推理/语音集成默认使用固定响应，仍通过真实 HTTP、WebSocket 与物理执行。真实模型导航需显式运行 `NAVIGATION_PROVIDERS=/absolute/path/providers.json pnpm test:navigation:live`；测试不会自动读取生产凭据，也不修改当前开发世界。结果默认写入 `artifacts/navigation-live-model.json`。
 
-`tests/server-boundaries.test.ts` 检查依赖方向、循环依赖、配置入口和集成装配，并限定业务模块仅从 Socket 适配文件以 `import type` 引用传输契约。Prisma 运行时与 Pg 适配器的导入统一限制在 `core/database/client.ts`，其他服务端文件只引用 Prisma 类型。生命周期测试检查 HTTP 契约、SSE/ASR/世界连接关闭、失败启动后的再次启动，以及共享数据库客户端的释放顺序和重复关闭。Vitest 使用线程池，避免 Colyseus 的 PM2 遥测占用 fork 的测试 IPC，不模拟服务器本身。
+`tests/server-boundaries.test.ts` 检查依赖方向、全局持久化边界、循环依赖、配置入口和集成装配，并限定业务模块仅从 Socket 适配文件以 `import type` 引用传输契约。Prisma 运行时与 Pg 适配器的导入统一限制在 `core/database/client.ts`，其他服务端文件只引用 Prisma 类型。生命周期测试检查 HTTP 契约、SSE/ASR/世界连接关闭、失败启动后的再次启动，以及共享数据库客户端的释放顺序和重复关闭。Vitest 使用线程池，避免 Colyseus 的 PM2 遥测占用 fork 的测试 IPC，不模拟服务器本身。
 
 UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供确定性识别结果与临时配置；仓库没有可迁移的受控 `output/asr-services-fixture.ts`。三个沙箱均通过 `createTestServer` 启动，并处理退出清理。
 

@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`；联合存档仍在 `modules/management/persistence/`，管理 HTTP 装配仍在 `src/http/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 装配仍在 `src/http/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -355,8 +355,8 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
   - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 统一序列化并持久化至 PostgreSQL 表中；
   - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
 - **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：
-  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；
-  - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交可见状态并发布事件；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
+  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各模块的 `persistence/` 内；
+  - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交角色和任务的可见状态，再调用注入的提交通知回调；角色编排器将回调连接到 `ManagementEvents.commit()`，持久化协调器不依赖事件总线实现；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
 - **兼容模式：离线测试与 JSON 原子落盘（`src/persistence/archive-file.ts` / `migrate-archive.ts`）**：
   - **原子落盘（Atomic Write）**：在无数据库的离线单元测试或纯文件兼容模式下，`.agents.json` 与 `providers.json` 采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖”** 机制，彻底避免系统异常宕机导致 JSON 破损；
   - **向前平滑迁移（Forward Migration）**：历史文件均包含 `version` 标识（如 `version: 3`），加载时由 `migrate-archive.ts` 管道按顺序执行结构升级，保障向后兼容性。

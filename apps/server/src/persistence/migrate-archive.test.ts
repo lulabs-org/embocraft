@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 
 import { migrateArchive } from './migrate-archive';
 
-import { newPlan, newRun } from '../../tasks';
+import { newPlan, newRun } from '../modules/tasks';
 
 import { DEFAULT_TASK_LIMITS } from '@voxel/shared';
 

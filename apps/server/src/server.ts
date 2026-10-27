@@ -7,8 +7,8 @@ import { Server, matchMaker } from '@colyseus/core';
 import { createApp } from './app';
 import { env, type ServerConfig } from './core/config';
 import { checkStartupDatabase } from './core/database/health';
-import type { ArchivePort } from './modules/management';
-import { DatabaseManagementArchive } from './modules/management';
+import type { ArchivePort } from './persistence/archive';
+import { DatabaseManagementArchive } from './persistence/database-archive';
 import { createDatabaseClient } from './core/database/client';
 import type { PrismaClient } from '@prisma/client';
 

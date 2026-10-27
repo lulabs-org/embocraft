@@ -2,16 +2,16 @@ import { emptyState } from '@voxel/agent-runtime';
 import { expect, it, vi } from 'vitest';
 import { DEFAULT_TASK_LIMITS } from '@voxel/shared';
 import { ManagementPersistence } from './management-persistence';
-import type { ManagementArchive } from '../domain/archive';
-import { ManagementEvents } from '../events';
+import type { ManagementArchive } from './archive';
+import { ManagementEvents } from '../modules/management';
 import {
   AICharacterRegistry,
   type Job,
   AICharacterWakeScheduler,
   executionState,
-} from '../../ai-characters';
-import { CharacterSnapshots } from '../../ai-characters/persistence/snapshots';
-import { PlanService, TaskSnapshots, newPlan, newRun } from '../../tasks';
+} from '../modules/ai-characters';
+import { CharacterSnapshots } from '../modules/ai-characters/persistence/snapshots';
+import { PlanService, TaskSnapshots, newPlan, newRun } from '../modules/tasks';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const plans = new PlanService();
@@ -32,7 +32,7 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const tasks = new TaskSnapshots();
   const persistence = new ManagementPersistence(
     { load: async () => undefined, save },
-    events,
+    (snapshot) => events.commit(snapshot.characters, snapshot),
     {
       characters,
       tasks,
@@ -145,6 +145,39 @@ it('serializes joint snapshots and exposes both domains before publishing commit
     f.persistence.characters.publicList().find((c) => c.id === 'a')?.name,
   ).toBe('changed');
   expect(f.committed.plans[0].goal).toBe('new goal');
+});
+
+it('flush waits for queued saves without capturing another snapshot or advancing the failure revision', async () => {
+  let release!: () => void;
+  const save = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const f = fixture(save);
+  const revision = f.persistence.storageRevision;
+  await f.persistence.flush();
+  expect(save).not.toHaveBeenCalled();
+
+  const saving = f.persist();
+  await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  f.jobs.get('a')!.view.name = 'not queued';
+  let flushed = false;
+  const flushing = f.persistence.flush(revision).then(() => {
+    flushed = true;
+  });
+  await Promise.resolve();
+  expect(flushed).toBe(false);
+
+  release();
+  await Promise.all([saving, flushing]);
+  expect(flushed).toBe(true);
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(
+    f.persistence.characters.publicList().find((c) => c.id === 'a')?.name,
+  ).toBe('a');
+  expect(f.persistence.storageRevision).toBe(revision);
 });
 
 it('stops the affected character after a task-only failure and retains the last committed envelope and events', async () => {

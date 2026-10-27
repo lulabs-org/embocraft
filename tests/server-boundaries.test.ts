@@ -60,6 +60,33 @@ it('centralizes database client and pool construction in core/database/client.ts
     }
   }
 });
+it('keeps joint persistence independent of management, runtime and HTTP implementations', () => {
+  for (const [file, deps] of graph) {
+    const name = relative(root, file);
+    for (const dep of deps) {
+      const target = relative(root, dep);
+      if (name.startsWith('persistence/')) {
+        const taskMigration =
+          name === 'persistence/migrate-archive.ts' &&
+          target === 'modules/tasks/index.ts';
+        expect(
+          target.startsWith('persistence/') ||
+            target.startsWith('core/errors/') ||
+            target.startsWith('core/database/') ||
+            taskMigration,
+          `${name} -> ${target}`,
+        ).toBe(true);
+      }
+      if (
+        name.startsWith('modules/management/') ||
+        name.startsWith('modules/tasks/')
+      )
+        expect(target.startsWith('persistence/'), `${name} -> ${target}`).toBe(
+          false,
+        );
+    }
+  }
+});
 
 /** Follow only the symbols imported from a module facade, not every re-export. */
 function usedDependencies(file: string): string[] {
@@ -191,7 +218,7 @@ it('keeps domain implementations independent of HTTP routes, including through b
   for (const file of graph.keys()) {
     const name = relative(root, file);
     if (
-      !name.startsWith('modules/') ||
+      (!name.startsWith('modules/') && !name.startsWith('persistence/')) ||
       isRoute(name) ||
       name.endsWith('/index.ts')
     )

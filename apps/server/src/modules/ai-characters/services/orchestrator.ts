@@ -1,9 +1,7 @@
-import {
-  ManagementEvents,
-  ManagementPersistence,
-  migrateArchive,
-  type ArchivePort,
-} from '../../management';
+import { ManagementEvents } from '../../management';
+import { ManagementPersistence } from '../../../persistence/management-persistence';
+import { migrateArchive } from '../../../persistence/migrate-archive';
+import type { ArchivePort } from '../../../persistence/archive';
 import { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
 import { appendAICharacterLog } from '../domain/activity-log';
 import {
@@ -77,22 +75,31 @@ export class AICharacterOrchestrator {
   ) {
     const characters = new CharacterSnapshots();
     const tasks = new TaskSnapshots();
-    this.persistence = new ManagementPersistence(this.archive, this.events, {
-      characters,
-      tasks,
-      captureExecutions: () =>
-        tasks.captureExecutions([...this.jobs.values()].map(executionState)),
-      captureCharacters: () =>
-        characters.capture(this.jobs, () => this.list(), this.shutdownPresence),
-      captureTasks: () => tasks.capture(this.plans),
-      rejectTasks: (snapshot) => tasks.reject(snapshot, this.committedPlans),
-      rejectCharacters: (records, affected) =>
-        characters.reject(records, this.jobs, affected, (id) =>
-          this.taskScheduler.cancel(id),
-        ),
-      commitCharacters: (records, views) => characters.commit(records, views),
-      restoreTasks: (snapshot) => tasks.restore(this.committedPlans, snapshot),
-    });
+    this.persistence = new ManagementPersistence(
+      this.archive,
+      (snapshot) => this.events.commit(snapshot.characters, snapshot),
+      {
+        characters,
+        tasks,
+        captureExecutions: () =>
+          tasks.captureExecutions([...this.jobs.values()].map(executionState)),
+        captureCharacters: () =>
+          characters.capture(
+            this.jobs,
+            () => this.list(),
+            this.shutdownPresence,
+          ),
+        captureTasks: () => tasks.capture(this.plans),
+        rejectTasks: (snapshot) => tasks.reject(snapshot, this.committedPlans),
+        rejectCharacters: (records, affected) =>
+          characters.reject(records, this.jobs, affected, (id) =>
+            this.taskScheduler.cancel(id),
+          ),
+        commitCharacters: (records, views) => characters.commit(records, views),
+        restoreTasks: (snapshot) =>
+          tasks.restore(this.committedPlans, snapshot),
+      },
+    );
     this.voiceCoordinator = new CharacterVoiceCoordinator(this.voiceServices);
     this.tasks = new TaskCoordinator({
       execution: (id) => executionState(this.taskJob(id)),
