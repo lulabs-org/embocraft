@@ -2,7 +2,7 @@ import { ManagementEvents } from '../../management';
 import { ManagementPersistence } from '../../../persistence/management-persistence';
 import { migrateArchive } from '../../../persistence/migrate-archive';
 import type { ArchivePort } from '../../../persistence/archive';
-import { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
+import { AICharacterWakeScheduler } from './wake-scheduler.service';
 import { appendAICharacterLog } from '../domain/activity-log';
 import {
   aiCharacterPermissions,
@@ -33,7 +33,7 @@ import {
   canWakeJob,
   type Job,
   AICharacterRegistry,
-} from '../runtime/job';
+} from './job';
 import type { VoiceServicePort } from '../ports';
 import {
   pauseTaskForHost,
@@ -43,12 +43,12 @@ import {
   TaskCoordinator,
   TaskSnapshots,
 } from '../../tasks';
-import { executionState } from '../runtime/task-adapter';
+import { executionState } from './task-adapter';
 import { restoreAICharacterJob } from '../persistence/restore';
-import { AICharacterHost } from '../runtime/character-host';
-import type { ExecutionContext } from '../runtime/execution-context';
+import { AICharacterHost } from './character-host.service';
+import type { ExecutionContext } from './execution-context';
 import { CharacterSnapshots } from '../persistence/snapshots';
-import { CharacterVoiceCoordinator } from './voice-coordinator';
+import { CharacterVoiceCoordinator } from './voice-coordinator.service';
 
 export class AICharacterOrchestrator {
   readonly jobs = new AICharacterRegistry();

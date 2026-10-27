@@ -129,7 +129,7 @@ graph TB
 
     subgraph Modules["modules/ 领域模块"]
         World["world<br/>room · schema · terrain<br/>store · validation · routes"]
-        AIC["ai-characters<br/>domain · services · runtime<br/>persistence · routes"]
+        AIC["ai-characters<br/>domain · services<br/>persistence · routes"]
         Tasks["tasks<br/>domain · services（scheduler/coordinator/execution）<br/>persistence · routes · ports"]
         Mgmt["management<br/>command-router · commands · events"]
         GW["gateway<br/>auth · socket · validation"]
@@ -173,15 +173,16 @@ graph TB
 
 ```mermaid
 graph LR
-    Routes["routes.ts<br/>REST 管理接口"] --> Orch["services/orchestrator<br/>AICharacterManager"]
-    Orch --> Host["runtime/character-host<br/>单角色生命周期"]
-    Orch --> Voice["services/voice-coordinator"]
+    Routes["routes/ai-characters.routes.ts<br/>REST 管理接口"] --> Orch["services/orchestrator.service.ts<br/>AICharacterOrchestrator"]
+    Manager["services/character.manager.ts<br/>AICharacterManager"] --> Orch
+    Orch --> Host["services/character-host.service.ts<br/>单角色生命周期"]
+    Orch --> Voice["services/voice-coordinator.service.ts"]
     Orch --> Restore["persistence/restore · snapshots"]
-    Host --> Ctx["runtime/execution-context"]
-    Host --> Wake["runtime/wake-scheduler"]
-    Host --> WEH["runtime/world-event-handler"]
+    Host --> Ctx["services/execution-context.ts"]
+    Orch --> Wake["services/wake-scheduler.service.ts"]
+    Host --> WEH["services/world-event-handler.ts"]
     Host --> Log["domain/activity-log"]
-    Host --> TA["domain/task-adapter"]
+    Host --> TA["services/task-adapter.ts"]
     Ctx -->|Session / AgentRunner| RTPkg["@voxel/agent-runtime"]
     WEH -->|recordEvent / TaskService| RTPkg
     TA --> TaskMod["modules/tasks"]
