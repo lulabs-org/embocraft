@@ -92,8 +92,8 @@ graph TD
     Create --> Stores["loadStores()（并行）"]
     Stores --> GA["GatewayAuth<br/>gateway/auth.service"]
     Stores --> PS["FileProviderRepository<br/>providers"]
-    Stores --> VS["VoiceServiceStore<br/>audio/tts"]
-    Stores --> AS["AsrSettingsStore<br/>audio/asr"]
+    Stores --> VS["VoiceServiceStore<br/>audio/persistence"]
+    Stores --> AS["AsrSettingsStore<br/>audio/persistence"]
 
     Create --> VP["createVoiceProvider<br/>audio/services/sessions（mock/browser/ollama）"]
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]

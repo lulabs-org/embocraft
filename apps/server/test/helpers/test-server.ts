@@ -7,8 +7,8 @@ import {
   FileProviderRepository,
   bootstrapProviders,
 } from '../../src/modules/providers';
-import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
-import { AsrSettingsStore } from '../../src/modules/audio/asr/asr-settings';
+import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
+import { AsrSettingsStore } from '../../src/modules/audio/persistence/asr-settings-store';
 import {
   readManagementArchive,
   writeManagementArchive,

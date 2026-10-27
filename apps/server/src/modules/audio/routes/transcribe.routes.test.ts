@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AsrSettingsStore } from '../asr/asr-settings';
+import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { DEFAULT_WHISPER_ASR, DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';

@@ -10,7 +10,7 @@ import {
   DEFAULT_WHISPER_ASR,
   type BailianAsrDraft,
 } from '@voxel/shared';
-import { AsrSettingsStore } from '../asr/asr-settings';
+import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { installAsrRoutes } from './asr.routes.ts';
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
 import { createAsrSocket } from '../sockets/asr.socket';

@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频会话类型与 PCM 校验已归入 `audio/domain/`，音频处理与就近测试已归入 `audio/services/processing/`；语音会话实现与空间信令已归入 `audio/services/sessions/` 和 `audio/services/spatial/`；ASR 引擎、调度器与 Whisper 辅助文件已归入 `audio/services/asr/`；TTS 合成、模型安装与语音投递服务已归入 `audio/services/tts/`；音频持久化的目录仍待后续整理。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频会话类型与 PCM 校验已归入 `audio/domain/`，音频处理与就近测试已归入 `audio/services/processing/`；语音会话实现与空间信令已归入 `audio/services/sessions/` 和 `audio/services/spatial/`；ASR 引擎、调度器与 Whisper 辅助文件已归入 `audio/services/asr/`；TTS 合成、模型安装与语音投递服务已归入 `audio/services/tts/`；ASR/音色配置存储与数据库适配已归入 `audio/persistence/`。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -137,6 +137,13 @@ apps/server/
         │   │   └── spatial/             # 空间音频信令中继服务
         │   │       ├── signaling.service.ts
         │   │       └── signaling.service.test.ts
+        │   ├── persistence/             # ASR/音色配置存储及数据库适配
+        │   │   ├── asr-settings-store.ts # AsrSettingsStore：配置、迁移与识别占用
+        │   │   ├── asr-settings-store.test.ts
+        │   │   ├── voice-service-store.ts # VoiceServiceStore：配置、绑定与合成协调
+        │   │   ├── voice-service-store.test.ts
+        │   │   ├── database-asr-services.ts
+        │   │   └── database-voice-services.ts
         │   ├── routes/                  # HTTP 装配、接口与就近测试
         │   │   ├── audio.http.ts        # installAudioRoutes：保留鉴权与路由安装顺序
         │   │   ├── asr.routes.ts        # /voice/asr/services 识别服务管理
@@ -150,6 +157,8 @@ apps/server/
         │   │   └── capabilities.routes.test.ts
         │   ├── sockets/                 # 独立 WebSocket 端点
         │   │   └── asr.socket.ts        # /voice/asr/realtime 实时流式识别
+        │   ├── speech-endpoint.ts       # ASR/TTS 共用的内部服务地址配置
+        │   ├── speech-endpoint.test.ts
         │   └── index.ts                 # 保留 installAudioRoutes、installAsrSocket 等公开导出
         │
         ├── chat/                        # ── 3. 世界聊天与空间语音中继 ──
@@ -465,9 +474,11 @@ graph LR
 - **音频处理（`services/processing/`）**：
   `normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行与可执行文件查找，已有测试随源码共置。录音与合成音频各自的参数、时长限制、超时、取消传播和清理行为保持不变。
 - **ASR 服务（`services/asr/`）**：
-  `local-speech.service.ts` 保留 `LocalSpeech` 的 Whisper CLI/API 识别流程，`bailian.service.ts` 保留 `bridgeBailianAsr` 的流式协议，`speech-scheduler.service.ts` 保留 `SpeechScheduler` 与 `scheduleSpeech` 的队列管理。已有测试与源码共置。`whisper-settings.ts` 包含模型目录读取及配置校验，属于服务辅助文件，原有模型目录不变。`asr/asr-settings.ts`、其测试与 `asr/database-asr-services.ts` 留待持久化批次；ASR/TTS 共用的 `speech-endpoint.ts` 保留在模块根部。识别、排队、取消、超时、错误与资源清理行为保持不变，模块门面继续导出 `LocalSpeech` 和 `scheduleSpeech`。
+  `local-speech.service.ts` 保留 `LocalSpeech` 的 Whisper CLI/API 识别流程，`bailian.service.ts` 保留 `bridgeBailianAsr` 的流式协议，`speech-scheduler.service.ts` 保留 `SpeechScheduler` 与 `scheduleSpeech` 的队列管理。已有测试与源码共置。`whisper-settings.ts` 包含模型目录读取及配置校验，属于服务辅助文件，原有模型目录不变。`persistence/asr-settings-store.ts`、其测试与 `persistence/database-asr-services.ts` 负责配置存储；ASR/TTS 共用的 `speech-endpoint.ts` 保留在模块根部。识别、排队、取消、超时、错误与资源清理行为保持不变，模块门面继续导出 `LocalSpeech` 和 `scheduleSpeech`。
 - **TTS 服务（`services/tts/`）**：
-  `piper.service.ts` 和 `remote.service.ts` 保留 `PiperTts`、`RemoteTts` 的合成流程；`agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存；`piper-models.service.ts` 保留 `PiperModels` 的模型查询及安装调度。`speech-synthesizer.ts` 保存 `SpeechSynthesizer` 与 `SynthesizedSpeech` 契约，已有测试与服务共置。模块门面继续导出 `AgentSpeech` 和 `PiperTts`，合成参数、模型安装、队列、权限校验、取消和缓存行为保持不变。`tts/voice-services.ts`、其测试与 `tts/database-voice-services.ts` 留待持久化批次，共用 `speech-endpoint.ts` 保留原位。
+  `piper.service.ts` 和 `remote.service.ts` 保留 `PiperTts`、`RemoteTts` 的合成流程；`agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存；`piper-models.service.ts` 保留 `PiperModels` 的模型查询及安装调度。`speech-synthesizer.ts` 保存 `SpeechSynthesizer` 与 `SynthesizedSpeech` 契约，已有测试与服务共置。模块门面继续导出 `AgentSpeech` 和 `PiperTts`，合成参数、模型安装、队列、权限校验、取消和缓存行为保持不变。`persistence/voice-service-store.ts`、其测试与 `persistence/database-voice-services.ts` 负责音色配置存储，共用 `speech-endpoint.ts` 保留原位。
+- **配置存储与数据库适配（`persistence/`）**：
+  `asr-settings-store.ts` 与 `voice-service-store.ts` 保留 `AsrSettingsStore`、`VoiceServiceStore` 及持久化契约，已有存储测试与源码共置。两个 Store 仍包含原有校验与运行时协调职责，本次不拆分实现。`database-asr-services.ts` 和 `database-voice-services.ts` 保留数据库适配类名，模块门面保持全部公开导出。配置文件路径、格式迁移、默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `apps/server/test/`。
 - **会话与空间信令（`services/sessions/`、`services/spatial/`）**：
   Browser、Ollama、Mock 实现及工厂位于 `services/sessions/`；`voice-sessions.service.ts` 管理玩家会话的启动、中断、关闭与释放。`services/spatial/signaling.service.ts` 提供 WebRTC 信令校验与转发，已有测试随实现共置。audio 根部门面保留 `createVoiceProvider`、`VoiceProvider`、`VoiceSessions`、`createSpatialSignaling` 等全部公开导出，Provider 选择、事件内容、取消和信令转发行为保持不变。
 - **统一接口暴露（`routes/` & `sockets/`）**：

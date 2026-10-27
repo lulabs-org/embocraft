@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import { env } from '../../../core/config/env';
 import { originAllowed } from '../../../core/http/origin-policy';
 import { AppError } from '../../../core/errors/app-error';
-import type { AsrSettingsStore } from '../asr/asr-settings';
+import type { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { bridgeBailianAsr } from '../services/asr/bailian.service';
 import type { SocketRoutes } from '../../../core/transport/socket-routes';
 

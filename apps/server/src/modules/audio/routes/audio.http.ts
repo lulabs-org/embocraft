@@ -1,8 +1,8 @@
 import type { Express, RequestHandler } from 'express';
 import { installManagementJsonRoutes } from '../../management';
-import type { AsrSettingsStore } from '../asr/asr-settings';
+import type { AsrSettingsStore } from '../persistence/asr-settings-store';
 import type { LocalSpeech } from '../services/asr/local-speech.service';
-import type { VoiceServiceStore } from '../tts/voice-services';
+import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { installAsrRoutes } from './asr.routes';
 import { installTranscribeRoutes } from './transcribe.routes';
 import { installCapabilitiesRoutes } from './capabilities.routes';
