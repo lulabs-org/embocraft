@@ -7,10 +7,10 @@ import { Server, matchMaker } from '@colyseus/core';
 import { createApp } from './app';
 import { env, type ServerConfig } from './config';
 import { checkStartupDatabase } from './startup';
-import {
-  readManagementArchive,
-  writeManagementArchive,
-} from './persistence/archive-file';
+import type { ArchivePort } from './persistence/archive';
+import { DatabaseManagementArchive } from './persistence/database-archive';
+import { createDatabaseClient } from './persistence/database-client';
+import type { PrismaClient } from '@prisma/client';
 
 import type { SocketRoutes } from './transport/socket-routes';
 import { RoutedWebSocketTransport } from './transport/websocket.transport';
@@ -33,7 +33,8 @@ import { GatewayAuth } from './modules/gateway/auth';
 import { installGatewaySocket } from './modules/gateway/socket';
 
 import {
-  FileProviderRepository,
+  DatabaseProviderRepository,
+  type ProviderRepository,
   bootstrapProviders,
   ModelCatalog,
   ProviderHealthChecker,
@@ -45,7 +46,8 @@ import { WorldStore } from './modules/world/store';
 
 export type ServerOptions = {
   config?: ServerConfig;
-  providers?: FileProviderRepository;
+  providers?: ProviderRepository;
+  archive?: ArchivePort;
   voiceServices?: VoiceServiceStore;
   asrSettings?: AsrSettingsStore;
   speech?: LocalSpeech;
@@ -62,7 +64,7 @@ const wsHost = (host: string) => {
 
 type CoreStores = {
   gatewayAuth: GatewayAuth;
-  providers: FileProviderRepository;
+  providers: ProviderRepository;
   voiceServices: VoiceServiceStore;
   asrSettings: AsrSettingsStore;
 };
@@ -71,8 +73,9 @@ type CoreStores = {
 async function loadStores(
   config: ServerConfig,
   options: ServerOptions,
+  db?: PrismaClient,
 ): Promise<CoreStores> {
-  const providers = options.providers ?? new FileProviderRepository();
+  const providers = options.providers ?? new DatabaseProviderRepository(db!);
   const voiceServices = options.voiceServices ?? new VoiceServiceStore();
   const asrSettings = options.asrSettings ?? new AsrSettingsStore();
   const [gatewayAuth] = await Promise.all([
@@ -88,26 +91,31 @@ async function loadStores(
 export async function createServer(options: ServerOptions = {}) {
   const config = options.config ?? env.readServer();
   await (options.databaseCheck ?? checkStartupDatabase)(config.databaseUrl);
-  const { gatewayAuth, providers, voiceServices, asrSettings } =
-    await loadStores(config, options);
-  // Validate fallible provider construction before allocating network resources.
+  if (!config.databaseUrl && !(options.providers && options.archive))
+    throw new Error('必须配置 DATABASE_URL 才能持久化模型服务与 Agent 数据。');
+  // Validate voice configuration before allocating the long-lived database client.
   const voiceProvider = createVoiceProvider(
     config.voice.provider,
     config.voice,
   );
+  const db = config.databaseUrl
+    ? createDatabaseClient(config.databaseUrl)
+    : undefined;
+  const { gatewayAuth, providers, voiceServices, asrSettings } =
+    await loadStores(config, options, db).catch(async (error) => {
+      await db?.$disconnect();
+      throw error;
+    });
   const store = options.worldStore ?? new WorldStore(config.databaseUrl);
   let world: WorldRoom | undefined;
   let url = '';
-  const archivePath = `${providers.path}.agents.json`;
+  const archive = options.archive ?? new DatabaseManagementArchive(db!);
   const characters = new AICharacterManager(
     providers,
     () => url,
     options.agentDependencies,
     voiceServices,
-    {
-      load: () => readManagementArchive(archivePath),
-      save: (records) => writeManagementArchive(archivePath, records),
-    },
+    archive,
   );
   const modelCatalog = new ModelCatalog(providers);
   const providerHealth = new ProviderHealthChecker(providers);
@@ -184,8 +192,12 @@ export async function createServer(options: ServerOptions = {}) {
           http.closeAllConnections();
           await once(http, 'close');
         }
-        if (!world) await store.close();
-        world = undefined;
+        try {
+          if (!world) await store.close();
+        } finally {
+          await db?.$disconnect();
+          world = undefined;
+        }
       }
     })());
   return {

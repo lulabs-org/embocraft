@@ -1,5 +1,5 @@
 import { AgentRunner, Session } from '@voxel/agent-runtime';
-import type { FileProviderRepository } from '../providers/persistence/file-repository';
+import type { ProviderRuntimePort } from '../providers/ports';
 import type { VoiceServiceStore } from '../audio/tts/voice-services';
 import {
   AICharacterOrchestrator,
@@ -11,12 +11,12 @@ import {
   writeManagementArchive,
 } from '../../persistence/archive-file';
 
-/** Compatibility entry point for callers that construct a file-backed manager directly. */
+/** Manager wrapper; production injects a database archive, legacy tests inject files. */
 export class AICharacterManager extends AICharacterOrchestrator {
   declare readonly voiceServices: VoiceServiceStore | undefined;
 
   constructor(
-    providers: FileProviderRepository,
+    providers: ProviderRuntimePort & { path?: string },
     serverUrl: string | (() => string),
     dependencies: AICharacterDependencies = {
       session: (url) => new Session(url),
@@ -26,15 +26,17 @@ export class AICharacterManager extends AICharacterOrchestrator {
     voiceServices?: VoiceServiceStore,
     archive?: ArchivePort,
   ) {
-    const path = `${providers.path}.agents.json`;
+    const path = providers.path && `${providers.path}.agents.json`;
+    if (!archive && !path)
+      throw new Error('AICharacterManager requires an archive');
     super(
       providers,
       serverUrl,
       dependencies,
       voiceServices,
       archive ?? {
-        load: () => readManagementArchive(path),
-        save: (records) => writeManagementArchive(path, records),
+        load: () => readManagementArchive(path!),
+        save: (records) => writeManagementArchive(path!, records),
       },
     );
   }

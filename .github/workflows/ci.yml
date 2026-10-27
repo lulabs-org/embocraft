@@ -83,3 +83,40 @@ jobs:
 
       - name: Run integration test
         run: pnpm test:integration
+
+  persistence:
+    name: PostgreSQL persistence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: voxel
+          POSTGRES_PASSWORD: voxel
+          POSTGRES_DB: voxel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U voxel -d voxel_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://voxel:voxel@127.0.0.1:5432/voxel_test?schema=public
+      TEST_DATABASE_URL: postgresql://voxel:voxel@127.0.0.1:5432/voxel_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm --filter @voxel/server exec prisma migrate deploy
+      - run: pnpm --filter @voxel/server exec vitest run test/database-persistence.test.ts --config ../../vitest.config.ts

@@ -65,10 +65,9 @@ export function databaseStartupMessage(error: unknown, databaseUrl: string) {
 
 export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
   if (!databaseUrl) {
-    console.warn(
-      '[警告] 未配置 DATABASE_URL，使用内存模式；服务重启后世界编辑会丢失。',
+    throw new Error(
+      '[启动失败] 必须配置 DATABASE_URL 并运行 pnpm db:migrate。',
     );
-    return;
   }
   let db: PrismaClient | undefined;
   try {
@@ -77,6 +76,12 @@ export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
     await db.$connect();
     // Read-only check before Colyseus creates a room and logs initialization errors.
     await db.world.findFirst({ select: { id: true } });
+    await db.agentProvider.findFirst({ select: { id: true } });
+    await db.agentProviderState.findFirst({ select: { id: true } });
+    await db.agentCharacter.findFirst({ select: { id: true } });
+    await db.agentPlan.findFirst({ select: { id: true } });
+    await db.agentRun.findFirst({ select: { id: true } });
+    await db.agentRequest.findFirst({ select: { key: true } });
   } catch (error) {
     // Raw database errors can contain credentials; expose only the sanitized message.
     // eslint-disable-next-line preserve-caught-error

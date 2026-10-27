@@ -9,6 +9,10 @@ import {
 } from '../../src/modules/providers';
 import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
 import { AsrSettingsStore } from '../../src/modules/audio/asr/asr-settings';
+import {
+  readManagementArchive,
+  writeManagementArchive,
+} from '../../src/persistence/archive-file';
 
 /** Production assembly with isolated disk/world and a random loopback port by default. */
 export async function createTestServer(
@@ -25,11 +29,19 @@ export async function createTestServer(
     const providers =
       options.providers ??
       new FileProviderRepository(join(directory, 'providers.json'));
+    const archivePath =
+      providers instanceof FileProviderRepository
+        ? `${providers.path}.agents.json`
+        : join(directory, 'providers.json.agents.json');
     if (!options.providers)
       await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-only' });
     server = await createServer({
       ...options,
       providers,
+      archive: options.archive ?? {
+        load: () => readManagementArchive(archivePath),
+        save: (records) => writeManagementArchive(archivePath, records),
+      },
       asrSettings:
         options.asrSettings ??
         new AsrSettingsStore(join(directory, 'asr-settings.json')),
