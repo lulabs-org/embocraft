@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -82,7 +82,11 @@ apps/server/
         │   │   ├── orchestrator.service.ts # 意图与动作编排服务
         │   │   ├── character-host.service.ts # 单智能体 Actor 宿主与执行上下文
         │   │   ├── wake-scheduler.service.ts # 定时与事件唤醒调度器
-        │   │   └── voice-coordinator.service.ts # 语音协同调度服务
+        │   │   ├── voice-coordinator.service.ts # 语音协同调度服务
+        │   │   ├── job.ts               # 托管运行时状态、集合与状态判定
+        │   │   ├── execution-context.ts # 会话与 Runner 执行上下文契约
+        │   │   ├── task-adapter.ts      # 将角色运行时状态适配为 Tasks 执行状态
+        │   │   └── world-event-handler.ts # 世界事件接收与角色唤醒协调
         │   ├── persistence/             # 角色配置存储与快照捕获（Snapshots）
         │   │   ├── snapshots.ts         # 角色快照捕获
         │   │   ├── restore.ts           # 历史快照还原

@@ -1,15 +1,15 @@
 import { AgentRunner, Session } from '@voxel/agent-runtime';
-import type { ProviderRuntimePort } from '../providers';
-import type { VoiceServiceStore } from '../audio';
+import type { ProviderRuntimePort } from '../../providers';
+import type { VoiceServiceStore } from '../../audio';
 import {
   AICharacterOrchestrator,
   type AICharacterDependencies,
-} from './services/orchestrator';
-import type { ArchivePort } from '../../persistence/archive';
+} from './orchestrator.service';
+import type { ArchivePort } from '../../../persistence/archive';
 import {
   readManagementArchive,
   writeManagementArchive,
-} from '../../persistence/archive-file';
+} from '../../../persistence/archive-file';
 
 /** Manager wrapper; production injects a database archive, legacy tests inject files. */
 export class AICharacterManager extends AICharacterOrchestrator {

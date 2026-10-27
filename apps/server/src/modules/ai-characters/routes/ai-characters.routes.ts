@@ -1,5 +1,5 @@
-import { ManagementCommands } from '../management';
-import { AppError } from '../../core/errors/app-error';
+import { ManagementCommands } from '../../management';
+import { AppError } from '../../../core/errors/app-error';
 import type { Express, Request } from 'express';
 import {
   AI_CHARACTER_LOG_MAX_PAGE_SIZE,
@@ -7,8 +7,8 @@ import {
   type AICharacterLogPage,
 } from '@voxel/shared';
 import type { PublicAICharacterView } from '@voxel/shared/management';
-import type { AICharacterOrchestrator } from './services/orchestrator';
-import { asyncRoute as route } from '../../core/http/middleware/async-route';
+import type { AICharacterOrchestrator } from '../services/orchestrator.service';
+import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 /** Opaque, versioned cursor wrapping a newest-first page offset. */
 const encodeLogCursor = (offset: number) =>
