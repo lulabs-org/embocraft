@@ -95,7 +95,7 @@ graph TD
     Stores --> VS["VoiceServiceStore<br/>audio/tts"]
     Stores --> AS["AsrSettingsStore<br/>audio/asr"]
 
-    Create --> VP["createVoiceProvider<br/>audio/session（mock/browser/ollama）"]
+    Create --> VP["createVoiceProvider<br/>audio/services/sessions（mock/browser/ollama）"]
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
     Create --> MC["ModelCatalog<br/>providers/model-catalog"]

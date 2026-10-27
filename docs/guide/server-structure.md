@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频会话类型与 PCM 校验已归入 `audio/domain/`，音频处理与就近测试已归入 `audio/services/processing/`；音频引擎、会话实现与持久化的目录仍待后续整理。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频会话类型与 PCM 校验已归入 `audio/domain/`，音频处理与就近测试已归入 `audio/services/processing/`；语音会话实现与空间信令已归入 `audio/services/sessions/` 和 `audio/services/spatial/`；ASR/TTS 引擎与持久化的目录仍待后续整理。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -114,9 +114,19 @@ apps/server/
         │   │   │   ├── remote.service.ts
         │   │   │   └── voice.service.ts
         │   │   ├── sessions/            # 语音会话状态维护（Browser、Ollama 智能体语音会话）
-        │   │   │   └── voice-sessions.service.ts
+        │   │   │   ├── index.ts         # createVoiceProvider 工厂、实现与类型重导出
+        │   │   │   ├── index.test.ts
+        │   │   │   ├── browser.ts
+        │   │   │   ├── browser.test.ts
+        │   │   │   ├── ollama.ts
+        │   │   │   ├── ollama.test.ts
+        │   │   │   ├── mock.ts
+        │   │   │   ├── mock.test.ts
+        │   │   │   ├── voice-sessions.service.ts # VoiceSessions：玩家会话生命周期
+        │   │   │   └── voice-sessions.service.test.ts
         │   │   └── spatial/             # 空间音频信令中继服务
-        │   │       └── signaling.service.ts
+        │   │       ├── signaling.service.ts
+        │   │       └── signaling.service.test.ts
         │   ├── routes/                  # HTTP 装配、接口与就近测试
         │   │   ├── audio.http.ts        # installAudioRoutes：保留鉴权与路由安装顺序
         │   │   ├── asr.routes.ts        # /voice/asr/services 识别服务管理
@@ -441,17 +451,18 @@ graph LR
 音频模块实现了实时多模态交互全双工闭环，遵循标准分层架构：
 
 - **领域音频规则（`domain/`）**：
-  `types.ts` 定义语音状态、事件、输入、会话与 Provider 契约，`session/index.ts` 保留原有类型重导出。`pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；它不负责 WAV 封包，也不执行 I/O。
+  `types.ts` 定义语音状态、事件、输入、会话与 Provider 契约，`services/sessions/index.ts` 保留原有类型重导出。`pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；它不负责 WAV 封包，也不执行 I/O。
 - **音频处理（`services/processing/`）**：
   `normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行与可执行文件查找，已有测试随源码共置。录音与合成音频各自的参数、时长限制、超时、取消传播和清理行为保持不变。
 - **多引擎服务调度（目标 `services/`）**：
   - **ASR 识别引擎**：支持通过配置在 Whisper 本地离线识别与阿里云百炼 WebSocket 双工流式识别之间平滑切换；
   - **TTS 合成引擎**：支持本地 Piper 离线轻量音色（优先低延迟）与远端大模型 TTS 服务按需调度；
-  - **会话与空间信令**：提供 Browser、Ollama 智能体语音会话管理（`sessions/`）及 WebRTC 空间信令中继服务（`spatial/`）。
+- **会话与空间信令（`services/sessions/`、`services/spatial/`）**：
+  Browser、Ollama、Mock 实现及工厂位于 `services/sessions/`；`voice-sessions.service.ts` 管理玩家会话的启动、中断、关闭与释放。`services/spatial/signaling.service.ts` 提供 WebRTC 信令校验与转发，已有测试随实现共置。audio 根部门面保留 `createVoiceProvider`、`VoiceProvider`、`VoiceSessions`、`createSpatialSignaling` 等全部公开导出，Provider 选择、事件内容、取消和信令转发行为保持不变。
 - **统一接口暴露（`routes/` & `sockets/`）**：
   HTTP 装配位于 `routes/audio.http.ts`，ASR 服务管理、音频转写、Piper 模型、TTS 服务及能力探针保留独立路由文件与现有测试。`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`，模块门面保留 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket`、`AsrBridge` 等全部公开导出。鉴权、Origin 策略、JSON/原始音频限制、装配顺序及连接生命周期保持不变。
 - **空间音频信令与听觉可见性解耦**：
-  `spatial/signaling.ts` 的 `createSpatialSignaling` 由 `WorldRoom` 调用，通过世界房间消息转发 WebRTC 协商数据，不注册独立的 `spatial.socket.ts` 端点。空间信令负责 WebRTC Peer 媒体协商；声音的距离衰减、朝向增益与声像由 `@voxel/shared` 的 `spatialMix` 计算，`chat/services/spatial-speech.service.ts` 据此筛选听众并管理语音票据。`chat/domain/visibility.ts` 只按消息范围、发送者与接收者判断消息是否对玩家可见，不执行距离衰减计算。
+  `services/spatial/signaling.service.ts` 的 `createSpatialSignaling` 由 `WorldRoom` 调用，通过世界房间消息转发 WebRTC 协商数据，不注册独立的 `spatial.socket.ts` 端点。空间信令负责 WebRTC Peer 媒体协商；声音的距离衰减、朝向增益与声像由 `@voxel/shared` 的 `spatialMix` 计算，`chat/services/spatial-speech.service.ts` 据此筛选听众并管理语音票据。`chat/domain/visibility.ts` 只按消息范围、发送者与接收者判断消息是否对玩家可见，不执行距离衰减计算。
 
 ---
 

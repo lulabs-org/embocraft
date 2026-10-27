@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createSpatialSignaling } from './signaling';
+import { createSpatialSignaling } from './signaling.service';
 
 function fixture() {
   const players = new Map(

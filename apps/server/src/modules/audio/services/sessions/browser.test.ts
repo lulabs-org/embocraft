@@ -2,7 +2,7 @@ import { it, expect, vi, afterEach } from 'vitest';
 
 import { BrowserVoiceProvider } from './browser';
 
-import type { VoiceEvent } from '../domain/types';
+import type { VoiceEvent } from '../../domain/types';
 
 afterEach(() => {
   vi.unstubAllGlobals();
