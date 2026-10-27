@@ -190,6 +190,68 @@ export function installChatRoutes(
     res.sendStatus(204);
   });
 
+  /**
+   * @openapi
+   * /chat/spatial/{id}/text:
+   *   post:
+   *     security:
+   *       - ChatBearer: []
+   *     summary: 发布附近麦克风的识别文字
+   *     description: 使用已发起的空间语音流发布前端确认的文字，并结束该语音流。
+   *     tags:
+   *       - Chat
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         description: 空间语音流 ID
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [text]
+   *             properties:
+   *               text:
+   *                 type: string
+   *                 minLength: 1
+   *                 maxLength: 240
+   *     responses:
+   *       200:
+   *         description: 已发布的附近聊天消息
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [scope, recipients, kind, name, text, transcriptAvailable]
+   *               properties:
+   *                 scope:
+   *                   type: string
+   *                   enum: [nearby]
+   *                 recipients:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                 kind:
+   *                   type: string
+   *                   enum: [text]
+   *                 name:
+   *                   type: string
+   *                 text:
+   *                   type: string
+   *                 transcriptAvailable:
+   *                   type: boolean
+   *                   enum: [true]
+   *       400:
+   *         description: 识别文字为空或超过 240 字
+   *       401:
+   *         description: 玩家会话无效
+   *       409:
+   *         description: 麦克风已关闭，或语音流已过期、取消或处理过
+   */
   app.post(
     '/chat/spatial/:id/text',
     express.json({ limit: '2kb' }),

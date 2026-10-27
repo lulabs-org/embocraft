@@ -16,6 +16,7 @@ const options: swaggerJsdoc.Options = {
     servers: [{ url: '/', description: '当前服务器' }],
     tags: [
       { name: 'System', description: '服务状态' },
+      { name: 'Management', description: '管理命令执行状态' },
       { name: 'World', description: '世界与在线状态' },
       { name: 'AI Characters', description: 'AI 角色配置、上下线与语音设置' },
       { name: 'Providers', description: '共享 LLM 提供商配置与模型目录' },
@@ -31,7 +32,7 @@ const options: swaggerJsdoc.Options = {
           type: 'http',
           scheme: 'bearer',
           description:
-            '管理员令牌；用于 AI Characters、Providers、Tasks、TTS 和 ASR 配置管理。',
+            '管理员令牌；用于管理命令查询，以及 AI Characters、Providers、Tasks、TTS 和 ASR 配置管理。',
         },
         ChatBearer: {
           type: 'http',
