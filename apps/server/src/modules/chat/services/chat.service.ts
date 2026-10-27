@@ -1,13 +1,13 @@
-import { AppError } from '../../core/errors/app-error';
+import { AppError } from '../../../core/errors/app-error';
 import {
   CHAT_MIN_INTERVAL_MS,
   parseChatRoute,
   type ChatData,
   type Player,
 } from '@voxel/shared';
-import { ChatCredentials } from './credentials';
-import { ChatAudioClips } from './audio-clips';
-import { SpatialSpeech } from './spatial-speech';
+import { ChatCredentials } from './credentials.service';
+import { ChatAudioClips } from './audio-clips.service';
+import { SpatialSpeech } from './spatial-speech.service';
 
 /** Room-facing chat API; each stateful concern owns its own lifecycle. */
 export class WorldChat {

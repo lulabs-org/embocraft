@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseChatRoute, spatialMix, type Player } from '@voxel/shared';
-import { visibleEvent } from '../src/modules/chat/visibility';
-import { WorldChat } from '../src/modules/chat/chat';
+import { visibleEvent } from '../src/modules/chat';
+import { WorldChat } from '../src/modules/chat';
 import {
   isolateChatScope,
   executeAction,

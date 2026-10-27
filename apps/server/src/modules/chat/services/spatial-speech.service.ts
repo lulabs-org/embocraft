@@ -5,7 +5,7 @@ import {
   type ChatData,
   type Player,
 } from '@voxel/shared';
-import { AppError } from '../../core/errors/app-error';
+import { AppError } from '../../../core/errors/app-error';
 
 type SpeechTicket = {
   actor: string;

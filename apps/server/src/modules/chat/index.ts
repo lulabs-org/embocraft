@@ -1,3 +1,3 @@
-export { WorldChat } from './chat';
-export { installChatRoutes } from './chat.routes';
-export { visibleEvent } from './visibility';
+export { WorldChat } from './services/chat.service';
+export { installChatRoutes } from './routes/chats.routes';
+export { visibleEvent } from './domain/visibility';

@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -126,13 +126,14 @@ apps/server/
         │
         ├── chat/                        # ── 3. 世界聊天与空间语音中继 ──
         │   ├── domain/
-        │   │   └── visibility.ts        # 声音距离衰减与空间可见性判定（纯函数计算）
+        │   │   └── visibility.ts        # 按消息范围、发送者与接收者判断可见性（纯函数）
         │   ├── services/
         │   │   ├── chat.service.ts           # 聊天室核心服务
         │   │   ├── credentials.service.ts    # 玩家防伪临时凭据服务（ChatCredentials）
         │   │   ├── audio-clips.service.ts    # 录音切片缓存服务
         │   │   ├── spatial-speech.service.ts # 空间化语音广播服务
-        │   │   └── speech.service.ts         # 本地/远端语音调度服务
+        │   │   ├── speech.service.ts         # 聊天 ASR 协调、上传槽位与票据生命周期
+        │   │   └── speech.service.test.ts
         │   ├── routes/
         │   │   ├── chats.routes.ts       # 聊天消息收发与历史查询
         │   │   └── chats.routes.test.ts
@@ -434,7 +435,7 @@ graph LR
 - **统一接口暴露（`routes/` & `sockets/`）**：
   所有 HTTP 接口集中于 `routes/`（ASR 控制、TTS 模型管理、能力探针），所有实时音频/信令套接字集中于 `sockets/`（ASR 实时流式识别端点、空间音频信令端点），由根部 `index.ts` 统一对外导出挂载函数。
 - **空间音频信令与听觉可见性解耦**：
-  空间信令仅负责 WebRTC Peer 媒体协商；声音的物理空间距离衰减与听觉可见性判定，严格由 `chat/domain/visibility.ts` 以纯数学函数计算（输入双方三维坐标与世界声学衰减系数），不与 Colyseus 游戏状态混合传输。
+  空间信令负责 WebRTC Peer 媒体协商；声音的距离衰减、朝向增益与声像由 `@voxel/shared` 的 `spatialMix` 计算，`chat/services/spatial-speech.service.ts` 据此筛选听众并管理语音票据。`chat/domain/visibility.ts` 只按消息范围、发送者与接收者判断消息是否对玩家可见，不执行距离衰减计算。
 
 ---
 

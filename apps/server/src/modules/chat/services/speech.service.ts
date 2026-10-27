@@ -1,6 +1,6 @@
-import { LocalSpeech, scheduleSpeech, AsrSettingsStore } from '../audio';
-import type { WorldChat } from './chat';
-import { AppError } from '../../core/errors/app-error';
+import { LocalSpeech, scheduleSpeech, AsrSettingsStore } from '../../audio';
+import type { WorldChat } from './chat.service';
+import { AppError } from '../../../core/errors/app-error';
 
 type AudioInput = {
   chat: WorldChat;

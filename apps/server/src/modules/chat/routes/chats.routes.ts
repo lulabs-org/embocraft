@@ -1,14 +1,14 @@
-import { asyncRoute } from '../../core/http/middleware/async-route';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
 import cors from 'cors';
-import { env } from '../../core/config/env';
-import { createOriginGuard } from '../../core/http/middleware/origin-guard';
-import { errorHandler } from '../../core/http/middleware/error-handler';
+import { env } from '../../../core/config/env';
+import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express } from 'express';
-import { type WorldChat } from './chat';
+import { type WorldChat } from '../services/chat.service';
 
-import { LocalSpeech, AsrSettingsStore, type AgentSpeech } from '../audio';
-import { AppError } from '../../core/errors/app-error';
-import { ChatSpeechService } from './speech-service';
+import { LocalSpeech, AsrSettingsStore, type AgentSpeech } from '../../audio';
+import { AppError } from '../../../core/errors/app-error';
+import { ChatSpeechService } from '../services/speech.service';
 export function installChatRoutes(
   app: Express,
   getChat: () => WorldChat | undefined,
