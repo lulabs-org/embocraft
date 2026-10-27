@@ -1,9 +1,9 @@
-import { env } from '../../../core/config/env';
-import { AppError } from '../../../core/errors/app-error';
+import { env } from '../../../../core/config/env';
+import { AppError } from '../../../../core/errors/app-error';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { validatePcmWav } from './pcm-wav';
+import { validatePcmWav } from '../../domain/pcm-wav';
 import { runCommand, type CommandRunner } from './command';
 
 export const MAX_AUDIO_BYTES = 5 * 1024 * 1024;

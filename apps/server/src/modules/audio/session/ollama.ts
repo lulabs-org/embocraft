@@ -4,7 +4,7 @@ import type {
   VoiceProvider,
   VoiceSession,
   VoiceState,
-} from './types';
+} from '../domain/types';
 
 /** Local text inference only; the browser owns recognition and playback. */
 export class OllamaVoiceProvider implements VoiceProvider {

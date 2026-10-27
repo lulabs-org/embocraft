@@ -10,14 +10,14 @@ import {
   executable,
   runCommand,
   type CommandRunner,
-} from '../processing/command';
-import { validatePcmWav } from '../processing/pcm-wav';
+} from '../services/processing/command';
+import { validatePcmWav } from '../domain/pcm-wav';
 import {
   audioFormats,
   MAX_AUDIO_BYTES,
   normalizeRecording,
   convertToPcmWav,
-} from '../processing/normalize';
+} from '../services/processing/normalize';
 
 function whisperPrompt(language: string, settings?: WhisperAsrSettings) {
   return (

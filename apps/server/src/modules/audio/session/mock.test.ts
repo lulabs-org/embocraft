@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { MockVoiceProvider } from './mock';
 
-import type { VoiceEvent } from './types';
+import type { VoiceEvent } from '../domain/types';
 
 afterEach(() => vi.useRealTimers());
 

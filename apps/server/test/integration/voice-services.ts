@@ -19,7 +19,7 @@ import {
   bootstrapProviders,
 } from '../../src/modules/providers';
 import { VoiceServiceStore } from '../../src/modules/audio/tts/voice-services';
-import { validatePcmWav } from '../../src/modules/audio/processing/pcm-wav';
+import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
 
 process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5191';
