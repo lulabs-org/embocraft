@@ -1,13 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AsrSettingsStore } from './asr-settings';
+import { AsrSettingsStore } from '../asr/asr-settings';
 import { DEFAULT_WHISPER_ASR, DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { installTranscribeRoutes } from './transcribe.routes';
-import { LocalSpeech } from './local-speech';
+import { LocalSpeech } from '../asr/local-speech';
 import { AppError } from '../../../core/errors/app-error';
 describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore, dir: string;

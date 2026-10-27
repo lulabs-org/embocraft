@@ -1,7 +1,10 @@
-export { installAudioRoutes, type AudioRouteDependencies } from './routes';
+export {
+  installAudioRoutes,
+  type AudioRouteDependencies,
+} from './routes/audio.http';
 export { AsrSettingsStore } from './asr/asr-settings';
 export { DatabaseAsrServicePersistence } from './asr/database-asr-services';
-export { installAsrSocket, type AsrBridge } from './asr/asr.socket';
+export { installAsrSocket, type AsrBridge } from './sockets/asr.socket';
 export { LocalSpeech } from './asr/local-speech';
 export { scheduleSpeech } from './asr/speech-scheduler';
 export { createVoiceProvider, type VoiceProvider } from './session';

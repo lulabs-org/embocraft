@@ -3,12 +3,12 @@ import cors from 'cors';
 import { env } from '../../../core/config/env';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
-import { AsrSettingsStore } from './asr-settings';
+import { AsrSettingsStore } from '../asr/asr-settings';
 import express, { type Express } from 'express';
-import { LocalSpeech } from './local-speech';
+import { LocalSpeech } from '../asr/local-speech';
 import { MAX_AUDIO_BYTES } from '../processing/normalize';
 import { AppError } from '../../../core/errors/app-error';
-import { scheduleSpeech } from './speech-scheduler';
+import { scheduleSpeech } from '../asr/speech-scheduler';
 export function installTranscribeRoutes(
   app: Express,
   speech = new LocalSpeech(),

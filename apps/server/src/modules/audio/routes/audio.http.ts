@@ -1,13 +1,13 @@
 import type { Express, RequestHandler } from 'express';
-import { installManagementJsonRoutes } from '../management';
-import type { AsrSettingsStore } from './asr/asr-settings';
-import type { LocalSpeech } from './asr/local-speech';
-import type { VoiceServiceStore } from './tts/voice-services';
-import { installAsrRoutes } from './asr/asr.routes';
-import { installTranscribeRoutes } from './asr/transcribe.routes';
+import { installManagementJsonRoutes } from '../../management';
+import type { AsrSettingsStore } from '../asr/asr-settings';
+import type { LocalSpeech } from '../asr/local-speech';
+import type { VoiceServiceStore } from '../tts/voice-services';
+import { installAsrRoutes } from './asr.routes';
+import { installTranscribeRoutes } from './transcribe.routes';
 import { installCapabilitiesRoutes } from './capabilities.routes';
-import { installPiperRoutes } from './tts/piper.routes';
-import { installVoiceServiceRoutes } from './tts/voice-services.routes';
+import { installPiperRoutes } from './piper.routes';
+import { installVoiceServiceRoutes } from './voice-services.routes';
 
 export type AudioRouteDependencies = {
   origin: string;

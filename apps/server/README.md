@@ -64,6 +64,8 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `world` 的地形、玩家名称和输入/编辑校验规则归入 `domain/`，数据库存储与就近测试归入 `persistence/`，HTTP/SSE 路由与测试归入 `routes/worlds.routes.ts` 及同名测试文件。`world.room.ts` 与 `world.schema.ts` 留在模块根部，分别负责 Colyseus 房间生命周期与同步状态 Schema；Schema 依赖框架，不属于纯领域规则。模块门面保留 `WorldRoom`、`WorldStore`、`installWorldRoutes` 和 `installPresenceRoutes` 四个公开导出。Schema 字段与注册顺序、物理模拟、持久化、房间生命周期及 `/world`、`/world/presence` 行为保持不变。跨共享物理实现的世界规则测试与服务器生命周期测试保留在 `test/`。
 
+`audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `spatial/signaling.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。音频引擎、会话与持久化目录将在后续批次整理。
+
 `AgentSpeech` 位于 `modules/audio/tts/agent-speech.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
 
 ## 状态与测试

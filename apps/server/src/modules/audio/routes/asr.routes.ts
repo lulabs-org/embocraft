@@ -5,7 +5,7 @@ import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { assertJsonRequest } from '../../../core/http/middleware/require-json';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express, type Request, type Response } from 'express';
-import { AsrSettingsStore } from './asr-settings';
+import { AsrSettingsStore } from '../asr/asr-settings';
 import { AppError } from '../../../core/errors/app-error';
 
 export function installAsrRoutes(

@@ -5,9 +5,9 @@ import { createServer, type Server } from 'node:http';
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import { AsrSettingsStore } from './asr/asr-settings';
-import { LocalSpeech } from './asr/local-speech';
-import { PiperModels } from './tts/piper-models';
+import { AsrSettingsStore } from '../asr/asr-settings';
+import { LocalSpeech } from '../asr/local-speech';
+import { PiperModels } from '../tts/piper-models';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
 describe('audio capabilities HTTP boundary', () => {
