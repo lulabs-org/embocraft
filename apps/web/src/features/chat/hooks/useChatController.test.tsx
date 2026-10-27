@@ -72,10 +72,10 @@ it('requires an explicit service for dictation and recorded voice', async () => 
   const dictation = vi.spyOn(controller.dictation, 'start');
   const recorder = vi.spyOn(controller.recorder, 'start');
   await act(async () => controller.record('text'));
-  expect(controller.error).toContain('选择对应的识别服务');
+  expect(controller.error).toContain('识别服务分配');
   expect(dictation).not.toHaveBeenCalled();
   await act(async () => controller.record('audio'));
-  expect(controller.error).toContain('选择对应的识别服务');
+  expect(controller.error).toContain('识别服务分配');
   expect(recorder).not.toHaveBeenCalled();
   await act(async () => controller.setClip(new Blob(['audio'])));
   await act(async () => controller.send());

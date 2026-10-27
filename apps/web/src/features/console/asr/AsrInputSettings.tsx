@@ -13,11 +13,15 @@ function InputChoice({
   services,
   loaded,
   use,
+  draftId,
+  onDraftChange,
 }: {
   selection: ReturnType<typeof useAsrSelection>;
   services: AsrChoice[];
   loaded: boolean;
   use: AsrUse;
+  draftId: string;
+  onDraftChange: (id: string) => void;
 }) {
   const { t } = useI18n();
   return (
@@ -25,16 +29,9 @@ function InputChoice({
       <strong>{t('console.asrInput.serviceLabel')}</strong>
       <select
         value={
-          services.some((service) => service.id === selection.selected.id)
-            ? selection.selected.id
-            : ''
+          services.some((service) => service.id === draftId) ? draftId : ''
         }
-        onChange={(e) => {
-          const service = services.find(
-            (service) => service.id === e.target.value,
-          );
-          if (service) selection.choose(service);
-        }}
+        onChange={(e) => onDraftChange(e.target.value)}
       >
         <option value="" disabled>
           {t('console.asrInput.selectPlaceholder')}
@@ -67,6 +64,7 @@ function InputChoice({
 export function AsrInputSettings({ active }: { active: boolean }) {
   const { t } = useI18n();
   const [use, setUse] = useState<AsrUse>('spatial');
+  const [drafts, setDrafts] = useState<Partial<Record<AsrUse, string>>>({});
   const chat = useAsrSelection('chat');
   const spatial = useAsrSelection('spatial');
   const clip = useAsrSelection('clip');
@@ -76,6 +74,18 @@ export function AsrInputSettings({ active }: { active: boolean }) {
     .filter((service) => use !== 'clip' || service.provider === 'whisper')
     .map(toAsrChoice);
   const choices = { chat, spatial, clip };
+  const draftId = drafts[use] ?? selection.selected.id;
+  const draftIsAvailable = services.some((service) => service.id === draftId);
+  const canSave = draftId !== selection.selected.id && draftIsAvailable;
+  const save = () => {
+    const service = services.find((item) => item.id === draftId);
+    if (!service || !selection.choose(service)) return;
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[use];
+      return next;
+    });
+  };
   return (
     <section
       className="asr-input-settings console-columns"
@@ -108,9 +118,6 @@ export function AsrInputSettings({ active }: { active: boolean }) {
             </button>
           ))}
         </div>
-        <p className="console-sidebar-note">
-          {t('console.asrInput.sidebarNote')}
-        </p>
       </aside>
       <div className="agent-form console-panel">
         <div className="console-panel-heading">
@@ -122,12 +129,28 @@ export function AsrInputSettings({ active }: { active: boolean }) {
             {manager.error}
           </p>
         )}
-        <InputChoice
-          selection={selection}
-          services={services}
-          loaded={manager.loaded}
-          use={use}
-        />
+        <div className="asr-input-controls">
+          <InputChoice
+            selection={selection}
+            services={services}
+            loaded={manager.loaded}
+            use={use}
+            draftId={draftId}
+            onDraftChange={(id) =>
+              setDrafts((current) => ({ ...current, [use]: id }))
+            }
+          />
+          <button
+            type="button"
+            className="primary"
+            disabled={!canSave}
+            onClick={save}
+          >
+            {draftIsAvailable && draftId === selection.selected.id
+              ? t('console.asrInput.saved')
+              : t('console.asrInput.save')}
+          </button>
+        </div>
       </div>
     </section>
   );

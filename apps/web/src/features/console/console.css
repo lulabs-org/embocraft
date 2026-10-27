@@ -214,11 +214,33 @@
 .asr-input-settings {
   min-width: 0;
 }
+.asr-input-settings .console-sidebar-items {
+  gap: 6px;
+}
+.agent-dialog .asr-input-settings .console-sidebar-item {
+  height: 64px;
+}
+.asr-input-settings .console-panel {
+  padding: 20px 22px 22px;
+}
+.asr-input-settings .console-panel-heading {
+  margin-bottom: 18px;
+}
+.asr-input-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
 .agent-form .asr-input-choice {
   display: grid;
   gap: 8px;
-  max-width: 440px;
   margin: 0;
+}
+.agent-dialog .asr-input-controls > button {
+  min-width: 96px;
+  height: 36px;
+  padding: 7px 12px;
 }
 .asr-input-choice strong {
   font-size: 12px;
@@ -236,6 +258,14 @@
   border-radius: var(--radius-control);
   background: #fff;
   font-size: 12px;
+}
+@media (max-width: 560px) {
+  .asr-input-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .asr-input-controls > button {
+    justify-self: end;
+  }
 }
 .voice-key-field {
   margin-bottom: 13px;
