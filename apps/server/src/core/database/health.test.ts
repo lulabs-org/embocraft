@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { checkStartupDatabase, databaseStartupMessage } from './startup';
+import { checkStartupDatabase, databaseStartupMessage } from './health';
 
 const db = vi.hoisted(() => ({
   $connect: vi.fn(),
@@ -51,7 +51,30 @@ describe('database startup diagnostics', () => {
     await checkStartupDatabase();
     expect(db.$connect).toHaveBeenCalledOnce();
     expect(db.world.findFirst).toHaveBeenCalledWith({ select: { id: true } });
+    for (const table of [
+      db.agentProvider,
+      db.agentProviderState,
+      db.agentCharacter,
+      db.agentPlan,
+      db.agentRun,
+      db.ttsService,
+      db.ttsCatalogState,
+      db.asrService,
+    ])
+      expect(table.findFirst).toHaveBeenCalledWith({ select: { id: true } });
+    expect(db.agentRequest.findFirst).toHaveBeenCalledWith({
+      select: { key: true },
+    });
     expect(db.$disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('sanitizes client construction failures before a connection exists', async () => {
+    createClient.mockImplementation(() => {
+      throw new Error(`sensitive connection: ${localUrl}`);
+    });
+    await expect(checkStartupDatabase()).rejects.toThrow('数据库启动检查失败');
+    await expect(checkStartupDatabase()).rejects.not.toThrow('secret');
+    expect(db.$disconnect).not.toHaveBeenCalled();
   });
 
   it('rejects an unreachable database with manual recovery steps and no credentials', async () => {

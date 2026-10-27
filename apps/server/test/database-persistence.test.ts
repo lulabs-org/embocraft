@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import { createDatabaseClient } from '../src/persistence/database-client';
+import { createDatabaseClient } from '../src/core/database/client';
 import { DatabaseProviderRepository } from '../src/modules/providers/persistence/database-repository';
 import { bootstrapProviders } from '../src/modules/providers/bootstrap';
 import { DatabaseManagementArchive } from '../src/modules/management';

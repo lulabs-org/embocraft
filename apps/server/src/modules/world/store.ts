@@ -1,6 +1,6 @@
 import { env } from '../../core/config/env';
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import type { PrismaClient } from '@prisma/client';
+import { createDatabaseClient } from '../../core/database/client';
 import {
   key,
   WORLD_ID,
@@ -10,15 +10,14 @@ import {
 } from '@voxel/shared';
 export class WorldStore {
   readonly mode: 'postgresql' | 'memory';
-  private db?: PrismaClient;
-  constructor(connectionString = env.databaseUrl()) {
-    this.mode = connectionString ? 'postgresql' : 'memory';
-    if (this.mode === 'postgresql') {
-      const adapter = new PrismaPg({
-        connectionString,
-      });
-      this.db = new PrismaClient({ adapter });
-    }
+  private readonly db?: PrismaClient;
+  private readonly ownsDatabase: boolean;
+  constructor(connectionString = env.databaseUrl(), db?: PrismaClient) {
+    this.db =
+      db ??
+      (connectionString ? createDatabaseClient(connectionString) : undefined);
+    this.ownsDatabase = !db;
+    this.mode = this.db ? 'postgresql' : 'memory';
   }
   async load(blocks: Map<string, Block>) {
     if (!this.db) return 0;
@@ -57,6 +56,7 @@ export class WorldStore {
     });
   }
   async close() {
-    await this.db?.$disconnect();
+    // Injected clients belong to the server and may still serve other stores.
+    if (this.ownsDatabase) await this.db?.$disconnect();
   }
 }
