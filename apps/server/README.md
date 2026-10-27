@@ -39,7 +39,7 @@
 | `modules/realtime`                | 百炼实时会话、工具确认与离线协议模拟器               |
 | `modules/world`                   | 权威物理房间、Schema、世界持久化与在线状态 SSE       |
 
-`services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，`provider-store.ts` 归属 `providers` 模块，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
+`services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库/文件实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
 
 全局 `persistence/` 直接提供存档契约、数据库/文件驱动、迁移和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`；历史任务迁移通过 `modules/tasks/index.ts` 复用任务模块的迁移函数。它不依赖角色运行时、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
 
@@ -79,9 +79,13 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `AgentSpeech` 位于 `modules/audio/services/tts/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
 
+## 结构验收
+
+本轮目录与命名整理已完成。架构测试位于 `tests/server-boundaries.test.ts`，检查跨模块门面、依赖方向、Socket 契约、循环依赖及再导出形成的间接 HTTP 依赖。`core/openapi/swagger.test.ts` 扫描全部服务端非测试 TypeScript 文件中的显式 `app.get/post/put/patch/delete` 注册；动态路径、Router 别名和 `app.use` 不在当前覆盖范围。测试反例验证再导出和非路由文件中的新增路由不能绕过已有检查。audio Store 的校验、运行时协调和持久化职责保持现状，进一步拆分需单独评估。
+
 ## 状态与测试
 
-`dataPath()` 锚定仓库根目录；模型服务、Agent 任务、ASR 设置、音色与模型缓存继续保存在原 `.data/` 位置，Docker 中仍为 `/app/.data/`。无数据格式或迁移变更。
+`dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；显式注入的兼容文件存储仍使用原路径与格式，网关令牌及本地语音模型文件保留原配置位置。本轮目录整理未修改数据格式或迁移逻辑。
 
 `test/helpers/test-server.ts` 使用生产 `createServer`，默认配置临时目录、内存世界、随机 loopback 端口、mock 语音和禁用云端实时会话。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
 

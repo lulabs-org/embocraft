@@ -1,5 +1,13 @@
 import { expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import {
+  readFileSync,
+  readdirSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -40,23 +48,21 @@ const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
     })),
 );
 
-it('documents every statically registered HTTP route', () => {
-  const serverSrc = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const routeFiles: string[] = [];
-  function collect(directory: string) {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) collect(path);
-      else if (entry.name === 'routes.ts' || entry.name.endsWith('.routes.ts'))
-        routeFiles.push(path);
-    }
-  }
-  collect(join(serverSrc, 'core', 'http'));
-  collect(join(serverSrc, 'core', 'openapi'));
-  collect(join(serverSrc, 'modules'));
+function collectSources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return collectSources(path);
+    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
+      ? [path]
+      : [];
+  });
+}
 
+type RoutePaths = Record<string, Record<string, unknown>>;
+
+function assertDocumentedRoutes(files: string[], paths: RoutePaths) {
   let routeCount = 0;
-  for (const file of routeFiles) {
+  for (const file of files) {
     const source = ts.createSourceFile(
       file,
       readFileSync(file, 'utf8'),
@@ -75,16 +81,16 @@ it('documents every statically registered HTTP route', () => {
       ) {
         const method = node.expression.name.text;
         const first = node.arguments[0];
-        const paths = ts.isArrayLiteralExpression(first)
+        const pathNodes = ts.isArrayLiteralExpression(first)
           ? first.elements
           : [first];
-        for (const pathNode of paths) {
+        for (const pathNode of pathNodes) {
           expect(ts.isStringLiteral(pathNode), file).toBe(true);
           if (!ts.isStringLiteral(pathNode)) continue;
           routeCount++;
           const path = pathNode.text.replace(/:([\w]+)/g, '{$1}');
           expect(
-            spec.paths[path]?.[method],
+            paths[path]?.[method],
             `${method} ${path} (${file})`,
           ).toBeDefined();
         }
@@ -93,8 +99,44 @@ it('documents every statically registered HTTP route', () => {
     }
     visit(source);
   }
+  return routeCount;
+}
+
+it('documents every statically registered HTTP route across server production sources', () => {
+  const serverSrc = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const routeCount = assertDocumentedRoutes(
+    collectSources(serverSrc),
+    spec.paths,
+  );
   expect(routeCount).toBeGreaterThan(0);
   expect(operations).toHaveLength(routeCount);
+});
+
+it('detects undocumented routes outside route-named files while excluding test fixtures', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'openapi-coverage-'));
+  try {
+    mkdirSync(join(dir, 'modules'));
+    writeFileSync(join(dir, 'app.ts'), "app.get('/known', handler);");
+    writeFileSync(
+      join(dir, 'modules', 'example.http.ts'),
+      "app.post('/missing', handler);",
+    );
+    writeFileSync(
+      join(dir, 'modules', 'example.test.ts'),
+      "app.get('/fixture', handler);",
+    );
+    const files = collectSources(dir);
+    expect(files).toHaveLength(2);
+    const paths: RoutePaths = {
+      '/known': { get: {} },
+      '/missing': { post: {} },
+    };
+    expect(assertDocumentedRoutes(files, paths)).toBe(2);
+    delete paths['/missing'];
+    expect(() => assertDocumentedRoutes(files, paths)).toThrow('post /missing');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 it('includes agent and task endpoints from domain routes.ts files', () => {

@@ -4,28 +4,27 @@
 
 ::: tip 核心设计原则
 1. **Core 与 Modules 严格分立**：非业务的通用平台底座统一收归 `src/core/`；所有具体沙盒与智能体业务逻辑严格在 `src/modules/<domain>/` 内部自闭环。
-2. **持久化职责清晰分层**：单一模块私有数据存储严格内聚于各模块的 `persistence/`；跨模块协调的全局状态快照与数据库驱动统一下沉至 `src/persistence/`。
+2. **持久化职责清晰分层**：单一模块私有数据存储严格内聚于各模块的 `persistence/`；跨模块联合存档归入 `src/persistence/`，数据库客户端、连接池及探活归入 `src/core/database/`。
 3. **业务路由内聚装配**：业务接口由各模块内部自治管理并导出挂载契约，顶层 `app.ts` / `server.ts` 仅负责声明式装配。
 4. **统一模块门面导出**：所有模块对外统一通过根部 `index.ts` 暴露公共接口，严禁跨模块深层相对路径引用（No Deep Import）。
-5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务统一为 `*.service.ts`；单测文件严格与源码同目录就近共置（`*.test.ts`）。
-6. **API 静态契约 100% 覆盖**：所有注册路由必须有对应的 OpenAPI JSDoc 注解，由 AST 静态分析自动拦截未文档化接口。
+5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务通常为 `*.service.ts`，保留 `character.manager.ts`、`world.room.ts`、`world.schema.ts` 等职责明确的命名；单元测试与源码同目录就近共置（`*.test.ts`），跨模块集成与架构测试另行集中。
+6. **API 静态契约 100% 覆盖**：显式注册的 REST 路由维护对应的 OpenAPI JSDoc 注解；AST 检查当前支持的 `app.get/post/put/patch/delete` 静态路径及数量一致性，检查范围与限制见第 5 节。
 7. **数据持久化安全保障**：PostgreSQL 强校验作为生产核心数据底座，启动前严格探活与脱敏；全局快照支持关系表驱动（主干）与 JSON 文件原子落盘（测试/离线兼容）双轨架构。
 :::
 
 ---
 
-## 1. 完整目录树规范（Target Directory Tree）
+## 1. 当前服务端目录结构
 
-以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
+以下列出已落地的主要目录与文件，不是完整文件清单；部分测试和辅助文件省略。服务端使用仓库根部的 `tsconfig.json`。本轮目录与命名整理已完成，后续职责拆分应单独评估。
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，`providers` 的服务与就近测试已对齐 `provider.service.ts` 命名，`audio` 的 HTTP 装配与路由已集中至 `routes/`，ASR Socket 已归入 `sockets/`；音频会话类型与 PCM 校验已归入 `audio/domain/`，音频处理与就近测试已归入 `audio/services/processing/`；语音会话实现与空间信令已归入 `audio/services/sessions/` 和 `audio/services/spatial/`；ASR 引擎、调度器与 Whisper 辅助文件已归入 `audio/services/asr/`；TTS 合成、模型安装与语音投递服务已归入 `audio/services/tts/`；ASR/音色配置存储与数据库适配已归入 `audio/persistence/`。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+数据库基础设施位于 `core/database/`，跨模块联合存档位于 `src/persistence/`，九个业务模块按职责组织领域规则、服务、存储和协议适配。`audio` 已完成 HTTP、Socket、领域类型、音频处理、会话、ASR/TTS 服务及配置存储的归位；`speech-endpoint.ts` 作为 ASR/TTS 共用配置辅助文件保留在模块根部。模块之间通过各自的 `index.ts` 引用。具体兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
 ├── prisma/                              # Prisma ORM 定义与迁移（PostgreSQL 全局领域存储）
 │   └── schema.prisma                    # 全局关系表定义（World/BlockEdit、Provider、Character、Task/Run、TTS/ASR）
 ├── package.json                         # 服务端运行时与依赖
-├── tsconfig.json                        # TypeScript 规范
 └── src/
     ├── index.ts                         # 服务进程入口（环境变量载入、CLI诊断、优雅停机）
     ├── server.ts                        # 复合网络装配器（HTTP + Colyseus + WebSocket 升级路由）
@@ -67,7 +66,7 @@ apps/server/
     ├── persistence/                     # ════════【全局数据快照与持久化底座】════════
     │   ├── archive.ts                   # 跨模块快照契约（ArchivePort, ManagementArchive）
     │   ├── database-archive.ts          # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
-    │   ├── management-persistence.ts    # 跨模块快照协调器与 storageRevision 屏障锁
+    │   ├── management-persistence.ts    # 跨模块快照串行提交与 storageRevision 失败代次
     │   ├── archive-file.ts              # 【兼容模式】测试与离线环境 .agents.json 原子落盘（Temp+Rename）
     │   └── migrate-archive.ts           # 历史 JSON 存档向前平滑迁移管道
     │
@@ -268,7 +267,7 @@ apps/server/
 每个业务模块均遵循统一的标准水平分层组织逻辑，包含以下核心要素：
 
 ### 2.1 模块标准分层拓扑
-- **`domain/`（纯规则与实体）**：实体契约、纯数学计算与无 I/O 的校验（如 PCM WAV 校验、方块空间校验），可复用通用类型与 `AppError`，不访问网络、文件系统或数据库；规则测试无需 I/O Mock。
+- **`domain/`（领域规则与实体）**：实体契约、计算与无网络/文件/数据库 I/O 的校验，可复用通用类型、`AppError` 与 `core/http/validation.ts` 中的纯值校验函数。现有规则中包含 UUID 生成，因此并非所有函数都是确定性纯函数；规则测试无需 I/O Mock。
 - **`services/`（业务流程与调度引擎）**：核心业务调度、状态机协调、外部厂商引擎适配（如 Whisper/Piper/百炼）。
 - **`persistence/`（可选，状态持久化）**：若模块持有独立持久化数据，其数据库访问或兼容文件存储严格内聚于此（如 `store.ts`、`database-repository.ts` 与兼容性 `file-repository.ts`）。
 - **`routes/`（HTTP API 路由）**：模块对外的所有 REST 接口声明，统一命名为 `*.routes.ts`，由 `src/app.ts` 集中挂载。
@@ -277,7 +276,7 @@ apps/server/
 - **`index.ts`（必须，唯一门面导出）**：模块对外的唯一公开出口，严禁外部做跨模块深层相对路径导入。
 
 ::: tip 杜绝过度设计（No Over-engineering）
-当模块某层仅有单一职责核心类时（例如权威世界房间 `WorldRoom`），直接放置于模块根部并规范命名为 `world.room.ts`，**严禁为单个文件创建空心包装目录**（如 `room/room.ts`）。同时，轻量模块即使文件较少，也必须遵守 `*.service.ts`、`*.socket.ts` 命名契约，杜绝无上下文的裸名。
+当模块某层仅有单一职责核心类时（例如权威世界房间 `WorldRoom`），直接放置于模块根部并规范命名为 `world.room.ts`，**严禁为单个文件创建空心包装目录**（如 `room/room.ts`）。服务和 Socket 采用职责明确的命名；模型、契约、工厂与辅助文件可以保留 `model.ts`、`ports.ts`、`job.ts` 等名称，不机械添加服务后缀。
 :::
 
 ### 2.2 必须拥有唯一门面导出（以 `src/modules/world/index.ts` 为例）
@@ -312,7 +311,7 @@ export function installWorldRoutes(app: Express, getRoomId: () => string) {
 // apps/server/src/modules/gateway/gateway.socket.ts
 export function installGatewaySocket(
   sockets: SocketRoutes,
-  deps: GatewaySocketDependencies,
+  deps: { events: ManagementEvents; auth: GatewayAuth },
 ) {
   sockets.set('/ai-characters/gateway', (socket, req) => {
     // 鉴权与事件订阅逻辑
@@ -327,7 +326,7 @@ export function installGatewaySocket(
 服务装配层严格遵循分层依赖原则：
 
 ### 3.1 HTTP 装配器（`src/app.ts`）
-`app.ts` 为**无副作用纯函数**，只负责路由管线与中间件拓扑组装，绝不启动网络监听或连库：
+`createApp` 创建 Express 实例并安装中间件和路由，不启动网络监听、连接数据库或加载 `.env`。下面省略依赖类型定义，安装参数与顺序与实现一致：
 
 ```typescript
 import express from 'express';
@@ -363,10 +362,17 @@ export function createApp(deps: AppDependencies) {
       installTaskRoutes(app, deps.management.tasks, commands);
     },
   });
-  installAudioRoutes(app, deps.audio);
+  installAudioRoutes(app, { ...deps.audio, origin: deps.origin });
   installWorldRoutes(app, deps.world.roomId);
+  installChatRoutes(
+    app,
+    deps.chat.getChat,
+    deps.chat.speech,
+    deps.chat.getAgentSpeech,
+    deps.origin,
+    deps.audio.asrSettings,
+  );
   installPresenceRoutes(app, deps.world.presence, deps.origin);
-  installChatRoutes(app, deps.chat);
 
   // 3. 尾部统一全局错误管道
   app.use(errorHandler());
@@ -381,7 +387,8 @@ export function createApp(deps: AppDependencies) {
 // 1. 基础设施引入
 import { env } from './core/config';
 import { checkStartupDatabase } from './core/database/health';
-import { RoutedWebSocketTransport, type SocketRoutes } from './core/transport';
+import type { SocketRoutes } from './core/transport/socket-routes';
+import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 
 // 2. 业务模块统一从各自门面引入
 import { AICharacterManager } from './modules/ai-characters';
@@ -420,7 +427,7 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
   - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各模块的 `persistence/` 内；
   - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交角色和任务的可见状态，再调用注入的提交通知回调；角色编排器将回调连接到 `ManagementEvents.commit()`，持久化协调器不依赖事件总线实现；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
 - **兼容模式：离线测试与 JSON 原子落盘（`src/persistence/archive-file.ts` / `migrate-archive.ts`）**：
-  - **原子落盘（Atomic Write）**：在无数据库的离线单元测试或纯文件兼容模式下，`.agents.json` 与 `providers.json` 采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖”** 机制，彻底避免系统异常宕机导致 JSON 破损；
+  - **原子落盘（Atomic Write）**：在无数据库的离线单元测试或纯文件兼容模式下，`.agents.json` 与 `providers.json` 采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖”** 机制，避免读者看到尚未写完的目标文件；这不等同于断电持久性保证；
   - **向前平滑迁移（Forward Migration）**：历史文件均包含 `version` 标识（如 `version: 3`），加载时由 `migrate-archive.ts` 管道按顺序执行结构升级，保障向后兼容性。
 
 ---
@@ -430,12 +437,14 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 服务端对对外暴露的 REST API 实行强类型与自动化门禁管理：
 
 ### 5.1 100% 静态路由覆盖门禁（Route Coverage Gate）
-- 位于 `src/core/openapi/swagger.test.ts` 的自动化测试，基于 **TypeScript AST 语法树**静态分析全工程所有的 `*.routes.ts` 源码。
+- 位于 `src/core/openapi/swagger.test.ts` 的自动化测试，扫描 `apps/server/src/` 全部非测试 TypeScript 文件，基于 **TypeScript AST 语法树**检查 `app.get/post/put/patch/delete` 注册，防止路由移出 `*.routes.ts` 后漏检。支持字符串路径及字符串数组，并核对 OpenAPI 操作数量。
 - **强制约束**：任何新增、修改或重命名的 HTTP 路由，都应同步维护 Swagger JSDoc 注解（`@openapi`）中的路径、请求方法、参数、请求体及适用状态码。当前静态门禁校验路由覆盖与数量一致性，另有路径参数、成功响应、局部请求体及引用解析检查；它尚不能验证所有端点的请求体和 4xx/5xx 声明是否完整。
 
+该检查不覆盖 `app.use` 挂载的 Swagger UI、隐式 HEAD/OPTIONS、Router 别名或动态路径。引入新的路由注册方式时应同时扩展检查；Swagger JSDoc 仍从 `swagger.ts` 指定的路由文件范围生成。
+
 ### 5.2 统一 DTO Schema 沉淀
-- 所有通用的请求体与响应数据模型，必须在 `src/core/openapi/openapi-schemas.ts` 集中声明（例如 `ProviderDto`, `TaskDto`, `AICharacterDto`）。
-- 路由文件中禁止就地手写大段硬编码的内联 Schema，保证接口契约的单一数据源（Single Source of Truth）。
+- 复用的请求体与响应数据模型在 `src/core/openapi/openapi-schemas.ts` 集中声明（例如 `TaskPlan`、`TaskRun`、`AICharacterView`）。
+- 路由文件可以为专属请求声明内联 Schema；通用模型优先通过 `$ref` 复用。
 - 运行时通过 `installDocsRoutes` 在 `/api-docs` 提供交互式 Swagger UI，在 `/api-docs.json` 导出标准化 OpenAPI Spec。
 
 ---
@@ -446,16 +455,17 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 
 ```mermaid
 graph LR
-    Client[Web 控制台 / Agent 客户端] -->|POST /management| Router[CommandRouter]
-    Router -->|规整请求体| Policy[命令指纹规整]
-    Policy -->|执行状态修改| Commands[ManagementCommands]
-    Commands -->|发布状态变更| Events[ManagementEvents]
+    Client[Web 控制台 / Agent 客户端] -->|资源 HTTP 变更请求| Commands[ManagementCommands]
+    Commands -->|规整命令指纹| Policy[命令指纹规整]
+    Policy -->|幂等与排队| Router[CommandRouter]
+    Router -->|执行注入操作| Service[业务服务]
+    Service -->|状态提交或变更| Events[ManagementEvents]
     Events -->|推送更新| WS[WebSocket: /ai-characters/gateway]
     WS -->|实时刷新 UI| Client
 ```
 
 - **统一变更指令入口（Command Bus）**：
-  所有对 Character、Provider、Task 的状态修改，统一经过 `ManagementCommands` / `services/command-router.service.ts` 分发处理，杜绝外部散乱调用底层 Service。该总线纯粹负责应用层指令路由、泳道并发隔离与幂等校验，与底层存储持久化彻底解耦。
+  Character、Provider、Task 的管理 HTTP 变更请求经过 `ManagementCommands` / `services/command-router.service.ts` 分发处理；运行时调度通过内部服务契约执行。该总线纯粹负责应用层指令路由、泳道并发隔离与幂等校验，与底层存储持久化彻底解耦。
 - **队列与契约归属**：
   通用排队、指纹计算和内部回执状态由 `core/concurrency/command-queue.ts` 负责；`CommandRouter` 注入管理错误策略，`ManagementCommands` 处理 HTTP 请求与执行前校验。公共 `CommandReceipt`、`ManagementErrorData` 和 `ManagementError` 继续由 `@voxel/shared/management` 定义，management 模块通过 `services/public-error.ts` 映射错误，不重复声明公共回执模型。
 - **命令指纹规整与输入校验**：
@@ -497,12 +507,16 @@ graph LR
 - 例如：`domain/inference.ts` 对应同级的 `domain/inference.test.ts`，`worlds.routes.ts` 对应同级的 `worlds.routes.test.ts`。
 
 ### 8.2 纯领域零 Mock 原则
-- `domain/` 下的所有业务逻辑、空间校验、时间窗口与状态转换，必须全部实现为纯函数或只依赖内存数据结构；
-- 领域测试（`*.test.ts`）禁止引入任何网络、文件系统或数据库 Mock，确保单测执行时间在毫秒级别。
+- `domain/` 的规则不访问网络、文件或数据库；现有 UUID 生成保留，不能把全部领域函数都视为确定性纯函数；
+- 领域测试（`*.test.ts`）禁止引入任何网络、文件系统或数据库 Mock，避免将外部 I/O 生命周期引入领域规则测试。
 
 ### 8.3 端口契约与内存测试桩（In-Memory Test Doubles）
 - 服务层测试依赖持久化时，优先使用对应端口契约（Port）的内存测试桩（如 `InMemoryProviderRepository` 或 `MockSpeech`）；
 - 数据库健康探测测试（如 `health.test.ts`）通过 Vitest 针对 `@prisma/client` 进行适配器级桩测试，验证各类报错分支的脱敏输出。
+
+### 8.4 架构边界回归检查
+
+`tests/server-boundaries.test.ts` 复核跨模块门面、Core 依赖方向、联合存档边界、Socket 类型契约和模块循环依赖；业务实现到 HTTP 路由的间接依赖检查会跟踪具名再导出、`export *` 和类型再导出。已加入违规再导出反例，以及只导入门面服务符号时不误判无关路由导出的正例。OpenAPI 检查另有非路由文件注册与排除测试文件的回归用例。这些是对当前静态导入和注册写法的检查，不代替运行时协议测试。
 
 ---
 
@@ -516,7 +530,7 @@ graph LR
 
 ### 9.2 严格安全中间件链
 - **`origin-guard.ts`**：严格校验请求 Origin 头是否在配置的白名单范围内，防御 CSRF 攻击；
-- **`require-json.ts`**：所有状态变更路由（POST/PUT/PATCH）必须携带 `Content-Type: application/json`，否则直接返回 415 拒绝解析；
+- **`require-json.ts`**：挂载该守卫的路由对 POST/PUT 要求 `Content-Type: application/json`，否则返回 415；音频上传使用各自的原始请求体策略，不受此 JSON 规则概括；
 - **`errorHandler`**：统一拦截全局异常。非业务预期的未知系统异常统一遮蔽为友好文案，生产环境完全隐藏堆栈细节。
 
 ### 9.3 确定性启动与逆序优雅停机（Startup & Reverse Shutdown）
@@ -524,13 +538,13 @@ graph LR
 #### 启动阶段顺序（Startup Lifecycle）：
 1. 校验与加载强类型环境变量（`env.load()`）；
 2. 数据库探活（`checkStartupDatabase()`），遇错脱敏中断；
-3. 并行安全加载各独立 Store（`loadStores()`）；
-4. 校验 ASR / TTS 提供商构造参数（在占用网络资源前确保有效）；
+3. 构造并校验会话 `VoiceProvider`，随后创建运行时数据库客户端；
+4. 并行加载 Gateway、Provider、TTS/ASR 配置（`loadStores()`），成功后装配服务、HTTP 和 Socket；任一加载失败时等待其他加载结束，释放数据库客户端并中断启动；
 5. 启动 HTTP 服务并在同端口绑定升级 WebSocket 路由器；
 6. 启动 Colyseus 房间引擎，依据已保存的快照恢复并自动唤醒智能体。
 
 #### 停机阶段顺序（Reverse Graceful Shutdown）：
-1. 捕获 `SIGINT` / `SIGTERM` 信号，进入 `closing` 状态拒绝新请求；
+1. 捕获 `SIGINT` / `SIGTERM` 信号，调用可重复调用的 `close()`，`closing` 防止再次启动监听；
 2. 停止所有 Agent 唤醒定时器与正在执行的行动循环；
 3. 由 Agent 关闭流程提交需要保存的最终状态，调用 `ManagementPersistence.flush()` 等待已排队的保存完成并检查失败状态；
 4. 优雅关闭 Colyseus 世界房间并断开玩家网络连接；
