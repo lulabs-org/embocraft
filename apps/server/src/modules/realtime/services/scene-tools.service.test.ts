@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { SceneTools } from './scene-tools';
+import { SceneTools } from './scene-tools.service';
 
 afterEach(() => vi.useRealTimers());
 const edit = { x: 2, y: 3, z: 2, material: 'wood' };

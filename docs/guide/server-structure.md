@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -171,14 +171,18 @@ apps/server/
         │   └── index.ts
         │
         ├── realtime/                    # ── 7. 百炼实时流式会话与场景交互工具 ──
-        │   ├── domain/                  # 纯规则与交互工具定义（零副作用，毫秒单测）
-        │   │   ├── scene-tools.ts       # LLM Function Calling 沙盒观察与方块编辑提案
-        │   │   └── limits.ts            # 会话配额与速率限制纯规则
-        │   ├── services/                # 实时会话管理与调度
+        │   ├── domain/                  # 音频与会话限额常量
+        │   │   └── limits.ts
+        │   ├── services/                # 实时会话管理、协议协调与场景工具
         │   │   ├── hub.service.ts       # 多玩家会话并发管理中枢（RealtimeHub）
-        │   │   └── session.service.ts   # 百炼双工流式会话协议协调器（BailianSession）
+        │   │   ├── hub.service.test.ts
+        │   │   ├── session.service.ts   # 百炼双工流式会话协议协调器（BailianSession）
+        │   │   ├── session.service.test.ts
+        │   │   ├── scene-tools.service.ts # 场景观察与待确认编辑提案（状态、时效与回调）
+        │   │   └── scene-tools.service.test.ts
         │   ├── adapters/                # 协议适配器与离线测试桩
-        │   │   └── demo-socket.ts       # 离线确定性协议模拟器（无网络单测桩）
+        │   │   ├── demo-socket.ts       # 离线确定性协议模拟器（无网络单测桩）
+        │   │   └── demo-socket.test.ts
         │   └── index.ts                 # 唯一门面：导出 RealtimeHub, SceneAccess 等供 WorldRoom 使用
         │
         ├── tasks/                       # ── 8. 智能体任务规划与状态机 ──

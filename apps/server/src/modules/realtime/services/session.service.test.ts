@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { BailianSession, decodePCM } from './bailian-session';
+import { BailianSession, decodePCM } from './session.service';
 import type { RealtimeEvent } from '@voxel/shared/communication';
 class Socket extends EventEmitter {
   bufferedAmount = 0;

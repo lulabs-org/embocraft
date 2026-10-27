@@ -1,5 +1,5 @@
 import { it, expect, vi } from 'vitest';
-import { RealtimeHub } from './hub';
+import { RealtimeHub } from './hub.service';
 it('cancels a pending demo handshake by owner request without accessing configuration', async () => {
   const events: (import('@voxel/shared/communication').RealtimeEvent & {
       owner: string;

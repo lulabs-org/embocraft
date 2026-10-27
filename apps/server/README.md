@@ -58,6 +58,8 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `chat` 按 `domain/`、`services/` 与 `routes/` 分层：`domain/visibility.ts` 按消息范围、发送者与接收者判断可见性；`services/` 集中聊天、凭据、音频缓存、空间语音票据及 ASR 协调，统一使用 `*.service.ts` 命名；`routes/chats.routes.ts` 保留 `/chat` 的 HTTP 接口与 OpenAPI 注解。路由和语音协调测试与源码共置，跨包的 `test/chat.test.ts` 保留在集成测试目录。模块门面继续导出 `WorldChat`、`installChatRoutes` 与 `visibleEvent`，聊天鉴权、可见性、语音处理和票据生命周期保持不变。
 
+`realtime` 按 `domain/`、`services/` 与 `adapters/` 分层：`domain/limits.ts` 保存现有音频与会话限额；`services/hub.service.ts` 管理玩家会话，`session.service.ts` 协调百炼双工协议，`scene-tools.service.ts` 管理场景观察与待确认编辑提案。`SceneTools` 持有提案集合、读取时间并调用场景接口，因此属于服务层；它不直接应用方块编辑。离线协议模拟器位于 `adapters/demo-socket.ts`，各实现的现有测试随源码就近放置。模块门面继续导出 `RealtimeHub`、`BailianConfig` 与 `SceneAccess`，协议、音频限额、用户授权、提案确认和连接生命周期保持不变。
+
 `AgentSpeech` 位于 `modules/audio/tts/agent-speech.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
 
 ## 状态与测试
