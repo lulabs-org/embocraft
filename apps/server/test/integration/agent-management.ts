@@ -14,7 +14,6 @@ import { Session, until, type Observation } from '@voxel/agent-runtime';
 
 import type { AICharacterView } from '@voxel/shared';
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5187';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-manager-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
@@ -25,7 +24,16 @@ let speaker: Session | undefined;
 const originalFetch = globalThis.fetch;
 try {
   const store = new FileProviderRepository(join(dir, 'providers.json'));
-  await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture-secret' });
+  await bootstrapProviders(store);
+  await store.save(
+    {
+      name: 'DeepSeek',
+      type: 'deepseek',
+      apiKey: 'fixture-secret',
+      defaultModel: 'deepseek-flash',
+    },
+    'deepseek',
+  );
   const rolesInRequests: string[] = [];
   const capabilitiesInRequests: unknown[] = [];
   const request: typeof fetch = async (_url, init) => {

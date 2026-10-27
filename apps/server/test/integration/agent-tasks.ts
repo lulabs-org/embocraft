@@ -20,7 +20,6 @@ import { Session, until, delay } from '@voxel/agent-runtime';
 import type { AICharacterView, TaskRun } from '@voxel/shared';
 
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5188';
 const preview = process.env.TASK_PREVIEW === '1';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-tasks-'));
@@ -40,7 +39,16 @@ type FixturePrompt = {
 const prompts: FixturePrompt[] = [];
 try {
   const store = new FileProviderRepository(join(dir, 'providers.json'));
-  await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture-only' });
+  await bootstrapProviders(store);
+  await store.save(
+    {
+      name: 'DeepSeek',
+      type: 'deepseek',
+      apiKey: 'fixture-only',
+      defaultModel: 'deepseek-flash',
+    },
+    'deepseek',
+  );
   const request: typeof fetch = async (_url, init) => {
     calls++;
     const prompt = JSON.parse(

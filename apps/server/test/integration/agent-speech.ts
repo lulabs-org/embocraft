@@ -6,7 +6,6 @@ import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
 import { Session, until, delay } from '@voxel/agent-runtime';
 import type { AgentSpeechEvent } from '@voxel/shared';
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5188';
 const real = process.env.REAL_TTS === '1';
 const server = await createTestServer({ origin: process.env.WEB_ORIGIN });

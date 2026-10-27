@@ -33,8 +33,18 @@ export async function createTestServer(
       providers instanceof FileProviderRepository
         ? `${providers.path}.agents.json`
         : join(directory, 'providers.json.agents.json');
-    if (!options.providers)
-      await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-only' });
+    if (!options.providers) {
+      await bootstrapProviders(providers);
+      await providers.save(
+        {
+          name: 'DeepSeek',
+          type: 'deepseek',
+          apiKey: 'fixture-only',
+          defaultModel: 'deepseek-flash',
+        },
+        'deepseek',
+      );
+    }
     server = await createServer({
       ...options,
       providers,
@@ -53,7 +63,6 @@ export async function createTestServer(
         HOST: '127.0.0.1',
         WEB_ORIGIN: options.origin ?? 'http://127.0.0.1:5173',
         DATABASE_URL: '',
-        VOICE_PROVIDER: 'mock',
         AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
         AGENT_GATEWAY_TOKEN_FILE: join(directory, 'gateway-token'),
       }),

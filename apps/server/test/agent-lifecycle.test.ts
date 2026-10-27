@@ -24,7 +24,16 @@ let dir: string,
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'agent-life-'));
   store = new FileProviderRepository(join(dir, 'providers.json'));
-  await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture' });
+  await bootstrapProviders(store);
+  await store.save(
+    {
+      name: 'DeepSeek',
+      type: 'deepseek',
+      apiKey: 'fixture',
+      defaultModel: 'deepseek-flash',
+    },
+    'deepseek',
+  );
 });
 afterEach(async () => {
   await manager?.close();

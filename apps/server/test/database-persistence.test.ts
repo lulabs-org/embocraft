@@ -173,9 +173,16 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
 
   it('seeds once, persists secrets privately, and does not reseed an intentionally empty catalog', async () => {
     const providers = new DatabaseProviderRepository(db!);
-    await bootstrapProviders(providers, {
-      DEEPSEEK_API_KEY: 'database-only-key',
-    });
+    await bootstrapProviders(providers);
+    await providers.save(
+      {
+        name: 'DeepSeek',
+        type: 'deepseek',
+        apiKey: 'database-only-key',
+        defaultModel: 'deepseek-flash',
+      },
+      'deepseek',
+    );
     expect(providers.get('deepseek')).not.toHaveProperty('apiKey');
     expect(providers.get('deepseek').hasApiKey).toBe(true);
     expect(
@@ -197,7 +204,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await reloaded.remove('ollama');
     await reloaded.remove('custom');
     const empty = new DatabaseProviderRepository(db!);
-    await bootstrapProviders(empty, { DEEPSEEK_API_KEY: 'must-not-seed' });
+    await bootstrapProviders(empty);
     expect(empty.list()).toEqual([]);
   });
 
@@ -349,7 +356,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       PORT: '0',
       HOST: '127.0.0.1',
       WEB_ORIGIN: 'http://127.0.0.1:5173',
-      VOICE_PROVIDER: 'mock',
       AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
       AGENT_GATEWAY_TOKEN_FILE: join(directory, 'gateway-token'),
     });

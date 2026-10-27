@@ -5,7 +5,6 @@ import { PLAYER_NAME_TAKEN } from '../../src/modules/world/domain/player-name';
 
 {
   process.env.DATABASE_URL = '';
-  process.env.VOICE_PROVIDER = 'mock';
   const server = await createTestServer();
   const sessions: Session[] = [];
   try {

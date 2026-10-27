@@ -12,7 +12,6 @@ import {
 } from '../../src/modules/providers';
 import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5189';
 const dir = await mkdtemp(join(tmpdir(), 'agent-console-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
@@ -20,7 +19,16 @@ let manager: AICharacterManager | undefined;
 let calls = 0;
 try {
   const providers = new FileProviderRepository(join(dir, 'providers.json'));
-  await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-only' });
+  await bootstrapProviders(providers);
+  await providers.save(
+    {
+      name: 'DeepSeek',
+      type: 'deepseek',
+      apiKey: 'fixture-only',
+      defaultModel: 'deepseek-flash',
+    },
+    'deepseek',
+  );
   const voices = new VoiceServiceStore(join(dir, 'voices.json'));
   await voices.load();
   server = await createTestServer({

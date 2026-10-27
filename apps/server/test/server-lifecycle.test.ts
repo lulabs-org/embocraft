@@ -39,7 +39,6 @@ describe('server assembly and lifecycle', () => {
       { PORT: '-1' },
       { HOST: '' },
       { WEB_ORIGIN: 'https://example.test/path' },
-      { VOICE_PROVIDER: 'unknown' },
     ])
       expect(() => env.readServer(testEnv)).toThrow();
     expect(

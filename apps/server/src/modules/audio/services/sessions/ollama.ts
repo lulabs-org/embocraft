@@ -22,9 +22,9 @@ export class OllamaVoiceProvider implements VoiceProvider {
       url.username ||
       url.password
     )
-      throw Error('OLLAMA_BASE_URL 必须是本机 HTTP 地址。');
+      throw Error('Ollama 服务地址必须是本机 HTTP 地址。');
     if (!model.trim() || /cloud/i.test(model))
-      throw Error('请设置 OLLAMA_MODEL 为已下载的本地模型。');
+      throw Error('请选择已下载的本地模型。');
     this.endpoint = new URL('/api/chat', url).href;
   }
   create(emit: (event: VoiceEvent) => void): VoiceSession {
