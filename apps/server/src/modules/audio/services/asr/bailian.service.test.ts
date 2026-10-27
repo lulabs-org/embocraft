@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, expect, it, vi } from 'vitest';
 import type WebSocket from 'ws';
-import { bridgeBailianAsr } from './bailian-asr';
+import { bridgeBailianAsr } from './bailian.service';
 import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 
 class Socket extends EventEmitter {

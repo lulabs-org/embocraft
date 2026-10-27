@@ -99,7 +99,7 @@ graph TD
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
     Create --> MC["ModelCatalog<br/>providers/model-catalog"]
-    Create --> LS["LocalSpeech<br/>audio/asr"]
+    Create --> LS["LocalSpeech<br/>audio/services/asr"]
 
     Create --> App["createApp()<br/>app.ts（Express）"]
     Create --> Sockets["SocketRoutes Map"]

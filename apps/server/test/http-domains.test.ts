@@ -1,7 +1,7 @@
 import { rename } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
 import { createTestServer } from './helpers/test-server';
-import { LocalSpeech } from '../src/modules/audio/asr/local-speech';
+import { LocalSpeech } from '../src/modules/audio/services/asr/local-speech.service';
 import { PiperModels } from '../src/modules/audio/tts/piper-models';
 
 const token = 'Bearer fixture-gateway-token-for-tests';

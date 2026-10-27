@@ -1,7 +1,7 @@
 import type { ChatData } from '@voxel/shared';
 import { createTestServer } from '../helpers/test-server';
 import assert from 'node:assert/strict';
-import { LocalSpeech } from '../../src/modules/audio/asr/local-speech';
+import { LocalSpeech } from '../../src/modules/audio/services/asr/local-speech.service';
 import { Session, until, delay } from '@voxel/agent-runtime';
 process.env.DATABASE_URL = '';
 process.env.VOICE_PROVIDER = 'mock';

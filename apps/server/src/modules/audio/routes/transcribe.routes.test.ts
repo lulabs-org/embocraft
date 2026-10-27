@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { installTranscribeRoutes } from './transcribe.routes';
-import { LocalSpeech } from '../asr/local-speech';
+import { LocalSpeech } from '../services/asr/local-speech.service';
 import { AppError } from '../../../core/errors/app-error';
 describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore, dir: string;

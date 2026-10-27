@@ -31,14 +31,15 @@
 | `modules/providers`               | 模型提供商持久化存储与模型列表服务                       |
 | `modules/tasks`                   | 任务计划、运行历史与执行控制领域服务                     |
 | `modules/gateway`                 | 管理令牌与 WebSocket 状态通知                            |
-| `modules/audio/asr`               | 本地 Whisper、百炼识别及 ASR 配置                        |
+| `modules/audio/asr`               | ASR 配置与持久化（待后续整理）                           |
+| `modules/audio/services/asr`      | Whisper、百炼识别、识别调度与模型配置辅助                |
 | `modules/audio/tts`               | Piper、本地/远程合成、音色服务、合成队列与世界内语音投递 |
 | `modules/audio/services/sessions` | mock/browser/Ollama 语音会话状态                         |
 | `modules/chat`                    | 消息、附件、音频票据及私聊权限                           |
 | `modules/realtime`                | 百炼实时会话、工具确认与离线协议模拟器                   |
 | `modules/world`                   | 权威物理房间、Schema、世界持久化与在线状态 SSE           |
 
-`local-speech.ts` 属于识别流程，保留在 `asr`。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，`provider-store.ts` 归属 `providers` 模块，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
+`services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，`provider-store.ts` 归属 `providers` 模块，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
 
 全局 `persistence/` 直接提供存档契约、数据库/文件驱动、迁移和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`；历史任务迁移通过 `modules/tasks/index.ts` 复用任务模块的迁移函数。它不依赖角色运行时、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
 
@@ -64,11 +65,13 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `world` 的地形、玩家名称和输入/编辑校验规则归入 `domain/`，数据库存储与就近测试归入 `persistence/`，HTTP/SSE 路由与测试归入 `routes/worlds.routes.ts` 及同名测试文件。`world.room.ts` 与 `world.schema.ts` 留在模块根部，分别负责 Colyseus 房间生命周期与同步状态 Schema；Schema 依赖框架，不属于纯领域规则。模块门面保留 `WorldRoom`、`WorldStore`、`installWorldRoutes` 和 `installPresenceRoutes` 四个公开导出。Schema 字段与注册顺序、物理模拟、持久化、房间生命周期及 `/world`、`/world/presence` 行为保持不变。跨共享物理实现的世界规则测试与服务器生命周期测试保留在 `test/`。
 
-`audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `services/spatial/signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。ASR/TTS 引擎与持久化目录将在后续批次整理。
+`audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `services/spatial/signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。TTS 引擎与音频持久化目录将在后续批次整理。
 
 `audio/domain/types.ts` 集中语音状态、事件、输入、会话与 Provider 契约，`services/sessions/index.ts` 保留原有类型重导出，audio 根部门面保持不变。`domain/pcm-wav.ts` 只执行无 I/O 的 PCM WAV 格式、时长与音量校验，复用通用 `AppError`，不负责 WAV 封包。`services/processing/` 集中 `normalize.ts`、`command.ts` 及已有测试，负责 FFmpeg、子进程与临时文件处理；转换参数、时长限制、超时、取消、错误语义及清理行为保持不变。
 
 `audio/services/sessions/` 集中 Browser、Ollama、Mock 会话实现、Provider 工厂与已有测试，`voice-sessions.service.ts` 管理玩家会话生命周期；`services/spatial/signaling.service.ts` 负责空间信令校验与转发，测试与源码共置。模块门面继续导出 `createVoiceProvider`、`VoiceProvider`、`VoiceSessions` 和 `createSpatialSignaling`，保持 Provider 选择、会话中断与关闭、事件内容及信令转发行为不变。
+
+`audio/services/asr/` 集中 `local-speech.service.ts`、`bailian.service.ts`、`speech-scheduler.service.ts` 及其已有测试，保留 `LocalSpeech`、`bridgeBailianAsr`、`SpeechScheduler` 与 `scheduleSpeech` 的实现和名称。`whisper-settings.ts` 包含模型目录读取、路径与配置校验，随服务迁移；模型目录、识别参数、队列限额、取消、超时、错误和清理行为保持不变，模块门面保留全部公开导出。ASR 配置存储及数据库适配仍位于 `asr/`，共用的 `speech-endpoint.ts` 仍在模块根部。
 
 `AgentSpeech` 位于 `modules/audio/tts/agent-speech.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
 

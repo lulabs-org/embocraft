@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { SpeechScheduler } from './speech-scheduler';
-import { LocalSpeech } from './local-speech';
+import { SpeechScheduler } from './speech-scheduler.service';
+import { LocalSpeech } from './local-speech.service';
 const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };

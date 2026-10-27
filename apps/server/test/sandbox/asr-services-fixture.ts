@@ -1,5 +1,5 @@
 import { createTestServer } from '../helpers/test-server';
-import { LocalSpeech } from '../../src/modules/audio/asr/local-speech';
+import { LocalSpeech } from '../../src/modules/audio/services/asr/local-speech.service';
 // UI fixture only: temporary settings, deterministic transcription, no cloud/model credentials.
 const speech = new LocalSpeech();
 speech.status = async () => ({ available: true, reason: 'sandbox fixture' });

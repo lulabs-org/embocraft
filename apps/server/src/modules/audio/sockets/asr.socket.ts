@@ -4,7 +4,7 @@ import { env } from '../../../core/config/env';
 import { originAllowed } from '../../../core/http/origin-policy';
 import { AppError } from '../../../core/errors/app-error';
 import type { AsrSettingsStore } from '../asr/asr-settings';
-import { bridgeBailianAsr } from '../asr/bailian-asr';
+import { bridgeBailianAsr } from '../services/asr/bailian.service';
 import type { SocketRoutes } from '../../../core/transport/socket-routes';
 
 export type AsrBridge = Parameters<typeof createAsrSocket>[1];
