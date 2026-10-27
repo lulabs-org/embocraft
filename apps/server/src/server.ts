@@ -86,12 +86,17 @@ async function loadStores(
   const asrSettings =
     options.asrSettings ??
     new AsrSettingsStore(undefined, new DatabaseAsrServicePersistence(db!));
-  const [gatewayAuth] = await Promise.all([
+  const loads = [
     GatewayAuth.load(config.gateway),
     bootstrapProviders(providers),
     voiceServices.load(),
     asrSettings.load(),
-  ]);
+  ] as const;
+  const [gatewayAuth] = await Promise.all(loads).catch(async (error) => {
+    // Finish pending I/O before the caller releases the shared database client.
+    await Promise.allSettled(loads);
+    throw error;
+  });
   return { gatewayAuth, providers, voiceServices, asrSettings };
 }
 

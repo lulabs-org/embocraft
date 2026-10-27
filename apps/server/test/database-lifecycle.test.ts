@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createServer } from '../src/server';
@@ -96,6 +97,56 @@ it('releases the runtime client when catalog loading fails', async () => {
   );
   expect(disconnect).toHaveBeenCalledOnce();
   expect(loadWorld).not.toHaveBeenCalled();
+});
+
+it('waits for all catalog loads before disconnecting and preserves the first failure', async () => {
+  const dependencies = options();
+  const firstError = new Error('voice catalog unavailable');
+  let failProviders!: () => void;
+  const providerLoad = new Promise<boolean>((_, reject) => {
+    failProviders = () => reject(new Error('provider catalog unavailable'));
+  });
+  let finishAsr!: () => void;
+  const asrLoad = new Promise<void>((resolve) => {
+    finishAsr = resolve;
+  });
+  const providers = vi
+    .spyOn(dependencies.providers, 'load')
+    .mockReturnValue(providerLoad);
+  const voices = vi
+    .spyOn(dependencies.voiceServices, 'load')
+    .mockRejectedValue(firstError);
+  const asr = vi
+    .spyOn(dependencies.asrSettings, 'load')
+    .mockReturnValue(asrLoad);
+  const settled = vi.fn();
+  const outcome = createServer(dependencies).then(settled, (error: unknown) => {
+    settled();
+    return error;
+  });
+
+  try {
+    await setImmediate();
+    expect(providers).toHaveBeenCalledOnce();
+    expect(voices).toHaveBeenCalledOnce();
+    expect(asr).toHaveBeenCalledOnce();
+    expect(settled).not.toHaveBeenCalled();
+    expect(disconnect).not.toHaveBeenCalled();
+
+    failProviders();
+    await setImmediate();
+    expect(settled).not.toHaveBeenCalled();
+    expect(disconnect).not.toHaveBeenCalled();
+
+    finishAsr();
+    expect(await outcome).toBe(firstError);
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(loadWorld).not.toHaveBeenCalled();
+  } finally {
+    failProviders();
+    finishAsr();
+    await outcome;
+  }
 });
 
 it('releases the runtime client after failed world startup and allows another server to start', async () => {
