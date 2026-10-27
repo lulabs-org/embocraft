@@ -1,0 +1,13 @@
+CREATE TABLE "TtsService" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "position" INTEGER NOT NULL,
+  "data" JSONB NOT NULL
+);
+
+CREATE TABLE "TtsCatalogState" ("id" INTEGER NOT NULL PRIMARY KEY);
+
+CREATE TABLE "AsrService" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "position" INTEGER NOT NULL,
+  "data" JSONB NOT NULL
+);

@@ -10,7 +10,11 @@ import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
 import { RemoteTts } from './remote-tts';
 import { AppError } from '../../../common/errors';
 
-type SavedVoice = VoiceServiceDraft & { id: string };
+export type SavedVoice = VoiceServiceDraft & { id: string };
+export interface VoiceServicePersistence {
+  load(): Promise<SavedVoice[] | undefined>;
+  save(values: SavedVoice[]): Promise<void>;
+}
 const publicView = ({ apiKey, ...value }: SavedVoice): VoiceServiceView => ({
   ...value,
   capability: 'tts',
@@ -125,8 +129,42 @@ export class VoiceServiceStore {
     readonly path = env.dataPath('voice-services.json'),
     private factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
       value.type === 'piper' ? new PiperTts(value) : new RemoteTts(value),
+    private readonly storage?: VoiceServicePersistence,
   ) {}
   async load() {
+    if (this.storage) {
+      const saved = await this.storage.load();
+      if (saved === undefined) {
+        const defaultVoice: SavedVoice = {
+          ...validateVoiceService({
+            name: 'Piper 本地语音',
+            type: 'piper',
+            voice: '',
+            speed: 1,
+          }),
+          id: 'local-default',
+        };
+        await this.storage.save([defaultVoice]);
+        this.values = [defaultVoice];
+      } else {
+        if (
+          !Array.isArray(saved) ||
+          saved.length > 20 ||
+          new Set(saved.map((voice) => voice.id)).size !== saved.length ||
+          saved.some(
+            (voice) =>
+              typeof voice.id !== 'string' ||
+              !/^[a-zA-Z0-9-]{1,80}$/.test(voice.id),
+          )
+        )
+          throw new AppError('语音服务数据库配置格式无效。', 500);
+        this.values = saved.map((voice) => ({
+          ...validateVoiceService(voice),
+          id: voice.id,
+        }));
+      }
+      return;
+    }
     try {
       const original = await readFile(this.path, 'utf8');
       const saved: (Omit<SavedVoice, 'type'> & { type: string })[] =
@@ -193,6 +231,7 @@ export class VoiceServiceStore {
     return { ...value };
   }
   private async persist(values: SavedVoice[]) {
+    if (this.storage) return this.storage.save(values);
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
     const tmp = `${this.path}.${randomUUID()}.tmp`;
     try {

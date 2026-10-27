@@ -57,7 +57,11 @@ export function asrEndpoint(settings: BailianAsrDraft) {
   return `wss://${host}/api-ws/v1/inference`;
 }
 
-type SavedService = AsrServiceDraft & { id: string };
+export type SavedService = AsrServiceDraft & { id: string };
+export interface AsrServicePersistence {
+  load(): Promise<SavedService[]>;
+  save(values: SavedService[]): Promise<void>;
+}
 const publicView = (value: SavedService): AsrServiceView => {
   if (value.provider === 'whisper') return { ...value };
   const { apiKey, ...settings } = value;
@@ -101,8 +105,31 @@ export class AsrSettingsStore {
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
-  constructor(readonly path = env.dataPath('asr-settings.json')) {}
+  constructor(
+    readonly path = env.dataPath('asr-settings.json'),
+    private readonly storage?: AsrServicePersistence,
+  ) {}
   async load() {
+    if (this.storage) {
+      const saved = await this.storage.load();
+      if (
+        !Array.isArray(saved) ||
+        saved.length > 20 ||
+        new Set(saved.map((service) => service.id)).size !== saved.length ||
+        saved.some(
+          (service) =>
+            typeof service.id !== 'string' ||
+            !/^[a-zA-Z0-9-]{1,80}$/.test(service.id) ||
+            ['local', 'new'].includes(service.id),
+        )
+      )
+        throw new AppError('ASR 数据库配置格式无效。', 500);
+      this.values = saved.map((service) => ({
+        ...validateService(service),
+        id: service.id,
+      }));
+      return;
+    }
     try {
       const saved = JSON.parse(await readFile(this.path, 'utf8'));
       if (saved?.version === 2 || saved?.version === 3) {
@@ -169,6 +196,7 @@ export class AsrSettingsStore {
     };
   }
   private async persist(values: SavedService[]) {
+    if (this.storage) return this.storage.save(values);
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
     const tmp = `${this.path}.${randomUUID()}.tmp`;
     try {
