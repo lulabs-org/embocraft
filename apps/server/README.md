@@ -9,6 +9,8 @@
 - `close()` 可重复调用。先关闭 Agent 与 Colyseus 房间，再终止 ASR WebSocket、HTTP/SSE 连接并释放存储；启动失败也走同一清理路径。
 - 仍为单进程单世界模型。Colyseus 的 matchMaker 与房间占用状态属于进程；不要在同一进程同时创建多个服务器。测试中的多个世界应顺序关闭后再创建，或放在独立进程中。
 - PostgreSQL 启动与迁移继续由开发者显式执行。配置了数据库但不可用时给出诊断和恢复命令，不自动启动数据库；生产启动未配置 `DATABASE_URL` 时会报错。测试可注入存储与归档依赖使用内存世界。
+- 数据库客户端与 Pg 连接池统一由 `core/database/client.ts` 创建。`core/database/health.ts` 使用独立短连接完成启动探活并释放；`createServer` 创建一个运行时客户端，供默认的 World、Provider、联合存档及 TTS/ASR 存储共享，待 Agent、房间和网络连接关闭后统一断开，不使用进程级单例。
+- `WorldStore(url)` 保留独立创建和关闭客户端的行为，`WorldStore('')` 保留内存模式；通过第二个参数注入客户端时只借用连接，`close()` 不断开它，由注入方负责释放。`ServerOptions.worldStore` 等测试注入接口保持不变。
 
 ## 依赖方向
 
@@ -17,13 +19,13 @@
 | 目录                    | 责任                                                     |
 | ----------------------- | -------------------------------------------------------- |
 | `core/config`           | 类型化配置、部署变量校验、`.env` 加载与数据路径          |
+| `core/database`         | 数据库客户端与连接池创建、启动探活和异常脱敏             |
 | `core/errors`           | 通用 `AppError`                                          |
 | `core/concurrency`      | 命令队列                                                 |
 | `core/http`             | HTTP 中间件、输入校验、Origin 判断与 health 路由         |
 | `core/openapi`          | OpenAPI schema、Swagger 文档生成与 docs 路由             |
 | `core/transport`        | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭     |
 | `http`                  | 待迁移的管理请求策略与跨模块 HTTP 装配                   |
-| `persistence`           | 待迁移的数据库客户端构造函数                             |
 | `modules/management`    | 角色与任务联合存档、迁移、提交及失败处理                 |
 | `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配           |
 | `modules/providers`     | 模型提供商持久化存储与模型列表服务                       |
@@ -74,7 +76,7 @@ pnpm --filter @voxel/server exec tsx test/integration/realtime.ts
 
 以上推理/语音集成默认使用固定响应，仍通过真实 HTTP、WebSocket 与物理执行。真实模型导航需显式运行 `NAVIGATION_PROVIDERS=/absolute/path/providers.json pnpm test:navigation:live`；测试不会自动读取生产凭据，也不修改当前开发世界。结果默认写入 `artifacts/navigation-live-model.json`。
 
-`tests/server-boundaries.test.ts` 检查依赖方向、循环依赖、配置入口和集成装配，并限定业务模块仅从 Socket 适配文件以 `import type` 引用传输契约。生命周期测试检查 HTTP 契约、SSE/ASR/世界连接关闭、失败启动后的再次启动。Vitest 使用线程池，避免 Colyseus 的 PM2 遥测占用 fork 的测试 IPC，不模拟服务器本身。
+`tests/server-boundaries.test.ts` 检查依赖方向、循环依赖、配置入口和集成装配，并限定业务模块仅从 Socket 适配文件以 `import type` 引用传输契约。Prisma 运行时与 Pg 适配器的导入统一限制在 `core/database/client.ts`，其他服务端文件只引用 Prisma 类型。生命周期测试检查 HTTP 契约、SSE/ASR/世界连接关闭、失败启动后的再次启动，以及共享数据库客户端的释放顺序和重复关闭。Vitest 使用线程池，避免 Colyseus 的 PM2 遥测占用 fork 的测试 IPC，不模拟服务器本身。
 
 UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供确定性识别结果与临时配置；仓库没有可迁移的受控 `output/asr-services-fixture.ts`。三个沙箱均通过 `createTestServer` 启动，并处理退出清理。
 

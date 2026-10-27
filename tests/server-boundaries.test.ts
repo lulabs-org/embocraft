@@ -43,6 +43,24 @@ const importedFile = (file: string, spec: string) => {
   );
 };
 
+it('centralizes database client and pool construction in core/database/client.ts', () => {
+  for (const file of graph.keys()) {
+    const name = relative(root, file);
+    if (name === 'core/database/client.ts') continue;
+    for (const statement of sourceFile(file).statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier)
+      )
+        continue;
+      const spec = statement.moduleSpecifier.text;
+      if (spec === '@prisma/client')
+        expect(statement.importClause?.isTypeOnly, name).toBe(true);
+      expect(['@prisma/adapter-pg', 'pg'].includes(spec), name).toBe(false);
+    }
+  }
+});
+
 /** Follow only the symbols imported from a module facade, not every re-export. */
 function usedDependencies(file: string): string[] {
   const dependencies: string[] = [];

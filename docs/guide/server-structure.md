@@ -18,6 +18,8 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`；联合存档仍在 `modules/management/persistence/`，管理 HTTP 装配仍在 `src/http/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+
 ```text
 apps/server/
 ├── prisma/                              # Prisma ORM 定义与迁移（PostgreSQL 全局领域存储）
@@ -34,7 +36,7 @@ apps/server/
     │   │   ├── env.ts                   # 环境变量校验与解析（dotenv）
     │   │   └── index.ts                 # 配置聚合导出
     │   ├── database/                    # 基础设施数据库连接与健康检查
-    │   │   ├── client.ts                # PrismaClient 与 Pg 适配器连接池管理
+    │   │   ├── client.ts                # PrismaClient 与 Pg 适配器统一工厂（调用方拥有连接）
     │   │   ├── health.ts                # 启动前只读探测与异常凭据脱敏（checkStartupDatabase）
     │   │   └── health.test.ts
     │   ├── concurrency/                 # 跨模块并发与异步队列调度原语
@@ -66,7 +68,6 @@ apps/server/
     │   ├── archive.ts                   # 跨模块快照契约（ArchivePort, ManagementArchive）
     │   ├── database-archive.ts          # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
     │   ├── management-persistence.ts    # 跨模块快照协调器与 storageRevision 屏障锁
-    │   ├── database-client.ts           # 数据库客户端工厂
     │   ├── archive-file.ts              # 【兼容模式】测试与离线环境 .agents.json 原子落盘（Temp+Rename）
     │   └── migrate-archive.ts           # 历史 JSON 存档向前平滑迁移管道
     │
@@ -94,9 +95,10 @@ apps/server/
         ├── audio/                       # ── 2. 全双工音频管线与语音引擎 ──
         │   ├── domain/                  # 纯音频领域实体、模型与 DSP 编解码（零外部依赖）
         │   │   ├── types.ts             # 音频会话/转写/合成核心契约与类型
-        │   │   ├── pcm-wav.ts           # PCM 采样率规整与标准 WAV 封包纯函数
-        │   │   └── normalize.ts         # 音量增益标准化与声道下混计算
+        │   │   └── pcm-wav.ts           # PCM WAV 校验与标准 WAV 封包纯函数
         │   ├── services/                # 具体的音频服务调度与引擎实现
+        │   │   ├── processing/          # FFmpeg 转码与临时文件生命周期（有 I/O）
+        │   │   │   └── normalize.ts     # 录音/合成音频规整，复用 domain 的 WAV 校验
         │   │   ├── asr/                 # 语音识别引擎（Whisper 本地识别、百炼云端流式 ASR）
         │   │   │   ├── whisper.service.ts
         │   │   │   ├── bailian.service.ts
@@ -134,7 +136,7 @@ apps/server/
         │
         ├── gateway/                     # ── 4. 管理网关鉴权与安全通道 ──
         │   ├── auth.service.ts          # Bearer 令牌与文件 Token 双轨校验服务（GatewayAuth）
-        │   ├── gateway.socket.ts        # WebSocket 握手鉴权守卫（/agent-gateway）
+        │   ├── gateway.socket.ts        # WebSocket 握手鉴权守卫（/ai-characters/gateway）
         │   ├── validation.ts            # 网关请求校验守卫
         │   └── index.ts                 # 暴露 GatewayAuth, installGatewaySocket
         │
@@ -263,7 +265,7 @@ export function installGatewaySocket(
   sockets: SocketRoutes,
   deps: GatewaySocketDependencies,
 ) {
-  sockets.set('/agent-gateway', (socket, req) => {
+  sockets.set('/ai-characters/gateway', (socket, req) => {
     // 鉴权与事件订阅逻辑
   });
 }
@@ -335,9 +337,11 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 
 ### 4.1 Prisma 与 PostgreSQL 持久化与健康检查策略
 - **统一数据库基础设施（`core/database/client.ts`）**：
-  统一采用 `@prisma/adapter-pg` 构造连接池与 PrismaClient 单例管理，业务存储（如 `modules/world/persistence/store.ts`）必须复用该统一基础设施，严禁在业务模块内散乱 `new PrismaClient` 导致连接泄漏。
-- **启动前全量探活与阻断门禁（`core/database/health.ts` / `startup.ts`）**：
+  统一由 `createDatabaseClient` 使用 `@prisma/adapter-pg` 创建连接池与 PrismaClient，不使用进程级单例。`createServer` 拥有一个运行时客户端，并注入默认的 World、Provider、联合存档与 TTS/ASR 存储；在 Agent、房间和网络连接停止后统一断开。业务模块不得直接构造 PrismaClient 或 Pg 连接池。
+  `WorldStore(url)` 保留独立连接的创建和关闭行为，`WorldStore('')` 保留显式内存模式；`WorldStore(url, db)` 借用注入的客户端，房间调用其 `close()` 时不会断开共享连接，释放责任属于注入方。
+- **启动前全量探活与阻断门禁（`core/database/health.ts`）**：
   在系统分配网络端口与 Colyseus 房间创建前，必须执行只读查询（依次检查 `world`、`agentProvider`、`agentCharacter`、`ttsService` 等关键表）进行探活；若数据库未准备好或未完成迁移，立即阻断启动，防止 Colyseus 抛出二次崩溃。
+  探活通过统一工厂创建独立短连接，并在成功或失败后释放；运行时客户端在探活与语音配置校验通过后创建。目录加载失败会释放运行时客户端，监听或房间启动失败走服务器的统一关闭流程。
 - **连接异常安全脱敏**：
   数据库异常信息必须通过 `databaseStartupMessage` 进行过滤清洗，**绝不允许将带有数据库用户名、密码凭据的原始连接串输出到终端或网络响应中**；对于本地开发场景（`127.0.0.1:55432`），输出友好的修复提示（如 `pnpm db:start`）。
 - **强依赖保障与防隐式降级（Fail-Fast Enforcement）**：
@@ -352,7 +356,7 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
   - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
 - **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：
   - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；
-  - 内部维护单调自增的 `storageRevision` 与 Promise 串行保存队列（`ManagementPersistence.flush`），实施并发写屏障，彻底杜绝多次并发状态修改导致的乱序覆盖与脏落盘。
+  - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交可见状态并发布事件；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
 - **兼容模式：离线测试与 JSON 原子落盘（`src/persistence/archive-file.ts` / `migrate-archive.ts`）**：
   - **原子落盘（Atomic Write）**：在无数据库的离线单元测试或纯文件兼容模式下，`.agents.json` 与 `providers.json` 采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖”** 机制，彻底避免系统异常宕机导致 JSON 破损；
   - **向前平滑迁移（Forward Migration）**：历史文件均包含 `version` 标识（如 `version: 3`），加载时由 `migrate-archive.ts` 管道按顺序执行结构升级，保障向后兼容性。
@@ -365,7 +369,7 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 
 ### 5.1 100% 静态路由覆盖门禁（Route Coverage Gate）
 - 位于 `src/core/openapi/swagger.test.ts` 的自动化测试，基于 **TypeScript AST 语法树**静态分析全工程所有的 `*.routes.ts` 源码。
-- **强制约束**：任何新增、修改或重命名的 HTTP 路由，必须同时在 Swagger JSDoc 注解（`@openapi`）中完成完整的路径、请求方法、参数、请求体及状态码（2xx/4xx/5xx）声明，否则静态覆盖门禁直接导致单测不通过。
+- **强制约束**：任何新增、修改或重命名的 HTTP 路由，都应同步维护 Swagger JSDoc 注解（`@openapi`）中的路径、请求方法、参数、请求体及适用状态码。当前静态门禁校验路由覆盖与数量一致性，另有路径参数、成功响应、局部请求体及引用解析检查；它尚不能验证所有端点的请求体和 4xx/5xx 声明是否完整。
 
 ### 5.2 统一 DTO Schema 沉淀
 - 所有通用的请求体与响应数据模型，必须在 `src/core/openapi/openapi-schemas.ts` 集中声明（例如 `ProviderDto`, `TaskDto`, `AICharacterDto`）。
@@ -384,7 +388,7 @@ graph LR
     Router -->|校验 Payload| Policy[CommandPolicy 白名单]
     Policy -->|执行状态修改| Commands[ManagementCommands]
     Commands -->|发布状态变更| Events[ManagementEvents]
-    Events -->|推送更新| WS[WebSocket: /agent-gateway]
+    Events -->|推送更新| WS[WebSocket: /ai-characters/gateway]
     WS -->|实时刷新 UI| Client
 ```
 
@@ -393,7 +397,7 @@ graph LR
 - **指令白名单与 Payload 守卫**：
   如任务执行指令必须经过 `tasks/domain/command-policy.ts` 白名单校验，过滤未受信任的非法字段。
 - **全双工审计与通知总线（`ManagementEvents`）**：
-  任何领域状态发生跃迁（如模型创建、角色上线、任务推进），由 `ManagementEvents.publish()` 统一发布事件，并直推给连接到 `/agent-gateway` 的管理客户端。**前端控制台通过事件流实时驱动界面更新，杜绝低效的 HTTP 短轮询**。
+  任何领域状态发生跃迁（如模型创建、角色上线、任务推进），由 `ManagementEvents.publish()` 统一发布事件，并直推给连接到 `/ai-characters/gateway` 的管理客户端。**前端控制台通过事件流实时驱动界面更新，杜绝低效的 HTTP 短轮询**。
 
 ---
 
@@ -401,8 +405,8 @@ graph LR
 
 音频模块实现了实时多模态交互全双工闭环，遵循标准分层架构：
 
-- **领域 DSP 与信号规整（`domain/`）**：
-  纯数学与内存操作，负责统一规整 PCM 原始采样率、位深与声道（`normalize.ts`），支持带标准 WAV 头的切片封包（`pcm-wav.ts`），确保浏览器端与端侧引擎格式对齐，单测零 Mock 毫秒级执行。
+- **领域音频规则（目标 `domain/`）**：
+  WAV 封包与校验等纯内存操作归领域层（`pcm-wav.ts`）。当前 `processing/normalize.ts` 使用临时文件与 FFmpeg 进行采样率、位深和声道转换，属于有 I/O 的服务流程，应迁入服务或适配层，不能直接归入纯领域层。
 - **多引擎服务调度（`services/`）**：
   - **ASR 识别引擎**：支持通过配置在 Whisper 本地离线识别与阿里云百炼 WebSocket 双工流式识别之间平滑切换；
   - **TTS 合成引擎**：支持本地 Piper 离线轻量音色（优先低延迟）与远端大模型 TTS 服务按需调度；
@@ -419,7 +423,7 @@ graph LR
 为保障代码的可维护性与模块自治，测试代码遵循以下准则：
 
 ### 8.1 测试文件就近共置（Test Colocation）
-- 弃用顶层统一的大 `tests/` 目录，所有单元测试与集成测试统一命名为 `*.test.ts`，**严格与被测试的源码文件放置在同一目录**；
+- 单元测试统一命名为 `*.test.ts`，**与被测试的源码文件放置在同一目录**；跨模块集成与生命周期测试保留在 `apps/server/test/`，全仓架构门禁保留在顶层 `tests/`；
 - 例如：`domain/inference.ts` 对应同级的 `domain/inference.test.ts`，`worlds.routes.ts` 对应同级的 `worlds.routes.test.ts`。
 
 ### 8.2 纯领域零 Mock 原则
@@ -458,7 +462,7 @@ graph LR
 #### 停机阶段顺序（Reverse Graceful Shutdown）：
 1. 捕获 `SIGINT` / `SIGTERM` 信号，进入 `closing` 状态拒绝新请求；
 2. 停止所有 Agent 唤醒定时器与正在执行的行动循环；
-3. 调用 `ManagementPersistence.flush()`，强制将内存中的最新状态落盘至持久化介质（数据库/磁盘）；
+3. 由 Agent 关闭流程提交需要保存的最终状态，调用 `ManagementPersistence.flush()` 等待已排队的保存完成并检查失败状态；
 4. 优雅关闭 Colyseus 世界房间并断开玩家网络连接；
 5. 主动切断 ASR 与 Gateway 升级的长连接；
 6. 关闭 HTTP 监听并销毁全部存活的 TCP 连接；

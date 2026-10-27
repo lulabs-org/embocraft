@@ -6,10 +6,10 @@ import { Server, matchMaker } from '@colyseus/core';
 
 import { createApp } from './app';
 import { env, type ServerConfig } from './core/config';
-import { checkStartupDatabase } from './startup';
+import { checkStartupDatabase } from './core/database/health';
 import type { ArchivePort } from './modules/management';
 import { DatabaseManagementArchive } from './modules/management';
-import { createDatabaseClient } from './persistence/database-client';
+import { createDatabaseClient } from './core/database/client';
 import type { PrismaClient } from '@prisma/client';
 
 import type { SocketRoutes } from './core/transport/socket-routes';
@@ -114,7 +114,7 @@ export async function createServer(options: ServerOptions = {}) {
       await db?.$disconnect();
       throw error;
     });
-  const store = options.worldStore ?? new WorldStore(config.databaseUrl);
+  const store = options.worldStore ?? new WorldStore(config.databaseUrl, db);
   let world: WorldRoom | undefined;
   let url = '';
   const archive = options.archive ?? new DatabaseManagementArchive(db!);
