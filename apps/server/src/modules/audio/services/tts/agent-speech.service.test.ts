@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { AgentSpeech } from './agent-speech';
+import { AgentSpeech } from './agent-speech.service';
 import type { AgentSpeechEvent, ChatData, Player } from '@voxel/shared';
 const person = (id: string, kind = 'human'): Player => ({
   id,

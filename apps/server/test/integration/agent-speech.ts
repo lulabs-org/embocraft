@@ -1,7 +1,7 @@
 import { createTestServer } from '../helpers/test-server';
 import assert from 'node:assert/strict';
-import { AgentSpeech } from '../../src/modules/audio/tts/agent-speech';
-import { PiperTts } from '../../src/modules/audio/tts/piper-tts';
+import { AgentSpeech } from '../../src/modules/audio/services/tts/agent-speech.service';
+import { PiperTts } from '../../src/modules/audio/services/tts/piper.service';
 import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
 import { Session, until, delay } from '@voxel/agent-runtime';
 import type { AgentSpeechEvent } from '@voxel/shared';

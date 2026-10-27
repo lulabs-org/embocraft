@@ -2,7 +2,7 @@ import { rename } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
 import { createTestServer } from './helpers/test-server';
 import { LocalSpeech } from '../src/modules/audio/services/asr/local-speech.service';
-import { PiperModels } from '../src/modules/audio/tts/piper-models';
+import { PiperModels } from '../src/modules/audio/services/tts/piper-models.service';
 
 const token = 'Bearer fixture-gateway-token-for-tests';
 const origin = 'http://world.test';

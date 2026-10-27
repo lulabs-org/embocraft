@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { PiperTts } from './piper-tts';
+import { PiperTts } from './piper.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 
