@@ -9,7 +9,7 @@
 4. **统一模块门面导出**：所有模块对外统一通过根部 `index.ts` 暴露公共接口，严禁跨模块深层相对路径引用（No Deep Import）。
 5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务统一为 `*.service.ts`；单测文件严格与源码同目录就近共置（`*.test.ts`）。
 6. **API 静态契约 100% 覆盖**：所有注册路由必须有对应的 OpenAPI JSDoc 注解，由 AST 静态分析自动拦截未文档化接口。
-7. **数据持久化安全保障**：PostgreSQL 启动前脱敏探测与严格校验门禁；JSON 文件存储采用原子写入（Atomic Write）与版本化向前迁移。
+7. **数据持久化安全保障**：PostgreSQL 强校验作为生产核心数据底座，启动前严格探活与脱敏；全局快照支持关系表驱动（主干）与 JSON 文件原子落盘（测试/离线兼容）双轨架构。
 :::
 
 ---
@@ -61,6 +61,14 @@ apps/server/
     │   └── transport/                   # 网络传输复合多路复用底座
     │       ├── socket-routes.ts         # Socket 路由契约（SocketHandler, SocketRoutes）
     │       └── websocket.transport.ts   # RoutedWebSocketTransport（拦截升级，共享端口与心跳）
+    │
+    ├── persistence/                     # ════════【全局数据快照与持久化底座】════════
+    │   ├── archive.ts                   # 跨模块快照契约（ArchivePort, ManagementArchive）
+    │   ├── database-archive.ts          # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
+    │   ├── management-persistence.ts    # 跨模块快照协调器与 storageRevision 屏障锁
+    │   ├── database-client.ts           # 数据库客户端工厂
+    │   ├── archive-file.ts              # 【兼容模式】测试与离线环境 .agents.json 原子落盘（Temp+Rename）
+    │   └── migrate-archive.ts           # 历史 JSON 存档向前平滑迁移管道
     │
     └── modules/                         # ════════【业务领域模块层（各领域自闭环）】════════
         │
@@ -130,21 +138,17 @@ apps/server/
         │   ├── validation.ts            # 网关请求校验守卫
         │   └── index.ts                 # 暴露 GatewayAuth, installGatewaySocket
         │
-        ├── management/                  # ── 5. 统一运维控制台与归档系统 ──
-        │   ├── domain/                  # 归档实体与版本契约模型
-        │   │   └── archive.ts           # 跨模块快照归档 Schema 与版本契约定义
+        ├── management/                  # ── 5. 统一管理控制台与指令/事件总线 ──
+        │   ├── domain/                  # 控制台指令契约与回执模型
+        │   │   └── command.ts           # 指令回执状态（pending/committed/rejected）与请求模型
         │   ├── services/                # CQRS 指令与事件调度总线
-        │   │   ├── command-router.service.ts # 指令路由器
-        │   │   ├── commands.service.ts       # 控制台修改命令执行器
-        │   │   └── events.service.ts         # 全双工管理事件广播总线
-        │   ├── persistence/             # 快照落盘与版本迁移
-        │   │   ├── archive-file.ts      # .agents.json 原子落盘（Temp+Rename）
-        │   │   ├── management-persistence.ts # 跨模块快照协调器与 storageRevision 锁
-        │   │   └── migrate-archive.ts   # 历史版本数据向前平滑迁移
+        │   │   ├── command-router.service.ts # 指令路由器（泳道并发隔离与 FIFO 队列）
+        │   │   ├── commands.service.ts       # 控制台修改命令执行器与 Idempotency-Key 幂等校验
+        │   │   └── events.service.ts         # 全双工管理事件广播总线（Diff 计算与 WebSocket 推送）
         │   ├── routes/                  # 控制台 HTTP 路由与守卫
-        │   │   ├── managements.routes.ts
-        │   │   └── management-policy.ts # 控制台鉴权与前置守卫
-        │   └── index.ts                 # 导出 ManagementPersistence, ManagementCommands 等
+        │   │   ├── managements.routes.ts     # /management/commands/:id 回执查询
+        │   │   └── management-policy.ts      # 控制台鉴权与前置守卫
+        │   └── index.ts                 # 导出 ManagementCommands, ManagementEvents, installManagementRoutes
         │
         ├── providers/                   # ── 6. 大模型提供商管理（DDD 标杆） ──
         │   ├── adapters/                # 外部适配器（健康探测、模型目录）
@@ -342,13 +346,16 @@ import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/audio
 - **方块编辑乐观版本控制（CAS）**：
   `BlockEdit` 实体采用 `[worldId, x, y, z]` 复合主键，与 `World.revision` 协同工作，防止多人并发修改时的数据覆盖破坏。
 
-### 4.2 JSON 状态归档的原子写与版本迁移
-- **原子落盘机制（Atomic Write）**：
-  智能体配置（`.agents.json`）与模型提供商（`providers.json`）落盘时，必须采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖原文件”** 机制，彻底避免系统异常宕机导致 JSON 破损。
-- **并发写屏障（Storage Revision Barrier）**：
-  持久化服务维护自增 `storageRevision` 与正在保存的 Promise 链（`ManagementPersistence.flush`），杜绝多次并发修改导致脏数据乱序落盘。
-- **版本化向前迁移（Forward Migration）**：
-  所有归档文件均包含 `version` 标识（如 `version: 3`），加载时由 `migrate-archive.ts` 管道按顺序执行结构升级，向后兼容历史存档。
+### 4.2 全局快照持久化与双轨驱动（Database & Archive Engine）
+- **生产主干：基于 PostgreSQL 的关系型快照驱动（`src/persistence/database-archive.ts`）**：
+  - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 统一序列化并持久化至 PostgreSQL 表中；
+  - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
+- **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：
+  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；
+  - 内部维护单调自增的 `storageRevision` 与 Promise 串行保存队列（`ManagementPersistence.flush`），实施并发写屏障，彻底杜绝多次并发状态修改导致的乱序覆盖与脏落盘。
+- **兼容模式：离线测试与 JSON 原子落盘（`src/persistence/archive-file.ts` / `migrate-archive.ts`）**：
+  - **原子落盘（Atomic Write）**：在无数据库的离线单元测试或纯文件兼容模式下，`.agents.json` 与 `providers.json` 采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖”** 机制，彻底避免系统异常宕机导致 JSON 破损；
+  - **向前平滑迁移（Forward Migration）**：历史文件均包含 `version` 标识（如 `version: 3`），加载时由 `migrate-archive.ts` 管道按顺序执行结构升级，保障向后兼容性。
 
 ---
 
@@ -382,7 +389,7 @@ graph LR
 ```
 
 - **统一变更指令入口（Command Bus）**：
-  所有对 Character、Provider、Task 的状态修改，统一经过 `ManagementCommands` / `command-router.ts` 分发处理，杜绝外部散乱调用底层 Service。
+  所有对 Character、Provider、Task 的状态修改，统一经过 `ManagementCommands` / `command-router.ts` 分发处理，杜绝外部散乱调用底层 Service。该总线纯粹负责应用层指令路由、泳道并发隔离与幂等校验，与底层存储持久化彻底解耦。
 - **指令白名单与 Payload 守卫**：
   如任务执行指令必须经过 `tasks/domain/command-policy.ts` 白名单校验，过滤未受信任的非法字段。
 - **全双工审计与通知总线（`ManagementEvents`）**：
@@ -451,7 +458,7 @@ graph LR
 #### 停机阶段顺序（Reverse Graceful Shutdown）：
 1. 捕获 `SIGINT` / `SIGTERM` 信号，进入 `closing` 状态拒绝新请求；
 2. 停止所有 Agent 唤醒定时器与正在执行的行动循环；
-3. 调用 `ManagementPersistence.flush()`，强制将内存中的最新状态原子写入磁盘；
+3. 调用 `ManagementPersistence.flush()`，强制将内存中的最新状态落盘至持久化介质（数据库/磁盘）；
 4. 优雅关闭 Colyseus 世界房间并断开玩家网络连接；
 5. 主动切断 ASR 与 Gateway 升级的长连接；
 6. 关闭 HTTP 监听并销毁全部存活的 TCP 连接；
