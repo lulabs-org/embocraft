@@ -1,7 +1,7 @@
 import { createTestServer } from '../helpers/test-server';
 import assert from 'node:assert/strict';
 import { Session, until } from '@voxel/agent-runtime';
-import { PLAYER_NAME_TAKEN } from '../../src/modules/world/player-name';
+import { PLAYER_NAME_TAKEN } from '../../src/modules/world/domain/player-name';
 
 {
   process.env.DATABASE_URL = '';

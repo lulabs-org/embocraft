@@ -12,7 +12,7 @@ import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
 import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';
 import { whisperModelsDirectory } from '../src/modules/audio/asr/whisper-settings';
 import { join } from 'node:path';
-import { WorldStore } from '../src/modules/world/store';
+import { WorldStore } from '../src/modules/world/persistence/store';
 
 describe('server assembly and lifecycle', () => {
   it('keeps original data locations and validates deployment configuration without dotenv side effects', () => {

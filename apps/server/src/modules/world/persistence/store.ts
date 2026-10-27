@@ -1,6 +1,6 @@
-import { env } from '../../core/config/env';
+import { env } from '../../../core/config/env';
 import type { PrismaClient } from '@prisma/client';
-import { createDatabaseClient } from '../../core/database/client';
+import { createDatabaseClient } from '../../../core/database/client';
 import {
   key,
   WORLD_ID,

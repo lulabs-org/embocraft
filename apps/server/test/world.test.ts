@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { key, simulate } from '@voxel/shared';
-import { terrain } from '../src/modules/world/terrain';
-import { validateEdit, parseInput } from '../src/modules/world/validation';
+import { terrain } from '../src/modules/world/domain/terrain';
+import {
+  validateEdit,
+  parseInput,
+} from '../src/modules/world/domain/validation';
 describe('authoritative world rules', () => {
   it('generates deterministic terrain', () =>
     expect([...terrain()]).toEqual([...terrain()]));

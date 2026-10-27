@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调，管理命令与事件服务已归入 `modules/management/services/`；`tasks` 的领域规则、服务、存储、路由与端口已按下方结构归位；`ai-characters` 的服务与运行时辅助文件已归入 `services/`，HTTP 路由已归入 `routes/`；`chat` 的可见性规则、服务与路由已分别归入 `domain/`、`services/` 和 `routes/`；`gateway` 已对齐 `auth.service.ts` 与 `gateway.socket.ts` 命名；`realtime` 的限额、会话服务与离线协议适配器已分别归入 `domain/`、`services/` 和 `adapters/`；`world` 的领域规则、存储与路由已归位，房间和框架 Schema 分别命名为 `world.room.ts` 与 `world.schema.ts`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -208,16 +208,17 @@ apps/server/
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
         └── world/                       # ── 9. 权威体素世界房间与物理模拟 ──
-            ├── domain/                  # 实体与领域规则
-            │   ├── schema.ts            # Colyseus 状态 Schema（玩家坐标、手持）
+            ├── domain/                  # 地形、玩家名称与输入/编辑校验规则
             │   ├── terrain.ts           # 确定性地形与增量覆盖判定
             │   ├── player-name.ts       # 玩家名称合法性规则
             │   └── validation.ts        # 空间坐标范围约束
             ├── persistence/             # 数据库持久化
-            │   └── store.ts             # PostgreSQL + Prisma 方块 CAS 乐观锁写入
+            │   ├── store.ts             # PostgreSQL + Prisma 方块 CAS 乐观锁写入
+            │   └── store.test.ts
             ├── world.room.ts            # WorldRoom 权威物理模拟与 Colyseus 房间 Tick 广播
+            ├── world.schema.ts          # Colyseus 同步状态 Schema（框架适配）
             ├── routes/
-            │   ├── worlds.routes.ts      # /world/room 与 /world/presence 路由
+            │   ├── worlds.routes.ts      # /world 与 /world/presence 路由
             │   └── worlds.routes.test.ts
             └── index.ts                 # 导出 WorldRoom, WorldStore, installWorldRoutes
 ```
@@ -251,9 +252,7 @@ export { WorldStore } from './persistence/store';
 export {
   installWorldRoutes,
   installPresenceRoutes,
-  type WorldRouteDependencies,
 } from './routes/worlds.routes';
-export type { WorldPresence } from '@voxel/shared';
 ```
 
 ### 2.3 统一的路由安装契约
@@ -262,7 +261,7 @@ export type { WorldPresence } from '@voxel/shared';
 ```typescript
 // apps/server/src/modules/world/routes/worlds.routes.ts
 export function installWorldRoutes(app: Express, getRoomId: () => string) {
-  app.get('/world/room', (req, res) => {
+  app.get('/world', (req, res) => {
     res.json({ roomId: getRoomId() });
   });
 }

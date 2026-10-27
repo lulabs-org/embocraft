@@ -10,9 +10,9 @@ import {
   type VoiceProvider,
   type VoiceServiceStore,
 } from '../audio';
-import { WorldStore } from './store';
+import { WorldStore } from './persistence/store';
 import { Room, Client, ServerError } from '@colyseus/core';
-import { Avatar, WorldState } from './schema';
+import { Avatar, WorldState } from './world.schema';
 import {
   LIMIT,
   MAX_Y,
@@ -26,13 +26,13 @@ import {
   type Edit,
   type WorldEvent,
 } from '@voxel/shared';
-import { terrain } from './terrain';
+import { terrain } from './domain/terrain';
 import {
   normalizePlayerName,
   playerNameKey,
   PLAYER_NAME_TAKEN,
-} from './player-name';
-import { validateEdit, parseInput } from './validation';
+} from './domain/player-name';
+import { validateEdit, parseInput } from './domain/validation';
 const zero: Input = { x: 0, z: 0, jump: false, yaw: 0 };
 let activeRoom = false;
 export class WorldRoom extends Room<WorldState> {
