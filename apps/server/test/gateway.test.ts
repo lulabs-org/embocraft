@@ -8,10 +8,10 @@ import {
   UnknownOutcome,
   type SocketLike,
 } from '@voxel/shared/management';
-import { gatewaySocket } from '../src/modules/gateway/socket';
+import { gatewaySocket } from '../src/modules/gateway';
 import { ManagementEvents as ServerManagementEvents } from '../src/modules/management';
 import { EventEmitter } from 'node:events';
-import { GatewayAuth } from '../src/modules/gateway/auth';
+import { GatewayAuth } from '../src/modules/gateway';
 import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

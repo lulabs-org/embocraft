@@ -90,7 +90,7 @@ graph TD
 
     Create --> Startup["startup.ts<br/>checkStartupDatabase"]
     Create --> Stores["loadStores()（并行）"]
-    Stores --> GA["GatewayAuth<br/>gateway/auth"]
+    Stores --> GA["GatewayAuth<br/>gateway/auth.service"]
     Stores --> PS["FileProviderRepository<br/>providers"]
     Stores --> VS["VoiceServiceStore<br/>audio/tts"]
     Stores --> AS["AsrSettingsStore<br/>audio/asr"]
@@ -132,7 +132,7 @@ graph TB
         AIC["ai-characters<br/>domain · services<br/>persistence · routes"]
         Tasks["tasks<br/>domain · services（scheduler/coordinator/execution）<br/>persistence · routes · ports"]
         Mgmt["management<br/>services（command-router · commands · events · public-error）<br/>routes"]
-        GW["gateway<br/>auth · socket · validation"]
+        GW["gateway<br/>auth.service · gateway.socket · validation"]
         Prov["providers<br/>store · catalog · validation · routes"]
         Chat["chat<br/>domain（visibility） · services<br/>routes（chats.routes）"]
         Audio["audio<br/>asr · tts · session · spatial · processing"]
