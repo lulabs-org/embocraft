@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { Session } from '@voxel/agent-runtime';
-import { MockVoiceProvider } from '../src/modules/audio/session/mock';
+import { MockVoiceProvider } from '../src/modules/audio/services/sessions/mock';
 import { createTestServer } from './helpers/test-server';
 
 it('preserves voice actions and closes sessions on replacement, leave and server shutdown', async () => {

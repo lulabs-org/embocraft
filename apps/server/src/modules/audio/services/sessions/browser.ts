@@ -1,4 +1,8 @@
-import type { VoiceEvent, VoiceProvider, VoiceSession } from '../domain/types';
+import type {
+  VoiceEvent,
+  VoiceProvider,
+  VoiceSession,
+} from '../../domain/types';
 
 export class BrowserVoiceProvider implements VoiceProvider {
   readonly id = 'browser';

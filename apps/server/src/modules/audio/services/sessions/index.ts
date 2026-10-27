@@ -1,5 +1,5 @@
-import { env } from '../../../core/config/env';
-import type { VoiceProvider } from '../domain/types';
+import { env } from '../../../../core/config/env';
+import type { VoiceProvider } from '../../domain/types';
 import { MockVoiceProvider } from './mock';
 import { BrowserVoiceProvider } from './browser';
 import { OllamaVoiceProvider } from './ollama';
@@ -10,7 +10,7 @@ export type {
   VoiceInput,
   VoiceSession,
   VoiceProvider,
-} from '../domain/types';
+} from '../../domain/types';
 export { MockVoiceProvider } from './mock';
 export { BrowserVoiceProvider } from './browser';
 export { OllamaVoiceProvider } from './ollama';

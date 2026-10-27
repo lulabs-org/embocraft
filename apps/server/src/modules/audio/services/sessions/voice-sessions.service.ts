@@ -1,5 +1,9 @@
 import { createVoiceProvider } from './index';
-import type { VoiceEvent, VoiceProvider, VoiceSession } from '../domain/types';
+import type {
+  VoiceEvent,
+  VoiceProvider,
+  VoiceSession,
+} from '../../domain/types';
 
 type SessionEvent = Omit<VoiceEvent, 'provider'> & {
   requestId: string;
