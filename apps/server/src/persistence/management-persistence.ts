@@ -1,11 +1,10 @@
 import type { AICharacterView } from '@voxel/shared';
-import { AppError } from '../../../core/errors/app-error';
+import { AppError } from '../core/errors/app-error';
 import type {
   ArchivePort,
   CharacterRecord,
   ManagementArchive,
-} from '../domain/archive';
-import type { ManagementEvents } from '../events';
+} from './archive';
 
 type TaskSnapshot = Pick<ManagementArchive, 'plans' | 'runs' | 'requests'>;
 
@@ -24,14 +23,16 @@ export type ManagementSnapshotPorts<Characters, Tasks> = {
   restoreTasks(snapshot: TaskSnapshot): void;
 };
 
-/** One serialized commit owns the character/task envelope and its visibility boundary. */
+/** One serialized commit owns the character/task envelope and its visibility boundary.
+ * The caller wires notifications after both committed views have been updated.
+ */
 export class ManagementPersistence<Characters, Tasks> {
   private saving: Promise<void> = Promise.resolve();
   storageRevision = 0;
 
   constructor(
     private readonly archive: ArchivePort,
-    private readonly events: ManagementEvents,
+    private readonly onCommitted: (snapshot: ManagementArchive) => void,
     private readonly snapshots: ManagementSnapshotPorts<Characters, Tasks>,
   ) {}
 
@@ -79,7 +80,7 @@ export class ManagementPersistence<Characters, Tasks> {
         }
         this.snapshots.commitCharacters(records, views);
         this.snapshots.restoreTasks(snapshot);
-        this.events.commit(records, snapshot);
+        this.onCommitted(snapshot);
       });
     void this.saving.catch(() => console.error('无法保存 Agent 记录。'));
     return this.saving;

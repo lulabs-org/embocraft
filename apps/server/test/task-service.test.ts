@@ -11,7 +11,7 @@ import {
 } from '@voxel/agent-runtime';
 import { testAgentConfig } from '../../../tests/support/agent-config';
 import { RequestBudget } from '../../../packages/agent-runtime/src/agent/task/budget';
-import { readManagementArchive } from '../src/modules/management';
+import { readManagementArchive } from '../src/persistence/archive-file';
 import {
   FileProviderRepository,
   bootstrapProviders,

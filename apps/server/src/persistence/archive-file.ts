@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, rename, writeFile, unlink } from 'node:fs/promises';
-import { AppError } from '../../../core/errors/app-error';
+import { AppError } from '../core/errors/app-error';
 import type {
   CharacterRecord,
   ManagementArchive,
   LegacyAgentArchive,
-} from '../domain/archive';
+} from './archive';
 import { migrateArchive } from './migrate-archive';
 
 export async function writeManagementArchive(
