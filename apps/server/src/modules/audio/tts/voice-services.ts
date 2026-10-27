@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
-import type { SpeechSynthesizer } from './speech-synthesizer';
-import { PiperTts } from './piper-tts';
-import { PiperModels, piperModel } from './piper-models';
+import type { SpeechSynthesizer } from '../services/tts/speech-synthesizer';
+import { PiperTts } from '../services/tts/piper.service';
+import { PiperModels, piperModel } from '../services/tts/piper-models.service';
 import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
-import { RemoteTts } from './remote-tts';
+import { RemoteTts } from '../services/tts/remote.service';
 import { AppError } from '../../../core/errors/app-error';
 
 export type SavedVoice = VoiceServiceDraft & { id: string };

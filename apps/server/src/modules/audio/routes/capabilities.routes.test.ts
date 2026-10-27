@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { AsrSettingsStore } from '../asr/asr-settings';
 import { LocalSpeech } from '../services/asr/local-speech.service';
-import { PiperModels } from '../tts/piper-models';
+import { PiperModels } from '../services/tts/piper-models.service';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
 describe('audio capabilities HTTP boundary', () => {

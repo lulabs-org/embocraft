@@ -1,6 +1,6 @@
-import { normalizeSpeech } from '../services/processing/normalize';
+import { normalizeSpeech } from '../processing/normalize';
 import type { VoiceServiceDraft } from '@voxel/shared';
-import { AppError } from '../../../core/errors/app-error';
+import { AppError } from '../../../../core/errors/app-error';
 import type { SpeechSynthesizer } from './speech-synthesizer';
 
 async function boundedBody(response: Response, limit: number) {

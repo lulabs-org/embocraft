@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 import { VoiceServiceStore, validateVoiceService } from './voice-services';
 
-import { PiperTts } from './piper-tts';
+import { PiperTts } from '../services/tts/piper.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 

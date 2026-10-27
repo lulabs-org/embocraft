@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest';
 
-import { validateVoiceService } from './voice-services';
+import { validateVoiceService } from '../../tts/voice-services';
 
-import { RemoteTts } from './remote-tts';
+import { RemoteTts } from './remote.service';
 
 const remote = {
   name: 'Cloud',

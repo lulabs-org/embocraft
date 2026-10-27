@@ -8,7 +8,7 @@ import type { Express } from 'express';
 import { LocalSpeech } from '../services/asr/local-speech.service';
 import { AppError } from '../../../core/errors/app-error';
 import { createVoiceProvider } from '../services/sessions';
-import { PiperModels } from '../tts/piper-models';
+import { PiperModels } from '../services/tts/piper-models.service';
 export function installCapabilitiesRoutes(
   app: Express,
   speech = new LocalSpeech(),

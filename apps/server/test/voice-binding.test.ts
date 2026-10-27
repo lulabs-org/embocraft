@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 import { VoiceServiceStore } from '../src/modules/audio/tts/voice-services';
 
-import { AgentSpeech } from '../src/modules/audio/tts/agent-speech';
+import { AgentSpeech } from '../src/modules/audio/services/tts/agent-speech.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS, type Player } from '@voxel/shared';
 

@@ -3,8 +3,8 @@ import {
   PIPER_MODELS,
   type PiperModelView,
 } from '@voxel/shared';
-import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../speech-endpoint';
+import { AppError } from '../../../../core/errors/app-error';
+import { speechEndpoint } from '../../speech-endpoint';
 
 export function piperModel(id: unknown) {
   const model = PIPER_MODELS.find((value) => value.id === id);
