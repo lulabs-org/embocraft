@@ -38,22 +38,19 @@ it('keeps infrastructure independent of business modules and modules independent
     const name = relative(root, file);
     for (const dep of deps) {
       const target = relative(root, dep);
-      if (name.startsWith('common/') || name.startsWith('config/'))
-        expect(
-          target.startsWith('common/') || target.startsWith('config/'),
-          `${name} -> ${target}`,
-        ).toBe(true);
+      if (name.startsWith('core/'))
+        expect(target.startsWith('core/'), `${name} -> ${target}`).toBe(true);
       if (name.startsWith('modules/')) {
         const socketContract =
-          target === 'transport/socket-routes.ts' &&
+          target === 'core/transport/socket-routes.ts' &&
           /(^|[/.])socket\.ts$/.test(name);
         expect(
           ['app.ts', 'server.ts', 'index.ts'].includes(target) ||
-            (target.startsWith('transport/') && !socketContract) ||
+            (target.startsWith('core/transport/') && !socketContract) ||
             target.startsWith('routes/') ||
             target === 'http/management.ts' ||
-            (target.startsWith('http/') && isRoute(target)) ||
-            target.startsWith('openapi/'),
+            (target.startsWith('core/http/') && isRoute(target)) ||
+            target.startsWith('core/openapi/'),
           `${name} -> ${target}`,
         ).toBe(false);
         if (socketContract) {
@@ -108,7 +105,7 @@ it('keeps infrastructure independent of business modules and modules independent
           'modules/management/events.ts -> persistence/archive.ts',
         );
     }
-    if (!name.startsWith('config/'))
+    if (!name.startsWith('core/config/'))
       expect(readFileSync(file, 'utf8'), name).not.toMatch(/process\.env/);
   }
 });

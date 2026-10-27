@@ -12,7 +12,7 @@ import {
 } from '@voxel/shared';
 import { AsrSettingsStore } from './asr-settings';
 import { installAsrRoutes } from './asr.routes.ts';
-import { RoutedWebSocketTransport } from '../../../transport/websocket.transport';
+import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
 import { createAsrSocket } from './asr.socket';
 import { installCapabilitiesRoutes } from '../capabilities.routes';
 import { LocalSpeech } from './local-speech';

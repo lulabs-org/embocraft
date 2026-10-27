@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { AsrServicePersistence, SavedService } from './asr-settings';
 
 /** Persists ASR definitions; active recordings stay in AsrSettingsStore. */

@@ -2,7 +2,7 @@ import { LocalSpeech } from '../audio/asr/local-speech';
 import { scheduleSpeech } from '../audio/asr/speech-scheduler';
 import type { WorldChat } from './chat';
 import { AsrSettingsStore } from '../audio/asr/asr-settings';
-import { AppError } from '../../common/errors';
+import { AppError } from '../../core/errors/app-error';
 
 type AudioInput = {
   chat: WorldChat;

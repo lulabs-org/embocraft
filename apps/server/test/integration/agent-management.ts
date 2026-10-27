@@ -1,6 +1,6 @@
 import { createTestServer } from '../helpers/test-server';
-import { DecisionFixture as ModelPlanner } from './../../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from './../../../../tests/support/decision-fixture';
+import { DecisionFixture as ModelPlanner } from '../../../../tests/support/decision-fixture';
+import { fixtureRunnerFactory } from '../../../../tests/support/decision-fixture';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -10,7 +10,7 @@ import {
 import { parseEventConnect } from './validation';
 import { publicError } from '../management/errors';
 import type { GatewayAuth } from './auth';
-import type { SocketRoutes } from '../../transport/socket-routes';
+import type { SocketRoutes } from '../../core/transport/socket-routes';
 
 /** The socket owns only notifications. Snapshots and all commands use authenticated HTTP. */
 export function gatewaySocket(

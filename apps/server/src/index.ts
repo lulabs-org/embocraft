@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { env } from './config';
+import { env } from './core/config';
 import { createServer } from './server';
 
 try {

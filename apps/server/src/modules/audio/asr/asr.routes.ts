@@ -1,12 +1,12 @@
 import cors from 'cors';
-import { env } from '../../../config/env';
-import { createOriginGuard } from '../../../http/middleware/origin-guard';
-import { asyncRoute } from '../../../http/middleware/async-route';
-import { assertJsonRequest } from '../../../http/middleware/require-json';
-import { errorHandler } from '../../../http/middleware/error-handler';
+import { env } from '../../../core/config/env';
+import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
+import { assertJsonRequest } from '../../../core/http/middleware/require-json';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express, type Request, type Response } from 'express';
 import { AsrSettingsStore } from './asr-settings';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 
 export function installAsrRoutes(
   app: Express,

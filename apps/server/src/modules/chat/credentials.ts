@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Player } from '@voxel/shared';
-import { AppError } from '../../common/errors';
+import { AppError } from '../../core/errors/app-error';
 
 export class ChatCredentials {
   private tokens = new Map<string, string>();

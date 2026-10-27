@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, rename, writeFile, unlink } from 'node:fs/promises';
-import { AppError } from '../common/errors';
+import { AppError } from '../core/errors/app-error';
 import type {
   CharacterRecord,
   ManagementArchive,

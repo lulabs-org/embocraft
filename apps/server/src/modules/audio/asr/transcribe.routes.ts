@@ -1,13 +1,13 @@
-import { asyncRoute } from '../../../http/middleware/async-route';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
 import cors from 'cors';
-import { env } from '../../../config/env';
-import { createOriginGuard } from '../../../http/middleware/origin-guard';
-import { errorHandler } from '../../../http/middleware/error-handler';
+import { env } from '../../../core/config/env';
+import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { AsrSettingsStore } from './asr-settings';
 import express, { type Express } from 'express';
 import { LocalSpeech } from './local-speech';
 import { MAX_AUDIO_BYTES } from '../processing/normalize';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import { scheduleSpeech } from './speech-scheduler';
 export function installTranscribeRoutes(
   app: Express,

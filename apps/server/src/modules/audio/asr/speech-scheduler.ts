@@ -1,6 +1,6 @@
 import type { WhisperAsrSettings } from '@voxel/shared';
 import { LocalSpeech } from './local-speech';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 
 type Job = { run: () => Promise<void>; cancel: () => void };
 /** Final sentences wait in a bounded queue. Obsolete previews never queue. */

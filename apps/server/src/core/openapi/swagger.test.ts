@@ -41,7 +41,7 @@ const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
 );
 
 it('documents every statically registered HTTP route', () => {
-  const serverSrc = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const serverSrc = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const routeFiles: string[] = [];
   function collect(directory: string) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -51,7 +51,8 @@ it('documents every statically registered HTTP route', () => {
         routeFiles.push(path);
     }
   }
-  collect(join(serverSrc, 'http'));
+  collect(join(serverSrc, 'core', 'http'));
+  collect(join(serverSrc, 'core', 'openapi'));
   collect(join(serverSrc, 'modules'));
 
   let routeCount = 0;

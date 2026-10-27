@@ -2,7 +2,7 @@ import {
   ManagementError,
   MANAGEMENT_EVENTS_VERSION,
 } from '@voxel/shared/management';
-import { record } from '../../common/validation';
+import { record } from '../../core/http/validation';
 export function parseEventConnect(value: unknown) {
   if (
     !record(value) ||

@@ -6,7 +6,7 @@ import {
   type ChatData,
   type Player,
 } from '@voxel/shared';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { SpeechSynthesizer } from './speech-synthesizer';
 import { PiperTts } from './piper-tts';
 

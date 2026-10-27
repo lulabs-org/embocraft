@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler } from 'express';
-import { AppError } from '../../common/errors';
+import { AppError } from '../../errors/app-error';
 export type ErrorResponse = {
   status: number;
   body: { error: string; code?: string };

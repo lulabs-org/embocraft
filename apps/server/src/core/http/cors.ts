@@ -1,6 +1,6 @@
 import cors from 'cors';
 import type { RequestHandler } from 'express';
-import { originAllowed } from '../common/origin-policy';
+import { originAllowed } from './origin-policy';
 
 /** Routes own preflight responses after their access checks. */
 export function publicCors(origin: string): RequestHandler {

@@ -5,15 +5,15 @@ import type { AddressInfo } from 'node:net';
 import { Server, matchMaker } from '@colyseus/core';
 
 import { createApp } from './app';
-import { env, type ServerConfig } from './config';
+import { env, type ServerConfig } from './core/config';
 import { checkStartupDatabase } from './startup';
 import type { ArchivePort } from './persistence/archive';
 import { DatabaseManagementArchive } from './persistence/database-archive';
 import { createDatabaseClient } from './persistence/database-client';
 import type { PrismaClient } from '@prisma/client';
 
-import type { SocketRoutes } from './transport/socket-routes';
-import { RoutedWebSocketTransport } from './transport/websocket.transport';
+import type { SocketRoutes } from './core/transport/socket-routes';
+import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 
 import {
   AICharacterManager,

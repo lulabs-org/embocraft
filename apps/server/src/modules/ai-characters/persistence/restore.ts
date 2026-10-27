@@ -6,7 +6,7 @@ import {
   restoreAICharacterLogs,
 } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort } from '../../providers/ports';
 import type { CharacterRecord } from './record';
 import type { Job } from '../runtime/job';

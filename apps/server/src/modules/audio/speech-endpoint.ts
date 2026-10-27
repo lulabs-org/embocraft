@@ -1,4 +1,4 @@
-import { env } from '../../config/env';
+import { env } from '../../core/config/env';
 /** Deployment settings only: clients cannot choose internal service addresses. */
 export function speechEndpoint(engine: 'whisper' | 'piper') {
   const c = env.readSpeech();

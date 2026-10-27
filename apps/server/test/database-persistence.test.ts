@@ -12,7 +12,7 @@ import { AsrSettingsStore } from '../src/modules/audio/asr/asr-settings';
 import { DatabaseAsrServicePersistence } from '../src/modules/audio/asr/database-asr-services';
 import type { ManagementArchive } from '../src/persistence/archive';
 import { createServer } from '../src/server';
-import { env } from '../src/config';
+import { env } from '../src/core/config';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

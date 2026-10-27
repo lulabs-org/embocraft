@@ -1,4 +1,4 @@
-import { AppError } from '../../../common/errors';
+import { AppError } from '../../../core/errors/app-error';
 import type { ModelCatalog } from '../adapters/model-catalog';
 import type { ProviderHealthChecker } from '../adapters/health-checker';
 import type { ProviderRepository } from '../persistence/repository.port';

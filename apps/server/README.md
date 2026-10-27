@@ -8,34 +8,36 @@
 - `createServer` 检查数据库配置、加载本地服务配置并装配 Agent、世界、HTTP 和 WebSocket。`listen()` 绑定端口、创建世界，然后恢复 Agent；端口为 0 时，内部 Agent 连接使用实际分配的端口。
 - `close()` 可重复调用。先关闭 Agent 与 Colyseus 房间，再终止 ASR WebSocket、HTTP/SSE 连接并释放存储；启动失败也走同一清理路径。
 - 仍为单进程单世界模型。Colyseus 的 matchMaker 与房间占用状态属于进程；不要在同一进程同时创建多个服务器。测试中的多个世界应顺序关闭后再创建，或放在独立进程中。
-- PostgreSQL 启动与迁移继续由开发者显式执行。配置了数据库但不可用时给出诊断和恢复命令，不自动启动数据库；未配置时使用带警告的内存世界。
+- PostgreSQL 启动与迁移继续由开发者显式执行。配置了数据库但不可用时给出诊断和恢复命令，不自动启动数据库；生产启动未配置 `DATABASE_URL` 时会报错。测试可注入存储与归档依赖使用内存世界。
 
 ## 依赖方向
 
-`config` 和 `common` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配由 `http/management.ts` 负责。`transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。跨领域只依赖实际使用的具体文件，少量装配入口才使用 `index.ts`，避免大范围重导出。
+`core` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。业务模块门面与深层导入会在后续调整。
 
-| 目录                    | 责任                                                       |
-| ----------------------- | ---------------------------------------------------------- |
-| `config`                | 类型化配置、部署变量校验、`.env` 加载与数据路径            |
-| `common`                | `AppError`、输入校验、命令队列、HTTP/WS 共用的 Origin 判断 |
-| `http`                  | HTTP 装配、中间件、管理请求策略、health/docs 路由          |
-| `openapi`               | OpenAPI schema 与 Swagger 文档生成                         |
-| `transport`             | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭       |
-| `persistence`           | 角色与任务联合存档、迁移、提交及失败处理                   |
-| `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配             |
-| `modules/providers`     | 模型提供商持久化存储与模型列表服务                         |
-| `modules/tasks`         | 任务计划、运行历史与执行控制领域服务                       |
-| `modules/gateway`       | 管理令牌与 WebSocket 状态通知                              |
-| `modules/audio/asr`     | 本地 Whisper、百炼识别及 ASR 配置                          |
-| `modules/audio/tts`     | Piper、本地/远程合成、音色服务、合成队列与世界内语音投递   |
-| `modules/audio/session` | mock/browser/Ollama 语音会话状态                           |
-| `modules/chat`          | 消息、附件、音频票据及私聊权限                             |
-| `modules/realtime`      | 百炼实时会话、工具确认与离线协议模拟器                     |
-| `modules/world`         | 权威物理房间、Schema、世界持久化与在线状态 SSE             |
+| 目录                    | 责任                                                     |
+| ----------------------- | -------------------------------------------------------- |
+| `core/config`           | 类型化配置、部署变量校验、`.env` 加载与数据路径          |
+| `core/errors`           | 通用 `AppError`                                          |
+| `core/concurrency`      | 命令队列                                                 |
+| `core/http`             | HTTP 中间件、输入校验、Origin 判断与 health 路由         |
+| `core/openapi`          | OpenAPI schema、Swagger 文档生成与 docs 路由             |
+| `core/transport`        | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭     |
+| `http`                  | 待迁移的管理请求策略与跨模块 HTTP 装配                   |
+| `persistence`           | 角色与任务联合存档、迁移、提交及失败处理                 |
+| `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配           |
+| `modules/providers`     | 模型提供商持久化存储与模型列表服务                       |
+| `modules/tasks`         | 任务计划、运行历史与执行控制领域服务                     |
+| `modules/gateway`       | 管理令牌与 WebSocket 状态通知                            |
+| `modules/audio/asr`     | 本地 Whisper、百炼识别及 ASR 配置                        |
+| `modules/audio/tts`     | Piper、本地/远程合成、音色服务、合成队列与世界内语音投递 |
+| `modules/audio/session` | mock/browser/Ollama 语音会话状态                         |
+| `modules/chat`          | 消息、附件、音频票据及私聊权限                           |
+| `modules/realtime`      | 百炼实时会话、工具确认与离线协议模拟器                   |
+| `modules/world`         | 权威物理房间、Schema、世界持久化与在线状态 SSE           |
 
 `local-speech.ts` 属于识别流程，保留在 `asr`。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`manager.ts`、`orchestrator.ts` 位于 `ai-characters` 模块，`provider-store.ts` 归属 `providers` 模块，`port.ts`、`service.ts`、`model.ts` 与 `scheduler.ts` 归属 `tasks` 模块。角色与任务的联合存档由 `persistence` 负责：先串行保存，再更新已提交视图并发布事件；存储失败时保留现有执行保护。
 
-业务错误与通用异常统一使用 `common/errors.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 递归扫描 `http` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
+业务错误与通用异常统一使用 `core/errors/app-error.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 扫描 `core/http`、`core/openapi` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
 
 Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/ai-characters`，任务计划、执行控制与计划调度位于 `modules/tasks`，模型提供商归入 `modules/providers`。各模块高内聚低耦合，不再依赖外部编排包。HTTP 路由和 OpenAPI 注释由各领域维护，`app.ts` 显式装配依赖；Provider 路由仅接收存储、模型查询、删除和变更通知接口。`http/management.ts` 为角色、模型提供商、任务与命令回执路由装配鉴权、32 KiB JSON、404 和错误映射，并共享一个 `ManagementCommands` 实例。TTS 复用同一请求策略，但不进入命令回执队列；ASR 配置保留 8 KiB JSON 和专用错误映射，转录保留原始音频请求体。路由直接注册在 Express app 上，保留命令指纹使用的完整 `req.path`。
 

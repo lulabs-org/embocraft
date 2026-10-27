@@ -21,7 +21,9 @@ const DEFAULT_GATEWAY_ORIGINS = [
 const VALID_VOICE_PROVIDERS = ['mock', 'browser', 'ollama'] as const;
 type VoiceProvider = (typeof VALID_VOICE_PROVIDERS)[number];
 
-const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+const repositoryRoot = fileURLToPath(
+  new URL('../../../../../', import.meta.url),
+);
 
 const dataPath = (name: string): string =>
   resolve(repositoryRoot, '.data', name);

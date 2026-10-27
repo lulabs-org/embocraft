@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { ManagementCommands } from './commands';
 import { taskCommandBody } from '../tasks/command-policy';
-import { AppError } from '../../common/errors';
+import { AppError } from '../../core/errors/app-error';
 
 type Request = Parameters<ManagementCommands['execute']>[0];
 

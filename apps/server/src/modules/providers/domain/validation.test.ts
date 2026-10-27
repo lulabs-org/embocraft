@@ -16,9 +16,9 @@ it('applies provider defaults and validates fields', () => {
   expect(() => validateProvider({ name: '', type: 'deepseek' })).toThrow(
     '请输入服务名称。',
   );
-  expect(() =>
-    validateProvider({ name: 'Other', type: 'unknown' }),
-  ).toThrow('不支持此服务类型。');
+  expect(() => validateProvider({ name: 'Other', type: 'unknown' })).toThrow(
+    '不支持此服务类型。',
+  );
 });
 
 it('enforces provider-specific URL and protocol rules', () => {

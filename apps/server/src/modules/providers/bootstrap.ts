@@ -1,4 +1,4 @@
-import { env, type EnvLookup } from '../../config/env';
+import { env, type EnvLookup } from '../../core/config/env';
 import { type SavedProvider } from './domain/model';
 import { validateProvider } from './domain/validation';
 import type { ProviderRepository } from './persistence/repository.port';
