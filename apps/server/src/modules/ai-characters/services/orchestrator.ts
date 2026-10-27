@@ -7,9 +7,9 @@ import {
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { emptyState } from '@voxel/agent-runtime';
-import type { ProviderRuntimePort } from '../../providers/ports';
+import type { ProviderRuntimePort, SavedProvider } from '../../providers';
 import type { ArchivePort } from '../../../persistence/archive';
-import { ManagementEvents } from '../../management/events';
+import { ManagementEvents } from '../../management';
 import {
   AgentAttention,
   nextIntervalMs,
@@ -23,7 +23,6 @@ import {
   validateAICharacter,
   aiCharacterProfileInput,
 } from '../domain/validation';
-import type { SavedProvider } from '../../providers/domain/model';
 import { AppError } from '../../../core/errors/app-error';
 
 import {
@@ -40,13 +39,13 @@ import {
   markJoined,
   markOffline,
   modelChanged,
-} from '../../tasks/runtime/execution';
+  TaskCoordinator,
+} from '../../tasks';
 import { executionState } from '../runtime/task-adapter';
 import { restoreAICharacterJob } from '../persistence/restore';
 import { AICharacterHost } from '../runtime/character-host';
 import type { ExecutionContext } from '../runtime/execution-context';
 import { ManagementPersistence } from '../../../persistence/management-persistence';
-import { TaskCoordinator } from '../../tasks/runtime/coordinator';
 import { CharacterVoiceCoordinator } from './voice-coordinator';
 
 export class AICharacterOrchestrator {

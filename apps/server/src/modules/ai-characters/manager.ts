@@ -1,6 +1,6 @@
 import { AgentRunner, Session } from '@voxel/agent-runtime';
-import type { ProviderRuntimePort } from '../providers/ports';
-import type { VoiceServiceStore } from '../audio/tts/voice-services';
+import type { ProviderRuntimePort } from '../providers';
+import type { VoiceServiceStore } from '../audio';
 import {
   AICharacterOrchestrator,
   type AICharacterDependencies,

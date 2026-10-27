@@ -12,7 +12,7 @@
 
 ## 依赖方向
 
-`core` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。业务模块门面与深层导入会在后续调整。
+`core` 不引用业务领域；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`；顶层 `persistence` 的归档依赖将在归档归位时处理。
 
 | 目录                    | 责任                                                     |
 | ----------------------- | -------------------------------------------------------- |

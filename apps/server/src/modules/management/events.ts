@@ -1,7 +1,7 @@
-import type {
-  CharacterRecord,
-  ManagementArchive,
-} from '../../persistence/archive';
+type EventSnapshot = {
+  plans: { id: string }[];
+  runs: { id: string; planId?: string; source?: string }[];
+};
 
 export type ManagementResourceChange = {
   resource: 'characters' | 'providers' | 'plans' | 'runs';
@@ -25,7 +25,7 @@ export class ManagementEvents {
     };
   }
 
-  commit(records: CharacterRecord[], archive?: ManagementArchive) {
+  commit(records: { id: string }[], archive?: EventSnapshot) {
     const next = new Map(records.map((r) => [r.id, JSON.stringify(r)]));
     const ids = [...new Set([...next.keys(), ...this.previous.keys()])].filter(
       (id) => next.get(id) !== this.previous.get(id),

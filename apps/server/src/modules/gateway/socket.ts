@@ -1,6 +1,6 @@
 import type WebSocket from 'ws';
 import type { IncomingMessage } from 'node:http';
-import type { ManagementEvents } from '../management/events';
+import type { ManagementEvents } from '../management';
 import {
   ManagementError,
   MANAGEMENT_EVENTS_VERSION,
@@ -8,7 +8,7 @@ import {
   type ManagementFrame,
 } from '@voxel/shared/management';
 import { parseEventConnect } from './validation';
-import { publicError } from '../management/errors';
+import { publicError } from '../management';
 import type { GatewayAuth } from './auth';
 import type { SocketRoutes } from '../../core/transport/socket-routes';
 

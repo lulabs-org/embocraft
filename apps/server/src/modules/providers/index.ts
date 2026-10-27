@@ -12,7 +12,10 @@ export type {
   ProviderRuntimePort,
   ProviderCommandPort,
 } from './ports';
-export { installProviderRoutes } from './routes/providers.routes';
+export {
+  installProviderRoutes,
+  type ProviderRouteDependencies,
+} from './routes/providers.routes';
 export { ModelCatalog } from './adapters/model-catalog';
 export { ProviderHealthChecker } from './adapters/health-checker';
 export { ProviderService } from './services/provider-service';

@@ -5,8 +5,8 @@ import type { Player } from '@voxel/shared';
 import { installChatRoutes } from './chat.routes';
 import { WorldChat } from './chat';
 import { errorHandler } from '../../core/http/middleware/error-handler';
-import type { LocalSpeech } from '../audio/asr/local-speech';
-import type { AsrSettingsStore } from '../audio/asr/asr-settings';
+import type { LocalSpeech } from '../audio';
+import type { AsrSettingsStore } from '../audio';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 
 let server: Server | undefined;

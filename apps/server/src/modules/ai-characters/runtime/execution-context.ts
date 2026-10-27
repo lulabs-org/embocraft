@@ -7,7 +7,7 @@ import type {
 import type { WorldEvent } from '@voxel/shared';
 import type { Job } from './job';
 import type { VoiceServicePort as VoiceServiceStore } from '../ports';
-import type { SavedProvider } from '../../providers/domain/model';
+import type { SavedProvider } from '../../providers';
 
 /** AI 角色在游戏世界中的会话运行时执行上下文契约 */
 export type ExecutionContext = {

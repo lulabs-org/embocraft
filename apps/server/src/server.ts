@@ -20,19 +20,18 @@ import {
   type AICharacterDependencies,
 } from './modules/ai-characters';
 
-import { AsrSettingsStore } from './modules/audio/asr/asr-settings';
-import { DatabaseAsrServicePersistence } from './modules/audio/asr/database-asr-services';
 import {
+  AsrSettingsStore,
+  DatabaseAsrServicePersistence,
+  DatabaseVoiceServicePersistence,
   installAsrSocket,
+  LocalSpeech,
+  createVoiceProvider,
+  VoiceServiceStore,
   type AsrBridge,
-} from './modules/audio/asr/asr.socket';
-import { LocalSpeech } from './modules/audio/asr/local-speech';
-import { createVoiceProvider } from './modules/audio/session';
-import { VoiceServiceStore } from './modules/audio/tts/voice-services';
-import { DatabaseVoiceServicePersistence } from './modules/audio/tts/database-voice-services';
+} from './modules/audio';
 
-import { GatewayAuth } from './modules/gateway/auth';
-import { installGatewaySocket } from './modules/gateway/socket';
+import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 
 import {
   DatabaseProviderRepository,
@@ -43,8 +42,7 @@ import {
   ProviderService,
 } from './modules/providers';
 
-import { WorldRoom } from './modules/world/room';
-import { WorldStore } from './modules/world/store';
+import { WorldRoom, WorldStore } from './modules/world';
 
 export type ServerOptions = {
   config?: ServerConfig;

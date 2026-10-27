@@ -9,11 +9,11 @@ import {
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { object, text, integer, boolean } from '../../../core/http/validation';
-import { type SavedProvider } from '../../providers/domain/model';
+import { type SavedProvider } from '../../providers';
 import {
   validateInferenceSettings,
   validateProviderModel,
-} from '../../providers/domain/inference';
+} from '../../providers';
 
 export function validateAICharacter(
   value: unknown,

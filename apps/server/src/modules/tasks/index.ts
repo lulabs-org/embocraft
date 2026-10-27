@@ -3,9 +3,11 @@ export type { TaskPort } from './port';
 
 // 2. HTTP 路由
 export { installTaskRoutes } from './routes';
+export { taskCommandBody } from './command-policy';
 
 // 3. 仓储与内存存储服务
 export { TaskPlanService, PlanService } from './persistence/service';
+export { restoreTaskExecution, restoreTaskMemory } from './persistence/restore';
 
 // 4. 定时调度器
 export { TaskScheduler } from './runtime/scheduler';
@@ -39,6 +41,16 @@ export type {
 } from './domain/types';
 
 export { TaskCoordinator } from './runtime/coordinator';
+export {
+  beginChatExecution,
+  captureTask,
+  currentRun,
+  executionConfigOverrides,
+  pauseTaskForHost,
+  markJoined,
+  markOffline,
+  modelChanged,
+} from './runtime/execution';
 export type {
   TaskExecutionState,
   TaskHostPort,

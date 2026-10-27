@@ -33,11 +33,79 @@ const graph = new Map(
 const isRoute = (name: string) =>
   /(^|\/)routes\//.test(name) || /(^|\/)(?:[^/]+\.)?routes\.ts$/.test(name);
 
+const sourceFile = (file: string) =>
+  ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest);
+
+const importedFile = (file: string, spec: string) => {
+  const base = resolve(dirname(file), spec);
+  return [base, base + '.ts', base + '/index.ts'].find(
+    (path) => existsSync(path) && statSync(path).isFile(),
+  );
+};
+
+/** Follow only the symbols imported from a module facade, not every re-export. */
+function usedDependencies(file: string): string[] {
+  const dependencies: string[] = [];
+  for (const statement of sourceFile(file).statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    )
+      continue;
+    const target = importedFile(file, statement.moduleSpecifier.text);
+    if (!target || !target.startsWith(root)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (
+      !target.endsWith('/index.ts') ||
+      !bindings ||
+      !ts.isNamedImports(bindings)
+    ) {
+      dependencies.push(target);
+      continue;
+    }
+    const facade = sourceFile(target);
+    for (const imported of bindings.elements) {
+      const name = imported.propertyName?.text ?? imported.name.text;
+      const matched = facade.statements.find(
+        (exported) =>
+          ts.isExportDeclaration(exported) &&
+          exported.moduleSpecifier &&
+          ts.isStringLiteral(exported.moduleSpecifier) &&
+          exported.exportClause &&
+          ts.isNamedExports(exported.exportClause) &&
+          exported.exportClause.elements.some(
+            (item) => item.name.text === name,
+          ),
+      );
+      if (
+        matched &&
+        ts.isExportDeclaration(matched) &&
+        matched.moduleSpecifier &&
+        ts.isStringLiteral(matched.moduleSpecifier)
+      ) {
+        const source = importedFile(target, matched.moduleSpecifier.text);
+        if (source) dependencies.push(source);
+      } else dependencies.push(target);
+    }
+  }
+  return dependencies;
+}
+
 it('keeps infrastructure independent of business modules and modules independent of composition/transport implementations', () => {
   for (const [file, deps] of graph) {
     const name = relative(root, file);
     for (const dep of deps) {
       const target = relative(root, dep);
+      if (target.startsWith('modules/') && !name.startsWith('persistence/')) {
+        const domain = target.split('/')[1];
+        const owner = name.startsWith('modules/')
+          ? name.split('/')[1]
+          : undefined;
+        if (owner !== domain)
+          expect(target, `${name} -> ${target}`).toBe(
+            `modules/${domain}/index.ts`,
+          );
+      }
       if (name.startsWith('core/'))
         expect(target.startsWith('core/'), `${name} -> ${target}`).toBe(true);
       if (name.startsWith('modules/')) {
@@ -122,7 +190,7 @@ it('keeps domain implementations independent of HTTP routes, including through b
     function visit(current: string, chain: string[]) {
       if (visited.has(current)) return;
       visited.add(current);
-      for (const dep of graph.get(current) ?? []) {
+      for (const dep of usedDependencies(current)) {
         const path = [...chain, relative(root, dep)];
         expect(isRoute(relative(root, dep)), path.join(' -> ')).toBe(false);
         visit(dep, path);

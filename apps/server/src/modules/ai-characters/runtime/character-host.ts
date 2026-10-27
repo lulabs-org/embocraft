@@ -6,15 +6,14 @@ import {
 } from '@voxel/agent-runtime';
 import { appendAICharacterLog } from '../domain/activity-log';
 import type { Job } from './job';
-import type { SavedProvider } from '../../providers/domain/model';
+import { resolveInferenceDefaults, type SavedProvider } from '../../providers';
 import {
   captureTask,
   currentRun,
   executionConfigOverrides,
   beginChatExecution,
-} from '../../tasks/runtime/execution';
+} from '../../tasks';
 import { executionState } from './task-adapter';
-import { resolveInferenceDefaults } from '../../providers/domain/inference';
 import { handleWorldEvent } from './world-event-handler';
 import type { ExecutionContext } from './execution-context';
 
