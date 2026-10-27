@@ -8,8 +8,8 @@ import {
 } from '@voxel/agent-runtime';
 import { isRepeating, type AICharacterTask } from '@voxel/shared';
 import { duePlans, endedRun, newRun, nextOccurrence } from '../domain/model';
-import { captureTask } from '../runtime/execution';
-import type { TaskExecutionState } from '../runtime/execution-port';
+import { captureTask } from '../services/execution.service';
+import type { TaskExecutionState } from '../ports';
 
 /** Read compatibility only. New task creation must use the task service. */
 export function restoreTaskMemory(

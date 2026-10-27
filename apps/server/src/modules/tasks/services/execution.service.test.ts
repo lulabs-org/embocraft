@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { captureTask } from './execution';
+import { captureTask } from './execution.service';
 
 import { taskExecutionFixture as fixture } from '../../../../test/helpers/task-execution-fixture';
 
