@@ -1,5 +1,5 @@
 import type { Express, RequestHandler } from 'express';
-import { installManagementJsonRoutes } from '../../http/management-policy';
+import { installManagementJsonRoutes } from '../management';
 import type { AsrSettingsStore } from './asr/asr-settings';
 import type { LocalSpeech } from './asr/local-speech';
 import type { VoiceServiceStore } from './tts/voice-services';

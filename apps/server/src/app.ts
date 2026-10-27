@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import type { WorldPresence } from '@voxel/shared';
 import { publicCors } from './core/http/cors';
 import { installDocsRoutes } from './core/openapi/docs.routes';
@@ -6,10 +6,20 @@ import {
   installHealthRoutes,
   type HealthConfig,
 } from './core/http/routes/health.routes';
+import { installManagementHttp } from './modules/management';
 import {
-  installManagementHttp,
-  type ManagementHttpDependencies,
-} from './http/management';
+  installAICharacterRoutes,
+  type AICharacterRoutePort,
+} from './modules/ai-characters';
+import {
+  installProviderRoutes,
+  type ProviderRouteDependencies,
+} from './modules/providers';
+import {
+  taskCommandBody,
+  installTaskRoutes,
+  type TaskPort,
+} from './modules/tasks';
 import { errorHandler } from './core/http/middleware/error-handler';
 import {
   installAudioRoutes,
@@ -21,7 +31,12 @@ import { installWorldRoutes, installPresenceRoutes } from './modules/world';
 export type AppDependencies = {
   origin: string;
   health: HealthConfig;
-  management: ManagementHttpDependencies;
+  management: {
+    authenticate: RequestHandler;
+    characters: AICharacterRoutePort;
+    providers: ProviderRouteDependencies;
+    tasks: TaskPort;
+  };
   audio: Omit<AudioRouteDependencies, 'origin'>;
   world: {
     roomId: () => string;
@@ -40,7 +55,15 @@ export function createApp(deps: AppDependencies) {
   app.use(publicCors(deps.origin));
   installDocsRoutes(app);
   installHealthRoutes(app, deps.health);
-  installManagementHttp(app, deps.management);
+  installManagementHttp(app, {
+    authenticate: deps.management.authenticate,
+    receiptBody: taskCommandBody,
+    installRoutes: (app, commands) => {
+      installAICharacterRoutes(app, deps.management.characters, commands);
+      installProviderRoutes(app, deps.management.providers, commands);
+      installTaskRoutes(app, deps.management.tasks, commands);
+    },
+  });
   installAudioRoutes(app, { ...deps.audio, origin: deps.origin });
   installWorldRoutes(app, deps.world.roomId);
   installChatRoutes(

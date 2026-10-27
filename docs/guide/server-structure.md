@@ -18,7 +18,7 @@
 
 以下为服务端的标准目录结构图，标明了每个目录与文件的归属、职责与单测共置约定：
 
-该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 装配仍在 `src/http/`，其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
+该目录树是目标结构，并非所有路径均已落地。目前数据库基础设施已统一至 `core/database/`，联合存档已迁入 `src/persistence/`；管理 HTTP 管线与请求策略已归入 `modules/management/routes/`，由 `app.ts` 注入业务路由安装回调；其他模块的目录与命名将分批对齐。当前实现与兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -148,9 +148,10 @@ apps/server/
         │   │   ├── commands.service.ts       # 控制台修改命令执行器与 Idempotency-Key 幂等校验
         │   │   └── events.service.ts         # 全双工管理事件广播总线（Diff 计算与 WebSocket 推送）
         │   ├── routes/                  # 控制台 HTTP 路由与守卫
+        │   │   ├── management.http.ts        # 管理 HTTP 管线、共享命令实例与注入式路由装配
         │   │   ├── managements.routes.ts     # /management/commands/:id 回执查询
         │   │   └── management-policy.ts      # 控制台鉴权与前置守卫
-        │   └── index.ts                 # 导出 ManagementCommands, ManagementEvents, installManagementRoutes
+        │   └── index.ts                 # 导出 ManagementCommands, ManagementEvents, installManagementHttp 等
         │
         ├── providers/                   # ── 6. 大模型提供商管理（DDD 标杆） ──
         │   ├── adapters/                # 外部适配器（健康探测、模型目录）
@@ -288,7 +289,10 @@ import { installHealthRoutes } from './core/http/routes/health.routes';
 import { errorHandler } from './core/http/middleware/error-handler';
 
 // 各模块统一从 index.ts 引入
-import { installManagementRoutes } from './modules/management';
+import { installManagementHttp } from './modules/management';
+import { installAICharacterRoutes } from './modules/ai-characters';
+import { installProviderRoutes } from './modules/providers';
+import { installTaskRoutes, taskCommandBody } from './modules/tasks';
 import { installAudioRoutes } from './modules/audio';
 import { installWorldRoutes, installPresenceRoutes } from './modules/world';
 import { installChatRoutes } from './modules/chat';
@@ -302,7 +306,15 @@ export function createApp(deps: AppDependencies) {
   installHealthRoutes(app, deps.health);
 
   // 2. 挂载各业务领域模块的 HTTP 路由
-  installManagementRoutes(app, deps.management);
+  installManagementHttp(app, {
+    authenticate: deps.management.authenticate,
+    receiptBody: taskCommandBody,
+    installRoutes: (app, commands) => {
+      installAICharacterRoutes(app, deps.management.characters, commands);
+      installProviderRoutes(app, deps.management.providers, commands);
+      installTaskRoutes(app, deps.management.tasks, commands);
+    },
+  });
   installAudioRoutes(app, deps.audio);
   installWorldRoutes(app, deps.world.roomId);
   installPresenceRoutes(app, deps.world.presence, deps.origin);
@@ -313,6 +325,8 @@ export function createApp(deps: AppDependencies) {
   return app;
 }
 ```
+
+`installManagementHttp` 由 management 模块持有鉴权、请求解析、共享命令实例、回执路由和错误处理的安装顺序。角色、Provider、Tasks 的路由安装函数由 `app.ts` 通过回调注入，management 的 HTTP 层不反向导入这些模块。所有路由继续直接注册在 Express app 上，保留完整 `req.path` 命令指纹；TTS 通过 management 门面复用 32 KiB 请求策略，但不进入命令回执队列，ASR 继续使用独立的 8 KiB JSON 与原始音频处理策略。
 
 ### 3.2 复合网络服务装配器（`src/server.ts`）
 ```typescript

@@ -7,7 +7,7 @@ import { errorHandler } from '../src/core/http/middleware/error-handler';
 import {
   managementBody,
   managementErrors,
-} from '../src/http/management-policy';
+} from '../src/modules/management/routes/management-policy';
 
 let server: Server;
 let url: string;
