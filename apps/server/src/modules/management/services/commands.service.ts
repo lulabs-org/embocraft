@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
-import { CommandRouter } from './command-router';
+import { CommandRouter } from './command-router.service';
 
 /** Shared HTTP write receipts. Reads and event subscriptions never enter this queue. */
 export class ManagementCommands extends CommandRouter {

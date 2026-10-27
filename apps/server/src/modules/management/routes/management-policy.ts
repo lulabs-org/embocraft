@@ -1,4 +1,4 @@
-import { publicError } from '../errors';
+import { publicError } from '../services/public-error';
 import express, { type Express, type RequestHandler } from 'express';
 import { identifier } from '../../../core/http/validation';
 import { AppError } from '../../../core/errors/app-error';

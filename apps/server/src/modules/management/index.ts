@@ -1,7 +1,10 @@
-export { ManagementCommands } from './commands';
-export { CommandRouter } from './command-router';
-export { ManagementEvents, type ManagementResourceChange } from './events';
-export { publicError } from './errors';
+export { ManagementCommands } from './services/commands.service';
+export { CommandRouter } from './services/command-router.service';
+export {
+  ManagementEvents,
+  type ManagementResourceChange,
+} from './services/events.service';
+export { publicError } from './services/public-error';
 export { installManagementRoutes } from './routes/managements.routes';
 export {
   installManagementHttp,

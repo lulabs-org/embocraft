@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import { identifier } from '../../../core/http/validation';
-import type { ManagementCommands } from '../commands';
+import type { ManagementCommands } from '../services/commands.service';
 
 export function installManagementRoutes(
   app: Express,
