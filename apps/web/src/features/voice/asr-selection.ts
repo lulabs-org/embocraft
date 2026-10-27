@@ -127,8 +127,10 @@ export function useAsrSelection(use: AsrUse) {
       try {
         chooseAsrService(use, choice);
         setError('');
+        return true;
       } catch {
-        setError('无法保存识别服务选择，请检查浏览器存储设置。');
+        setError('无法保存识别服务分配，请检查浏览器存储设置。');
+        return false;
       }
     },
   };

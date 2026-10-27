@@ -197,7 +197,7 @@ export function useChatController(connection: Connection, expanded = true) {
       return;
     }
     if (!(kind === 'text' ? asr.selected.id : clipAsr.selected.id)) {
-      setError('请先在控制台的“识别服务选择”中选择对应的识别服务。');
+      setError('请先在控制台的“识别服务分配”中为此功能指定识别服务。');
       return;
     }
     connection.stopSpatialInput();

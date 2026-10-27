@@ -234,13 +234,14 @@
       "providers": "Model Providers",
       "voice": "Text-to-Speech (TTS)",
       "asr": "Speech Recognition (ASR)",
-      "asrInput": "Recognition Choices"
+      "asrInput": "ASR Assignments"
     },
     "asrInput": {
-      "title": "Choose recognition services",
+      "title": "Assign recognition services",
       "sidebarHeading": "Used by",
-      "sidebarNote": "Self-hosted Whisper is selected initially when available. Each of the three inputs can be changed separately.",
       "serviceLabel": "Recognition service",
+      "save": "Save choice",
+      "saved": "Saved",
       "selectPlaceholder": "Choose a recognition service",
       "noService": "No service is available. Add one in Speech Recognition (ASR).",
       "noWhisperService": "No Whisper service is available. Add one in Speech Recognition (ASR).",
@@ -843,7 +844,7 @@
       "serviceNotReady": "Service not ready",
       "checkFinished": "Check finished",
       "recheck": "Recheck",
-      "whisperServerNote": "Self-hosted Whisper models stay on the server. Choose a service for chat dictation, the nearby microphone, and recorded chat voice in Recognition Choices.",
+      "whisperServerNote": "Self-hosted Whisper models stay on the server. Assign a service to chat dictation, the nearby microphone, and recorded chat voice in ASR Assignments.",
       "whisperSetupHint": "If service is not ready, run pnpm voice:setup in the server root to download models.",
       "tryAsrHeading": "Test Speech Recognition",
       "startRecording": "Start Recording",
