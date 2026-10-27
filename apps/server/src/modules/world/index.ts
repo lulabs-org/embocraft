@@ -1,3 +1,6 @@
-export { WorldRoom } from './room';
-export { WorldStore } from './store';
-export { installWorldRoutes, installPresenceRoutes } from './world.routes';
+export { WorldRoom } from './world.room';
+export { WorldStore } from './persistence/store';
+export {
+  installWorldRoutes,
+  installPresenceRoutes,
+} from './routes/worlds.routes';

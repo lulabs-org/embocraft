@@ -96,7 +96,7 @@ graph TD
     Stores --> AS["AsrSettingsStore<br/>audio/asr"]
 
     Create --> VP["createVoiceProvider<br/>audio/session（mock/browser/ollama）"]
-    Create --> WS["WorldStore<br/>world/store（Prisma）"]
+    Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
     Create --> MC["ModelCatalog<br/>providers/model-catalog"]
     Create --> LS["LocalSpeech<br/>audio/asr"]
@@ -128,7 +128,7 @@ graph TB
     end
 
     subgraph Modules["modules/ 领域模块"]
-        World["world<br/>room · schema · terrain<br/>store · validation · routes"]
+        World["world<br/>world.room · world.schema<br/>domain · persistence · routes"]
         AIC["ai-characters<br/>domain · services<br/>persistence · routes"]
         Tasks["tasks<br/>domain · services（scheduler/coordinator/execution）<br/>persistence · routes · ports"]
         Mgmt["management<br/>services（command-router · commands · events · public-error）<br/>routes"]

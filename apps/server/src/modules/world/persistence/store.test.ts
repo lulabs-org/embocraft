@@ -1,10 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { key, WORLD_ID, type Block, type Edit } from '@voxel/shared';
-import { createDatabaseClient } from '../../core/database/client';
+import { createDatabaseClient } from '../../../core/database/client';
 import { WorldStore } from './store';
 
-vi.mock('../../core/database/client', () => ({
+vi.mock('../../../core/database/client', () => ({
   createDatabaseClient: vi.fn(),
 }));
 
