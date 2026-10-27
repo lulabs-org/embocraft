@@ -153,6 +153,14 @@ it('keeps infrastructure independent of business modules and modules independent
       }
       if (name.startsWith('core/'))
         expect(target.startsWith('core/'), `${name} -> ${target}`).toBe(true);
+      if (
+        name.startsWith('modules/management/routes/') &&
+        target.startsWith('modules/')
+      )
+        expect(
+          target.startsWith('modules/management/'),
+          `${name} -> ${target}: domain routes must be injected by composition`,
+        ).toBe(true);
       if (name.startsWith('modules/')) {
         const socketContract =
           target === 'core/transport/socket-routes.ts' &&
@@ -161,7 +169,7 @@ it('keeps infrastructure independent of business modules and modules independent
           ['app.ts', 'server.ts', 'index.ts'].includes(target) ||
             (target.startsWith('core/transport/') && !socketContract) ||
             target.startsWith('routes/') ||
-            target === 'http/management.ts' ||
+            target.startsWith('http/') ||
             (target.startsWith('core/http/') && isRoute(target)) ||
             target.startsWith('core/openapi/'),
           `${name} -> ${target}`,

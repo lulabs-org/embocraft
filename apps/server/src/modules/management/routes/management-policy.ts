@@ -1,9 +1,9 @@
-import { publicError } from '../modules/management';
+import { publicError } from '../errors';
 import express, { type Express, type RequestHandler } from 'express';
-import { identifier } from '../core/http/validation';
-import { AppError } from '../core/errors/app-error';
-import { requireJsonRequest } from '../core/http/middleware/require-json';
-import { errorHandler } from '../core/http/middleware/error-handler';
+import { identifier } from '../../../core/http/validation';
+import { AppError } from '../../../core/errors/app-error';
+import { requireJsonRequest } from '../../../core/http/middleware/require-json';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
 
 const validateIdempotencyKey: RequestHandler = (req, res, next) => {
   const key = req.header('Idempotency-Key');

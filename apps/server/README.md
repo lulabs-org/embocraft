@@ -14,7 +14,7 @@
 
 ## 依赖方向
 
-`core` 不引用业务领域或全局持久化层；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或 `http/management.ts`。业务路由可以复用 `core/http/middleware` 和 `http/management-policy.ts`；跨模块的 HTTP 装配暂由 `http/management.ts` 负责。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
+`core` 不引用业务领域或全局持久化层；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或顶层 HTTP 装配。管理 HTTP 管线与请求策略归入 `modules/management/routes/`，业务路由通过 management 门面复用该策略。management 的 HTTP 层不导入其他业务模块，由 `app.ts` 注入路由安装回调与命令指纹的请求体规整函数，避免模块循环依赖。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
 
 | 目录                    | 责任                                                     |
 | ----------------------- | -------------------------------------------------------- |
@@ -25,9 +25,8 @@
 | `core/http`             | HTTP 中间件、输入校验、Origin 判断与 health 路由         |
 | `core/openapi`          | OpenAPI schema、Swagger 文档生成与 docs 路由             |
 | `core/transport`        | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭     |
-| `http`                  | 待迁移的管理请求策略与跨模块 HTTP 装配                   |
 | `persistence`           | 角色与任务联合存档、迁移、提交及失败处理                 |
-| `modules/management`    | 管理指令路由、幂等回执与状态变更事件                     |
+| `modules/management`    | 管理 HTTP 管线、指令路由、幂等回执与状态变更事件         |
 | `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配           |
 | `modules/providers`     | 模型提供商持久化存储与模型列表服务                       |
 | `modules/tasks`         | 任务计划、运行历史与执行控制领域服务                     |
@@ -45,7 +44,7 @@
 
 业务错误与通用异常统一使用 `core/errors/app-error.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 扫描 `core/http`、`core/openapi` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
 
-Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/ai-characters`，任务计划、执行控制与计划调度位于 `modules/tasks`，模型提供商归入 `modules/providers`。各模块高内聚低耦合，不再依赖外部编排包。HTTP 路由和 OpenAPI 注释由各领域维护，`app.ts` 显式装配依赖；Provider 路由仅接收存储、模型查询、删除和变更通知接口。`http/management.ts` 为角色、模型提供商、任务与命令回执路由装配鉴权、32 KiB JSON、404 和错误映射，并共享一个 `ManagementCommands` 实例。TTS 复用同一请求策略，但不进入命令回执队列；ASR 配置保留 8 KiB JSON 和专用错误映射，转录保留原始音频请求体。路由直接注册在 Express app 上，保留命令指纹使用的完整 `req.path`。
+Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/ai-characters`，任务计划、执行控制与计划调度位于 `modules/tasks`，模型提供商归入 `modules/providers`。各模块高内聚低耦合，不再依赖外部编排包。HTTP 路由和 OpenAPI 注释由各领域维护，`app.ts` 显式装配依赖；Provider 路由仅接收存储、模型查询、删除和变更通知接口。`modules/management/routes/management.http.ts` 通过门面导出的 `installManagementHttp` 装配鉴权、32 KiB JSON、404 和错误映射，并创建一个共享的 `ManagementCommands` 实例。`app.ts` 注入角色、模型提供商和任务路由的安装回调；management 随后安装命令回执查询。共享请求策略位于同目录的 `management-policy.ts`，回执路由及 OpenAPI 注解位于 `managements.routes.ts`；顶层 `src/http/` 已移除。TTS 复用同一请求策略，但不进入命令回执队列；ASR 配置保留 8 KiB JSON 和专用错误映射，转录保留原始音频请求体。路由直接注册在 Express app 上，保留命令指纹使用的完整 `req.path`。
 
 `ModelCatalog` 由 `createServer` 创建并直接注入 Provider 路由，角色编排器不再持有它。`agentDependencies` 仅配置角色的 session 与 runner。删除模型或音色服务仍经角色管理器检查关联约束。
 

@@ -516,12 +516,18 @@ it('shares command receipts across management domains without adding receipts to
     expect(retry.status).toBe(201);
     expect(await retry.json()).toEqual(provider);
     // Same method/body at a different domain must not replay the provider result.
-    const conflict = await fetch(server.httpUrl + '/ai-characters', {
-      method: 'POST',
-      headers: commandHeaders,
-      body: providerBody,
-    });
-    expect(conflict.status).toBe(409);
+    for (const path of [
+      '/ai-characters',
+      '/tasks',
+      '/task-runs/run-123/pause',
+    ]) {
+      const conflict = await fetch(server.httpUrl + path, {
+        method: 'POST',
+        headers: commandHeaders,
+        body: providerBody,
+      });
+      expect(conflict.status, path).toBe(409);
+    }
     const receipt = await fetch(server.httpUrl + '/management/commands/' + id, {
       headers,
     });
