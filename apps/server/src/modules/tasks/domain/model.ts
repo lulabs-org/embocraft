@@ -1,3 +1,4 @@
+import { runtimeView } from '@voxel/agent-runtime';
 import { randomUUID } from 'node:crypto';
 import {
   isRepeating,
@@ -27,7 +28,9 @@ export function runView(run: StoredRun): TaskRun {
   const { runtime, accountedTokens, requestId, lastBatch, ...view } = run;
   return structuredClone({
     ...view,
-    requiresReassignment: runtime?.conversation.audienceExpired,
+    requiresReassignment: runtime
+      ? runtimeView(runtime).audienceExpired
+      : undefined,
   });
 }
 

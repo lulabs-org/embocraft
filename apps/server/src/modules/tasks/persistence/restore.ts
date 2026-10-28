@@ -1,8 +1,6 @@
 import {
-  restoreBatchHistory,
-  restoreCheckpoint,
-  emptyState,
-  restoreState,
+  createAgentRuntime,
+  runtimeView,
   type AgentRunState,
 } from '@voxel/agent-runtime';
 import { isRepeating } from '@voxel/shared';
@@ -13,46 +11,14 @@ import type { TaskExecutionState } from '../ports';
 export function restoreTaskMemory(
   runtime: AgentRunState | undefined,
 ): AgentRunState {
-  return runtime ? restoreState(runtime) : emptyState();
+  const agent = createAgentRuntime();
+  agent.restore(runtime);
+  return agent.snapshot();
 }
 
 /** Restore task policy without starting a host, replaying unknown actions or dispatching missed triggers. */
 export function restoreTaskExecution(job: TaskExecutionState) {
-  if (job.memory.effects.activeAction?.status === 'running')
-    job.memory.effects.activeAction.status = 'unknown';
-  // World-session recipients cannot survive a restart. Retain audit, never replay old chat.
-  for (const event of job.memory.inbox?.events ?? []) {
-    if (event.kind === 'chat' || event.state === 'processing')
-      event.state = 'unknown';
-  }
-  if (job.memory.conversation.exchanges) {
-    const publicHistory = job.memory.conversation.exchanges.public;
-    job.memory.conversation.exchanges = publicHistory
-      ? { public: publicHistory }
-      : {};
-  }
-  job.memory.effects.previous = restoreBatchHistory(
-    job.memory.effects.previous,
-  );
-  restoreCheckpoint(job.memory);
-  if (
-    job.memory.task.current &&
-    ['running', 'waiting'].includes(job.memory.task.current.status)
-  ) {
-    job.memory.task.current.status = 'paused';
-    job.memory.task.current.reason = '服务重启，任务进度已保留，请手动继续。';
-  }
-  if (job.memory.task.current && !job.memory.task.current.privateTo)
-    delete job.memory.task.current.owner;
-  if (
-    job.memory.task.current?.privateTo &&
-    !['completed', 'cancelled'].includes(job.memory.task.current.status)
-  ) {
-    job.memory.conversation.audienceExpired = true;
-    job.memory.task.current.status = 'needs_input';
-    job.memory.task.current.reason =
-      '服务重启后原私聊会话已失效，请重新通过聊天发起。';
-  }
+  job.runtime.recoverAfterRestart();
   const interruptedRuns = new Set(
     job.ledger.runs
       .filter((r) => r.characterId === job.view.id)
@@ -74,46 +40,31 @@ export function restoreTaskExecution(job: TaskExecutionState) {
     (r) => r.characterId === job.view.id,
   )) {
     if (run.runtime) {
-      run.runtime = restoreState(run.runtime);
-      restoreCheckpoint(run.runtime);
-      if (run.runtime.effects.activeAction?.status === 'running')
-        run.runtime.effects.activeAction.status = 'unknown';
-      for (const event of run.runtime.inbox?.events ?? [])
-        if (event.kind === 'chat' || event.state === 'processing')
-          event.state = 'unknown';
-      if (run.runtime.conversation.exchanges) {
-        const publicHistory = run.runtime.conversation.exchanges.public;
-        run.runtime.conversation.exchanges = publicHistory
-          ? { public: publicHistory }
-          : {};
+      const runtime = createAgentRuntime();
+      runtime.restore(run.runtime);
+      const recovery = runtime.recoverHistory({
+        unfinished: !endedRun(run),
+        running: ['running', 'waiting'].includes(run.status),
+      });
+      if (recovery.audienceExpired) {
+        run.status = 'needs_input';
+        run.task = runtime.view().task;
       }
+      if (['running', 'waiting'].includes(run.status)) {
+        run.task = runtime.view().task ?? run.task;
+      }
+      run.runtime = runtime.snapshot();
     }
     for (const action of run.actions ?? [])
       if (action.status === 'executing') action.status = 'unknown';
-    if (run.runtime?.effects.previous)
-      run.runtime.effects.previous = restoreBatchHistory(
-        run.runtime.effects.previous,
-      );
-    if (run.runtime?.task.current?.privateTo && !endedRun(run)) {
-      run.runtime.conversation.audienceExpired = true;
-      run.runtime.task.current.status = 'needs_input';
-      run.runtime.task.current.reason =
-        '原私聊会话已失效，请重新通过聊天发起。';
-      run.status = 'needs_input';
-      run.task = structuredClone(run.runtime.task.current);
-    }
     if (['running', 'waiting'].includes(run.status)) {
       run.status = 'paused';
       run.reason = '服务重启，进度保留，请手动继续。';
-      if (run.runtime?.task.current) {
-        run.runtime.task.current.status = 'paused';
-        run.runtime.task.current.reason = run.reason;
-        run.task = structuredClone(run.runtime.task.current);
-      }
     }
     if (
       !endedRun(run) &&
-      (interruptedRuns.has(run.id) || run.runtime?.conversation.audienceExpired)
+      (interruptedRuns.has(run.id) ||
+        (run.runtime && runtimeView(run.runtime).requiresReassignment))
     ) {
       const p = job.ledger.plans.find((p) => p.id === run.planId);
       if (p) {

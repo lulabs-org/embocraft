@@ -8,7 +8,7 @@ import {
   runView,
   endedRun,
 } from '../domain/model';
-import { TaskService, recordEvent, type TaskLease } from '@voxel/agent-runtime';
+import { createAgentRuntime, type TaskLease } from '@voxel/agent-runtime';
 import type { WorldEvent } from '@voxel/shared';
 import { CommandQueue } from '../../../core/concurrency/command-queue';
 import { isRepeating } from '@voxel/shared';
@@ -312,7 +312,7 @@ export class TaskCoordinator {
   private checkTaskRevision(id: string, value: unknown) {
     const expected = object(value).expectedTask;
     if (expected === undefined) return; // Existing HTTP callers may omit preconditions.
-    const current = this.host.execution(id).memory.task.identity ?? null;
+    const current = this.host.execution(id).runtime.view().identity ?? null;
     if (
       expected === null
         ? current !== null
@@ -338,9 +338,7 @@ export class TaskCoordinator {
     const state = this.host.execution(id);
     let runId: string | undefined;
     const verify = () => {
-      const tasks = new TaskService(state.memory);
-      tasks.assertCurrent(lease);
-      tasks.authorize({ kind: 'player', message });
+      state.runtime.authorize({ kind: 'player', message }, lease);
       if (runId && state.currentRunId !== runId)
         throw new AppError('当前执行已改变，请重新确认。', 409);
     };
@@ -372,26 +370,18 @@ export class TaskCoordinator {
       verify?.();
       if (state.currentRunId !== runId)
         throw new AppError('当前执行已改变。', 409);
-      const task = state.memory.task.current;
+      const task = state.runtime.view().task;
       if (task && !['completed', 'cancelled'].includes(task.status))
-        new TaskService(state.memory).command(
+        state.runtime.stageControl(
           { type: operation },
           message ? { kind: 'player', message } : { kind: 'operator' },
           { ...state.view, apiKey: '' },
         );
-      const lease = new TaskService(state.memory).lease();
-      recordEvent(state.memory, {
-        id: `control:${runId}:${lease.revision}:${operation}`,
-        kind: 'control',
-        state: 'done',
-        at: Date.now(),
-        audience: task?.privateTo ?? 'public',
-        actor: message?.actor,
-        characterId: state.view.id,
+      state.runtime.recordRunControl({
         runId,
-        taskId: lease.id,
-        revision: lease.revision,
-        detail: operation,
+        characterId: state.view.id,
+        operation,
+        actor: message?.actor,
       });
       captureTask(state);
       await this.host.save();
@@ -412,14 +402,16 @@ export class TaskCoordinator {
     for (const run of this.plans.runs.filter(
       (r) => r.characterId === id && !endedRun(r),
     )) {
-      if (run.runtime?.task.current) {
-        new TaskService(run.runtime).command(
-          { type: 'cancel' },
-          { kind: 'operator' },
-          { ...state.view, apiKey: '' },
-        );
-        delete run.runtime.effects.follow;
-        run.task = structuredClone(run.runtime.task.current);
+      if (run.runtime) {
+        const runtime = createAgentRuntime({ state: run.runtime });
+        if (runtime.view().task) {
+          run.task = runtime.stageControl(
+            { type: 'cancel' },
+            { kind: 'operator' },
+            { ...state.view, apiKey: '' },
+          );
+          run.runtime = runtime.snapshot();
+        }
       }
       run.status = 'cancelled';
       run.reason = '执行角色已删除。';
@@ -441,10 +433,7 @@ export class TaskCoordinator {
   pauseForShutdown(id: string) {
     const state = this.host.findExecution(id);
     if (!state) return;
-    if (
-      !['running', 'waiting'].includes(state.memory.task.current?.status ?? '')
-    )
-      return;
+    if (!state.runtime.view().active) return;
     const run = currentRun(state),
       plan = this.plans.plans.find((p) => p.id === run?.planId);
     if (plan) {
@@ -507,8 +496,7 @@ export class TaskCoordinator {
         queued.length &&
         job.online &&
         !taskBusy(job) &&
-        (!job.memory.task.current ||
-          ['completed', 'cancelled'].includes(job.memory.task.current.status))
+        !job.runtime.view().occupied
       ) {
         const runId = await commitExecution(
           job,

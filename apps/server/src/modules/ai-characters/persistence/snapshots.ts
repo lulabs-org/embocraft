@@ -1,3 +1,4 @@
+import { runtimeView } from '@voxel/agent-runtime';
 import type { AICharacterView } from '@voxel/shared';
 import type { CharacterRecord } from './record';
 import type { AICharacterRegistry } from '../services/job';
@@ -12,7 +13,8 @@ export class CharacterSnapshots {
   }
 
   publicIdentity(id: string) {
-    return structuredClone(this.committed.get(id)?.runtime?.task.identity);
+    const snapshot = this.committed.get(id)?.runtime;
+    return snapshot ? runtimeView(snapshot).identity : undefined;
   }
 
   publicLogEntries(id: string) {
@@ -38,7 +40,7 @@ export class CharacterSnapshots {
       ...view,
       status: shutdownPresence.get(view.id) ?? view.status,
       sessionId: undefined,
-      runtime: structuredClone(jobs.get(view.id)?.memory),
+      runtime: jobs.get(view.id)?.runtime.snapshot(),
       currentRunId: jobs.get(view.id)?.currentRunId,
     }));
     return { records, views };

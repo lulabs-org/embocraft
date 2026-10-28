@@ -11,6 +11,9 @@ export function taskExecutionState(job: Job): TaskExecutionState {
   const previous = states.get(job);
   if (previous) return previous;
   const state: TaskExecutionState = {
+    get runtime() {
+      return job.runtime;
+    },
     get view() {
       return job.view;
     },

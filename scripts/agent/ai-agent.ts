@@ -1,9 +1,8 @@
 import {
   aiCharacterPermissions,
   Session,
-  AgentRunner,
+  createAgentRuntime,
   AgentRuntimeError,
-  runAgent,
 } from '@voxel/agent-runtime';
 import { agentConfig } from './config';
 
@@ -38,7 +37,12 @@ try {
     await session.request('agent.voice', {
       enabled: !!config.voiceReplies && aiCharacterPermissions(config).chat,
     });
-  await runAgent(session, new AgentRunner(), config, abort.signal);
+  const runtime = createAgentRuntime({
+    session,
+    selfId: session.room.sessionId,
+    log: console.log,
+  });
+  await runtime.runUntilSettled(config, abort.signal);
 } catch (error) {
   if (!abort.signal.aborted) {
     console.error(

@@ -50,7 +50,19 @@ export {
 
 export { worldSignature } from '../world/observe/extract';
 
-export { nextIntervalMs, runAgent } from '../agent/schedule';
+export { nextIntervalMs } from '../agent/schedule';
+export { runAgent } from './standalone';
+export {
+  runtimeView,
+  type RuntimeView,
+  type RuntimePlanInput,
+} from './execution';
+export type {
+  RuntimeOptions,
+  RuntimeReceiveOptions,
+  RuntimeReceiveResult,
+  RuntimeMessageControl,
+} from './ports';
 
 export { RequestBudget, checkBudgetCap } from '../agent/task/budget';
 

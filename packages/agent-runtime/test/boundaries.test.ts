@@ -192,6 +192,80 @@ describe('agent runtime dependency boundaries', () => {
         }
   });
 
+  it('keeps production hosts behind runtime operations and treats archive internals as opaque', () => {
+    const hosts = [
+      ...sources(resolve(root, 'apps/server/src/modules/ai-characters')),
+      ...sources(resolve(root, 'apps/server/src/modules/tasks')),
+      resolve(root, 'scripts/agent/ai-agent.ts'),
+    ];
+    const legacyAliases = new Set([
+      'apps/server/src/modules/ai-characters/services/job.ts',
+      'apps/server/src/modules/ai-characters/services/task-adapter.ts',
+    ]);
+    const internals = new Set([
+      'TaskService',
+      'recordEvent',
+      'recordChatEvent',
+      'parseControlCommand',
+      'startScheduledTaskState',
+      'resumeTaskState',
+      'rollbackTaskState',
+      'restoreCheckpoint',
+      'restoreBatchHistory',
+    ]);
+    const partitions = new Set([
+      'task',
+      'effects',
+      'conversation',
+      'checkpoint',
+      'health',
+      'inbox',
+    ]);
+    for (const path of hosts) {
+      const name = relative(root, path);
+      const source = ts.createSourceFile(
+        path,
+        readFileSync(path, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      for (const statement of source.statements) {
+        if (
+          !ts.isImportDeclaration(statement) ||
+          !ts.isStringLiteral(statement.moduleSpecifier) ||
+          statement.moduleSpecifier.text !== '@voxel/agent-runtime'
+        )
+          continue;
+        const bindings = statement.importClause?.namedBindings;
+        if (bindings && ts.isNamedImports(bindings))
+          for (const binding of bindings.elements)
+            expect(
+              internals.has((binding.propertyName ?? binding.name).text),
+              name,
+            ).toBe(false);
+      }
+      if (legacyAliases.has(name)) continue;
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isPropertyAccessExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression)
+        ) {
+          const owner = node.expression.name.text;
+          if (owner === 'memory')
+            expect(partitions.has(node.name.text), name).toBe(false);
+          if (owner === 'runtime') {
+            expect(partitions.has(node.name.text), name).toBe(false);
+            expect(['state', 'attention'].includes(node.name.text), name).toBe(
+              false,
+            );
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+  });
+
   it('keeps re-exports and inline import() types on the public surface', () => {
     for (const path of files) {
       if (isSurface(path)) continue;

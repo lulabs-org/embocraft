@@ -1,12 +1,11 @@
 import type { AICharacterSettings } from '@voxel/shared';
-import { AgentAttention } from '@voxel/agent-runtime';
 import type { PlanService } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort } from '../../providers';
 import type { CharacterRecord } from './record';
-import type { Job } from '../services/job';
+import { createCharacterJob, type Job } from '../services/job';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
 import { executionState } from '../services/task-adapter';
 
@@ -29,21 +28,22 @@ export function restoreAICharacterJob(
   if (typeof view.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(view.id))
     throw new AppError('Agent 标识无效。', 500);
 
-  const job: Job = {
-    view: {
-      ...settings,
-      id: view.id,
-      createdAt: view.createdAt,
-      providerName: provider.name,
-      status: 'stopped',
-      ...restoreAICharacterLogs(view.logEntries),
+  const job = createCharacterJob(
+    {
+      view: {
+        ...settings,
+        id: view.id,
+        createdAt: view.createdAt,
+        providerName: provider.name,
+        status: 'stopped',
+        ...restoreAICharacterLogs(view.logEntries),
+      },
+      abort: new AbortController(),
+      ledger,
+      currentRunId: view.currentRunId,
     },
-    abort: new AbortController(),
-    memory: restoreTaskMemory(view.runtime),
-    attention: new AgentAttention(),
-    ledger,
-    currentRunId: view.currentRunId,
-  };
+    restoreTaskMemory(view.runtime),
+  );
 
   restoreTaskExecution(executionState(job));
 

@@ -2,8 +2,10 @@ import type { AICharacterView } from '@voxel/shared';
 import type {
   AgentAttention,
   AgentRunState,
+  AgentRuntime,
   Session,
 } from '@voxel/agent-runtime';
+import { createAgentRuntime } from '@voxel/agent-runtime';
 import type { PlanService } from '../../tasks';
 import type { SavedProvider } from '../../providers';
 
@@ -17,6 +19,8 @@ export type Job = {
   abort: AbortController;
   session?: Session;
   done?: Promise<void>;
+  runtime: AgentRuntime;
+  /** Compatibility aliases; production code uses runtime operations. */
   memory: AgentRunState;
   ledger: PlanService;
   currentRunId?: string;
@@ -42,8 +46,32 @@ export const canWakeJob = (job: Job, closing: boolean) =>
   !job.storageFailed &&
   !isJobBusy(job) &&
   (job.view.status === 'idle' ||
-    (job.view.status === 'failed' && job.attention.pending)) &&
+    (job.view.status === 'failed' && job.runtime.pendingMessages)) &&
   !!job.session;
 
 /** The sole owner of hosted Agent instances. Never shared with standalone CLI instances. */
 export class AICharacterRegistry extends Map<string, Job> {}
+
+/** The runtime owns state and attention for the whole lifetime of a hosted character. */
+export function createCharacterJob(
+  input: Omit<Job, 'runtime' | 'memory' | 'attention'>,
+  state?: AgentRunState,
+): Job {
+  const runtime = createAgentRuntime({ state });
+  return {
+    ...input,
+    runtime,
+    get memory() {
+      return runtime.state;
+    },
+    set memory(value) {
+      runtime.replaceState(value);
+    },
+    get attention() {
+      return runtime.attention;
+    },
+    set attention(value) {
+      runtime.replaceAttention(value);
+    },
+  };
+}
