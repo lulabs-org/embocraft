@@ -58,7 +58,7 @@ services:
       speech:
         condition: service_started
     environment:
-      HOST: 0.0.0.0
+      SERVER_HOST: 0.0.0.0
       DATABASE_URL: postgresql://${POSTGRES_USER:-embocraft}:${POSTGRES_PASSWORD:-embocraftpassword}@db:5432/${POSTGRES_DB:-embocraft}?schema=public
       WEB_ORIGIN: '${WEB_ORIGIN:-*}'
       AGENT_GATEWAY_TOKEN: '${AGENT_GATEWAY_TOKEN:-}'

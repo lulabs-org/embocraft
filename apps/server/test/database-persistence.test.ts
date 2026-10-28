@@ -342,7 +342,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const config = env.readServer({
       DATABASE_URL: url!,
       SERVER_PORT: '0',
-      HOST: '127.0.0.1',
+      SERVER_HOST: '127.0.0.1',
       WEB_ORIGIN: 'http://127.0.0.1:5173',
       AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
       AGENT_GATEWAY_TOKEN_FILE: join(directory, 'gateway-token'),

@@ -21,14 +21,17 @@ describe('server assembly and lifecycle', () => {
       databaseUrl: '',
     });
     expect(
-      env.readServer({ SERVER_PORT: '0', HOST: '0.0.0.0', WEB_ORIGIN: '*' })
-        .port,
+      env.readServer({
+        SERVER_PORT: '0',
+        SERVER_HOST: '0.0.0.0',
+        WEB_ORIGIN: '*',
+      }).port,
     ).toBe(0);
     for (const testEnv of [
       { SERVER_PORT: 'no' },
       { SERVER_PORT: '65536' },
       { SERVER_PORT: '-1' },
-      { HOST: '' },
+      { SERVER_HOST: '' },
       { WEB_ORIGIN: 'https://example.test/path' },
     ])
       expect(() => env.readServer(testEnv)).toThrow();

@@ -48,7 +48,7 @@ export async function createTestServer(
       voiceServices: options.voiceServices ?? new VoiceServiceStore(),
       config: env.readServer({
         SERVER_PORT: String(options.port ?? 0),
-        HOST: '127.0.0.1',
+        SERVER_HOST: '127.0.0.1',
         WEB_ORIGIN: options.origin ?? 'http://127.0.0.1:5173',
         DATABASE_URL: '',
         AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',

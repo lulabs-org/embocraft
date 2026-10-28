@@ -36,8 +36,8 @@ RUN pnpm db:generate
 
 # 环境变量默认配置
 ENV NODE_ENV=production
-ENV HOST=0.0.0.0
-ENV PORT=2567
+ENV SERVER_HOST=0.0.0.0
+ENV SERVER_PORT=2567
 
 EXPOSE 2567
 

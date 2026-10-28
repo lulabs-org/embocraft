@@ -45,7 +45,7 @@ function options() {
     config: env.readServer({
       DATABASE_URL: 'postgresql://fixture/world',
       SERVER_PORT: '0',
-      HOST: '127.0.0.1',
+      SERVER_HOST: '127.0.0.1',
       AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
     }),
     databaseCheck: async () => {},

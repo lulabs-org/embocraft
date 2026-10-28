@@ -55,7 +55,7 @@ function parsePort(
 function parseHost(raw: string | undefined = DEFAULT_HOST): string {
   const host = raw.trim();
   if (!host || /\s|[/?#]/.test(host)) {
-    throw new Error('HOST 必须是有效的监听主机名或地址。');
+    throw new Error('SERVER_HOST 必须是有效的监听主机名或地址。');
   }
   return host;
 }
@@ -115,7 +115,7 @@ function readSpeechConfig(env: EnvLookup = process.env) {
 
 function readServerConfig(env: EnvLookup = process.env) {
   const port = parsePort(env.SERVER_PORT);
-  const host = parseHost(env.HOST);
+  const host = parseHost(env.SERVER_HOST);
   const origin = validateWebOrigin(webOrigin(env));
   const gatewayOrigins = parseGatewayOrigins(
     env.AGENT_GATEWAY_ALLOWED_ORIGINS,
