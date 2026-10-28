@@ -82,7 +82,7 @@ jobs:
         run: pnpm db:generate
 
       - name: Run integration test
-        run: pnpm test:integration
+        run: pnpm --filter @voxel/server exec tsx test/integration/world-client.ts
 
   persistence:
     name: PostgreSQL persistence
