@@ -25,21 +25,6 @@ export type TaskBook = {
 export type { PlanQueryFilter } from '@voxel/shared/management';
 
 /**
- * 计划控制操作类型
- */
-export type PlanControlOperation =
-  | 'pause'
-  | 'resume'
-  | 'archive'
-  | 'extend'
-  | 'delete';
-
-/**
- * 任务执行控制操作类型
- */
-export type RunControlOperation = 'cancel' | 'retry' | 'skip';
-
-/**
  * 任务运行历史分页列表响应结构
  */
 export interface TaskRunsPage {

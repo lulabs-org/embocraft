@@ -151,7 +151,7 @@ export function installChatRoutes(
    *                 id:
    *                   type: string
    */
-  app.post('/chat/spatial/start', (req, res, next) => {
+  app.post('/chat/spatial/start', (_req, res, next) => {
     try {
       res.json({
         id: (res.locals.chat as WorldChat).beginSpatial(res.locals.actor),
