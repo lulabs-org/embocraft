@@ -1,3 +1,4 @@
+import { restoreBatchHistory } from '../task/state';
 import { key } from '@voxel/shared';
 import type {
   ActionExecution,
@@ -165,4 +166,38 @@ function clearReconciledUnknownEffect(
   delete memory.checkpoint.unknownEffect;
   if (memory.checkpoint.pi?.inFlight?.id === unknown.id)
     delete memory.checkpoint.pi.inFlight;
+}
+
+/** Reconcile observed progress before exposing action state to a decision. */
+export function reconcileActionEffects(
+  memory: AgentRunState,
+  observation: Observation,
+) {
+  reconcileUnfinishedBuild(memory, observation);
+  reconcilePendingEffects(memory, observation);
+}
+
+/** Keep the legacy prompt fields while hiding action-specific state from the turn. */
+export function actionDecisionContext(memory: AgentRunState, visible: boolean) {
+  return {
+    previous: visible ? memory.effects.previous : undefined,
+    pendingEffects: visible ? memory.effects.pendingEffects : undefined,
+    follow: visible ? memory.effects.follow : undefined,
+    unfinishedBuild: visible ? memory.effects.unfinishedBuild : undefined,
+  };
+}
+
+/** Picks up an interrupted effect ledger; unknown results stay pending for reconciliation. */
+export function restoreActionEffects(memory: AgentRunState) {
+  const previous = restoreBatchHistory(memory.effects.previous);
+  memory.effects.previous = previous;
+  if (memory.effects.pendingEffects)
+    memory.effects.pendingEffects = restoreBatchHistory(
+      memory.effects.pendingEffects,
+    );
+  if (
+    !memory.effects.pendingEffects &&
+    previous?.results?.some((result) => result.status === 'unknown')
+  )
+    memory.effects.pendingEffects = structuredClone(previous);
 }

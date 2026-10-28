@@ -146,6 +146,50 @@ describe('agent runtime dependency boundaries', () => {
     }
   });
 
+  it('keeps concrete action state and execution out of the decision loop', () => {
+    const actionPorts = new Set([
+      'runtime.ts',
+      'executor.ts',
+      'reconcile.ts',
+      'chat-pacing.ts',
+    ]);
+    for (const [path, dependencies] of graph) {
+      const module = relative(runtime, path);
+      if (module.startsWith('agent/action/')) {
+        for (const dependency of dependencies)
+          expect(relative(runtime, dependency), module).not.toMatch(
+            /^agent\/(turn|model|tools)\//,
+          );
+      }
+      if (!module.startsWith('agent/turn/')) continue;
+      for (const dependency of dependencies) {
+        const target = relative(runtime, dependency);
+        expect(target, module).not.toMatch(/^world\/(actions|nav)\//);
+        if (target.startsWith('agent/action/'))
+          expect(
+            actionPorts.has(target.slice('agent/action/'.length)),
+            `${module} -> ${target}`,
+          ).toBe(true);
+      }
+      const source = ts.createSourceFile(
+        path,
+        readFileSync(path, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      const visit = (node: ts.Node) => {
+        if (ts.isPropertyAccessExpression(node))
+          expect(node.name.text, module).not.toBe('effects');
+        if (ts.isStringLiteral(node))
+          expect(['goto', 'follow', 'build', 'house'], module).not.toContain(
+            node.text,
+          );
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+  });
+
   it('routes every decision through one turn loop and keeps task commands in the service', () => {
     const slot = readFileSync(resolve(runtime, 'api/runtime.ts'), 'utf8');
     const runner = readFileSync(resolve(runtime, 'agent/turn/wake.ts'), 'utf8');

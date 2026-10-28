@@ -3,7 +3,10 @@ import type { DecisionContext, Observation } from '../../contracts/observation';
 import type { AgentRunState } from '../../contracts/state';
 import { worldSignature } from '../../world/observe/extract';
 import type { AgentSession } from '../../world/session/port';
-import { reconcilePendingEffects, reconcileUnfinishedBuild } from './reconcile';
+import {
+  actionDecisionContext,
+  reconcileActionEffects,
+} from '../action/reconcile';
 
 /**
  * Observes the world, skips a wait that did not change, reconciles outstanding
@@ -20,8 +23,7 @@ export async function prepareDecision(
   signal.throwIfAborted();
   if (waitStillUnchanged(addressed, task, observation, memory))
     return undefined;
-  reconcileUnfinishedBuild(memory, observation);
-  reconcilePendingEffects(memory, observation);
+  reconcileActionEffects(memory, observation);
   return buildDecisionContext(memory, task, observation, addressed);
 }
 
@@ -62,10 +64,7 @@ function buildDecisionContext(
       task: visibleTask,
       // Conversation and task audiences are independent: a public question never
       // sees a private task, and that task's effects stay hidden with it.
-      previous: visibleTask ? memory.effects.previous : undefined,
-      pendingEffects: visibleTask ? memory.effects.pendingEffects : undefined,
-      follow: visibleTask ? memory.effects.follow : undefined,
-      unfinishedBuild: visibleTask ? memory.effects.unfinishedBuild : undefined,
+      ...actionDecisionContext(memory, !!visibleTask),
       decisionError: visibleTask ? memory.health.decisionError : undefined,
       trigger: decisionTrigger(addressed, task),
     },

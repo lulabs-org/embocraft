@@ -6,6 +6,7 @@ import { TaskService } from '../agent/task/service';
 import type { TaskAuthority, TaskCommand } from '../contracts/task';
 import { AgentRunner } from '../agent/turn/wake';
 import { nextIntervalMs } from '../agent/schedule';
+import { actionWakeDelay } from '../agent/action/runtime';
 import { AgentAttention } from '../world/observe/attention';
 import type { AgentSession } from '../world/session/port';
 import { mergeSignals } from '../kernel/abort';
@@ -153,7 +154,8 @@ export class AgentRuntime extends RuntimeExecution {
   nextWakeDelay(config: AgentConfig): number | undefined {
     if (this.pendingMessages) return 0;
     const view = this.view();
-    if (view.active) return view.following ? 100 : nextIntervalMs(config);
+    if (view.active)
+      return actionWakeDelay(this.state) ?? nextIntervalMs(config);
     return undefined;
   }
 
@@ -170,7 +172,7 @@ export class AgentRuntime extends RuntimeExecution {
       )
         break;
       await this.messages.wait(
-        view.following ? 100 : nextIntervalMs(config),
+        actionWakeDelay(this.state) ?? nextIntervalMs(config),
         signal,
       );
     } while (!signal.aborted);

@@ -2,16 +2,12 @@ import type { ModelEndpoint } from '../../contracts';
 import type { WorldEvent } from '@voxel/shared';
 import { AgentRuntimeError } from '../../contracts/errors';
 import type { AgentRunState } from '../../contracts/state';
-import { BackgroundActionTracker } from '../action/background';
-import { runFollowStep } from '../action/follow';
+import { ActionRuntime } from '../action/runtime';
 import { defaultEndpoint } from '../model/pi';
 import { checkBudgetCap } from '../task/budget';
 import { isActiveTask } from '../task/state';
 import { restoreCheckpoint } from './checkpoint';
 import { Turn, type RunOptions } from './turn';
-
-/** What advancing a saved follow intent asks the wake loop to do next. */
-type FollowStep = 'idle' | 'resume' | 'stop';
 
 type WakeCause =
   | { kind: 'message'; message: WorldEvent }
@@ -43,36 +39,41 @@ export class AgentRunner {
     }
   }
 
-  /** Follow ticks and background actions precede event decisions. */
+  /** Local action progress and settlements precede event decisions. */
   private async runWake(o: RunOptions) {
     const { memory, signal } = o;
-    const background = new BackgroundActionTracker();
+    const actions = new ActionRuntime(o);
     let cause = nextWakeCause(o.attention);
     if (cause.kind === 'tick') restoreCheckpoint(memory);
     await this.parkBudgetExhausted(o);
     try {
       while (!signal.aborted) {
-        const follow = await this.advanceFollow(o, cause);
-        if (follow === 'stop') return;
-        if (follow === 'resume') {
-          // The failed follow was cleared; run one decision to pick a new step.
+        const step =
+          cause.kind === 'tick'
+            ? await actions.advance(
+                async () => !(await this.parkBudgetExhausted(o)),
+              )
+            : 'idle';
+        if (step === 'stop') return;
+        if (step === 'resume') {
+          // The action requests a decision to choose its next step.
           cause = { kind: 'resume' };
           continue;
         }
         if (cause.kind === 'tick' && !isActiveTask(memory.task.current)) return;
-        if (!background.isRunning || cause.kind !== 'tick')
+        if (!actions.isRunning || cause.kind !== 'tick')
           await this.turn(
             o,
             cause.kind === 'message' ? cause.message : undefined,
-            background,
+            actions,
           );
         cause = nextWakeCause(o.attention);
         if (cause.kind === 'message') continue;
-        if (background.isRunning) {
-          await background.wait(o.attention, signal);
+        if (actions.isRunning) {
+          await actions.wait(o.attention, signal);
           cause = nextWakeCause(o.attention);
-          if (cause.kind === 'tick' && background.isSettled) {
-            await background.complete();
+          if (cause.kind === 'tick' && actions.isSettled) {
+            await actions.complete();
             cause = { kind: 'resume' };
           }
           continue;
@@ -84,33 +85,8 @@ export class AgentRunner {
         return;
       }
     } finally {
-      await background.cleanup();
+      await actions.cleanup();
     }
-  }
-
-  /**
-   * Paces a saved follow intent with local navigation instead of a model request.
-   * A follow that ended blocked clears itself and asks for one recovery decision.
-   */
-  private async advanceFollow(
-    o: RunOptions,
-    cause: WakeCause,
-  ): Promise<FollowStep> {
-    const { memory } = o;
-    if (cause.kind !== 'tick' || !memory.effects.follow) return 'idle';
-    if (!isActiveTask(memory.task.current)) return 'idle';
-    if (await this.parkBudgetExhausted(o)) return 'stop';
-    await runFollowStep(o);
-    const task = memory.task.current;
-    if (
-      task?.status === 'blocked' &&
-      memory.effects.activeAction?.status === 'failed'
-    ) {
-      delete memory.effects.follow;
-      task.status = 'running';
-      return 'resume';
-    }
-    return 'stop';
   }
 
   /** Saves a task that cannot afford another request as 'budget'. */
@@ -128,7 +104,7 @@ export class AgentRunner {
   private turn(
     o: RunOptions,
     message: WorldEvent | undefined,
-    background: BackgroundActionTracker,
+    actions: ActionRuntime,
   ) {
     return new Turn({
       options: o,
@@ -136,10 +112,9 @@ export class AgentRunner {
       request: this.request,
       message,
       actions: {
-        running: () => background.isRunning,
-        launch: (id, controller, work) =>
-          background.launch(id, controller, work),
-        stop: () => background.stop(),
+        running: () => actions.isRunning,
+        launch: (id, controller, work) => actions.launch(id, controller, work),
+        stop: () => actions.stop(),
       },
     }).run();
   }

@@ -134,3 +134,27 @@ export function formatActionResult(
   };
 }
 
+/** One batch captures its prior blueprint once, including blocks outside a replacement. */
+export function createBuildEffects(memory: AgentRunState) {
+  const prior = memory.effects.unfinishedBuild;
+  return {
+    before(action: AgentAction): boolean {
+      if (action.type !== 'build' && action.type !== 'house') return false;
+      memory.effects.unfinishedBuild = beginUnfinishedBuild(prior, action);
+      return true;
+    },
+    progress(action: BuildAction, result: BuildResult) {
+      memory.effects.unfinishedBuild = mergeBuildCheckpoint(
+        prior,
+        action,
+        result,
+      );
+    },
+    checkpoint(batch: BatchResult) {
+      memory.effects.unfinishedBuild = reconcileUnfinishedBuild(
+        memory.effects.unfinishedBuild,
+        batch,
+      );
+    },
+  };
+}

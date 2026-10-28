@@ -1,8 +1,9 @@
 import type { Message } from '@earendil-works/pi-ai';
 import type { AICharacterTask } from '@voxel/shared';
 import type { AgentRunState, PiCheckpoint } from '../../contracts/state';
-import { isEndedTask, restoreBatchHistory } from '../task/state';
+import { isEndedTask } from '../task/state';
 import { TaskService, type TaskLease } from '../task/service';
+import { restoreActionEffects } from '../action/reconcile';
 import { recentTurns } from './window';
 
 /** Owner fields tie a checkpoint to exactly one task revision and audience. */
@@ -18,7 +19,7 @@ export function checkpointMessages(memory: AgentRunState): Message[] {
 
 /** Migrate both current and archived run states without replaying old tool calls. */
 export function restoreCheckpoint(memory: AgentRunState) {
-  restoreEffects(memory);
+  restoreActionEffects(memory);
   const saved = memory.checkpoint.pi;
   if (saved?.inFlight)
     memory.checkpoint.unknownEffect = { ...saved.inFlight, state: 'unknown' };
@@ -44,21 +45,6 @@ export function restoreCheckpoint(memory: AgentRunState) {
     return;
   }
   if (saved.inFlight) saved.inFlight.state = 'unknown';
-}
-
-/** Picks up an interrupted effect ledger; unknown results stay pending for reconciliation. */
-function restoreEffects(memory: AgentRunState) {
-  const previous = restoreBatchHistory(memory.effects.previous);
-  memory.effects.previous = previous;
-  if (memory.effects.pendingEffects)
-    memory.effects.pendingEffects = restoreBatchHistory(
-      memory.effects.pendingEffects,
-    );
-  if (
-    !memory.effects.pendingEffects &&
-    previous?.results?.some((result) => result.status === 'unknown')
-  )
-    memory.effects.pendingEffects = structuredClone(previous);
 }
 
 /** Persists the trimmed transcript for the current task; callers redact first. */

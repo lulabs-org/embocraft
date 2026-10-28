@@ -1,5 +1,4 @@
-import type { AgentAction } from '../../contracts';
-import type { AgentRunState } from '../../contracts/state';
+import type { ActiveAction, AgentRunState } from '../../contracts/state';
 import type { ToolState } from '../../contracts/tool-state';
 import { recordEvent } from '../task/inbox';
 import type { TaskLease, TaskService } from '../task/service';
@@ -16,11 +15,6 @@ export type BackgroundActionHost = {
     work: Promise<void>,
   ) => void;
 };
-
-/** Long-running world actions that run asynchronously in the background slot. */
-export function isBackgroundWorldAction(name: AgentAction['type']): boolean {
-  return name === 'goto' || name === 'build' || name === 'house';
-}
 
 /** Marks an action as actively running in the durable effects section. */
 export function markActiveActionRunning(
@@ -61,7 +55,7 @@ export async function launchBackgroundWorldAction(
     .then(
       (value) => {
         if (host.service.current(lease))
-          host.memory.effects.activeAction = {
+          settleActiveAction(host.memory, host.service, lease, {
             id,
             name,
             taskId: lease.id,
@@ -78,32 +72,22 @@ export async function launchBackgroundWorldAction(
               ],
               details: {},
             },
-          };
+          });
       },
       (error) => {
         if (host.service.current(lease))
-          host.memory.effects.activeAction = {
+          settleActiveAction(host.memory, host.service, lease, {
             id,
             name,
             taskId: lease.id,
             revision: lease.revision,
             status: host.activeSignal.aborted ? 'unknown' : 'failed',
             result: String(error),
-          };
+          });
       },
     )
     .then(async () => {
-      if (host.service.current(lease))
-        recordEvent(host.memory, {
-          id: `action:${id}`,
-          kind: 'action_result',
-          state: 'pending',
-          at: Date.now(),
-          audience: host.memory.task.current?.privateTo ?? 'public',
-          taskId: lease.id,
-          revision: lease.revision,
-          actionId: id,
-        });
+      recordActionResult(host.memory, host.service, lease, id);
       await host.save();
     });
 
@@ -112,3 +96,34 @@ export async function launchBackgroundWorldAction(
   return { actionId: id, status: 'running' };
 }
 
+/** A late action may never replace the next task revision's result. */
+export function settleActiveAction(
+  memory: AgentRunState,
+  service: TaskService,
+  lease: TaskLease,
+  action: ActiveAction,
+): void {
+  if (service.current(lease)) memory.effects.activeAction = action;
+}
+
+/** Keep settlement and event publication separate to preserve checkpoint ordering. */
+export function recordActionResult(
+  memory: AgentRunState,
+  service: TaskService,
+  lease: TaskLease,
+  actionId: string,
+  event: { id?: string; detail?: string } = {},
+): void {
+  if (!service.current(lease)) return;
+  recordEvent(memory, {
+    id: event.id ?? `action:${actionId}`,
+    kind: 'action_result',
+    state: 'pending',
+    at: Date.now(),
+    audience: memory.task.current?.privateTo ?? 'public',
+    taskId: lease.id,
+    revision: lease.revision,
+    actionId,
+    ...(event.detail === undefined ? {} : { detail: event.detail }),
+  });
+}
