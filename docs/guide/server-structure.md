@@ -195,22 +195,7 @@ apps/server/
         │   ├── ports.ts
         │   └── index.ts
         │
-        ├── realtime/                    # ── 7. 百炼实时流式会话与场景交互工具 ──
-        │   ├── domain/                  # 音频与会话限额常量
-        │   │   └── limits.ts
-        │   ├── services/                # 实时会话管理、协议协调与场景工具
-        │   │   ├── hub.service.ts       # 多玩家会话并发管理中枢（RealtimeHub）
-        │   │   ├── hub.service.test.ts
-        │   │   ├── session.service.ts   # 百炼双工流式会话协议协调器（BailianSession）
-        │   │   ├── session.service.test.ts
-        │   │   ├── scene-tools.service.ts # 场景观察与待确认编辑提案（状态、时效与回调）
-        │   │   └── scene-tools.service.test.ts
-        │   ├── adapters/                # 协议适配器与离线测试桩
-        │   │   ├── demo-socket.ts       # 离线确定性协议模拟器（无网络单测桩）
-        │   │   └── demo-socket.test.ts
-        │   └── index.ts                 # 唯一门面：导出 RealtimeHub, SceneAccess 等供 WorldRoom 使用
-        │
-        ├── tasks/                       # ── 8. 智能体任务规划与状态机 ──
+        ├── tasks/                       # ── 7. 智能体任务规划与状态机 ──
         │   ├── domain/                  # 纯规则、状态机模型与时间窗口计算
         │   │   ├── model.ts             # 任务实体与状态转换纯函数
         │   │   ├── timing.ts            # Cron 周期与下一次触发时间纯计算
@@ -232,7 +217,7 @@ apps/server/
         │   ├── ports.ts                 # TaskPort、TaskHostPort 与 TaskExecutionState 契约
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
-        └── world/                       # ── 9. 权威体素世界房间与物理模拟 ──
+        └── world/                       # ── 8. 权威体素世界房间与物理模拟 ──
             ├── domain/                  # 地形、玩家名称与输入/编辑校验规则
             │   ├── terrain.ts           # 确定性地形与增量覆盖判定
             │   ├── player-name.ts       # 玩家名称合法性规则

@@ -36,7 +36,6 @@
 | `modules/audio/services/tts`     | Piper/远程合成、模型安装、语音队列与世界内语音投递   |
 | `modules/audio/services/spatial` | 空间语音信令校验与转发                               |
 | `modules/chat`                   | 消息、附件、音频票据及私聊权限                       |
-| `modules/realtime`               | 百炼实时会话、工具确认与离线协议模拟器               |
 | `modules/world`                  | 权威物理房间、Schema、世界持久化与在线状态 SSE       |
 
 `services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
@@ -61,8 +60,6 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `chat` 按 `domain/`、`services/` 与 `routes/` 分层：`domain/visibility.ts` 按消息范围、发送者与接收者判断可见性；`services/` 集中聊天、凭据、音频缓存、空间语音票据及 ASR 协调，统一使用 `*.service.ts` 命名；`routes/chats.routes.ts` 保留 `/chat` 的 HTTP 接口与 OpenAPI 注解。路由和语音协调测试与源码共置，跨包的 `test/chat.test.ts` 保留在集成测试目录。模块门面继续导出 `WorldChat`、`installChatRoutes` 与 `visibleEvent`，聊天鉴权、可见性、语音处理和票据生命周期保持不变。
 
-`realtime` 按 `domain/`、`services/` 与 `adapters/` 分层：`domain/limits.ts` 保存现有音频与会话限额；`services/hub.service.ts` 管理玩家会话，`session.service.ts` 协调百炼双工协议，`scene-tools.service.ts` 管理场景观察与待确认编辑提案。`SceneTools` 持有提案集合、读取时间并调用场景接口，因此属于服务层；它不直接应用方块编辑。离线协议模拟器位于 `adapters/demo-socket.ts`，各实现的现有测试随源码就近放置。模块门面继续导出 `RealtimeHub`、`BailianConfig` 与 `SceneAccess`，协议、音频限额、用户授权、提案确认和连接生命周期保持不变。
-
 `world` 的地形、玩家名称和输入/编辑校验规则归入 `domain/`，数据库存储与就近测试归入 `persistence/`，HTTP/SSE 路由与测试归入 `routes/worlds.routes.ts` 及同名测试文件。`world.room.ts` 与 `world.schema.ts` 留在模块根部，分别负责 Colyseus 房间生命周期与同步状态 Schema；Schema 依赖框架，不属于纯领域规则。模块门面保留 `WorldRoom`、`WorldStore`、`installWorldRoutes` 和 `installPresenceRoutes` 四个公开导出。Schema 字段与注册顺序、物理模拟、持久化、房间生命周期及 `/world`、`/world/presence` 行为保持不变。跨共享物理实现的世界规则测试与服务器生命周期测试保留在 `test/`。
 
 `audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `services/spatial/signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。
@@ -85,7 +82,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；旧 JSON 存储后备路径已移除，网关令牌及本地语音模型文件保留原配置位置。现有数据库存档恢复与运行时迁移继续保留。
 
-`test/helpers/test-server.ts` 使用生产 `createServer`，通过 `test/helpers/memory-storage.ts` 注入内存模型服务、角色存档与语音配置；默认配置临时令牌目录、内存世界、随机 loopback 端口、mock 语音和禁用云端实时会话。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
+`test/helpers/test-server.ts` 使用生产 `createServer`，通过 `test/helpers/memory-storage.ts` 注入内存模型服务、角色存档与语音配置；默认配置临时令牌目录、内存世界、随机 loopback 端口与 mock 语音。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
 
 ```sh
 pnpm --filter @voxel/server test  # 服务端就近测试与网络生命周期
@@ -100,7 +97,6 @@ pnpm test:agent:voice
 pnpm test:voice:services
 pnpm test:agent:deepseek
 pnpm test:player:names
-pnpm --filter @voxel/server exec tsx test/integration/realtime.ts
 ```
 
 `pnpm lint` / `pnpm lint:fix` 在根目录检查全仓。服务端单独运行 `pnpm --filter @voxel/server lint` 或 `lint:fix`，沿用根目录配置，覆盖源码、测试（含集成脚本与沙箱）及 Prisma 配置。启用 ESLint/TypeScript 推荐规则、未处理 Promise 和异步回调误用检查，零警告才通过。生成目录和依赖不参与检查，格式由 Prettier 负责。
@@ -109,7 +105,7 @@ pnpm --filter @voxel/server exec tsx test/integration/realtime.ts
 
 `tests/server-boundaries.test.ts` 检查依赖方向、全局持久化边界、循环依赖、配置入口和集成装配，并限定业务模块仅从 Socket 适配文件以 `import type` 引用传输契约。Prisma 运行时与 Pg 适配器的导入统一限制在 `core/database/client.ts`，其他服务端文件只引用 Prisma 类型。生命周期测试检查 HTTP 契约、SSE/ASR/世界连接关闭、失败启动后的再次启动，以及共享数据库客户端的释放顺序和重复关闭。Vitest 使用线程池，避免 Colyseus 的 PM2 遥测占用 fork 的测试 IPC，不模拟服务器本身。
 
-UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供确定性识别结果与临时配置；仓库没有可迁移的受控 `output/asr-services-fixture.ts`。三个沙箱均通过 `createTestServer` 启动，并处理退出清理。
+UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供确定性识别结果与临时配置；仓库没有可迁移的受控 `output/asr-services-fixture.ts`。两个沙箱均通过 `createTestServer` 启动，并处理退出清理。
 
 ## 独立任务计划存档
 

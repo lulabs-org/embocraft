@@ -73,7 +73,7 @@ graph LR
     Shared["@voxel/shared"] --> World["world<br/>core · geometry · physics · navigation"]
     Shared --> Agent["agent<br/>capabilities · characters"]
     Shared --> Task["task<br/>contracts · plans · timing"]
-    Shared --> Comm["communication<br/>chat · realtime"]
+    Shared --> Comm["communication<br/>chat"]
     Shared --> Audio["audio<br/>asr · spatial · voice-services"]
     Shared --> Mgmt["management<br/>client · contracts"]
 ```
@@ -82,7 +82,7 @@ graph LR
 
 ## 3. 服务端装配（`apps/server/src/server.ts`）
 
-`createServer()` 负责数据库探活、会话 Provider 校验、存储加载和服务装配；`createApp()` 负责 HTTP 装配。`listen()` 才绑定端口、创建房间并恢复角色。存储加载失败时会等待并行任务结束，再释放共享数据库客户端。
+`createServer()` 负责数据库探活、存储加载和服务装配；`createApp()` 负责 HTTP 装配。`listen()` 才绑定端口、创建房间并恢复角色。存储加载失败时会等待并行任务结束，再释放共享数据库客户端。
 
 ```mermaid
 graph TD
@@ -95,7 +95,6 @@ graph TD
     Stores --> VS["VoiceServiceStore<br/>audio/persistence"]
     Stores --> AS["AsrSettingsStore<br/>audio/persistence"]
 
-    Create --> VP["createVoiceProvider<br/>audio/services/sessions（mock/browser/ollama）"]
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
     Create --> MC["ModelCatalog<br/>providers/adapters/model-catalog"]
@@ -136,7 +135,6 @@ graph TB
         Prov["providers<br/>domain · services · adapters<br/>persistence · routes · ports"]
         Chat["chat<br/>domain · services · routes"]
         Audio["audio<br/>domain · services · persistence · routes · sockets"]
-        RT["realtime<br/>domain · services · adapters"]
     end
     Server --> App
     Server --> Core
@@ -161,7 +159,6 @@ graph TB
     Tasks -->|仅 HTTP 层| Mgmt
     World --> Chat
     World --> Audio
-    World --> RT
     Modules --> Core
     Persist -->|仅历史任务迁移契约| Tasks
 ```
@@ -236,9 +233,7 @@ graph TD
     Allow --> Edit["edit → 方块 CAS 写入 → WorldStore"]
     Allow --> Rename["rename"]
     Allow --> AV["agent.voice → 角色语音开关"]
-    Allow --> VoiceS["voice.* → VoiceProvider 会话"]
     Allow --> Spatial["spatial.signal → WebRTC 信令"]
-    Allow --> Realtime["realtime.* → RealtimeHub<br/>realtime.approve → edit"]
     Allow --> ChatM["chat → Chat 模块"]
     Sync["onMessage('sync')"] --> Snap["snapshot() 全量快照"]
 ```
