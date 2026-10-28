@@ -1,24 +1,22 @@
 import { withDeadline } from '../../kernel/abort';
-import { recordEvent } from '../task/inbox';
+import {
+  markActiveActionRunning,
+  recordActionResult,
+  settleActiveAction,
+} from './lifecycle';
+import type { ActionRunOptions, ContinuingAction } from './port';
+import type { AgentAction, BatchResult, Observation } from '../../contracts';
+import type { TaskLease } from '../task/service';
+import { worldSignature } from '../../world/observe/extract';
+import type { ToolState } from '../../contracts/tool-state';
 import { TaskService } from '../task/service';
 import { aiCharacterPermissions } from '@voxel/shared';
 import { navigate, observeNavigation } from '../../world/nav/controller';
 import { parseAction } from '../../world/actions/parse';
-import type { AgentConfig } from '../../contracts';
-import type { AgentSession } from '../../world/session/port';
 import type { AgentRunState } from '../../contracts/state';
-import type { AgentAttention } from '../../world/observe/attention';
-type FollowOptions = {
-  memory: AgentRunState;
-  session: AgentSession;
-  signal: AbortSignal;
-  config: AgentConfig;
-  attention?: AgentAttention;
-  checkpoint?: () => void | Promise<void>;
-};
 
 /** A bounded host tick: no model request, no new task, no replayed movement inputs. */
-export async function runFollowStep(options: FollowOptions) {
+export async function runFollowStep(options: ActionRunOptions) {
   const { memory, session, signal, config, attention } = options;
   const follow = memory.effects.follow,
     task = memory.task.current;
@@ -102,19 +100,89 @@ export async function runFollowStep(options: FollowOptions) {
         const action = memory.effects.activeAction;
         action.status = 'failed';
         action.result = follow.lastResult ?? task.reason;
-        recordEvent(memory, {
+        settleActiveAction(memory, service, lease, action);
+        recordActionResult(memory, service, lease, action.id, {
           id: `action:${action.id}:${lease.revision}`,
-          kind: 'action_result',
-          state: 'pending',
-          at: Date.now(),
-          audience: task.privateTo ?? 'public',
-          taskId: lease.id,
-          revision: lease.revision,
-          actionId: action.id,
           detail: task.reason,
         });
       }
       await options.checkpoint?.();
     }
   }
+}
+
+/** The action layer owns both local continuation and its recovery decision. */
+export const followingAction: ContinuingAction = {
+  pending: (memory) => !!memory.effects.follow,
+  wakeDelayMs: 100,
+  async advance(options) {
+    await runFollowStep(options);
+    const { memory } = options;
+    const task = memory.task.current;
+    if (
+      task?.status === 'blocked' &&
+      memory.effects.activeAction?.status === 'failed'
+    ) {
+      delete memory.effects.follow;
+      task.status = 'running';
+      return 'resume';
+    }
+    return 'stop';
+  },
+};
+
+/** Per-batch intent tracking; navigation to a destination supersedes following. */
+export function createFollowEffects(memory: AgentRunState) {
+  const control = { pursuing: true };
+  return {
+    control,
+    before(action: AgentAction): boolean {
+      if (action.type === 'goto') delete memory.effects.follow;
+      if (action.type !== 'follow') return false;
+      memory.effects.follow = {
+        action,
+        taskStartedAt: memory.task.current!.startedAt,
+        pursuing: true,
+      };
+      return true;
+    },
+    complete(batch: BatchResult) {
+      const result = batch.results.find(
+        (r) => r.action.type === 'follow',
+      )?.result;
+      if (memory.effects.follow && result && 'status' in result) {
+        memory.effects.follow.pursuing = control.pursuing;
+        memory.effects.follow.lastResult = result;
+        if (!result.ok) delete memory.effects.follow;
+      }
+    },
+  };
+}
+
+/** A successful first slice parks the task; later slices run without a model. */
+export function settleFollowing(
+  memory: AgentRunState,
+  service: TaskService,
+  lease: TaskLease,
+  observation: Observation,
+  state: ToolState,
+) {
+  if (!memory.effects.follow) return;
+  service.finish(lease, {
+    status: 'waiting',
+    reason: '持续跟随中，由本地导航控制器推进。',
+    waitFor: 'players',
+    signature: worldSignature(observation, 'players'),
+  });
+  state.terminal = true;
+}
+
+/** Retain the original checkpoint order: the first slice is saved before activation. */
+export function activateFollowing(
+  memory: AgentRunState,
+  id: string,
+  lease: TaskLease,
+) {
+  if (memory.effects.follow)
+    markActiveActionRunning(memory, id, 'follow', lease);
 }

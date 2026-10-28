@@ -1,22 +1,14 @@
 import { paceChat } from './chat-pacing';
+import { launchBackgroundWorldAction } from './lifecycle';
+import { formatActionResult } from './build-tracker';
 import {
-  isBackgroundWorldAction,
-  launchBackgroundWorldAction,
-  markActiveActionRunning,
-} from './background-action';
-import {
-  beginUnfinishedBuild,
-  formatActionResult,
-  mergeBuildCheckpoint,
-  reconcileUnfinishedBuild,
-} from './build-tracker';
+  actionPolicy,
+  activateContinuingAction,
+  createActionEffects,
+  settleActionEffects,
+} from './effects';
 import { aiCharacterPermissions } from '@voxel/shared';
-import type {
-  AgentAction,
-  AgentConfig,
-  BatchResult,
-  Observation,
-} from '../../contracts';
+import type { AgentAction, AgentConfig, Observation } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
 import type { AgentSession } from '../../world/session/port';
 import type { AgentRunState } from '../../contracts/state';
@@ -25,7 +17,6 @@ import { TaskService, type TaskLease } from '../task/service';
 import type { AgentAttention } from '../../world/observe/attention';
 import { mergeSignals, withDeadline } from '../../kernel/abort';
 import { executeBatch } from '../../world/actions/batch';
-import { worldSignature } from '../../world/observe/extract';
 import type { RequestBudget } from '../task/budget';
 
 function guardSessionWithLease(
@@ -61,31 +52,6 @@ function routeTaskActions(
   );
 }
 
-function reconcileFollowEffect(
-  memory: AgentRunState,
-  batch: BatchResult,
-  pursuing: boolean,
-): void {
-  const followResult = batch.results.find(
-    (r) => r.action.type === 'follow',
-  )?.result;
-  if (memory.effects.follow && followResult && 'status' in followResult) {
-    memory.effects.follow.pursuing = pursuing;
-    memory.effects.follow.lastResult = followResult;
-    if (!followResult.ok) delete memory.effects.follow;
-  }
-}
-
-function isWorldMutatingAction(name: AgentAction['type']): boolean {
-  return (
-    name === 'goto' ||
-    name === 'follow' ||
-    name === 'edit' ||
-    name === 'build' ||
-    name === 'house'
-  );
-}
-
 /**
  * Task-bound Action Execution Adapter:
  * Bridges runtime-level TaskService invariants, memory persistence, and budget limits
@@ -111,8 +77,7 @@ export async function executeTaskActions(
   const task = memory.task.current!;
   const routed = routeTaskActions(actions, task.privateTo);
   const deadline = withDeadline(signal, budget.remainingMs, 'task_timeout');
-  const priorBuild = memory.effects.unfinishedBuild;
-  const followControl = { pursuing: true };
+  const effects = createActionEffects(memory, checkpoint);
 
   let outcome;
   try {
@@ -123,45 +88,23 @@ export async function executeTaskActions(
       aiCharacterPermissions(config),
       deadline.signal,
       {
-        navigation: { follow: followControl },
+        navigation: effects.navigation,
         pending: () => !!attention?.pending,
         log,
         beforeAction: async (action) => {
           service.assertCurrent(lease);
           signal.throwIfAborted();
           if (action.type === 'chat') await paceChat(memory, signal);
-          if (action.type === 'follow') {
-            memory.effects.follow = {
-              action,
-              taskStartedAt: task.startedAt,
-              pursuing: true,
-            };
-            await checkpoint();
-          }
-          if (action.type === 'goto') delete memory.effects.follow;
-          if (action.type === 'build' || action.type === 'house') {
-            memory.effects.unfinishedBuild = beginUnfinishedBuild(
-              priorBuild,
-              action,
-            );
-            await checkpoint();
-          }
+          await effects.beforeAction(action);
         },
         buildCheckpoint: (action, result) => {
           service.assertCurrent(lease);
-          memory.effects.unfinishedBuild = mergeBuildCheckpoint(
-            priorBuild,
-            action,
-            result,
-          );
+          effects.buildCheckpoint(action, result);
         },
         checkpoint: async (batch) => {
           service.assertCurrent(lease);
           memory.effects.previous = batch;
-          memory.effects.unfinishedBuild = reconcileUnfinishedBuild(
-            memory.effects.unfinishedBuild,
-            batch,
-          );
+          effects.checkpoint(batch);
           await checkpoint();
         },
       },
@@ -172,7 +115,7 @@ export async function executeTaskActions(
 
   service.assertCurrent(lease);
   const { batch, observation: finalObservation } = outcome;
-  reconcileFollowEffect(memory, batch, followControl.pursuing);
+  effects.complete(batch);
   if (deadline.expired || budget.remainingMs <= 0) {
     batch.stopReason = 'timeout';
     batch.ok = false;
@@ -200,7 +143,11 @@ export type TurnActionContext = {
   observation: () => Observation;
   refreshObservation: (observation: Observation) => Promise<void>;
   save: () => Promise<void>;
-  launch: (id: string, controller: AbortController, work: Promise<void>) => void;
+  launch: (
+    id: string,
+    controller: AbortController,
+    work: Promise<void>,
+  ) => void;
 };
 
 /**
@@ -213,7 +160,7 @@ export async function executeTurnWorldAction(
 ): Promise<unknown> {
   const { id, action, lease } = ctx;
   const name = action.type;
-  const background = isBackgroundWorldAction(name);
+  const background = actionPolicy(name).background;
   const controller = new AbortController();
   const signal = mergeSignals(ctx.activeSignal, controller.signal);
   const state = background ? initialToolState() : ctx.state;
@@ -221,8 +168,7 @@ export async function executeTurnWorldAction(
 
   if (!background) {
     const valueResult = await work;
-    if (name === 'follow' && ctx.memory.effects.follow)
-      markActiveActionRunning(ctx.memory, id, name, lease);
+    activateContinuingAction(name, ctx.memory, id, lease);
     return valueResult;
   }
 
@@ -254,7 +200,7 @@ async function runSingleWorldAction(
     throw new AgentRuntimeError('当前批次已停止。');
   if (
     memory.checkpoint.unknownEffect?.name === name &&
-    (name === 'chat' || name === 'goto' || name === 'follow')
+    actionPolicy(name).blocksUnknownReplay
   )
     throw new AgentRuntimeError(
       '上次聊天或移动结果未知，不能自动重放；请核对结果或等待玩家明确的新指令。',
@@ -289,21 +235,20 @@ async function runSingleWorldAction(
     await ctx.refreshObservation(outcome.observation);
     const { batch } = outcome;
     known = batch.stopReason !== 'unknown' && batch.stopReason !== 'executing';
-    const mutating = isWorldMutatingAction(name);
+    const mutating = actionPolicy(name).mutating;
     if (!batch.ok) {
       if (mutating) memory.effects.pendingEffects = batch;
       state.skipBatch = true;
       throw new AgentRuntimeError(JSON.stringify(batch));
     }
-    if (name === 'follow' && memory.effects.follow) {
-      ctx.service.finish(lease, {
-        status: 'waiting',
-        reason: '持续跟随中，由本地导航控制器推进。',
-        waitFor: 'players',
-        signature: worldSignature(ctx.observation(), 'players'),
-      });
-      state.terminal = true;
-    }
+    settleActionEffects(
+      name,
+      memory,
+      ctx.service,
+      lease,
+      ctx.observation(),
+      state,
+    );
     if (mutating) state.turnMutated = true;
     return formatActionResult(action, batch, ctx.observation(), memory);
   } finally {
