@@ -8,12 +8,10 @@ import { env } from '../src/core/config/env';
 import { createServer } from '../src/server';
 import { createTestServer } from './helpers/test-server';
 
-import { whisperModelsDirectory } from '../src/modules/audio/services/asr/whisper-settings';
 import { WorldStore } from '../src/modules/world/persistence/store';
 
 describe('server assembly and lifecycle', () => {
-  it('keeps original data locations and validates deployment configuration without dotenv side effects', () => {
-    expect(whisperModelsDirectory).toBe(env.dataPath('voice'));
+  it('validates deployment configuration without dotenv side effects', () => {
     expect(env.readServer({})).toMatchObject({
       port: 2567,
       host: '127.0.0.1',

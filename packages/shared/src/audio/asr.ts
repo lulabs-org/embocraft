@@ -7,15 +7,11 @@ export type BailianAsrDraft = BailianAsrSettings & { apiKey: string };
 export type BailianAsrView = BailianAsrSettings & { hasApiKey: boolean };
 export type WhisperAsrSettings = {
   model: string;
-  threads: number;
-  beamSize: number;
   temperature: number;
   prompt: string;
 };
 export const DEFAULT_WHISPER_ASR: WhisperAsrSettings = {
-  model: 'default',
-  threads: 4,
-  beamSize: 5,
+  model: 'Systran/faster-whisper-base',
   temperature: 0,
   prompt: '',
 };

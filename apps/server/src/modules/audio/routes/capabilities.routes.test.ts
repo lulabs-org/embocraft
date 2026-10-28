@@ -42,7 +42,6 @@ describe('audio capabilities HTTP boundary', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       local: { available: true },
-      whisperModels: expect.any(Array),
       agentSpeech: { available: false },
     });
   });
@@ -70,7 +69,7 @@ describe('audio capabilities HTTP boundary', () => {
       ...DEFAULT_WHISPER_ASR,
       provider: 'whisper',
       name: 'Whisper',
-      threads: 2,
+      model: 'Systran/faster-whisper-small',
     });
     const cloud = await store.save({
       ...DEFAULT_BAILIAN_ASR,
@@ -78,9 +77,7 @@ describe('audio capabilities HTTP boundary', () => {
       apiKey: 'fixture',
     });
     expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(200);
-    expect(status).toHaveBeenCalledWith(
-      expect.objectContaining({ threads: 2 }),
-    );
+    expect(status).toHaveBeenCalledWith();
     expect((await fetch(`${url}?serviceId=${cloud.id}`)).status).toBe(400);
     await store.remove(whisper.id);
     expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(404);

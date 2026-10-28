@@ -55,25 +55,19 @@ export const AI_CHARACTER_SKILLS: ReadonlyArray<{
   },
 ];
 
-/** Legacy callers grant movement/chat and use allowEdits for both block operations. */
 export function resolvePermissions(
-  value: boolean | AICharacterPermissions,
+  value: AICharacterPermissions,
 ): AICharacterPermissions {
-  return typeof value === 'boolean'
-    ? { move: true, chat: true, place: value, remove: value }
-    : {
-        move: value.move === true,
-        chat: value.chat === true,
-        place: value.place === true,
-        remove: value.remove === true,
-      };
+  return {
+    move: value.move === true,
+    chat: value.chat === true,
+    place: value.place === true,
+    remove: value.remove === true,
+  };
 }
 
 export function aiCharacterPermissions(settings: {
-  permissions?: AICharacterPermissions;
-  allowEdits?: boolean;
+  permissions: AICharacterPermissions;
 }): AICharacterPermissions {
-  return resolvePermissions(
-    settings.permissions ?? settings.allowEdits === true,
-  );
+  return resolvePermissions(settings.permissions);
 }

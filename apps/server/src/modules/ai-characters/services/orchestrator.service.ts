@@ -396,9 +396,7 @@ export class AICharacterOrchestrator {
         permissions:
           input.permissions !== undefined
             ? input.permissions
-            : input.allowEdits !== undefined
-              ? undefined
-              : job.view.permissions,
+            : job.view.permissions,
       },
       provider,
     );

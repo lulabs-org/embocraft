@@ -60,9 +60,9 @@ type HouseAction = Extract<BuildAction, { type: 'house' }>;
 
 export function parseBuildAction(
   a: Record<string, unknown>,
-  allowEdits: boolean | AICharacterPermissions,
+  permissions: AICharacterPermissions,
 ): BuildAction {
-  const permissions = resolvePermissions(allowEdits);
+  const capabilities = resolvePermissions(permissions);
 
   if (a.type === 'build') {
     if (
@@ -73,7 +73,9 @@ export function parseBuildAction(
       throw Error(`批量建造需包含 1–${MAX_BATCH_BLOCKS} 个方块。`);
     const blocks = a.blocks.map(parsePlannedEdit);
     if (
-      blocks.some((b) => !permissions[b.material === null ? 'remove' : 'place'])
+      blocks.some(
+        (b) => !capabilities[b.material === null ? 'remove' : 'place'],
+      )
     )
       throw Error('方块修改未开启：批次缺少放置或拆除权限。');
     if (new Set(blocks.map(key)).size !== blocks.length)
@@ -82,7 +84,7 @@ export function parseBuildAction(
   }
 
   // house
-  if (!permissions.place) throw Error('方块修改未开启：缺少放置权限。');
+  if (!capabilities.place) throw Error('方块修改未开启：缺少放置权限。');
   const origin = parsePlannedEdit(a);
   const sizeMsg = '房屋尺寸或门的方向无效。';
   if (a.type !== 'house' || origin.material === null) throw Error(sizeMsg);

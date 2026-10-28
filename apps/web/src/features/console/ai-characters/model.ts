@@ -17,7 +17,6 @@ export const initialAICharacter: AICharacterSettings = {
   intervalMs: 3000,
   timeoutMs: 60000,
   maxTokens: 512,
-  allowEdits: false,
   permissions: { move: true, chat: true, place: false, remove: false },
   skills: [],
   voiceReplies: false,

@@ -207,8 +207,7 @@ describe('Whisper transcription service', () => {
           ? undefined
           : {
               model: 'default',
-              threads: 4,
-              beamSize: 5,
+
               temperature: 0,
               prompt,
             };

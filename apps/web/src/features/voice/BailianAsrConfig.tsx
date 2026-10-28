@@ -8,11 +8,9 @@ import type { useAsrServices } from './useAsrServices';
 export function BailianAsrConfig({
   manager,
   disabled,
-  models = ['default'],
 }: {
   manager: ReturnType<typeof useAsrServices>;
   disabled: boolean;
-  models?: string[];
 }) {
   const { t } = useI18n();
   const {
@@ -45,7 +43,9 @@ export function BailianAsrConfig({
       }}
     >
       <div className="console-panel-heading">
-        <h3>{saved ? t('console.asr.headingEdit') : t('console.asr.headingAdd')}</h3>
+        <h3>
+          {saved ? t('console.asr.headingEdit') : t('console.asr.headingAdd')}
+        </h3>
         <p>{t('console.asr.headingDesc')}</p>
       </div>
       <fieldset disabled={busy || disabled}>
@@ -93,40 +93,15 @@ export function BailianAsrConfig({
           <>
             <label>
               {t('console.asr.recognitionModel')}
-              <select
+              <input
+                required
+                maxLength={200}
                 value={draft.model}
+                placeholder="Systran/faster-whisper-base"
                 onChange={(e) => change({ model: e.target.value })}
-              >
-                {[...new Set([...models, draft.model])].map((model) => (
-                  <option key={model} value={model}>
-                    {model === 'default' ? t('console.asr.defaultServerModel') : model}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             <small>{t('console.asr.whisperModelNote')}</small>
-            <label>
-              {t('console.asr.threadsLabel')}
-              <input
-                type="number"
-                min={1}
-                max={16}
-                required
-                value={draft.threads}
-                onChange={(e) => change({ threads: e.target.valueAsNumber })}
-              />
-            </label>
-            <label>
-              {t('console.asr.beamSizeLabel')}
-              <input
-                type="number"
-                min={1}
-                max={8}
-                required
-                value={draft.beamSize}
-                onChange={(e) => change({ beamSize: e.target.valueAsNumber })}
-              />
-            </label>
             <label>
               {t('console.asr.temperatureLabel')}
               <input
@@ -164,8 +139,12 @@ export function BailianAsrConfig({
                   })
                 }
               >
-                <option value="beijing">{t('console.asr.regionBeijing')}</option>
-                <option value="singapore">{t('console.asr.regionSingapore')}</option>
+                <option value="beijing">
+                  {t('console.asr.regionBeijing')}
+                </option>
+                <option value="singapore">
+                  {t('console.asr.regionSingapore')}
+                </option>
               </select>
             </label>
             <label>
@@ -195,7 +174,9 @@ export function BailianAsrConfig({
               <span className="voice-key-label">API Key</span>
               {canKeepKey && !editingKey ? (
                 <div className="voice-key-saved">
-                  <span role="status">{t('console.voice.keyConfiguredStatus')}</span>
+                  <span role="status">
+                    {t('console.voice.keyConfiguredStatus')}
+                  </span>
                   <button type="button" onClick={() => setEditingKey(true)}>
                     {t('console.voice.changeKey')}
                   </button>
@@ -257,7 +238,9 @@ export function BailianAsrConfig({
           </button>
         </div>
       </fieldset>
-      {dirty && <p className="agent-hint">{t('console.asr.dirtyRecordHint')}</p>}
+      {dirty && (
+        <p className="agent-hint">{t('console.asr.dirtyRecordHint')}</p>
+      )}
       {draft.provider === 'browser' ? (
         <p className="agent-hint">{t('console.asr.browserHint')}</p>
       ) : draft.provider === 'whisper' ? (

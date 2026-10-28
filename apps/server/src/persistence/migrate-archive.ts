@@ -20,6 +20,18 @@ export function migrateArchive(saved: unknown): ManagementArchive {
   if (candidate.characters.length > 50)
     throw new AppError('Agent 记录格式无效。', 500);
   const copy = structuredClone(candidate as ManagementArchive);
+  // Normalize only persisted v3 profiles; the runtime and public writes use permissions.
+  for (const character of copy.characters) {
+    const profile = character as typeof character & { allowEdits?: boolean };
+    if (profile.permissions === undefined)
+      profile.permissions = {
+        move: true,
+        chat: true,
+        place: profile.allowEdits === true,
+        remove: profile.allowEdits === true,
+      };
+    delete profile.allowEdits;
+  }
   for (const plan of copy.plans) plan.limitsMode ??= 'override';
   for (const run of copy.runs) run.snapshot.limitsMode ??= 'override';
   validateArchive(copy);

@@ -4,7 +4,7 @@ import { i18n } from '../../../../i18n';
 export const runEnded = (run: TaskRun) =>
   ['completed', 'cancelled', 'skipped', 'missed'].includes(run.status);
 
-export const getRunStatusLabel = (status: TaskRun['status']) => {
+const getRunStatusLabel = (status: TaskRun['status']) => {
   const map: Record<TaskRun['status'], string> = {
     queued: i18n.t('console.plans.statusQueued'),
     running: i18n.t('console.plans.statusRunning'),
@@ -31,7 +31,7 @@ export const runStatus: Record<TaskRun['status'], string> = new Proxy(
   },
 );
 
-export const getPlanStatusLabel = (state: TaskPlan['state']) => {
+const getPlanStatusLabel = (state: TaskPlan['state']) => {
   const map: Record<TaskPlan['state'], string> = {
     enabled: i18n.t('console.plans.statusEnabled'),
     paused: i18n.t('console.plans.planStatePaused'),

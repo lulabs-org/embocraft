@@ -39,12 +39,12 @@ export async function executeBatch(
   session: AgentSession,
   actions: AgentAction[],
   initial: Observation,
-  allowEdits: boolean | AICharacterPermissions,
+  permissions: AICharacterPermissions,
   signal: AbortSignal,
   options: BatchOptions = {},
 ): Promise<{ batch: BatchResult; observation: Observation }> {
   // Defense in depth at the effect boundary, including an invalid final action.
-  actions = parseActions(actions, allowEdits);
+  actions = parseActions(actions, permissions);
   const batch: BatchResult = {
     batchId: randomUUID(),
     actions,
@@ -124,7 +124,7 @@ export async function executeBatch(
         guarded,
         action,
         observation,
-        allowEdits,
+        permissions,
         signal,
         log,
         async (result) => {

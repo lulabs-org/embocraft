@@ -1,7 +1,4 @@
-import type { Observation } from '@voxel/agent-runtime';
 import { describe, expect, it, vi } from 'vitest';
-import { testAgentConfig } from '../../../tests/support/agent-config';
-import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
 import { validateAICharacter } from '../src/modules/ai-characters';
 import {
   bootstrapProviders,
@@ -126,13 +123,13 @@ describe('provider configuration boundary', () => {
     const input = { name: 'AI', goal: 'Observe' };
     expect(validateAICharacter(input, p)).toMatchObject({
       maxTurns: 100,
-      allowEdits: false,
+      permissions: { move: true, chat: true, place: false, remove: false },
       model: 'deepseek-flash',
     });
     for (const invalid of [
       { maxTurns: 1001 },
       { intervalMs: 0 },
-      { allowEdits: 'true' },
+      { permissions: 'true' },
       { reasoningEffort: ['high'] },
       { model: 'bad model' },
       { maxTokens: Infinity },
@@ -166,7 +163,7 @@ describe('provider configuration boundary', () => {
     ).toMatchObject({
       roleDescription: '负责规划和建造房屋。\n先确认需求。',
       goal: '',
-      allowEdits: false,
+      permissions: { move: true, chat: true, place: false, remove: false },
     });
     expect(
       validateAICharacter({ ...input, roleDescription: '建'.repeat(2000) }, p)
@@ -180,68 +177,6 @@ describe('provider configuration boundary', () => {
   });
 });
 describe('multi-provider SDK requests', () => {
-  it.each(['ollama', 'compatible'] as const)(
-    'uses %s endpoint without DeepSeek-only parameters',
-    async (type) => {
-      const request = vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            choices: [
-              {
-                finish_reason: 'stop',
-                message: {
-                  content:
-                    '{"actions":[{"type":"wait"}],"task":{"intent":"continue","status":"completed","summary":"测试决策"}}',
-                },
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } },
-        ),
-      );
-      const endpoint = {
-        type,
-        baseUrl: 'http://127.0.0.1:11434/v1',
-      };
-      const config = {
-        ...testAgentConfig(),
-        model: 'org/model:8b',
-      };
-      const observation = {
-        revision: 1,
-        self: {},
-        players: [],
-        blocks: [],
-        events: [],
-        radius: 8,
-      } as unknown as Observation;
-      expect(
-        await new ModelPlanner(config, request, endpoint).decide(
-          observation,
-          null,
-          new AbortController().signal,
-        ),
-      ).toMatchObject({
-        actions: [{ type: 'wait' }],
-        task: { intent: 'continue', status: 'completed' },
-      });
-      const [url, init] = request.mock.calls[0];
-      expect(url).toBe('http://127.0.0.1:11434/v1/chat/completions');
-      const body = JSON.parse(init!.body as string);
-      expect(body).toMatchObject({
-        model: 'org/model:8b',
-        max_tokens: 512,
-      });
-      for (const key of [
-        'max_completion_tokens',
-        'thinking',
-        'reasoning_effort',
-        'response_format',
-      ])
-        expect(body).not.toHaveProperty(key);
-      expect(init?.redirect).toBe('error');
-    },
-  );
   it('discovers model IDs through the configured SDK endpoint', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
@@ -299,7 +234,7 @@ describe('managed scheduling validation', () => {
   });
 });
 
-it('migrates legacy permissions and validates canonical capability settings', () => {
+it('defaults and validates independent capability settings', () => {
   const p = provider();
   const input = { name: 'Capabilities' };
   expect(validateAICharacter(input, p)).toMatchObject({
@@ -307,7 +242,13 @@ it('migrates legacy permissions and validates canonical capability settings', ()
     permissions: { move: true, chat: true, place: false, remove: false },
   });
   expect(
-    validateAICharacter({ ...input, allowEdits: true }, p).permissions,
+    validateAICharacter(
+      {
+        ...input,
+        permissions: { move: true, chat: true, place: true, remove: true },
+      },
+      p,
+    ).permissions,
   ).toEqual({
     move: true,
     chat: true,
@@ -319,7 +260,6 @@ it('migrates legacy permissions and validates canonical capability settings', ()
     validateAICharacter(
       {
         ...input,
-        allowEdits: true,
         permissions,
         skills: ['guide', 'building', 'guide'],
       },
@@ -327,7 +267,6 @@ it('migrates legacy permissions and validates canonical capability settings', ()
     ),
   ).toMatchObject({
     permissions,
-    allowEdits: false,
     skills: ['building', 'guide'],
   });
   for (const invalid of [

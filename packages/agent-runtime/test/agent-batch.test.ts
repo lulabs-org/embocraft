@@ -1,10 +1,14 @@
+import { executeTaskActions } from '../src/agent/action/executor';
+import { TaskService, RequestBudget } from '@voxel/agent-runtime';
 import { emptyState } from '@voxel/agent-runtime';
 import type { Edit } from '@voxel/shared';
-import { parseDecision } from '../../../tests/support/decision-decision';
-import type { AgentDecision } from '../../../tests/support/decision-contracts';
-import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
-import { type Planner } from '../../../tests/support/decision-fixture';
-import { runTaskStep } from '../../../tests/support/decision-step';
+import { parseActions } from '../src/world/actions/parse';
+import {
+  modelRequest,
+  worldTool,
+  type ModelResponder,
+} from '../../../tests/support/model-fixture';
+import { AgentRunner } from '@voxel/agent-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
   executeBatch,
@@ -20,11 +24,6 @@ import {
 } from '@voxel/agent-runtime';
 import { testAgentConfig } from '../../../tests/support/agent-config';
 
-const task = {
-  intent: 'continue',
-  status: 'running',
-  summary: '推进任务',
-} as const;
 const edit = (x = 1, material: 'wood' | null = 'wood'): AgentAction => ({
   type: 'edit',
   x,
@@ -42,7 +41,7 @@ const move: AgentAction = {
 };
 const config = () => ({
   ...testAgentConfig(),
-  allowEdits: true,
+  permissions: { move: true, chat: true, place: true, remove: true },
   timeoutMs: 2000,
 });
 function fixture() {
@@ -107,11 +106,18 @@ function fixture() {
   const history: BatchResult[] = [];
   const builds: BuildResult[] = [];
   const run = (actions: AgentAction[], options = {}) =>
-    executeBatch(session, actions, structuredClone(world), true, abort.signal, {
-      checkpoint: (value) => history.push(value),
-      buildCheckpoint: (_action, value) => builds.push(value),
-      ...options,
-    });
+    executeBatch(
+      session,
+      actions,
+      structuredClone(world),
+      { move: true, chat: true, place: true, remove: true },
+      abort.signal,
+      {
+        checkpoint: (value) => history.push(value),
+        buildCheckpoint: (_action, value) => builds.push(value),
+        ...options,
+      },
+    );
   return {
     world,
     observe,
@@ -124,72 +130,6 @@ function fixture() {
     run,
   };
 }
-
-describe('multi-action protocol', () => {
-  it('accepts only a complete actions/task decision', () => {
-    expect(parseDecision({ actions: [chat], task }, true)).toMatchObject({
-      actions: [chat],
-      task,
-    });
-    expect(
-      parseDecision({ actions: Array(8).fill(chat), task }, false).actions,
-    ).toHaveLength(8);
-  });
-  it.each([
-    chat,
-    { ...chat, task },
-    { action: chat, task },
-    { action: { ...chat, task } },
-    { actions: [chat], task: null },
-    { actions: [chat], type: 'chat', task },
-    { actions: [], task },
-    { actions: Array(9).fill(chat), task },
-    { actions: [chat] },
-    { actions: [chat, { type: 'shell' }], task },
-    { actions: [{ type: 'wait' }, chat], task },
-    { actions: [chat], action: chat, task },
-    { actions: [{ ...chat, task }], task },
-    { actions: [move], task: { ...task, intent: 'reply' } },
-    {
-      actions: [
-        { type: 'build', blocks: [edit()] },
-        { type: 'build', blocks: [edit(2)] },
-      ],
-      task,
-    },
-  ])('rejects invalid plan before effects: %j', (value) =>
-    expect(() => parseDecision(value, true)).toThrow(),
-  );
-  it('does not allow an authorized chat to hide a forbidden trailing edit', () => {
-    expect(() =>
-      parseDecision({ actions: [chat, edit()], task }, false),
-    ).toThrow();
-  });
-  it('rejects truncated model output without returning any partial plan', async () => {
-    const f = fixture();
-    const planner = new ModelPlanner(
-      config(),
-      async () =>
-        new Response(
-          JSON.stringify({
-            choices: [
-              {
-                finish_reason: 'length',
-                message: {
-                  content: '{"actions":[{"type":"chat","text":"hello"},',
-                },
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' } },
-        ),
-    );
-    await expect(
-      planner.decide(f.world, null, f.abort.signal),
-    ).rejects.toThrow();
-    expect(f.request).not.toHaveBeenCalled();
-  });
-});
 
 describe('sequential batch effects', () => {
   it('validates an invalid tail before the first side effect', async () => {
@@ -394,7 +334,7 @@ function runtimeFixture() {
   };
   const attention = new AgentAttention();
   const planner = {
-    decide: vi.fn<Planner['decide']>(),
+    decide: vi.fn<ModelResponder>(),
     lastUsage: { tokens: 50, estimated: false },
   };
   let seq = 0;
@@ -412,18 +352,16 @@ function runtimeFixture() {
     );
   const saved: AgentRunState[] = [];
   const step = (cfg = config()) =>
-    runTaskStep(
-      f.session,
-      planner,
-      cfg,
-      f.abort.signal,
+    new AgentRunner(undefined, modelRequest(planner.decide)).run({
+      session: f.session,
+      config: cfg,
+      signal: f.abort.signal,
       memory,
       attention,
-      () => {},
-      () => {
+      checkpoint: () => {
         saved.push(structuredClone(memory));
       },
-    );
+    });
   return { ...f, memory, attention, planner, message, step, saved };
 }
 
@@ -431,34 +369,34 @@ describe('batch task lifecycle', () => {
   it('charges once, prevents immediate completion and confirms on a later model turn', async () => {
     const f = runtimeFixture();
     f.planner.decide
-      .mockResolvedValueOnce({
-        actions: [edit(), edit(2), chat],
-        task: { ...task, status: 'completed' },
-      })
-      .mockResolvedValueOnce({
-        actions: [{ type: 'wait' }],
-        task: { ...task, status: 'completed' },
-      });
+      .mockResolvedValueOnce([
+        worldTool(edit()),
+        worldTool(edit(2)),
+        worldTool(chat),
+        { name: 'complete_task', arguments: { summary: '推进任务' } },
+      ])
+      .mockResolvedValueOnce([
+        { name: 'complete_task', arguments: { summary: '推进任务' } },
+      ]);
     await f.step();
     expect(f.memory.task.current).toMatchObject({
-      status: 'running',
-      calls: 1,
-      tokens: 50,
+      status: 'completed',
+      calls: 2,
+      tokens: 100,
     });
     expect(
       f.saved.some(
-        (s) =>
-          (s.effects.previous as BatchResult)?.results[1]?.status ===
-          'succeeded',
+        (state) =>
+          state.task.current?.status === 'running' &&
+          state.task.current.calls === 1,
       ),
     ).toBe(true);
-    await f.step();
-    expect(f.memory.task.current?.status).toBe('completed');
-    expect(f.planner.decide).toHaveBeenCalledTimes(2);
+    expect(f.world.blocks.map((block) => block.x)).toEqual([1, 2]);
     expect(
-      (f.planner.decide.mock.calls[1][1] as { previous: BatchResult }).previous
-        .results,
-    ).toHaveLength(3);
+      f.request.mock.calls.filter(([name]) => name === 'chat'),
+    ).toHaveLength(1);
+    await f.step();
+    expect(f.planner.decide).toHaveBeenCalledTimes(2);
   });
   it('interrupts at a boundary, handles the greeting, and replans instead of replaying the tail', async () => {
     const f = runtimeFixture();
@@ -469,75 +407,84 @@ describe('batch task lifecycle', () => {
       return r;
     });
     f.planner.decide
-      .mockResolvedValueOnce({
-        actions: [edit(), edit(2)],
-        task: { ...task, status: 'completed' },
-      })
-      .mockResolvedValueOnce({
-        actions: [chat],
-        task: { ...task, intent: 'reply', status: 'completed' },
-      })
-      .mockResolvedValueOnce({
-        actions: [{ type: 'wait' }],
-        task: { ...task, status: 'needs_input' },
-      });
-    await f.step();
-    const previous = structuredClone(f.memory.effects.previous);
-    expect(previous).toMatchObject({
-      stopReason: 'message',
-      remaining: [edit(2)],
-    });
-    await f.step();
-    expect(f.memory.effects.previous).toEqual(previous);
+      .mockResolvedValueOnce([
+        worldTool(edit()),
+        worldTool(edit(2)),
+        { name: 'complete_task', arguments: { summary: '推进任务' } },
+      ])
+      .mockResolvedValueOnce([worldTool(chat)])
+      .mockResolvedValueOnce([
+        { name: 'request_input', arguments: { question: '推进任务' } },
+      ]);
     await f.step();
     expect(f.world.blocks.map((b) => b.x)).toEqual([1]);
+    expect(f.planner.decide).toHaveBeenCalledTimes(3);
+    expect(f.memory.task.current?.status).toBe('needs_input');
+    await f.step();
     expect(f.planner.decide).toHaveBeenCalledTimes(3);
   });
   it('does not drop queued addressed replies or disclose private batch history', async () => {
     const f = runtimeFixture();
-    f.memory.task.current = newTask('secret', 'owner', 'owner');
-    f.memory.effects.previous = { actions: [chat], secret: 'private' };
+    f.memory.task.current = {
+      ...newTask('secret', 'owner', 'owner'),
+      status: 'paused',
+    };
+    f.memory.effects.previous = {
+      actions: [chat],
+      results: [{ action: chat, status: 'succeeded', result: { ok: true } }],
+      remaining: [],
+      ok: true,
+      stopReason: 'completed',
+    };
     f.message('public', 'other');
     f.message('public', 'third');
-    f.planner.decide.mockResolvedValue({
-      actions: [chat],
-      task: { ...task, intent: 'reply', status: 'completed' },
-    });
+    f.planner.decide.mockResolvedValue([worldTool(chat)]);
     await f.step();
     await f.step();
     expect(f.request.mock.calls.filter(([t]) => t === 'chat')).toHaveLength(2);
-    expect(f.memory.effects.previous).toEqual({
+    expect(f.memory.effects.previous).toMatchObject({
       actions: [chat],
-      secret: 'private',
+      results: [{ status: 'succeeded' }],
     });
     for (const [, context] of f.planner.decide.mock.calls)
-      expect(context).toMatchObject({ task: undefined, previous: undefined });
+      expect(context).toEqual({});
   });
   it('counts actual edits as progress even when the last action is chat', async () => {
     const f = runtimeFixture();
     f.memory.health.noProgress = 2;
-    f.planner.decide.mockResolvedValue({ actions: [edit(), chat], task });
+    f.planner.decide
+      .mockResolvedValueOnce([worldTool(edit()), worldTool(chat)])
+      .mockResolvedValueOnce([
+        {
+          name: 'wait_for',
+          arguments: { condition: 'world', reason: '等待变化' },
+        },
+      ]);
     await f.step();
-    expect(f.memory.health.noProgress).toBe(0);
-    expect(f.memory.task.current?.status).toBe('running');
+    expect(f.saved.some((state) => state.health.noProgress === 0)).toBe(true);
+    expect(f.memory.task.current?.status).toBe('waiting');
   });
-  it('stops a long batch at its time budget without executing the tail', async () => {
+  it('stops physical actions at the task deadline without executing the tail', async () => {
     const f = runtimeFixture();
-    f.planner.decide.mockResolvedValue({
-      actions: [{ ...move, durationMs: 1000 } as AgentAction, edit()],
-      task,
-    });
-    vi.useFakeTimers();
-    try {
-      const step = f.step({ ...config(), taskTimeoutMs: 30 });
-      await vi.advanceTimersByTimeAsync(30);
-      await step;
-    } finally {
-      vi.useRealTimers();
-    }
+    const cfg = { ...config(), taskTimeoutMs: 50 };
+    const outcome = await executeTaskActions(
+      f.session,
+      [{ ...move, durationMs: 1000 } as AgentAction, edit()],
+      f.world,
+      cfg,
+      f.abort.signal,
+      f.memory,
+      new RequestBudget(
+        cfg,
+        { calls: 0, tokens: 0, estimated: false },
+        f.memory.task.current,
+      ),
+      new TaskService(f.memory).lease(),
+      async () => {},
+    );
     expect(f.request).not.toHaveBeenCalled();
-    expect(f.memory.task.current?.status).toBe('budget');
-    expect(f.memory.effects.previous).toMatchObject({ stopReason: 'timeout' });
+    expect(outcome.batch.ok).toBe(false);
+    expect(outcome.batch.results[1].status).toBe('pending');
     expect(f.sendMove).toHaveBeenLastCalledWith(0, 0, false);
   });
   it('restores batch history without converting single-action records', () => {
@@ -574,10 +521,9 @@ describe('batch task lifecycle', () => {
         note: 'unknown',
       },
     };
-    f.planner.decide.mockResolvedValue({
-      actions: [{ type: 'wait' }],
-      task: { ...task, status: 'completed' },
-    });
+    f.planner.decide.mockResolvedValue([
+      { name: 'complete_task', arguments: { summary: '推进任务' } },
+    ]);
     await f.step();
     expect(f.memory.effects.unfinishedBuild?.result.remaining).toEqual([block]);
     expect(f.memory.task.current?.status).toBe('blocked');
@@ -604,15 +550,18 @@ it('preserves older pending blueprint coordinates when only a subset is rebuilt'
       note: 'partial',
     },
   };
-  f.planner.decide.mockResolvedValue({
-    actions: [{ type: 'build', blocks: [blocks[0]] }],
-    task,
-  });
+  f.planner.decide
+    .mockResolvedValueOnce([
+      { name: 'build', arguments: { blocks: [blocks[0]] } },
+    ])
+    .mockResolvedValue([
+      { name: 'request_input', arguments: { question: '剩余方块待确认' } },
+    ]);
   await f.step();
   expect(f.memory.effects.unfinishedBuild?.result.remaining).toEqual([
     blocks[1],
   ]);
-  expect(f.memory.task.current?.status).toBe('running');
+  expect(f.memory.task.current?.status).toBe('needs_input');
 });
 
 it('keeps an unconfirmed deletion outside the 500-block cutoff, even inside radius 8', async () => {
@@ -637,10 +586,9 @@ it('keeps an unconfirmed deletion outside the 500-block cutoff, even inside radi
       note: 'unknown',
     },
   };
-  f.planner.decide.mockResolvedValue({
-    actions: [{ type: 'wait' }],
-    task: { ...task, status: 'completed' },
-  });
+  f.planner.decide.mockResolvedValue([
+    { name: 'complete_task', arguments: { summary: '推进任务' } },
+  ]);
   await f.step();
   expect(f.memory.effects.unfinishedBuild?.result.remaining).toEqual([block]);
   expect(f.memory.task.current?.status).toBe('blocked');
@@ -662,24 +610,23 @@ it('confirms an unknown deletion by fresh complete observation without replaying
       note: 'unknown',
     },
   };
-  f.planner.decide.mockResolvedValue({
-    actions: [{ type: 'wait' }],
-    task: { ...task, status: 'completed' },
-  });
+  f.planner.decide.mockResolvedValue([
+    { name: 'complete_task', arguments: { summary: '推进任务' } },
+  ]);
   await f.step();
   expect(f.memory.effects.unfinishedBuild).toBeUndefined();
   expect(f.request).not.toHaveBeenCalled();
   expect(f.memory.task.current?.status).toBe('completed');
 });
 
-it('stops repeated stalled batches after three rounds without ever running their trailing chat', async () => {
+it('stops repeated failed tools without executing trailing chat', async () => {
   const f = runtimeFixture();
-  f.sendMove.mockImplementation(() => {});
-  f.planner.decide.mockResolvedValue({ actions: [move, chat], task });
-  for (let i = 0; i < 5; i++) await f.step();
+  f.request.mockResolvedValue({ ok: false, error: 'conflict', revision: 1 });
+  f.planner.decide.mockResolvedValue([worldTool(edit()), worldTool(chat)]);
+  await f.step();
   expect(f.planner.decide).toHaveBeenCalledTimes(3);
   expect(f.memory.task.current?.status).toBe('blocked');
-  expect(f.request).not.toHaveBeenCalled();
+  expect(f.request.mock.calls.filter(([type]) => type === 'chat')).toEqual([]);
 });
 
 it('does not repeat already empty deletions when resuming a larger original build', async () => {
@@ -703,50 +650,6 @@ it('does not repeat already empty deletions when resuming a larger original buil
     completed: 1,
     remaining: [],
   });
-});
-
-it.each([
-  { type: 'chat', text: 'old action' },
-  { type: 'chat', text: 'old action', task },
-  { action: chat, task },
-  { actions: [chat] },
-])(
-  'rejects obsolete or incomplete planner decisions before effects: %j',
-  async (input) => {
-    const f = runtimeFixture();
-    f.planner.decide.mockResolvedValue(input as unknown as AgentDecision);
-    await f.step();
-    expect(f.request).not.toHaveBeenCalled();
-    expect(f.sendMove).not.toHaveBeenCalled();
-    expect(f.memory.task.current?.goal).toBe('build');
-    expect(f.memory.health.decisionError).toMatch(/actions|task/);
-  },
-);
-
-it.each([
-  { type: 'chat', text: 'old action', task },
-  { action: chat, task },
-  { actions: [chat] },
-])('rejects obsolete or incomplete JSON from the SDK: %j', async (input) => {
-  const f = fixture();
-  const planner = new ModelPlanner(
-    config(),
-    async () =>
-      new Response(
-        JSON.stringify({
-          choices: [
-            {
-              finish_reason: 'stop',
-              message: { content: JSON.stringify(input) },
-            },
-          ],
-        }),
-        { headers: { 'Content-Type': 'application/json' } },
-      ),
-  );
-  await expect(planner.decide(f.world, null, f.abort.signal)).rejects.toThrow(
-    '格式无效',
-  );
 });
 
 describe('independent action permissions', () => {
@@ -775,9 +678,7 @@ describe('independent action permissions', () => {
     async (permission, action) => {
       const f = fixture();
       const policy = { ...all, [permission]: false };
-      expect(() => parseDecision({ actions: [action], task }, policy)).toThrow(
-        '权限',
-      );
+      expect(() => parseActions([action], policy)).toThrow('权限');
       await expect(
         executeBatch(
           f.session,
@@ -815,20 +716,14 @@ describe('independent action permissions', () => {
       material: 'wood',
       door: 'south',
     };
+    expect(parseActions([house], { ...all, remove: false })[0].type).toBe(
+      'house',
+    );
     expect(
-      parseDecision({ actions: [house], task }, { ...all, remove: false })
-        .actions[0].type,
-    ).toBe('house');
-    expect(
-      parseDecision(
-        {
-          actions: [
-            { type: 'build', blocks: [{ x: 1, y: 3, z: 1, material: null }] },
-          ],
-          task,
-        },
+      parseActions(
+        [{ type: 'build', blocks: [{ x: 1, y: 3, z: 1, material: null }] }],
         { ...all, place: false },
-      ).actions[0].type,
+      )[0].type,
     ).toBe('build');
     const f = fixture();
     await expect(
@@ -850,18 +745,18 @@ describe('independent action permissions', () => {
     ).rejects.toThrow('权限');
     expect(f.request).not.toHaveBeenCalled();
   });
-  it('does not send a runtime error receipt when chat is disabled', async () => {
+  it('records replies without sending chat when chat permission is disabled', async () => {
     const f = runtimeFixture();
+    f.memory.task.current!.status = 'paused';
     f.message();
-    f.planner.decide.mockResolvedValue({
-      actions: [chat],
-      task: { intent: 'reply', status: 'completed', summary: '非法回复' },
-    });
+    f.planner.decide.mockResolvedValue([
+      { name: 'reply', arguments: { text: '进展汇报' } },
+    ]);
     await f.step({ ...config(), permissions: { ...all, chat: false } });
     expect(f.request.mock.calls.filter(([type]) => type === 'chat')).toEqual(
       [],
     );
-    expect(f.memory.health.decisionError).toContain('聊天');
+    expect(f.memory.health.lastResponse).toBe('进展汇报');
   });
   it.each(['owner', 'ended'] as const)(
     'does not send the %s task-control receipt without chat permission',
@@ -871,17 +766,16 @@ describe('independent action permissions', () => {
       f.memory.task.current!.owner =
         scenario === 'owner' ? 'someone-else' : 'human';
       f.memory.task.current!.status =
-        scenario === 'owner' ? 'running' : 'completed';
-      f.planner.decide.mockResolvedValue({
-        actions: [{ type: 'wait' }],
-        task: { intent: 'resume', status: 'running', summary: '请求继续' },
-      });
+        scenario === 'owner' ? 'paused' : 'completed';
+      f.planner.decide.mockResolvedValue([
+        { name: 'resume_task', arguments: {} },
+      ]);
       await f.step({ ...config(), permissions: { ...all, chat: false } });
       expect(f.request.mock.calls.filter(([type]) => type === 'chat')).toEqual(
         [],
       );
       expect(f.memory.task.current!.status).toBe(
-        scenario === 'owner' ? 'running' : 'completed',
+        scenario === 'owner' ? 'paused' : 'completed',
       );
     },
   );

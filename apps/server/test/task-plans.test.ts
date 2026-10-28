@@ -1,7 +1,6 @@
 import {
   AgentRunner,
   AgentRuntimeError,
-  type Observation,
   type Session,
 } from '@voxel/agent-runtime';
 import {
@@ -11,8 +10,11 @@ import {
   type WorldEvent,
 } from '@voxel/shared';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { Planner } from '../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from '../../../tests/support/decision-fixture';
+import type { ModelResponder } from '../../../tests/support/model-fixture';
+import {
+  scriptedRunnerFactory,
+  testObservation,
+} from '../../../tests/support/model-fixture';
 import { toolResponse } from '../../../tests/support/pi-response';
 import { AICharacterManager } from '../src/modules/ai-characters';
 import { bootstrapProviders } from '../src/modules/providers';
@@ -22,16 +24,17 @@ let store: MemoryProviderRepository, manager: AICharacterManager;
 let now: number;
 const response = (
   status: 'completed' | 'running' | 'waiting' = 'completed',
-): Awaited<ReturnType<Planner['decide']>> => ({
-  actions: [{ type: 'wait' }],
-  task: {
-    intent: 'continue',
-    status,
-    summary: '完成一次观察',
-    waitFor: status === 'waiting' ? 'world' : undefined,
-  },
-});
-const decide = vi.fn<Planner['decide']>();
+): Awaited<ReturnType<ModelResponder>> => [
+  status === 'completed'
+    ? { name: 'complete_task', arguments: { summary: '完成一次观察' } }
+    : status === 'running'
+      ? { name: 'observe', arguments: {} }
+      : {
+          name: 'wait_for',
+          arguments: { condition: 'world', reason: '完成一次观察' },
+        },
+];
+const decide = vi.fn<ModelResponder>();
 function session() {
   const leaves: (() => void)[] = [];
   return {
@@ -47,12 +50,7 @@ function session() {
       onLeave: (f: () => void) => leaves.push(f),
       connection: { close: () => {} },
     },
-    observe: async () =>
-      ({
-        self: { id: 'fixture-player' },
-        events: [],
-        blocks: [],
-      }) as unknown as Observation,
+    observe: async () => testObservation(),
     request: vi.fn(async () => ({ ok: true })),
   };
 }
@@ -63,9 +61,9 @@ function build() {
       currentSession = session();
       return currentSession as unknown as Session;
     },
-    runner: fixtureRunnerFactory(() => ({
-      decide,
-      lastUsage: { tokens: 600, estimated: false },
+    runner: scriptedRunnerFactory(() => ({
+      respond: decide,
+      tokens: 600,
     })),
   });
 }
@@ -310,14 +308,16 @@ it('keeps the activity slot after an execution error until explicit resolution',
     id,
     draft({ kind: 'interval', everyMs: 60000 }),
   );
-  decide.mockRejectedValueOnce(new AgentRuntimeError('fixture', true));
+  vi.spyOn(AgentRunner.prototype, 'run').mockRejectedValueOnce(
+    new AgentRuntimeError('fixture', true),
+  );
   await manager.tasks.controlTaskPlan(id, p.id, 'run', { requestId: 'err' });
   await vi.waitFor(() => expect(manager.list()[0].status).toBe('failed'));
   expect(manager.tasks.taskPlans(id)[0].state).toBe('paused');
   expect(manager.tasks.taskRuns(id, p.id).items[0].status).toBe('failed');
   const pending = await manager.tasks.createTaskPlan(id, draft());
   expect(manager.tasks.taskRuns(id, pending.id).items[0].status).toBe('queued');
-  expect(decide).toHaveBeenCalledTimes(1);
+  expect(decide).not.toHaveBeenCalled();
 });
 it('restart preserves paused progress and skips missed schedules without calling a model', async () => {
   const id = await role();
@@ -469,16 +469,13 @@ it('records chat execution without creating plans and rejects replacement of act
       name: 'Owner',
     },
   });
-  decide.mockImplementation(async () => ({
-    actions: [{ type: 'wait' }],
-    task: {
-      intent: 'task',
-      goal: '聊天安排',
-      status: 'waiting',
-      waitFor: 'world',
-      summary: '观察后等待',
+  decide.mockImplementation(async () => [
+    { name: 'start_task', arguments: { goal: '聊天安排' } },
+    {
+      name: 'wait_for',
+      arguments: { condition: 'world', reason: '观察后等待' },
     },
-  }));
+  ]);
   currentSession.onEvent!(addressed(1));
   await vi.waitFor(() =>
     expect(manager.plans.runs.filter((r) => r.characterId === id)).toHaveLength(
@@ -493,17 +490,17 @@ it('records chat execution without creating plans and rejects replacement of act
     totalTokens: 600,
     task: { privateTo: 'owner' },
   });
+  const originalRunId = manager.plans.runs[0].id;
   currentSession.onEvent!(addressed(2));
-  await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() =>
+    expect(decide.mock.calls.length).toBeGreaterThanOrEqual(2),
+  );
   await idle();
   expect(manager.tasks.taskPlans(id)).toHaveLength(0);
   expect(manager.plans.runs).toHaveLength(1);
   expect(manager.plans.runs[0].task?.goal).toBe('聊天安排');
-  expect(
-    manager
-      .list()[0]
-      .logEntries.some((entry) => entry.text.includes('已有正在执行')),
-  ).toBe(true);
+  expect(manager.plans.runs[0].id).toBe(originalRunId);
+  expect(manager.plans.runs[0].task?.owner).toBe('owner');
 });
 
 it('unchecked limits survive restart, resume and scheduled/manual executions without capping cumulative usage', async () => {

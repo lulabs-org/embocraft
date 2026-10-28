@@ -96,14 +96,14 @@ describe('transcription HTTP boundary', () => {
       ...DEFAULT_WHISPER_ASR,
       provider: 'whisper',
       name: 'fast',
-      threads: 2,
+      model: 'Systran/faster-whisper-small',
     });
     const b = await store.save({
       ...DEFAULT_WHISPER_ASR,
       provider: 'whisper',
       name: 'terms',
-      threads: 8,
-      beamSize: 7,
+      model: 'Systran/faster-whisper-large-v3',
+
       prompt: '量子计算',
     });
     const cloud = await store.save({
@@ -122,13 +122,12 @@ describe('transcription HTTP boundary', () => {
       );
     expect((await send(a.id)).status).toBe(200);
     expect(transcribe.mock.calls[0][4]).toMatchObject({
-      threads: 2,
-      beamSize: 5,
+      model: 'Systran/faster-whisper-small',
     });
     expect((await send(b.id)).status).toBe(200);
     expect(transcribe.mock.calls[1][4]).toMatchObject({
-      threads: 8,
-      beamSize: 7,
+      model: 'Systran/faster-whisper-large-v3',
+
       prompt: '量子计算',
     });
     expect((await send()).status).toBe(200);

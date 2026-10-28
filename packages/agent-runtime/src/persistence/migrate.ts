@@ -1,7 +1,5 @@
 import { emptyState, type AgentRunState } from '../contracts/state';
 
-export const STATE_VERSION = 3;
-
 type Record_ = Record<string, unknown>;
 const isRecord = (value: unknown): value is Record_ =>
   !!value && typeof value === 'object' && !Array.isArray(value);
