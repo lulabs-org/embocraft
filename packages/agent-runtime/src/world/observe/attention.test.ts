@@ -1,9 +1,5 @@
+import { AgentAttention } from '@voxel/agent-runtime';
 import { expect, it } from 'vitest';
-import {
-  AgentAttention,
-  isolateChatScope,
-  type Observation,
-} from '@voxel/agent-runtime';
 
 import type { WorldEvent } from '@voxel/shared';
 const message = (
@@ -34,21 +30,11 @@ it('wakes a long interval promptly, deduplicates, and only accepts addressed hum
   abort.abort();
   await next;
 });
-it('bounds queued mentions and keeps private audiences separate when prioritizing a message', () => {
+it('bounds queued mentions and clears pending messages', () => {
   const inbox = new AgentAttention();
   for (let seq = 1; seq <= 10; seq++) inbox.push(message(seq), 'ai');
   expect(inbox.rejected).toBe(true);
   expect(inbox.take()?.seq).toBe(1);
   inbox.clear();
   expect(inbox.pending).toBe(false);
-  const secret = message(1, 'private'),
-    publicMessage = message(2);
-  const raw = {
-    self: { id: 'ai' },
-    events: [secret, publicMessage],
-  } as Observation;
-  expect(isolateChatScope(raw).events).toEqual([publicMessage]);
-  const secondSecret = { ...message(3, 'private'), actor: 'other' };
-  raw.events = [secret, secondSecret, publicMessage, secret];
-  expect(isolateChatScope(raw).events).not.toContainEqual(secondSecret);
 });

@@ -1,17 +1,15 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createServer, type Server } from 'node:http';
-import express from 'express';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
+import express from 'express';
+import { createServer, type Server } from 'node:http';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+
 import { LocalSpeech } from '../services/asr/local-speech.service';
 import { PiperModels } from '../services/tts/piper-models.service';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
 describe('audio capabilities HTTP boundary', () => {
-  let server: Server, url: string, store: AsrSettingsStore, dir: string;
+  let server: Server, url: string, store: AsrSettingsStore;
   const status = vi.fn();
   const origin = 'http://127.0.0.1:5187';
   beforeEach(async () => {
@@ -22,8 +20,7 @@ describe('audio capabilities HTTP boundary', () => {
     status.mockReset().mockResolvedValue({ available: true, reason: 'ready' });
     const speech = new LocalSpeech();
     vi.spyOn(speech, 'status').mockImplementation(status);
-    dir = await mkdtemp(join(tmpdir(), 'capabilities-route-'));
-    store = new AsrSettingsStore(join(dir, 'services.json'));
+    store = new AsrSettingsStore();
     await store.load();
     const app = express();
     installCapabilitiesRoutes(app, speech, store, origin);
@@ -36,7 +33,6 @@ describe('audio capabilities HTTP boundary', () => {
   afterEach(async () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await rm(dir, { recursive: true, force: true });
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });

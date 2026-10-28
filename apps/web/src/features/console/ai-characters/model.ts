@@ -6,7 +6,7 @@ export const initialAICharacter: AICharacterSettings = {
   name: '',
   goal: '',
   roleDescription: '',
-  continuous: false,
+
   intervalMode: 'fixed',
   intervalMinMs: 4000,
   intervalMaxMs: 8000,

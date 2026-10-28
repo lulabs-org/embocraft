@@ -187,7 +187,7 @@ SERVER_URL=ws://127.0.0.1:2577 pnpm agent:ai --api-key sk-your-deepseek-api-key
 pnpm agent:mock
 ```
 
-可选参数：`--max-turns`（100）、`--token-budget`（50000）、`--task-timeout-ms`（900000）、`--interval-ms`（3000）、`--interval-mode`（fixed/random）、`--interval-min-ms`（4000）、`--interval-max-ms`（8000）、`--continuous`（true/false）、`--allow-edits`（true/false）、`--voice-replies`（true/false）。布尔选项需显式传入值，默认 false。
+可选参数：`--max-turns`（100）、`--token-budget`（50000）、`--task-timeout-ms`（900000）、`--interval-ms`（3000）、`--interval-mode`（fixed/random）、`--interval-min-ms`（4000）、`--interval-max-ms`（8000）、`--allow-edits`（true/false）、`--voice-replies`（true/false）。布尔选项需显式传入值，默认 false。
 
 ### 2. 思考模式
 

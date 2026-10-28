@@ -1,18 +1,18 @@
 import {
-  AI_CHARACTER_ROLE_DESCRIPTION_LIMIT,
-  type AICharacterSettings,
   AI_CHARACTER_PERMISSIONS,
+  AI_CHARACTER_ROLE_DESCRIPTION_LIMIT,
   AI_CHARACTER_SKILLS,
   resolvePermissions,
   type AICharacterPermissions,
+  type AICharacterSettings,
   type AICharacterSkillId,
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import { object, text, integer, boolean } from '../../../core/http/validation';
-import { type SavedProvider } from '../../providers';
+import { boolean, integer, object, text } from '../../../core/http/validation';
 import {
   validateInferenceSettings,
   validateProviderModel,
+  type SavedProvider,
 } from '../../providers';
 
 export function validateAICharacter(
@@ -55,7 +55,6 @@ export function validateAICharacter(
   }
   return {
     ...capabilities,
-    continuous: boolean(input.continuous, false),
     intervalMode,
     intervalMinMs,
     intervalMaxMs,

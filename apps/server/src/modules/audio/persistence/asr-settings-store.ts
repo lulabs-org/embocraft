@@ -1,15 +1,11 @@
-import { env } from '../../../core/config/env';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import {
-  DEFAULT_WHISPER_ASR,
-  type BailianAsrDraft,
   type AsrServiceDraft,
   type AsrServiceView,
+  type BailianAsrDraft,
 } from '@voxel/shared';
-import { validateWhisperSettings } from '../services/asr/whisper-settings';
+import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
+import { validateWhisperSettings } from '../services/asr/whisper-settings';
 
 export function validateAsrSettings(
   value: unknown,
@@ -105,71 +101,25 @@ export class AsrSettingsStore {
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
-  constructor(
-    readonly path = env.dataPath('asr-settings.json'),
-    private readonly storage?: AsrServicePersistence,
-  ) {}
+  constructor(private readonly storage: AsrServicePersistence) {}
   async load() {
-    if (this.storage) {
-      const saved = await this.storage.load();
-      if (
-        !Array.isArray(saved) ||
-        saved.length > 20 ||
-        new Set(saved.map((service) => service.id)).size !== saved.length ||
-        saved.some(
-          (service) =>
-            typeof service.id !== 'string' ||
-            !/^[a-zA-Z0-9-]{1,80}$/.test(service.id) ||
-            ['local', 'new'].includes(service.id),
-        )
+    const saved = await this.storage.load();
+    if (
+      !Array.isArray(saved) ||
+      saved.length > 20 ||
+      new Set(saved.map((service) => service.id)).size !== saved.length ||
+      saved.some(
+        (service) =>
+          typeof service.id !== 'string' ||
+          !/^[a-zA-Z0-9-]{1,80}$/.test(service.id) ||
+          ['local', 'new'].includes(service.id),
       )
-        throw new AppError('ASR 数据库配置格式无效。', 500);
-      this.values = saved.map((service) => ({
-        ...validateService(service),
-        id: service.id,
-      }));
-      return;
-    }
-    try {
-      const saved = JSON.parse(await readFile(this.path, 'utf8'));
-      if (saved?.version === 2 || saved?.version === 3) {
-        if (!Array.isArray(saved.services) || saved.services.length > 20)
-          throw Error('services');
-        const ids = new Set<string>();
-        this.values = saved.services.map((value: SavedService) => {
-          if (
-            typeof value.id !== 'string' ||
-            !/^[a-zA-Z0-9-]{1,80}$/.test(value.id) ||
-            ['local', 'new'].includes(value.id) ||
-            ids.has(value.id)
-          )
-            throw Error('id');
-          ids.add(value.id);
-          return { ...validateService(value), id: value.id };
-        });
-      } else {
-        // Upgrade the former singleton without changing its model, region or secret.
-        if (saved?.version !== undefined) throw Error('version');
-        const settings = validateAsrSettings(saved);
-        this.values = [validateService({ ...settings, name: '阿里云百炼' })];
-      }
-      if (saved?.version !== 3) {
-        // Materialize the old fixed Whisper entry once. Deleted profiles stay deleted.
-        if (this.values.length < 20) {
-          this.values.push(
-            validateService({
-              ...DEFAULT_WHISPER_ASR,
-              provider: 'whisper',
-              name: '自托管 Whisper',
-            }),
-          );
-        }
-        await this.persist(this.values);
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-        throw new AppError('无法读取 ASR 配置，请检查服务器配置文件。', 500);
-    }
+    )
+      throw new AppError('ASR 数据库配置格式无效。', 500);
+    this.values = saved.map((service) => ({
+      ...validateService(service),
+      id: service.id,
+    }));
   }
   list() {
     return this.values.map(publicView);
@@ -196,22 +146,7 @@ export class AsrSettingsStore {
     };
   }
   private async persist(values: SavedService[]) {
-    if (this.storage) return this.storage.save(values);
-    await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
-    const tmp = `${this.path}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(
-        tmp,
-        JSON.stringify({ version: 3, services: values }, null, 2),
-        {
-          flag: 'wx',
-          mode: 0o600,
-        },
-      );
-      await rename(tmp, this.path);
-    } finally {
-      await unlink(tmp).catch(() => {});
-    }
+    await this.storage.save(values);
   }
   private mutate<T>(fn: () => Promise<T>) {
     const operation = this.queue.then(fn);

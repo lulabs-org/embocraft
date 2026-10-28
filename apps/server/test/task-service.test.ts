@@ -1,21 +1,17 @@
-import { emptyState, restoreState } from '@voxel/agent-runtime';
-import { describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
+  emptyState,
   newTask,
-  TaskService,
   restoreCheckpoint,
+  restoreState,
+  TaskService,
   type AgentRunState,
 } from '@voxel/agent-runtime';
-import { testAgentConfig } from '../../../tests/support/agent-config';
+import { describe, expect, it } from 'vitest';
 import { RequestBudget } from '../../../packages/agent-runtime/src/agent/task/budget';
-import { readManagementArchive } from '../src/persistence/archive-file';
-import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../src/modules/providers';
+import { testAgentConfig } from '../../../tests/support/agent-config';
+import { bootstrapProviders } from '../src/modules/providers';
+import { migrateArchive } from '../src/persistence/migrate-archive';
+import { MemoryProviderRepository } from './helpers/memory-storage';
 const config = testAgentConfig();
 const operator = { kind: 'operator' as const };
 
@@ -107,93 +103,98 @@ describe('TaskService revision and commit boundary', () => {
   });
 });
 
-it('backs up and migrates current and historical runtimes while preserving uncertain effects and budgets', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'agent-v2-migration-'));
-  try {
-    const providers = new FileProviderRepository(join(dir, 'providers.json'));
-    await bootstrapProviders(providers);
-    const task = { ...newTask('old build'), calls: 3, tokens: 600 };
-    task.status = 'completed';
-    // Persisted v2 archives are flat; restoreState is the only migration entry.
-    const legacyRuntime = {
-      task,
-      pi: {
-        version: 1,
-        taskStartedAt: task.startedAt,
-        audience: 'public',
-        messages: [],
-        inFlight: { id: 'old-chat', name: 'chat', state: 'executing' },
-      },
-    } as unknown as AgentRunState;
-    const record = {
-      ...config,
-      providerId: 'deepseek',
-      id: 'old-agent',
-      status: 'stopped',
-      createdAt: task.startedAt,
-      logs: [],
-      runtime: legacyRuntime,
-      taskBook: {
-        version: 1,
-        plans: [
-          {
-            id: 'old-plan',
-            name: 'old build',
-            goal: 'old build',
-            timing: { kind: 'immediate' },
-            state: 'completed',
-            revision: 1,
-            spentTokens: 600,
-            limits: {},
-            totalTokenBudget: 500000,
-          },
-        ],
-        runs: [
-          {
-            id: 'old-run',
-            planId: 'old-plan',
-            status: 'completed',
-            runtime: structuredClone(legacyRuntime),
-            snapshot: { limits: {}, timing: { kind: 'immediate' } },
-            accountedTokens: 600,
-            totalTokens: 600,
-            logs: [],
-          },
-        ],
-      },
-    };
-    // Keep the current run ended to avoid fabricating another plan during restore.
-    const path = join(dir, 'archive.json');
-    const original = JSON.stringify([record]);
-    await writeFile(path, original);
-    const saved = await readManagementArchive(path);
-    expect(
-      await readFile(`${path}.before-conversation-tasks-v2.bak`, 'utf8'),
-    ).toBe(original);
-    // The archive reader is deliberately lossless; migration belongs to restoration.
-    const migrated = saved!.characters[0];
-    migrated.runtime = restoreState(migrated.runtime);
-    restoreCheckpoint(migrated.runtime!);
-    for (const run of saved!.runs) {
-      run.runtime = restoreState(run.runtime);
-      restoreCheckpoint(run.runtime!);
-    }
-    expect(migrated.runtime).toMatchObject({
-      version: 3,
-      task: { current: { calls: 3, tokens: 600 } },
-      checkpoint: { unknownEffect: { name: 'chat', state: 'unknown' } },
-    });
-    expect(migrated.runtime!.checkpoint.pi).toBeUndefined();
-    expect(saved!.runs[0].runtime).toMatchObject({
-      version: 3,
-      checkpoint: { unknownEffect: { name: 'chat' } },
-    });
-    const again = structuredClone(migrated.runtime);
-    restoreCheckpoint(again!);
-    expect(again).toEqual(migrated.runtime);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+it('migrates current and historical runtimes while preserving uncertain effects and budgets', async () => {
+  const providers = new MemoryProviderRepository();
+
+  await bootstrapProviders(providers);
+
+  const task = { ...newTask('old build'), calls: 3, tokens: 600 };
+
+  task.status = 'completed';
+
+  // Persisted v2 archives are flat; restoreState is the only migration entry.
+  const legacyRuntime = {
+    task,
+    pi: {
+      version: 1,
+      taskStartedAt: task.startedAt,
+      audience: 'public',
+      messages: [],
+      inFlight: { id: 'old-chat', name: 'chat', state: 'executing' },
+    },
+  } as unknown as AgentRunState;
+
+  const record = {
+    ...config,
+    providerId: 'deepseek',
+    id: 'old-agent',
+    status: 'stopped',
+    createdAt: task.startedAt,
+    logs: [],
+    runtime: legacyRuntime,
+    taskBook: {
+      version: 1,
+      plans: [
+        {
+          id: 'old-plan',
+          name: 'old build',
+          goal: 'old build',
+          timing: { kind: 'immediate' },
+          state: 'completed',
+          revision: 1,
+          spentTokens: 600,
+          limits: {},
+          totalTokenBudget: 500000,
+        },
+      ],
+      runs: [
+        {
+          id: 'old-run',
+          planId: 'old-plan',
+          status: 'completed',
+          runtime: structuredClone(legacyRuntime),
+          snapshot: { limits: {}, timing: { kind: 'immediate' } },
+          accountedTokens: 600,
+          totalTokens: 600,
+          logs: [],
+        },
+      ],
+    },
+  };
+
+  // Keep the current run ended to avoid fabricating another plan during restore.
+  const saved = migrateArchive(JSON.parse(JSON.stringify([record])));
+
+  // The archive reader is deliberately lossless; migration belongs to restoration.
+  const migrated = saved!.characters[0];
+
+  migrated.runtime = restoreState(migrated.runtime);
+
+  restoreCheckpoint(migrated.runtime!);
+
+  for (const run of saved!.runs) {
+    run.runtime = restoreState(run.runtime);
+    restoreCheckpoint(run.runtime!);
   }
+
+  expect(migrated.runtime).toMatchObject({
+    version: 3,
+    task: { current: { calls: 3, tokens: 600 } },
+    checkpoint: { unknownEffect: { name: 'chat', state: 'unknown' } },
+  });
+
+  expect(migrated.runtime!.checkpoint.pi).toBeUndefined();
+
+  expect(saved!.runs[0].runtime).toMatchObject({
+    version: 3,
+    checkpoint: { unknownEffect: { name: 'chat' } },
+  });
+
+  const again = structuredClone(migrated.runtime);
+
+  restoreCheckpoint(again!);
+
+  expect(again).toEqual(migrated.runtime);
 });
 
 it('counts overlapping activity model/action time once and excludes a later paused interval', async () => {

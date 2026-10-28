@@ -1,9 +1,9 @@
+import { normalizeContext } from '@earendil-works/pi-ai';
+import { stream } from '@earendil-works/pi-ai/api/openai-completions';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { createModel, resolveMaxTokensField } from './pi';
 import { providerOptions } from './stream';
-import { normalizeContext } from '@earendil-works/pi-ai';
-import { stream } from '@earendil-works/pi-ai/api/openai-completions';
 
 /** Explicit inputs; independent of CLI defaults and the developer's environment. */
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -14,7 +14,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     goal: '观察附近环境并回应玩家。',
     allowEdits: false,
     voiceReplies: false,
-    continuous: false,
+
     intervalMode: 'fixed',
     intervalMinMs: 4000,
     intervalMaxMs: 8000,
@@ -67,10 +67,16 @@ describe('model definition and thinking policy', () => {
     expect(resolveMaxTokensField('deepseek-chat')).toBe('max_tokens');
     expect(resolveMaxTokensField('qwen2.5:7b')).toBe('max_tokens');
 
-    const o1Model = createModel(config({ model: 'o1-mini' }), endpoint('compatible'));
+    const o1Model = createModel(
+      config({ model: 'o1-mini' }),
+      endpoint('compatible'),
+    );
     expect(o1Model.compat?.maxTokensField).toBe('max_completion_tokens');
 
-    const standardModel = createModel(config({ model: 'gpt-4o' }), endpoint('compatible'));
+    const standardModel = createModel(
+      config({ model: 'gpt-4o' }),
+      endpoint('compatible'),
+    );
     expect(standardModel.compat?.maxTokensField).toBe('max_tokens');
   });
 });
@@ -156,12 +162,7 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
     const cfg = config({ thinking: 'enabled', reasoningEffort: 'high' });
     const ep = endpoint('deepseek');
     const model = createModel(cfg, ep);
-    const options = providerOptions(
-      cfg,
-      ep,
-      request,
-      () => {},
-    );
+    const options = providerOptions(cfg, ep, request, () => {});
     const s = stream(
       model,
       normalizeContext({
@@ -187,12 +188,7 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
     const cfg = config({ thinking: 'disabled', reasoningEffort: 'high' });
     const ep = endpoint('deepseek');
     const model = createModel(cfg, ep);
-    const options = providerOptions(
-      cfg,
-      ep,
-      request,
-      () => {},
-    );
+    const options = providerOptions(cfg, ep, request, () => {});
     const s = stream(
       model,
       normalizeContext({

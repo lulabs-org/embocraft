@@ -1,4 +1,4 @@
-import { rename } from 'node:fs/promises';
+import { MemoryArchive } from './helpers/memory-storage';
 import { expect, it, vi } from 'vitest';
 import { createTestServer } from './helpers/test-server';
 import { LocalSpeech } from '../src/modules/audio/services/asr/local-speech.service';
@@ -458,8 +458,10 @@ it('returns one persisted result for concurrent HTTP commands and protects recei
 
 it('does not acknowledge or publish an HTTP creation whose archive cannot be saved', async () => {
   const session = vi.fn();
+  const archive = new MemoryArchive();
   const server = await createTestServer({
     origin,
+    archive,
     agentDependencies: {
       session,
       runner: () => ({ run: async () => {} }),
@@ -467,8 +469,7 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
   });
   const changed = vi.fn();
   const off = server.characters.events.on(changed);
-  const moved = server.directory + '-unavailable';
-  await rename(server.directory, moved);
+  archive.saveError = new Error(`private storage failure: ${server.directory}`);
   try {
     const response = await fetch(server.httpUrl + '/ai-characters', {
       method: 'POST',
@@ -488,7 +489,7 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
     expect(JSON.stringify(receipt)).not.toContain(server.directory);
   } finally {
     off();
-    await rename(moved, server.directory);
+    archive.saveError = undefined;
     await server.close();
   }
 });

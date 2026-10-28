@@ -1,29 +1,28 @@
-export { FileProviderRepository } from './persistence/file-repository';
-export { DatabaseProviderRepository } from './persistence/database-repository';
-export type { ProviderRepository } from './persistence/repository.port';
-export { bootstrapProviders, createDefaultProviders } from './bootstrap';
-export { toProviderView } from './domain/model';
-export { validateProvider } from './domain/validation';
 export type { ProviderType } from '@voxel/shared';
-export type { SavedProvider } from './domain/model';
-export type {
-  ProviderPort,
-  ProviderQueryPort,
-  ProviderRuntimePort,
-  ProviderCommandPort,
-} from './ports';
-export {
-  installProviderRoutes,
-  type ProviderRouteDependencies,
-} from './routes/providers.routes';
-export { ModelCatalog } from './adapters/model-catalog';
 export { ProviderHealthChecker } from './adapters/health-checker';
-export { ProviderService } from './services/provider.service';
+export { ModelCatalog } from './adapters/model-catalog';
+export { bootstrapProviders, createDefaultProviders } from './bootstrap';
 export {
   resolveInferenceDefaults,
   validateInferenceSettings,
   validateProviderModel,
 } from './domain/inference';
 export type { InferenceSettings } from './domain/inference';
+export { toProviderView } from './domain/model';
+export type { SavedProvider } from './domain/model';
+export { validateProvider } from './domain/validation';
+export { DatabaseProviderRepository } from './persistence/database-repository';
+export type { ProviderRepository } from './persistence/repository.port';
+export type {
+  ProviderCommandPort,
+  ProviderPort,
+  ProviderQueryPort,
+  ProviderRuntimePort,
+} from './ports';
+export {
+  installProviderRoutes,
+  type ProviderRouteDependencies,
+} from './routes/providers.routes';
 export { PROVIDERS_CHANGED } from './services/events';
 export type { ProviderChangedEvent } from './services/events';
+export { ProviderService } from './services/provider.service';

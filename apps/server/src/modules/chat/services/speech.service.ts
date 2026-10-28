@@ -1,6 +1,6 @@
-import { LocalSpeech, scheduleSpeech, AsrSettingsStore } from '../../audio';
-import type { WorldChat } from './chat.service';
 import { AppError } from '../../../core/errors/app-error';
+import { AsrSettingsStore, LocalSpeech, scheduleSpeech } from '../../audio';
+import type { WorldChat } from './chat.service';
 
 type AudioInput = {
   chat: WorldChat;
@@ -24,7 +24,7 @@ type SpatialInput = Omit<AudioInput, 'route' | 'language'> & {
 export class ChatSpeechService {
   constructor(
     private speech: LocalSpeech,
-    private asrSettings = new AsrSettingsStore(),
+    private asrSettings: AsrSettingsStore,
   ) {}
 
   async publishAudio({

@@ -1,14 +1,17 @@
 import { controlRun } from '../../../../tests/support/managed-tasks';
+import { MemoryProviderRepository } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 /** Opt-in paid-model acceptance test. Uses real AICharacterManager, chat, WebSocket and physics. */
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve, dirname } from 'node:path';
-import { AICharacterManager } from '../../src/modules/ai-characters';
+import { dirname, join, resolve } from 'node:path';
+import {
+  AICharacterManager,
+  executionState,
+} from '../../src/modules/ai-characters';
 import { reserveRun } from '../../src/modules/tasks/services/execution.service';
-import { executionState } from '../../src/modules/ai-characters';
-import { FileProviderRepository } from '../../src/modules/providers';
+
 import {
   AgentRunner,
   Session,
@@ -52,10 +55,8 @@ const record = async () => {
   await writeFile(output, JSON.stringify(evidence, null, 2));
 };
 try {
-  const providerPath = join(dir, 'providers.json');
-  await writeFile(providerPath, JSON.stringify([provider]), { mode: 0o600 });
-  const store = new FileProviderRepository(providerPath);
-  await store.load();
+  const store = new MemoryProviderRepository();
+  await store.seed([provider]);
   let calls = 0;
   const actions = new Map<string, unknown>();
   const taskStates = new Set<string>();
@@ -226,9 +227,7 @@ try {
       if (kind.endsWith('step'))
         assert(result.maxHeight > 3.4, 'must jump the step');
       // Verify persisted managed-task records, not only the transient view.
-      const archive = JSON.parse(
-        await readFile(`${providerPath}.agents.json`, 'utf8'),
-      );
+      const archive = JSON.parse(store.archive.json!);
       const saved = archive.characters.find(
         (a: { id: string }) => a.id === managed.id,
       );

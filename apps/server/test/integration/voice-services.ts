@@ -1,24 +1,24 @@
-import { createTestServer } from '../helpers/test-server';
-import { AgentRunner } from '@voxel/agent-runtime';
-import { toolResponse } from '../../../../tests/support/pi-response';
-import assert from 'node:assert/strict';
-import express from 'express';
-import { createServer } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { Session, until, delay } from '@voxel/agent-runtime';
+import { AgentRunner, delay, Session, until } from '@voxel/agent-runtime';
 import type {
   AgentSpeechEvent,
   AICharacterView,
   VoiceServiceView,
 } from '@voxel/shared';
+import express from 'express';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
+import { bootstrapProviders } from '../../src/modules/providers';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../../src/modules/providers';
-import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
+  MemoryProviderRepository,
+  TestVoiceServiceStore as VoiceServiceStore,
+} from '../helpers/memory-storage';
+import { createTestServer } from '../helpers/test-server';
+
 import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
 
 process.env.DATABASE_URL = '';
@@ -52,9 +52,9 @@ await new Promise<void>((resolve) =>
   providerHttp.listen(0, '127.0.0.1', resolve),
 );
 const providerUrl = `http://127.0.0.1:${(providerHttp.address() as { port: number }).port}/v1`;
-const voices = new VoiceServiceStore(join(dir, 'voices.json'));
+const voices = new VoiceServiceStore();
 await voices.load();
-const providers = new FileProviderRepository(join(dir, 'providers.json'));
+const providers = new MemoryProviderRepository();
 await bootstrapProviders(providers);
 await providers.save(
   {
@@ -261,13 +261,14 @@ try {
   }
   const count = calls;
   await manager.close();
-  const restoredVoices = new VoiceServiceStore(voices.path);
+  const restoredVoices = new VoiceServiceStore(voices.persistence);
   await restoredVoices.load();
   assert.equal(restoredVoices.get(b.id).voice, 'beta');
   await voices.load();
   const restored = new AICharacterManager(
     providers,
     url.replace('http', 'ws'),
+    providers.archive,
     dependencies,
     voices,
   );

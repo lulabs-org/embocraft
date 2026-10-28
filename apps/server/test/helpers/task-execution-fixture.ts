@@ -45,7 +45,7 @@ export function taskExecutionFixture() {
       model: 'fixture',
       status: 'idle',
       logEntries: [],
-      continuous: false,
+
       maxTurns: 20,
       tokenBudget: 50000,
       taskTimeoutMs: 900000,

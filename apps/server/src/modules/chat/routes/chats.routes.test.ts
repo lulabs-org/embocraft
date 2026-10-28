@@ -1,12 +1,16 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import type { Player } from '@voxel/shared';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
-import type { Player } from '@voxel/shared';
-import { installChatRoutes } from './chats.routes';
-import { WorldChat } from '../services/chat.service';
+import { afterEach, expect, it, vi } from 'vitest';
+import {
+  TestAsrSettingsStore as AsrSettingsStore,
+  TestAsrSettingsStore,
+} from '../../../../test/helpers/memory-storage';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import type { LocalSpeech } from '../../audio';
-import type { AsrSettingsStore } from '../../audio';
+import { WorldChat } from '../services/chat.service';
+import { installChatRoutes } from './chats.routes';
+
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 
 let server: Server | undefined;
@@ -35,7 +39,14 @@ it('publishes confirmed external recognition only with the speaker’s live tick
   const token = chat.issue('speaker');
   const origin = 'http://127.0.0.1:5173';
   const app = express();
-  installChatRoutes(app, () => chat, undefined, undefined, origin);
+  installChatRoutes(
+    app,
+    () => chat,
+    undefined,
+    undefined,
+    origin,
+    new TestAsrSettingsStore(),
+  );
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

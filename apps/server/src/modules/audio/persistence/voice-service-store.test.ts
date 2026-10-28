@@ -1,26 +1,11 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { TestVoiceServiceStore as VoiceServiceStore } from '../../../../test/helpers/memory-storage';
 
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-
-import { join } from 'node:path';
-
-import { tmpdir } from 'node:os';
-
-import { VoiceServiceStore, validateVoiceService } from './voice-service-store';
+import { validateVoiceService } from './voice-service-store';
 
 import { PiperTts } from '../services/tts/piper.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
-
-let dir: string;
-
-beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'voice-services-test-'));
-});
-
-afterEach(async () => {
-  await rm(dir, { recursive: true, force: true });
-});
 
 const local = (name = 'Local', voice = '') => ({
   name,
@@ -59,7 +44,7 @@ const wav = () => {
 };
 
 it('persists multiple configurations privately, masks credentials, and preserves a blank key on edit', async () => {
-  const store = new VoiceServiceStore(join(dir, 'voices.json'));
+  const store = new VoiceServiceStore();
   await store.load();
   const cloud = await store.save(remote);
   const localVoice = await store.save(local('中文', 'Tingting'));
@@ -67,12 +52,11 @@ it('persists multiple configurations privately, masks credentials, and preserves
   expect(cloud.hasApiKey).toBe(true);
   await store.save({ ...cloud, apiKey: '', name: 'Renamed' }, cloud.id);
   expect(store.get(cloud.id).apiKey).toBe(remote.apiKey);
-  const restored = new VoiceServiceStore(store.path);
+  const restored = new VoiceServiceStore(store.persistence);
   await restored.load();
   expect(restored.list()).toHaveLength(3);
   expect(restored.get(localVoice.id).model).toBe(DEFAULT_PIPER_MODEL);
-  expect((await stat(store.path)).mode & 0o777).toBe(0o600);
-  expect(JSON.parse(await readFile(store.path, 'utf8'))).toHaveLength(3);
+  expect(await store.persistence.load()).toHaveLength(3);
 });
 
 it('rejects credential reuse for a different endpoint and invalid configuration', () => {
@@ -96,47 +80,8 @@ it('rejects credential reuse for a different endpoint and invalid configuration'
   );
 });
 
-it('migrates old local services once, keeps IDs and speeds, and backs up the original', async () => {
-  const path = join(dir, 'voices.json');
-  const original = JSON.stringify([
-    {
-      id: 'local-default',
-      name: 'macOS 系统语音',
-      type: 'local',
-      voice: 'Tingting',
-      speed: 0.8,
-    },
-    {
-      id: 'custom',
-      name: 'My voice',
-      type: 'local',
-      voice: 'Samantha',
-      speed: 1.2,
-    },
-  ]);
-  await writeFile(path, original);
-  const store = new VoiceServiceStore(path);
-  await store.load();
-  expect(store.get('local-default')).toMatchObject({
-    type: 'piper',
-    name: 'Piper 本地语音',
-    voice: '',
-    model: DEFAULT_PIPER_MODEL,
-    speed: 0.8,
-  });
-  expect(store.get('custom')).toMatchObject({ name: 'My voice', speed: 1.2 });
-  store.bind('actor', 'custom');
-  expect(await readFile(`${path}.pre-piper.bak`, 'utf8')).toBe(original);
-  await store.load();
-  expect(await readFile(`${path}.pre-piper.bak`, 'utf8')).toBe(original);
-  expect(() => validateVoiceService({ ...local(), type: 'local' })).toThrow();
-  expect(() =>
-    validateVoiceService({ ...local(), model: 'arbitrary/model' }),
-  ).toThrow();
-});
-
 it('rejects deletion of referenced services and validates bindings before changing them', async () => {
-  const store = new VoiceServiceStore(join(dir, 'voices.json'));
+  const store = new VoiceServiceStore();
   await store.load();
   await expect(store.remove('local-default', () => true)).rejects.toThrow(
     '引用',
@@ -152,7 +97,7 @@ it('rejects deletion of referenced services and validates bindings before changi
 });
 
 it('keeps unmanaged world clients on local TTS even if the initial profile becomes a cloud service', async () => {
-  const store = new VoiceServiceStore(join(dir, 'voices.json'));
+  const store = new VoiceServiceStore();
   await store.load();
   await store.save(remote, 'local-default');
   expect(store.forActor('unmanaged-client')).toBeInstanceOf(PiperTts);
@@ -160,7 +105,7 @@ it('keeps unmanaged world clients on local TTS even if the initial profile becom
 
 it('routes previews and different actors through the saved voice and speed, never by a client payload', async () => {
   const calls: string[] = [];
-  const store = new VoiceServiceStore(join(dir, 'voices.json'), (config) => ({
+  const store = new VoiceServiceStore(undefined, (config) => ({
     synthesize: async (text) => {
       calls.push(`${config.model}:${config.speed}:${text}`);
       return { bytes: wav(), durationMs: 1000 };
@@ -187,7 +132,7 @@ it('routes previews and different actors through the saved voice and speed, neve
 
 it('cancels previews and bounds concurrent synthesis', async () => {
   const pending: (() => void)[] = [];
-  const store = new VoiceServiceStore(join(dir, 'voices.json'), () => ({
+  const store = new VoiceServiceStore(undefined, () => ({
     synthesize: async () => {
       await new Promise<void>((resolve) => pending.push(resolve));
       return { bytes: wav(), durationMs: 1000 };
@@ -212,7 +157,7 @@ it('cancels previews and bounds concurrent synthesis', async () => {
 
 it('persists browser profiles without credentials and never runs server synthesis', async () => {
   const factory = vi.fn();
-  const store = new VoiceServiceStore(join(dir, 'browser.json'), factory);
+  const store = new VoiceServiceStore(undefined, factory);
   await store.load();
   const saved = await store.save({
     ...remote,
@@ -236,7 +181,7 @@ it('persists browser profiles without credentials and never runs server synthesi
     store.synthesize(saved.id, '你好', new AbortController().signal),
   ).rejects.toThrow('浏览器');
   expect(factory).not.toHaveBeenCalled();
-  const restored = new VoiceServiceStore(store.path);
+  const restored = new VoiceServiceStore(store.persistence);
   await restored.load();
   expect(restored.get(saved.id).voiceLanguage).toBe('zh-CN');
 });

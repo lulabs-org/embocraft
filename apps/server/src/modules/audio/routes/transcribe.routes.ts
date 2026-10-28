@@ -1,18 +1,18 @@
-import { asyncRoute } from '../../../core/http/middleware/async-route';
 import cors from 'cors';
-import { env } from '../../../core/config/env';
-import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { errorHandler } from '../../../core/http/middleware/error-handler';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import express, { type Express } from 'express';
-import { LocalSpeech } from '../services/asr/local-speech.service';
-import { MAX_AUDIO_BYTES } from '../services/processing/normalize';
+import { env } from '../../../core/config/env';
 import { AppError } from '../../../core/errors/app-error';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
+import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
+import { AsrSettingsStore } from '../persistence/asr-settings-store';
+import { LocalSpeech } from '../services/asr/local-speech.service';
 import { scheduleSpeech } from '../services/asr/speech-scheduler.service';
+import { MAX_AUDIO_BYTES } from '../services/processing/normalize';
 export function installTranscribeRoutes(
   app: Express,
   speech = new LocalSpeech(),
-  asrSettings = new AsrSettingsStore(),
+  asrSettings: AsrSettingsStore,
   origin = env.webOrigin(),
 ) {
   app.use(

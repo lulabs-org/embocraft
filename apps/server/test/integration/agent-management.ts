@@ -1,16 +1,16 @@
-import { createTestServer } from '../helpers/test-server';
-import { DecisionFixture as ModelPlanner } from '../../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from '../../../../tests/support/decision-fixture';
+import { Session, until, type Observation } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AICharacterManager } from '../../src/modules/ai-characters';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../../src/modules/providers';
-import { Session, until, type Observation } from '@voxel/agent-runtime';
+  fixtureRunnerFactory,
+  DecisionFixture as ModelPlanner,
+} from '../../../../tests/support/decision-fixture';
+import { AICharacterManager } from '../../src/modules/ai-characters';
+import { bootstrapProviders } from '../../src/modules/providers';
+import { MemoryProviderRepository } from '../helpers/memory-storage';
+import { createTestServer } from '../helpers/test-server';
 
 import type { AICharacterView } from '@voxel/shared';
 process.env.DATABASE_URL = '';
@@ -23,7 +23,7 @@ const observations: Observation[] = [];
 let speaker: Session | undefined;
 const originalFetch = globalThis.fetch;
 try {
-  const store = new FileProviderRepository(join(dir, 'providers.json'));
+  const store = new MemoryProviderRepository();
   await bootstrapProviders(store);
   await store.save(
     {
@@ -399,7 +399,7 @@ try {
       providerId: 'deepseek',
       name: `Loop ${i}`,
       maxTurns: 1,
-      continuous: true,
+
       intervalMode: 'random',
       intervalMinMs: 60000,
       intervalMaxMs: 60000,
@@ -476,7 +476,7 @@ try {
     manager
       .list()
       .filter((j) => j.status === 'running')
-      .every((j) => j.continuous && j.intervalMode === 'random'),
+      .every((j) => j.intervalMode === 'random'),
   );
   assert(
     manager.list().find((j) => j.id === created[0])?.task?.status ===
@@ -664,12 +664,17 @@ try {
       .every((j) => !['joining', 'running', 'stopping'].includes(j.status)),
   );
   const beforeRestore = calls;
-  manager = new AICharacterManager(store, url.replace('http', 'ws'), {
-    session: (url) => new Session(url),
-    runner: fixtureRunnerFactory(
-      (config, provider) => new ModelPlanner(config, request, provider),
-    ),
-  });
+  manager = new AICharacterManager(
+    store,
+    url.replace('http', 'ws'),
+    store.archive,
+    {
+      session: (url) => new Session(url),
+      runner: fixtureRunnerFactory(
+        (config, provider) => new ModelPlanner(config, request, provider),
+      ),
+    },
+  );
   await manager.load();
   assert.equal(calls, beforeRestore, 'restoration never spends inference');
   assert.equal(room.state.players.size, 3);

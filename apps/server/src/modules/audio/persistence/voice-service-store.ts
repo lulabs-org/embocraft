@@ -1,14 +1,11 @@
-import { env } from '../../../core/config/env';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
-import type { SpeechSynthesizer } from '../services/tts/speech-synthesizer';
-import { PiperTts } from '../services/tts/piper.service';
-import { PiperModels, piperModel } from '../services/tts/piper-models.service';
 import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
-import { RemoteTts } from '../services/tts/remote.service';
+import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
+import { PiperModels, piperModel } from '../services/tts/piper-models.service';
+import { PiperTts } from '../services/tts/piper.service';
+import { RemoteTts } from '../services/tts/remote.service';
+import type { SpeechSynthesizer } from '../services/tts/speech-synthesizer';
 
 export type SavedVoice = VoiceServiceDraft & { id: string };
 export interface VoiceServicePersistence {
@@ -126,99 +123,40 @@ export class VoiceServiceStore {
   private listeners = new Set<(actor: string) => void>();
   private running = 0;
   constructor(
-    readonly path = env.dataPath('voice-services.json'),
+    private readonly storage: VoiceServicePersistence,
     private factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
       value.type === 'piper' ? new PiperTts(value) : new RemoteTts(value),
-    private readonly storage?: VoiceServicePersistence,
   ) {}
   async load() {
-    if (this.storage) {
-      const saved = await this.storage.load();
-      if (saved === undefined) {
-        const defaultVoice: SavedVoice = {
-          ...validateVoiceService({
-            name: 'Piper 本地语音',
-            type: 'piper',
-            voice: '',
-            speed: 1,
-          }),
-          id: 'local-default',
-        };
-        await this.storage.save([defaultVoice]);
-        this.values = [defaultVoice];
-      } else {
-        if (
-          !Array.isArray(saved) ||
-          saved.length > 20 ||
-          new Set(saved.map((voice) => voice.id)).size !== saved.length ||
-          saved.some(
-            (voice) =>
-              typeof voice.id !== 'string' ||
-              !/^[a-zA-Z0-9-]{1,80}$/.test(voice.id),
-          )
-        )
-          throw new AppError('语音服务数据库配置格式无效。', 500);
-        this.values = saved.map((voice) => ({
-          ...validateVoiceService(voice),
-          id: voice.id,
-        }));
-      }
-      return;
-    }
-    try {
-      const original = await readFile(this.path, 'utf8');
-      const saved: (Omit<SavedVoice, 'type'> & { type: string })[] =
-        JSON.parse(original);
-      let migrated = false;
+    const saved = await this.storage.load();
+    if (saved === undefined) {
+      const defaultVoice: SavedVoice = {
+        ...validateVoiceService({
+          name: 'Piper 本地语音',
+          type: 'piper',
+          voice: '',
+          speed: 1,
+        }),
+        id: 'local-default',
+      };
+      await this.storage.save([defaultVoice]);
+      this.values = [defaultVoice];
+    } else {
       if (
         !Array.isArray(saved) ||
         saved.length > 20 ||
-        new Set(saved.map((v) => v.id)).size !== saved.length
-      )
-        throw Error('invalid');
-      this.values = saved.map((value) => {
-        if (
-          typeof value.id !== 'string' ||
-          !/^[a-zA-Z0-9-]{1,80}$/.test(value.id)
+        new Set(saved.map((voice) => voice.id)).size !== saved.length ||
+        saved.some(
+          (voice) =>
+            typeof voice.id !== 'string' ||
+            !/^[a-zA-Z0-9-]{1,80}$/.test(voice.id),
         )
-          throw Error('invalid');
-        if (value.type === 'local') {
-          migrated = true;
-          value = {
-            ...value,
-            type: 'piper',
-            model: DEFAULT_PIPER_MODEL,
-            voice: '',
-            name:
-              value.name === 'macOS 系统语音' ? 'Piper 本地语音' : value.name,
-          };
-        }
-        return { ...validateVoiceService(value), id: value.id };
-      });
-      if (migrated) {
-        await writeFile(`${this.path}.pre-piper.bak`, original, {
-          mode: 0o600,
-          flag: 'wx',
-        }).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== 'EEXIST') throw error;
-        });
-        await this.persist(this.values);
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-        throw new AppError('无法读取语音服务配置，请检查本地配置文件。', 500);
-      this.values = [
-        {
-          ...validateVoiceService({
-            name: 'Piper 本地语音',
-            type: 'piper',
-            voice: '',
-            speed: 1,
-          }),
-          id: 'local-default',
-        },
-      ];
-      await this.persist(this.values);
+      )
+        throw new AppError('语音服务数据库配置格式无效。', 500);
+      this.values = saved.map((voice) => ({
+        ...validateVoiceService(voice),
+        id: voice.id,
+      }));
     }
   }
   list() {
@@ -231,18 +169,7 @@ export class VoiceServiceStore {
     return { ...value };
   }
   private async persist(values: SavedVoice[]) {
-    if (this.storage) return this.storage.save(values);
-    await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
-    const tmp = `${this.path}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(tmp, JSON.stringify(values, null, 2), {
-        mode: 0o600,
-        flag: 'wx',
-      });
-      await rename(tmp, this.path);
-    } finally {
-      await unlink(tmp).catch(() => {});
-    }
+    await this.storage.save(values);
   }
   private mutate<T>(fn: () => Promise<T>) {
     const operation = this.queue.then(fn);

@@ -14,10 +14,6 @@
   background: var(--color-hud-ink);
   border-color: var(--color-hud-ink);
 }
-.agent-dialog .agents-actions .agents-text-button {
-  border-color: transparent;
-  margin-left: auto;
-}
 .agents-confirm {
   background: #f8f0df;
   border: 1px solid #eaddbf;
@@ -30,9 +26,4 @@
   font-size: 12px;
   line-height: 1.8;
   color: #7e633e;
-}
-.agents-composer {
-  margin: 18px 0 0;
-  border-top: 1px solid var(--agents-border);
-  padding-top: 18px;
 }

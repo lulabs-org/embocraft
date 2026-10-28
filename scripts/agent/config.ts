@@ -1,5 +1,5 @@
-import { parseArgs } from 'node:util';
 import type { AgentConfig } from '@voxel/agent-runtime';
+import { parseArgs } from 'node:util';
 
 export function agentConfig(
   options: Record<string, string | undefined> = cliOptions(),
@@ -20,11 +20,6 @@ export function agentConfig(
     !['true', 'false'].includes(options['allow-edits'])
   )
     throw Error('allow-edits 仅支持 true 或 false。');
-  if (
-    options['continuous'] &&
-    !['true', 'false'].includes(options['continuous'])
-  )
-    throw Error('continuous 仅支持 true 或 false。');
   const intervalMode = options['interval-mode'] ?? 'fixed';
   if (intervalMode !== 'fixed' && intervalMode !== 'random')
     throw Error('interval-mode 仅支持 fixed 或 random。');
@@ -49,7 +44,6 @@ export function agentConfig(
 
   return {
     apiKey,
-    continuous: options['continuous'] === 'true',
     intervalMode,
     intervalMinMs,
     intervalMaxMs,
@@ -75,7 +69,6 @@ function cliOptions(): Record<string, string | undefined> {
       [
         'allow-edits',
         'api-key',
-        'continuous',
         'goal',
         'interval-max-ms',
         'interval-min-ms',

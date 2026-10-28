@@ -1,12 +1,12 @@
-import { emptyState } from '@voxel/agent-runtime';
-import { expect, it } from 'vitest';
 import {
+  emptyState,
   newTask,
   type AgentRunState,
   type BatchResult,
 } from '@voxel/agent-runtime';
-import { prepareDecision } from './prepare';
+import { expect, it } from 'vitest';
 import { navigationWorld } from '../../../../../tests/support/navigation-world';
+import { prepareDecision } from './prepare';
 
 function fixture() {
   const w = navigationWorld({ x: 4, y: 3.5, z: 0 });
@@ -90,5 +90,53 @@ it.each(['unknown', 'not-arrived', 'chat-only', 'failed-edit'] as const)(
       });
     await f.reconcile();
     expect(f.memory.effects.pendingEffects).toBeDefined();
+  },
+);
+
+it.each(['public', 'private', 'nearby', undefined] as const)(
+  'only exposes the addressed event and authorized task context for a %s turn',
+  async (scope) => {
+    const w = navigationWorld({ x: 4, y: 3.5, z: 0 });
+    const event = (
+      actor: string,
+      scope: string,
+    ): import('@voxel/shared').WorldEvent => ({
+      seq: 1,
+      actor,
+      actorKind: 'human',
+      type: 'chat',
+      at: 0,
+      data: {
+        scope,
+        recipients: ['ai'],
+        text: `${actor}-secret`,
+        kind: 'text',
+      },
+    });
+    const observation = await w.session.observe();
+    const history = [event('alice', 'private'), event('bob', 'nearby')];
+    const addressed = scope ? event('bob', scope) : undefined;
+    const memory = emptyState();
+    memory.task.current = newTask('alice-private-task', 'alice', 'alice');
+    memory.effects.previous = { secret: 'alice-private-effects' };
+    const prepared = await prepareDecision(
+      { observe: async () => ({ ...observation, events: history }) },
+      memory,
+      new AbortController().signal,
+      addressed,
+    );
+    expect(prepared!.observation.events).toEqual(addressed ? [addressed] : []);
+    expect(prepared!.observation.events).not.toContainEqual(history[0]);
+    expect(prepared!.privateTo).toBe(
+      scope && scope !== 'public' ? 'bob' : undefined,
+    );
+    if (addressed) {
+      expect(prepared!.visibleTask).toBeUndefined();
+      expect(prepared!.context.previous).toBeUndefined();
+    } else {
+      expect(prepared!.visibleTask).toBe(memory.task.current);
+      expect(prepared!.context.previous).toEqual(memory.effects.previous);
+    }
+    expect(memory.task.current.goal).toBe('alice-private-task');
   },
 );

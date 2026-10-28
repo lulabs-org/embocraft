@@ -199,8 +199,7 @@
   color: #ad791e;
   margin-top: 3px;
 }
-.agents-hint-icon,
-.agents-status-icon {
+.agents-hint-icon {
   flex-shrink: 0;
   display: inline-block;
   vertical-align: -2px;
@@ -287,23 +286,4 @@
 }
 .agents-budget-settings .agents-budget-content > .agent-hint {
   margin: 0 0 12px;
-}
-
-.agent-form .agents-heartbeat-fields label {
-  margin-bottom: 0;
-}
-.agents-heartbeat-range {
-  min-width: 0;
-}
-.agents-heartbeat-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-}
-.agents-heartbeat-actions .agent-hint {
-  flex: 1 1 260px;
-  margin: 0;
 }

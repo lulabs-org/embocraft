@@ -1,16 +1,17 @@
-import { createTestServer } from '../helpers/test-server';
 import { toolResponse } from '../../../../tests/support/pi-response';
-/** Isolated UI acceptance world: no dotenv, no production config and no paid model calls. */
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { Session, until, AgentRunner } from '@voxel/agent-runtime';
-import { AICharacterManager } from '../../src/modules/ai-characters';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../../src/modules/providers';
-import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
+  MemoryProviderRepository,
+  TestVoiceServiceStore as VoiceServiceStore,
+} from '../helpers/memory-storage';
+import { createTestServer } from '../helpers/test-server';
+/** Isolated UI acceptance world: no dotenv, no production config and no paid model calls. */
+import { AgentRunner, Session, until } from '@voxel/agent-runtime';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { AICharacterManager } from '../../src/modules/ai-characters';
+import { bootstrapProviders } from '../../src/modules/providers';
+
 process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5189';
 const dir = await mkdtemp(join(tmpdir(), 'agent-console-'));
@@ -18,7 +19,7 @@ let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 let manager: AICharacterManager | undefined;
 let calls = 0;
 try {
-  const providers = new FileProviderRepository(join(dir, 'providers.json'));
+  const providers = new MemoryProviderRepository();
   await bootstrapProviders(providers);
   await providers.save(
     {
@@ -29,7 +30,7 @@ try {
     },
     'deepseek',
   );
-  const voices = new VoiceServiceStore(join(dir, 'voices.json'));
+  const voices = new VoiceServiceStore();
   await voices.load();
   server = await createTestServer({
     directory: dir,

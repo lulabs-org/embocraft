@@ -1,8 +1,8 @@
+import type { AICharacterTask, TaskLimits } from '../task/contracts';
 import type {
   AICharacterPermissions,
   AICharacterSkillId,
 } from './capabilities';
-import type { TaskLimits, AICharacterTask } from '../task/contracts';
 export const AI_CHARACTER_ROLE_DESCRIPTION_LIMIT = 2000;
 
 export type AICharacterSettings = {
@@ -12,8 +12,6 @@ export type AICharacterSettings = {
   goal: string;
   /** Persistent identity, responsibilities and style, independent of a task. */
   roleDescription?: string;
-  /** Legacy compatibility only; task continuation is decided from progress. */
-  continuous: boolean;
   /** Whether execution limits are enabled for this role. Missing means enabled. */
   taskLimitsEnabled?: boolean;
   /** Maximum model calls per task, not a target number of turns. */

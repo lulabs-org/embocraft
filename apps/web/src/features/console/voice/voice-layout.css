@@ -9,9 +9,6 @@
 .console-voice .voice > .eyebrow {
   display: none;
 }
-.console-voice .voice-label {
-  font-size: 12px;
-}
 .console-voice .voice select,
 .console-voice .voice input {
   padding: 9px;
@@ -25,42 +22,8 @@
   font-size: 10px;
   line-height: 1.6;
 }
-.console-voice-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 32px;
-  align-items: start;
-}
-.console-voice-guide {
-  padding: 22px;
-  background: #edf1e7;
-  border: 1px solid #d8e1d2;
-  border-radius: var(--radius-panel);
-}
-.console-voice-guide h4 {
-  margin: 0 0 16px;
-  font-size: 14px;
-}
-.console-voice-guide p {
-  color: #526d60;
-  font-size: 13px;
-  line-height: 1.8;
-  margin: 0 0 16px;
-}
-.console-voice-guide small {
-  display: block;
-  padding-top: 16px;
-  border-top: 1px solid #d8e1d2;
-  color: #697d70;
-  font-size: 12px;
-  line-height: 1.8;
-}
 @media (max-width: 700px) {
   .agent-tabs {
     flex-wrap: wrap;
-  }
-  .console-voice-layout {
-    grid-template-columns: 1fr;
-    gap: 24px;
   }
 }

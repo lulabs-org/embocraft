@@ -1,17 +1,17 @@
-import { asyncRoute } from '../../../core/http/middleware/async-route';
 import cors from 'cors';
+import type { Express } from 'express';
 import { env } from '../../../core/config/env';
+import { AppError } from '../../../core/errors/app-error';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { listWhisperModels } from '../services/asr/whisper-settings';
-import type { Express } from 'express';
 import { LocalSpeech } from '../services/asr/local-speech.service';
-import { AppError } from '../../../core/errors/app-error';
+import { listWhisperModels } from '../services/asr/whisper-settings';
 import { PiperModels } from '../services/tts/piper-models.service';
 export function installCapabilitiesRoutes(
   app: Express,
   speech = new LocalSpeech(),
-  asrSettings = new AsrSettingsStore(),
+  asrSettings: AsrSettingsStore,
   origin = env.webOrigin(),
 ) {
   app.use(
