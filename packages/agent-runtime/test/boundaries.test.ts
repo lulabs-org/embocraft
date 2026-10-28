@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import * as runtimeAPI from '../src/api/index';
 
 const runtime = fileURLToPath(new URL('../src/', import.meta.url));
 const root = resolve(runtime, '../../..');
@@ -67,11 +68,29 @@ const allowed: Record<string, string[]> = {
   agent: ['agent', 'world', 'contracts', 'kernel'],
   persistence: ['contracts'],
   api: ['api', 'agent', 'world', 'persistence', 'contracts', 'kernel'],
-  testing: ['testing', 'world', 'contracts'],
+  testing: ['testing', 'world', 'contracts', 'agent'],
   index: ['api'],
 };
 
 describe('agent runtime dependency boundaries', () => {
+  it('exposes one host execution API without transitional entrypoints', () => {
+    for (const name of [
+      'runAgent',
+      'AgentRunner',
+      'TaskService',
+      'AgentAttention',
+      'restoreCheckpoint',
+      'restoreState',
+      'startScheduledTaskState',
+      'resumeTaskState',
+      'rollbackTaskState',
+      'recordEvent',
+    ])
+      expect(runtimeAPI).not.toHaveProperty(name);
+    for (const name of ['submit', 'state', 'attention', 'replaceAttention'])
+      expect(runtimeAPI.AgentRuntime.prototype).not.toHaveProperty(name);
+  });
+
   it('has no circular module dependencies, including types and re-exports', () => {
     const visited = new Set<string>();
     function visit(path: string, chain: string[]) {
@@ -193,7 +212,7 @@ describe('agent runtime dependency boundaries', () => {
   it('routes every decision through one turn loop and keeps task commands in the service', () => {
     const slot = readFileSync(resolve(runtime, 'api/runtime.ts'), 'utf8');
     const runner = readFileSync(resolve(runtime, 'agent/turn/wake.ts'), 'utf8');
-    expect(slot).toContain("export { AgentRunner } from '../agent/turn/wake'");
+    expect(slot).toContain('new AgentRunner(');
     expect(runner).toContain('export class AgentRunner');
     for (const path of graph.keys())
       expect(path).not.toMatch(
@@ -227,6 +246,10 @@ describe('agent runtime dependency boundaries', () => {
     ])
       for (const path of sources(directory))
         for (const name of imports(path)) {
+          if (name === '@voxel/agent-runtime/testing') {
+            expect(relative(root, path)).toMatch(/^apps\/server\/test\//);
+            continue;
+          }
           expect(name).not.toMatch(/^@voxel\/agent-runtime\//);
           if (!name.startsWith('.')) continue;
           const target = resolve(dirname(path), name);
@@ -242,11 +265,8 @@ describe('agent runtime dependency boundaries', () => {
       ...sources(resolve(root, 'apps/server/src/modules/tasks')),
       resolve(root, 'scripts/agent/ai-agent.ts'),
     ];
-    const legacyAliases = new Set([
-      'apps/server/src/modules/ai-characters/services/job.ts',
-      'apps/server/src/modules/ai-characters/services/task-adapter.ts',
-    ]);
     const internals = new Set([
+      'AgentRunner',
       'TaskService',
       'recordEvent',
       'recordChatEvent',
@@ -258,6 +278,8 @@ describe('agent runtime dependency boundaries', () => {
       'restoreBatchHistory',
     ]);
     const partitions = new Set([
+      'character',
+      'execution',
       'task',
       'effects',
       'conversation',
@@ -288,7 +310,6 @@ describe('agent runtime dependency boundaries', () => {
               name,
             ).toBe(false);
       }
-      if (legacyAliases.has(name)) continue;
       const visit = (node: ts.Node) => {
         if (
           ts.isPropertyAccessExpression(node) &&

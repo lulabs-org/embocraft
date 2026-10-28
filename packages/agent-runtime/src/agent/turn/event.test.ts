@@ -2,10 +2,10 @@ import type { WorldEvent } from '@voxel/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
   emptyState,
-  type AgentRunState,
   type CharacterEvent,
+  type RuntimeState,
 } from '../../contracts/state';
-import type { TaskLease } from '../task/service';
+import type { TaskLease } from '../../contracts/task';
 import { claimEvent, settleEvent } from './event';
 
 function message(seq = 1): WorldEvent {
@@ -42,8 +42,12 @@ function planEvent(overrides: Partial<CharacterEvent> = {}): CharacterEvent {
   };
 }
 
-function memory(...events: CharacterEvent[]): AgentRunState {
-  return { ...emptyState(), inbox: { version: 1, events } };
+function memory(...events: CharacterEvent[]): RuntimeState {
+  return {
+    version: 4 as const,
+    character: { ...emptyState().character, inbox: { version: 1, events } },
+    execution: { ...emptyState().execution },
+  };
 }
 
 describe('event claims', () => {
@@ -52,7 +56,7 @@ describe('event claims', () => {
     const claim = await claimEvent({ memory: state, message: message() });
     expect(claim?.event?.kind).toBe('chat');
     expect(claim?.event?.state).toBe('processing');
-    expect(state.inbox?.events).toHaveLength(1);
+    expect(state.character.inbox?.events).toHaveLength(1);
   });
 
   it('rejects an already settled event', async () => {
@@ -72,7 +76,7 @@ describe('event claims', () => {
       checkpoint,
     });
     expect(claim).toBeUndefined();
-    expect(state.inbox?.events[0].state).toBe('unknown');
+    expect(state.character.inbox?.events[0].state).toBe('unknown');
     expect(checkpoint).toHaveBeenCalledTimes(1);
   });
 

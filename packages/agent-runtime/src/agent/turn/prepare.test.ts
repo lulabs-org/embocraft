@@ -1,9 +1,7 @@
-import {
-  emptyState,
-  newTask,
-  type AgentRunState,
-  type BatchResult,
-} from '@voxel/agent-runtime';
+import { type BatchResult, type RuntimeState } from '@voxel/agent-runtime';
+import { emptyState } from '../../contracts/state';
+import { newTask } from '../task/state';
+
 import { expect, it } from 'vitest';
 import { navigationWorld } from '../../../../../tests/support/navigation-world';
 import { prepareDecision } from './prepare';
@@ -53,10 +51,14 @@ function fixture() {
       },
     ],
   };
-  const memory: AgentRunState = {
-    ...emptyState(),
-    task: { current: newTask('到我这里来') },
-    effects: { pendingEffects: pending, previous },
+  const memory: RuntimeState = {
+    version: 4 as const,
+    character: { ...emptyState().character },
+    execution: {
+      ...emptyState().execution,
+      task: { current: newTask('到我这里来') },
+      effects: { pendingEffects: pending, previous },
+    },
   };
   const reconcile = () =>
     prepareDecision(w.session, memory, new AbortController().signal);
@@ -66,7 +68,7 @@ function fixture() {
 it('a verified corrected destination supersedes a known failed goto', async () => {
   const f = fixture();
   await f.reconcile();
-  expect(f.memory.effects.pendingEffects).toBeUndefined();
+  expect(f.memory.execution.effects.pendingEffects).toBeUndefined();
 });
 it.each(['unknown', 'not-arrived', 'chat-only', 'failed-edit'] as const)(
   'does not erase unresolved effects after %s',
@@ -89,7 +91,7 @@ it.each(['unknown', 'not-arrived', 'chat-only', 'failed-edit'] as const)(
         result: { ok: false, id: 'edit', revision: 1 },
       });
     await f.reconcile();
-    expect(f.memory.effects.pendingEffects).toBeDefined();
+    expect(f.memory.execution.effects.pendingEffects).toBeDefined();
   },
 );
 
@@ -117,8 +119,12 @@ it.each(['public', 'private', 'nearby', undefined] as const)(
     const history = [event('alice', 'private'), event('bob', 'nearby')];
     const addressed = scope ? event('bob', scope) : undefined;
     const memory = emptyState();
-    memory.task.current = newTask('alice-private-task', 'alice', 'alice');
-    memory.effects.previous = { secret: 'alice-private-effects' };
+    memory.execution.task.current = newTask(
+      'alice-private-task',
+      'alice',
+      'alice',
+    );
+    memory.execution.effects.previous = { secret: 'alice-private-effects' };
     const prepared = await prepareDecision(
       { observe: async () => ({ ...observation, events: history }) },
       memory,
@@ -134,9 +140,11 @@ it.each(['public', 'private', 'nearby', undefined] as const)(
       expect(prepared!.visibleTask).toBeUndefined();
       expect(prepared!.context.previous).toBeUndefined();
     } else {
-      expect(prepared!.visibleTask).toBe(memory.task.current);
-      expect(prepared!.context.previous).toEqual(memory.effects.previous);
+      expect(prepared!.visibleTask).toBe(memory.execution.task.current);
+      expect(prepared!.context.previous).toEqual(
+        memory.execution.effects.previous,
+      );
     }
-    expect(memory.task.current.goal).toBe('alice-private-task');
+    expect(memory.execution.task.current.goal).toBe('alice-private-task');
   },
 );

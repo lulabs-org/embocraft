@@ -1,9 +1,10 @@
 import type { AICharacterTask, WorldEvent } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts/config';
 import { AgentRuntimeError } from '../../contracts/errors';
-import type { AgentRunState } from '../../contracts/state';
+import type { RuntimeState } from '../../contracts/state';
+import type { TaskCommand, TaskLease } from '../../contracts/task';
 import { checkBudgetCap, RequestBudget } from '../task/budget';
-import { TaskService, type TaskCommand, type TaskLease } from '../task/service';
+import { TaskService } from '../task/service';
 import { isActiveTask } from '../task/state';
 
 /** Message turns use the character allowance when the host omits limits. */
@@ -22,21 +23,23 @@ export class TurnBinding {
   private attached: boolean;
 
   constructor(
-    private readonly memory: AgentRunState,
+    private readonly memory: RuntimeState,
     private readonly taskConfig: AgentConfig,
     private readonly defaults: AgentConfig,
     private readonly message?: WorldEvent,
   ) {
     this.service = new TaskService(memory);
-    this.expected = memory.task.current ? this.service.lease() : undefined;
+    this.expected = memory.execution.task.current
+      ? this.service.lease()
+      : undefined;
     this.attached = !message;
     this.config = { ...(message ? defaults : taskConfig) };
     if (message) this.applyMessageLimits();
-    memory.task.usage ??= { calls: 0, tokens: 0, estimated: false };
+    memory.character.usage ??= { calls: 0, tokens: 0, estimated: false };
     this.budget = new RequestBudget(
       this.config,
-      memory.task.usage,
-      message ? undefined : memory.task.current,
+      memory.character.usage,
+      message ? undefined : memory.execution.task.current,
     );
   }
 
@@ -61,7 +64,7 @@ export class TurnBinding {
   attach() {
     if (this.attached) return;
     this.authorize();
-    const task = this.memory.task.current;
+    const task = this.memory.execution.task.current;
     if (!isActiveTask(task))
       throw new AgentRuntimeError('当前任务未运行，请先恢复或创建任务。');
     Object.assign(this.config, this.taskConfig);
@@ -70,7 +73,7 @@ export class TurnBinding {
   }
 
   canAttachForReply(): boolean {
-    const task = this.memory.task.current;
+    const task = this.memory.execution.task.current;
     return isActiveTask(task) && !checkBudgetCap(task, this.taskConfig);
   }
 
@@ -81,7 +84,7 @@ export class TurnBinding {
     save: () => Promise<void>,
     beforeNewTask?: (
       task: AICharacterTask,
-      previous: AgentRunState,
+      previous: RuntimeState,
     ) => Promise<void>,
   ) {
     this.budget.flushTime();

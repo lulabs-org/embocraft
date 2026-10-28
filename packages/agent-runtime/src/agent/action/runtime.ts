@@ -1,8 +1,8 @@
+import type { RuntimeState } from '../../contracts/state';
+import type { AgentAttention } from '../../world/observe/attention';
+import { isActiveTask } from '../task/state';
 import { followingAction } from './follow';
 import type { ActionRunOptions, ActionStep } from './port';
-import type { AgentRunState } from '../../contracts/state';
-import { isActiveTask } from '../task/state';
-import type { AgentAttention } from '../../world/observe/attention';
 
 export interface ActionEntry {
   id: string;
@@ -18,7 +18,7 @@ export class ActionRuntime {
   async advance(canAdvance: () => Promise<boolean>): Promise<ActionStep> {
     const { memory } = this.options;
     const action = continuingAction(memory);
-    if (!action || !isActiveTask(memory.task.current)) return 'idle';
+    if (!action || !isActiveTask(memory.execution.task.current)) return 'idle';
     if (!(await canAdvance())) return 'stop';
     return action.advance(this.options);
   }
@@ -73,11 +73,11 @@ export class ActionRuntime {
   }
 }
 
-function continuingAction(memory: AgentRunState) {
+function continuingAction(memory: RuntimeState) {
   return followingAction.pending(memory) ? followingAction : undefined;
 }
 
 /** The host need not know which concrete action requests a local wake. */
-export function actionWakeDelay(memory: AgentRunState): number | undefined {
+export function actionWakeDelay(memory: RuntimeState): number | undefined {
   return continuingAction(memory)?.wakeDelayMs;
 }

@@ -1,10 +1,7 @@
 import type { AICharacterTask } from '@voxel/shared';
 import type { AgentAction } from '../../contracts/action';
-import type {
-  DecisionContext,
-  Observation,
-} from '../../contracts/observation';
-import type { TaskCommand } from '../task/service';
+import type { DecisionContext, Observation } from '../../contracts/observation';
+import type { TaskCommand } from '../../contracts/task';
 
 export type ToolTaskOutcome =
   | { status: 'completed' | 'blocked' | 'needs_input'; reason: string }

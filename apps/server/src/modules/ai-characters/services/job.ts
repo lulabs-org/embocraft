@@ -1,13 +1,9 @@
-import type { AICharacterView } from '@voxel/shared';
-import type {
-  AgentAttention,
-  AgentRunState,
-  AgentRuntime,
-  Session,
-} from '@voxel/agent-runtime';
+import type { AgentRuntime, RuntimeState, Session } from '@voxel/agent-runtime';
 import { createAgentRuntime } from '@voxel/agent-runtime';
-import type { PlanService } from '../../tasks';
+import type { AICharacterView } from '@voxel/shared';
+
 import type { SavedProvider } from '../../providers';
+import type { PlanService } from '../../tasks';
 
 export interface HostedAICharacter {
   run(provider: SavedProvider, run?: boolean): Promise<void>;
@@ -20,12 +16,9 @@ export type Job = {
   session?: Session;
   done?: Promise<void>;
   runtime: AgentRuntime;
-  /** Compatibility aliases; production code uses runtime operations. */
-  memory: AgentRunState;
   ledger: PlanService;
   currentRunId?: string;
   taskMutating?: boolean;
-  attention: AgentAttention;
   updating?: boolean;
   controlling?: boolean;
   storageFailed?: boolean;
@@ -54,24 +47,12 @@ export class AICharacterRegistry extends Map<string, Job> {}
 
 /** The runtime owns state and attention for the whole lifetime of a hosted character. */
 export function createCharacterJob(
-  input: Omit<Job, 'runtime' | 'memory' | 'attention'>,
-  state?: AgentRunState,
+  input: Omit<Job, 'runtime'>,
+  state?: RuntimeState,
 ): Job {
   const runtime = createAgentRuntime({ state });
   return {
     ...input,
     runtime,
-    get memory() {
-      return runtime.state;
-    },
-    set memory(value) {
-      runtime.replaceState(value);
-    },
-    get attention() {
-      return runtime.attention;
-    },
-    set attention(value) {
-      runtime.replaceAttention(value);
-    },
   };
 }

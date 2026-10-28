@@ -9,7 +9,7 @@ flowchart TD
   Queue -->|前序任务结束或空闲| Inbox
   Controls[控制台 / 玩家打断指令] --> Cancel[鉴权后立即取消活跃动作]
   Cancel --> Inbox
-  Inbox --> Runner[AgentRuntime / AgentRunner 统一执行入口]
+  Inbox --> Runner[AgentRuntime 统一宿主入口]
   Runner --> Policy[TaskService 归属与权限校验]
   Runner --> Actions[动作执行器: goto / build / house / follow]
   Actions -->|物理执行确认或阻碍| Inbox
@@ -17,7 +17,7 @@ flowchart TD
   Runner --> Save[事件 / 检查点原子持久化]
 ```
 
-服务端与 CLI 共用 `createAgentRuntime()` 门面。消息接入、任务控制、状态视图和重启恢复由运行时提供；计划账本、世界连接与联合存档提交由宿主负责。保存的 v3 状态格式和既有入口保持兼容。
+服务端与 CLI 共用 `createAgentRuntime()` 门面。消息接入、任务控制、状态视图和重启恢复由运行时提供；计划账本、世界连接与联合存档提交由宿主负责。运行时内存与存档统一采用 version 4 的 character / execution 分区；旧入口与 v3 运行时存档兼容已删除，加载旧格式会报错并阻止覆盖原档。
 
 ---
 
@@ -90,7 +90,7 @@ flowchart TD
 
 ## 持久化、检查点与故障恢复
 
-1. **版本化存档**：聚合存档数据规范为 v3 协议，Pi 检查点为 v3，事件队列为 v1；
+1. **版本化存档**：服务端聚合存档为 v3，其中运行时状态为 version 4，Pi 检查点为 v3，事件队列为 v1；
 2. **原子文件写入**：每次存档更新均经过临时文件写入与原子替换（Atomic Rename），彻底防止异常宕机导致文件损坏；
 3. **断电重启自愈**：
    - 服务重启后，正在执行的任务自动转为“已暂停（Paused）”；

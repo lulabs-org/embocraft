@@ -1,18 +1,20 @@
-import { AgentRunner, runAgent } from '@voxel/agent-runtime';
+import { createAgentRuntime } from '@voxel/agent-runtime';
+
 import {
-  modelRequest,
-  type ModelResponder,
-} from '../../../tests/support/model-fixture';
-import { testAgentConfig } from '../../../tests/support/agent-config';
-import { describe, it, expect, vi } from 'vitest';
-import {
-  parseAction,
   executeAction,
   houseBlocks,
+  parseAction,
   type BuildAction,
   type Observation,
   type Session,
 } from '@voxel/agent-runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { testAgentConfig } from '../../../tests/support/agent-config';
+import {
+  modelRequest,
+  type ModelResponder,
+} from '../../../tests/support/model-fixture';
+
 import { LIMIT } from '@voxel/shared';
 
 const observation: Observation = {
@@ -272,9 +274,12 @@ describe('bounded multi-block construction', () => {
       .mockResolvedValueOnce([
         { name: 'complete_task', arguments: { summary: '测试决策' } },
       ]);
-    await runAgent(
-      s as unknown as Session,
-      new AgentRunner(undefined, modelRequest(decide)),
+    await createAgentRuntime({
+      session: s as unknown as Session,
+      endpoint: undefined,
+      request: modelRequest(decide),
+      log: () => {},
+    }).runUntilSettled(
       {
         ...testAgentConfig(),
         permissions: { move: true, chat: true, place: true, remove: true },
@@ -282,7 +287,6 @@ describe('bounded multi-block construction', () => {
         intervalMs: 0,
       },
       signal(),
-      () => {},
     );
     expect(decide.mock.calls[2][1]).toMatchObject({
       unfinishedBuild: {

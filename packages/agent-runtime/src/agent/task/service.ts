@@ -1,48 +1,26 @@
 import type { AICharacterTask } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts';
-import type { AgentRunState } from '../../contracts/state';
-import type {
-  TaskCommand as Command,
-  TaskAuthority as Authority,
-  TaskLease as Lease,
-  TaskOutcome as Outcome,
-} from '../../contracts/task';
 import { AgentRuntimeError } from '../../contracts/errors';
+import type { RuntimeState } from '../../contracts/state';
+import type {
+  TaskAuthority,
+  TaskCommand,
+  TaskLease,
+  TaskOutcome,
+} from '../../contracts/task';
 import type { RequestBudget } from './budget';
 import { TaskPolicy } from './policy';
-import {
-  applyTaskExecutionState,
-  restoreStateSnapshot,
-  taskExecutionState,
-} from '../state/ownership';
 
-// Preserve the existing service's type surface for internal and external callers.
-export type TaskCommand = Command;
-export type TaskAuthority = Authority;
-export type TaskLease = Lease;
-export type TaskOutcome = Outcome;
-
-/** Compatibility/commit boundary; task rules receive execution state only. */
+/** Task transactions; policy receives the execution owner directly. */
 export class TaskService {
-  constructor(readonly memory: AgentRunState) {}
+  constructor(readonly memory: RuntimeState) {}
 
   private policy() {
-    return new TaskPolicy(taskExecutionState(this.memory));
-  }
-
-  private change<T>(operation: (policy: TaskPolicy) => T, replace = false): T {
-    const policy = this.policy();
-    try {
-      const result = operation(policy);
-      applyTaskExecutionState(this.memory, policy.memory, replace);
-      return result;
-    } finally {
-      if (policy.issuedLease) this.memory.version = 3;
-    }
+    return new TaskPolicy(this.memory.execution);
   }
 
   lease(): TaskLease {
-    return this.change((policy) => policy.lease());
+    return this.policy().lease();
   }
 
   current(lease: TaskLease) {
@@ -62,10 +40,7 @@ export class TaskService {
     authority: TaskAuthority,
     config: AgentConfig,
   ): AICharacterTask {
-    return this.change(
-      (policy) => policy.command(command, authority, config),
-      command.type === 'start',
-    );
+    return this.policy().command(command, authority, config);
   }
 
   async commit(
@@ -76,7 +51,7 @@ export class TaskService {
     budget?: RequestBudget,
     beforeNewTask?: (
       task: AICharacterTask,
-      previous: AgentRunState,
+      previous: RuntimeState,
     ) => Promise<void>,
   ) {
     const before = structuredClone(this.memory);
@@ -88,14 +63,14 @@ export class TaskService {
       return task;
     } catch {
       // A failed commit rolls back both scopes, but never erases provider usage.
-      const usage = this.memory.task.usage;
-      restoreStateSnapshot(this.memory, before);
-      this.memory.task.usage = usage;
+      const usage = this.memory.character.usage;
+      Object.assign(this.memory, before);
+      this.memory.character.usage = usage;
       throw new AgentRuntimeError('无法保存任务检查点，已停止写操作。', true);
     }
   }
 
   finish(lease: TaskLease, outcome: TaskOutcome, turnMutated = false) {
-    return this.change((policy) => policy.finish(lease, outcome, turnMutated));
+    return this.policy().finish(lease, outcome, turnMutated);
   }
 }

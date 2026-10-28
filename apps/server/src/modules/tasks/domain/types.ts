@@ -1,11 +1,11 @@
-import type { AgentRunState } from '@voxel/agent-runtime';
+import type { RuntimeState } from '@voxel/agent-runtime';
 import type { TaskRun } from '@voxel/shared';
 
 /**
  * 运行时任务运行快照及上下文
  */
 export type StoredRun = TaskRun & {
-  runtime?: AgentRunState;
+  runtime?: RuntimeState;
   accountedTokens: number;
   requestId?: string;
   lastBatch?: string;

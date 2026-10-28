@@ -1,9 +1,10 @@
 import type { Message } from '@earendil-works/pi-ai';
 import type { AICharacterTask } from '@voxel/shared';
-import type { AgentRunState, PiCheckpoint } from '../../contracts/state';
-import { isEndedTask } from '../task/state';
-import { TaskService, type TaskLease } from '../task/service';
+import type { PiCheckpoint, RuntimeState } from '../../contracts/state';
+import type { TaskLease } from '../../contracts/task';
 import { restoreActionEffects } from '../action/reconcile';
+import { TaskService } from '../task/service';
+import { isEndedTask } from '../task/state';
 import { recentTurns } from './window';
 
 /** Owner fields tie a checkpoint to exactly one task revision and audience. */
@@ -13,52 +14,52 @@ type CheckpointOwner = Pick<
 >;
 
 /** Model-specific deserialization stays outside task policy and persisted state types. */
-export function checkpointMessages(memory: AgentRunState): Message[] {
-  return recentTurns((memory.checkpoint.pi?.messages ?? []) as Message[]);
+export function checkpointMessages(memory: RuntimeState): Message[] {
+  return recentTurns(
+    (memory.execution.checkpoint.pi?.messages ?? []) as Message[],
+  );
 }
 
 /** Migrate both current and archived run states without replaying old tool calls. */
-export function restoreCheckpoint(memory: AgentRunState) {
+export function restoreCheckpoint(memory: RuntimeState) {
   restoreActionEffects(memory);
-  const saved = memory.checkpoint.pi;
+  const saved = memory.execution.checkpoint.pi;
   if (saved?.inFlight)
-    memory.checkpoint.unknownEffect = { ...saved.inFlight, state: 'unknown' };
-  memory.version = 3;
-  const task = memory.task.current;
+    memory.execution.checkpoint.unknownEffect = {
+      ...saved.inFlight,
+      state: 'unknown',
+    };
+  const task = memory.execution.task.current;
   if (!task) {
-    delete memory.checkpoint.pi;
+    delete memory.execution.checkpoint.pi;
     return;
   }
   const owner = checkpointOwner(new TaskService(memory).lease(), task);
-  if (
-    !saved ||
-    ![2, 3].includes(saved.version) ||
-    !matchesOwner(saved, owner)
-  ) {
-    delete memory.checkpoint.pi;
+  if (!saved || saved.version !== 3 || !matchesOwner(saved, owner)) {
+    delete memory.execution.checkpoint.pi;
     return;
   }
   try {
     saved.messages = checkpointMessages(memory);
   } catch {
-    delete memory.checkpoint.pi;
+    delete memory.execution.checkpoint.pi;
     return;
   }
   if (saved.inFlight) saved.inFlight.state = 'unknown';
 }
 
 /** Persists the trimmed transcript for the current task; callers redact first. */
-export function updateCheckpoint(memory: AgentRunState, messages: Message[]) {
-  const task = memory.task.current;
+export function updateCheckpoint(memory: RuntimeState, messages: Message[]) {
+  const task = memory.execution.task.current;
   if (!task || isEndedTask(task)) {
-    delete memory.checkpoint.pi;
+    delete memory.execution.checkpoint.pi;
     return;
   }
-  memory.checkpoint.pi = {
+  memory.execution.checkpoint.pi = {
     version: 3,
     ...checkpointOwner(new TaskService(memory).lease(), task),
     messages: recentTurns(messages),
-    inFlight: memory.checkpoint.pi?.inFlight,
+    inFlight: memory.execution.checkpoint.pi?.inFlight,
   };
 }
 

@@ -1,26 +1,24 @@
 import type { AICharacterTask, WorldEvent } from '@voxel/shared';
+import { actionWakeDelay } from '../agent/action/runtime';
+import { defaultEndpoint } from '../agent/model/pi';
+import { nextIntervalMs } from '../agent/schedule';
+import { TaskService } from '../agent/task/service';
+import { AgentRunner } from '../agent/turn/wake';
 import type { AgentConfig } from '../contracts/config';
 import { AgentRuntimeError } from '../contracts/errors';
-import { defaultEndpoint } from '../agent/model/pi';
-import { TaskService } from '../agent/task/service';
 import type { TaskAuthority, TaskCommand } from '../contracts/task';
-import { AgentRunner } from '../agent/turn/wake';
-import { nextIntervalMs } from '../agent/schedule';
-import { actionWakeDelay } from '../agent/action/runtime';
+import { mergeSignals } from '../kernel/abort';
 import { AgentAttention } from '../world/observe/attention';
 import type { AgentSession } from '../world/session/port';
-import { mergeSignals } from '../kernel/abort';
 import { RuntimeExecution } from './execution';
-import { receiveWorldEvent } from './receive';
 import type {
   RuntimeOptions,
-  RuntimeRunOptions,
   RuntimeReceiveOptions,
+  RuntimeRunOptions,
 } from './ports';
+import { receiveWorldEvent } from './receive';
 
-export type { RuntimePorts, RuntimeRunOptions, RuntimeStore } from './ports';
-export type { RunOptions } from '../agent/turn/turn';
-export { AgentRunner } from '../agent/turn/wake';
+export type { RuntimeRunOptions, RuntimeStore } from './ports';
 
 /** Host facade: one state owner, input queue and execution slot per character. */
 export class AgentRuntime extends RuntimeExecution {
@@ -32,7 +30,7 @@ export class AgentRuntime extends RuntimeExecution {
 
   constructor(private readonly ports: RuntimeOptions = {}) {
     super(ports.state);
-    this.messages = ports.attention ?? new AgentAttention();
+    this.messages = new AgentAttention();
     this.session = ports.session;
     this.selfId = ports.selfId ?? '';
   }
@@ -41,15 +39,8 @@ export class AgentRuntime extends RuntimeExecution {
     if (this.active) throw new AgentRuntimeError('Agent 已在运行。', true);
   }
 
-  /** Legacy queue access. Hosts use receive(), pendingMessages and clearMessages(). */
-  get attention(): AgentAttention {
-    return this.messages;
-  }
   get pendingMessages(): boolean {
     return this.messages.pending;
-  }
-  replaceAttention(attention: AgentAttention) {
-    this.messages = attention;
   }
   clearMessages() {
     this.messages.clear();
@@ -71,7 +62,7 @@ export class AgentRuntime extends RuntimeExecution {
   receive(event: WorldEvent, options: RuntimeReceiveOptions = {}) {
     const connection = this.connection;
     return receiveWorldEvent({
-      state: () => this.state,
+      state: () => this.memory,
       attention: () => this.messages,
       session: this.session,
       selfId: this.selfId,
@@ -83,11 +74,6 @@ export class AgentRuntime extends RuntimeExecution {
           connection === this.connection && (options.isCurrent?.() ?? true),
       },
     });
-  }
-
-  /** Compatibility entry: submit addressed chat without intercepting control words. */
-  async submit(event: WorldEvent): Promise<boolean> {
-    return (await this.receive(event)) === 'queued';
   }
 
   async interrupt() {
@@ -106,12 +92,12 @@ export class AgentRuntime extends RuntimeExecution {
     // Reject unauthorized controls before allowing them to interrupt current work.
     new TaskService(this.snapshot()).command(command, authority, config);
     await this.interrupt();
-    return new TaskService(this.state).commit(command, authority, config, () =>
+    return new TaskService(this.memory).commit(command, authority, config, () =>
       Promise.resolve(this.ports.store?.save()),
     );
   }
 
-  /** One serialized wake; old Runner injection remains available to existing hosts. */
+  /** One serialized wake using the selected model transport. */
   async run(config: AgentConfig, options: RuntimeRunOptions): Promise<void> {
     if (this.active) throw new AgentRuntimeError('Agent 已在运行。', true);
     if (!this.session) throw new AgentRuntimeError('角色尚未连接世界。', true);
@@ -124,19 +110,16 @@ export class AgentRuntime extends RuntimeExecution {
       }),
     };
     try {
-      const runner =
-        options.runner ??
-        this.ports.runner ??
-        new AgentRunner(
-          this.ports.endpoint ?? defaultEndpoint,
-          this.ports.request ?? fetch,
-        );
+      const runner = new AgentRunner(
+        options.model?.endpoint ?? this.ports.endpoint ?? defaultEndpoint,
+        options.model?.request ?? this.ports.request ?? fetch,
+      );
       await runner.run({
         session: this.session,
         config,
         defaults: options.defaults,
         signal: mergeSignals(options.signal, controller.signal),
-        memory: this.state,
+        memory: this.memory,
         attention: this.messages,
         log: options.log ?? this.ports.log,
         checkpoint:
@@ -155,7 +138,7 @@ export class AgentRuntime extends RuntimeExecution {
     if (this.pendingMessages) return 0;
     const view = this.view();
     if (view.active)
-      return actionWakeDelay(this.state) ?? nextIntervalMs(config);
+      return actionWakeDelay(this.memory) ?? nextIntervalMs(config);
     return undefined;
   }
 
@@ -172,7 +155,7 @@ export class AgentRuntime extends RuntimeExecution {
       )
         break;
       await this.messages.wait(
-        actionWakeDelay(this.state) ?? nextIntervalMs(config),
+        actionWakeDelay(this.memory) ?? nextIntervalMs(config),
         signal,
       );
     } while (!signal.aborted);

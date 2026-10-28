@@ -24,12 +24,6 @@ export function taskExecutionState(job: Job): TaskExecutionState {
         ...value,
       };
     },
-    get memory() {
-      return job.memory;
-    },
-    set memory(value) {
-      job.memory = value;
-    },
     get ledger() {
       return job.ledger;
     },

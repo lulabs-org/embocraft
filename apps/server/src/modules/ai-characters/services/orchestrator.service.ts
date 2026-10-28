@@ -1,51 +1,51 @@
-import { ManagementEvents } from '../../management';
-import { ManagementPersistence } from '../../../persistence/management-persistence';
-import { migrateArchive } from '../../../persistence/migrate-archive';
-import type { ArchivePort } from '../../../persistence/archive';
-import { AICharacterWakeScheduler } from './wake-scheduler.service';
-import { appendAICharacterLog } from '../domain/activity-log';
+import {
+  type AgentConfig,
+  type RuntimeModelOptions,
+  type Session,
+} from '@voxel/agent-runtime';
 import {
   aiCharacterPermissions,
   type AICharacterSettings,
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
+import type { ArchivePort } from '../../../persistence/archive';
+import { ManagementPersistence } from '../../../persistence/management-persistence';
+import { migrateArchive } from '../../../persistence/migrate-archive';
+import { ManagementEvents } from '../../management';
 import type { ProviderRuntimePort, SavedProvider } from '../../providers';
-import {
-  type Session,
-  type AgentRunner,
-  type AgentConfig,
-} from '@voxel/agent-runtime';
+import { appendAICharacterLog } from '../domain/activity-log';
+import { AICharacterWakeScheduler } from './wake-scheduler.service';
 
-import { object, text, boolean } from '../../../core/http/validation';
-import {
-  validateAICharacter,
-  aiCharacterProfileInput,
-} from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
+import { boolean, object, text } from '../../../core/http/validation';
+import {
+  aiCharacterProfileInput,
+  validateAICharacter,
+} from '../domain/validation';
 
 import {
-  active,
-  createCharacterJob,
-  resident,
-  isJobBusy,
-  canWakeJob,
-  type Job,
-  AICharacterRegistry,
-} from './job';
-import type { VoiceServicePort } from '../ports';
-import {
-  pauseTaskForHost,
   markJoined,
   markOffline,
   modelChanged,
+  pauseTaskForHost,
   TaskCoordinator,
   TaskSnapshots,
 } from '../../tasks';
-import { executionState } from './task-adapter';
 import { restoreAICharacterJob } from '../persistence/restore';
+import { CharacterSnapshots } from '../persistence/snapshots';
+import type { VoiceServicePort } from '../ports';
 import { AICharacterHost } from './character-host.service';
 import type { ExecutionContext } from './execution-context';
-import { CharacterSnapshots } from '../persistence/snapshots';
+import {
+  active,
+  AICharacterRegistry,
+  canWakeJob,
+  createCharacterJob,
+  isJobBusy,
+  resident,
+  type Job,
+} from './job';
+import { executionState } from './task-adapter';
 import { CharacterVoiceCoordinator } from './voice-coordinator.service';
 
 export class AICharacterOrchestrator {
@@ -634,8 +634,5 @@ export class AICharacterOrchestrator {
 
 export type AICharacterDependencies = {
   session: (url: string) => Session;
-  runner: (
-    config: AgentConfig,
-    provider: SavedProvider,
-  ) => Pick<AgentRunner, 'run'>;
+  model: (config: AgentConfig, provider: SavedProvider) => RuntimeModelOptions;
 };

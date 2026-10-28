@@ -7,7 +7,7 @@ import type {
   Observation,
   PlannedEdit,
 } from '../../contracts';
-import type { AgentRunState, EffectsSection } from '../../contracts/state';
+import type { EffectsSection, RuntimeState } from '../../contracts/state';
 import { houseBlocks } from '../../world/actions/build';
 import { observedEmpty } from '../../world/observe/verify';
 
@@ -96,7 +96,7 @@ export function formatActionResult(
   action: AgentAction,
   batch: BatchResult,
   observation: Observation,
-  memory: AgentRunState,
+  memory: RuntimeState,
 ) {
   const edits =
     action.type === 'edit'
@@ -130,29 +130,32 @@ export function formatActionResult(
       : {}),
     position: observation.self,
     revision: observation.revision,
-    unfinishedBuild: memory.effects.unfinishedBuild,
+    unfinishedBuild: memory.execution.effects.unfinishedBuild,
   };
 }
 
 /** One batch captures its prior blueprint once, including blocks outside a replacement. */
-export function createBuildEffects(memory: AgentRunState) {
-  const prior = memory.effects.unfinishedBuild;
+export function createBuildEffects(memory: RuntimeState) {
+  const prior = memory.execution.effects.unfinishedBuild;
   return {
     before(action: AgentAction): boolean {
       if (action.type !== 'build' && action.type !== 'house') return false;
-      memory.effects.unfinishedBuild = beginUnfinishedBuild(prior, action);
+      memory.execution.effects.unfinishedBuild = beginUnfinishedBuild(
+        prior,
+        action,
+      );
       return true;
     },
     progress(action: BuildAction, result: BuildResult) {
-      memory.effects.unfinishedBuild = mergeBuildCheckpoint(
+      memory.execution.effects.unfinishedBuild = mergeBuildCheckpoint(
         prior,
         action,
         result,
       );
     },
     checkpoint(batch: BatchResult) {
-      memory.effects.unfinishedBuild = reconcileUnfinishedBuild(
-        memory.effects.unfinishedBuild,
+      memory.execution.effects.unfinishedBuild = reconcileUnfinishedBuild(
+        memory.execution.effects.unfinishedBuild,
         batch,
       );
     },

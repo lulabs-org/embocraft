@@ -4,11 +4,8 @@ import {
   type WorldEvent,
 } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts/config';
-import type {
-  DecisionContext,
-  Observation,
-} from '../../contracts/observation';
-import type { AgentRunState, CharacterEvent } from '../../contracts/state';
+import type { DecisionContext, Observation } from '../../contracts/observation';
+import type { CharacterEvent, RuntimeState } from '../../contracts/state';
 import { worldView } from '../../world/observe/extract';
 import { isEndedTask } from '../task/state';
 
@@ -24,11 +21,11 @@ export function turnInput(
   config: AgentConfig,
   observation: Observation,
   context: unknown,
-  memory?: AgentRunState,
+  memory?: RuntimeState,
 ) {
-  const inFlight = memory?.checkpoint.pi?.inFlight;
+  const inFlight = memory?.execution.checkpoint.pi?.inFlight;
   const unknown =
-    memory?.checkpoint.unknownEffect ??
+    memory?.execution.checkpoint.unknownEffect ??
     (inFlight?.state === 'unknown' ? inFlight : undefined);
 
   return {
@@ -56,7 +53,7 @@ export function buildDecisionPayload(o: {
   config: AgentConfig;
   message?: WorldEvent;
   prepared: DecisionContext;
-  memory: AgentRunState;
+  memory: RuntimeState;
   event?: CharacterEvent;
 }): string {
   const { config, message, prepared, memory, event } = o;
@@ -89,7 +86,7 @@ export function buildDecisionPayload(o: {
       event: event
         ? { kind: event.kind, id: event.id, detail: event.detail }
         : { kind: 'condition_changed' },
-      activeAction: visible ? memory.effects.activeAction : undefined,
+      activeAction: visible ? memory.execution.effects.activeAction : undefined,
     },
     (key, value) => (key === 'batchId' ? undefined : value),
   );

@@ -1,14 +1,15 @@
-import { vi } from 'vitest';
 import {
-  AgentRunner,
-  AgentAttention,
-  emptyState,
-  newTask,
   type AgentSession,
-  type AgentRunState,
   type Observation,
   type Result,
+  type RuntimeState,
 } from '@voxel/agent-runtime';
+import { AgentRunner } from '@voxel/agent-runtime/testing';
+import { vi } from 'vitest';
+import { newTask } from '../src/agent/task/state';
+import { emptyState } from '../src/contracts/state';
+import { AgentAttention } from '../src/world/observe/attention';
+
 import type { Edit } from '@voxel/shared';
 import { testAgentConfig } from '../../../tests/support/agent-config';
 import { toolResponse } from '../../../tests/support/pi-response';
@@ -42,9 +43,13 @@ export function runtimeFixture(
     events: [],
     allowedActions: [],
   };
-  const memory: AgentRunState = {
-    ...emptyState(),
-    task: { current: newTask('向东移动') },
+  const memory: RuntimeState = {
+    version: 4 as const,
+    character: { ...emptyState().character },
+    execution: {
+      ...emptyState().execution,
+      task: { current: newTask('向东移动') },
+    },
   };
   const attention = new AgentAttention();
   const session = {

@@ -1,13 +1,17 @@
 import type { Message } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import { emptyState, type AgentRunState } from '../../contracts/state';
+import { emptyState, type RuntimeState } from '../../contracts/state';
 import { newTask } from '../task/state';
 import { persistTranscript } from './transcript';
 
-function memory(): AgentRunState {
+function memory(): RuntimeState {
   return {
-    ...emptyState(),
-    task: { current: newTask('goal') },
+    version: 4 as const,
+    character: { ...emptyState().character },
+    execution: {
+      ...emptyState().execution,
+      task: { current: newTask('goal') },
+    },
   };
 }
 
@@ -25,7 +29,7 @@ function transcript(text: string): Message[] {
 }
 
 function persist(
-  state: AgentRunState,
+  state: RuntimeState,
   options: {
     scope?: string;
     hasMessage?: boolean;
@@ -54,7 +58,7 @@ describe('transcript persistence', () => {
       apiKey: 'sk-secret',
       text: 'using sk-secret here',
     });
-    const serialized = JSON.stringify(state.conversation.exchanges);
+    const serialized = JSON.stringify(state.character.conversation.exchanges);
     expect(serialized).not.toContain('sk-secret');
     expect(serialized).toContain('[已隐藏]');
   });
@@ -63,7 +67,7 @@ describe('transcript persistence', () => {
     const state = memory();
     await persist(state, { scope: 'public' });
     for (let i = 1; i <= 20; i++) await persist(state, { scope: `alice-${i}` });
-    const keys = Object.keys(state.conversation.exchanges!);
+    const keys = Object.keys(state.character.conversation.exchanges!);
     expect(keys).toContain('public');
     expect(keys).toContain('alice-20');
     expect(keys).not.toContain('alice-4');
@@ -73,15 +77,17 @@ describe('transcript persistence', () => {
   it('checkpoints a task turn but does not open a conversation', async () => {
     const state = memory();
     await persist(state, { hasMessage: false, attached: true });
-    expect(state.conversation.exchanges).toBeUndefined();
-    expect(state.checkpoint.pi?.messages).toEqual(transcript('hello'));
+    expect(state.character.conversation.exchanges).toBeUndefined();
+    expect(state.execution.checkpoint.pi?.messages).toEqual(
+      transcript('hello'),
+    );
   });
 
   it('keeps a message turn out of the task checkpoint', async () => {
     const state = memory();
     await persist(state, { attached: false });
-    expect(state.conversation.exchanges).toHaveProperty('public');
-    expect(state.checkpoint.pi).toBeUndefined();
+    expect(state.character.conversation.exchanges).toHaveProperty('public');
+    expect(state.execution.checkpoint.pi).toBeUndefined();
   });
 
   it('saves exactly once per persisted turn', async () => {

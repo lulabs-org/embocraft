@@ -1,24 +1,25 @@
-import { emptyState } from '@voxel/agent-runtime';
-import { controlRun } from '../../../../tests/support/managed-tasks';
-import { createTestServer } from '../helpers/test-server';
+import { emptyState } from '@voxel/agent-runtime/testing';
+
+import {
+  Session,
+  createAgentRuntime,
+  delay,
+  executeAction,
+  until,
+  type RuntimeState,
+} from '@voxel/agent-runtime';
+import { newTask } from '@voxel/agent-runtime/testing';
+import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { controlRun } from '../../../../tests/support/managed-tasks';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import assert from 'node:assert/strict';
-import {
-  Session,
-  executeAction,
-  AgentRunner,
-  runAgent,
-  newTask,
-  delay,
-  until,
-  type AgentRunState,
-} from '@voxel/agent-runtime';
+import { createTestServer } from '../helpers/test-server';
+
 import { key } from '@voxel/shared';
-import { toolResponse } from '../../../../tests/support/pi-response';
 import { testAgentConfig } from '../../../../tests/support/agent-config';
+import { toolResponse } from '../../../../tests/support/pi-response';
 
 process.env.DATABASE_URL = '';
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
@@ -30,8 +31,10 @@ try {
     directory: dir,
     agentDependencies: {
       session: (endpoint) => new Session(endpoint),
-      runner: () =>
-        new AgentRunner(undefined, (input, init) => request(input, init)),
+      model: () => ({
+        endpoint: undefined,
+        request: (input, init) => request(input, init),
+      }),
     },
   });
   const room = server.world,
@@ -121,9 +124,13 @@ try {
     }
   }
   await reset();
-  const memory: AgentRunState = {
-    ...emptyState(),
-    task: { current: newTask('持续跟随') },
+  const memory: RuntimeState = {
+    version: 4 as const,
+    character: { ...emptyState().character },
+    execution: {
+      ...emptyState().execution,
+      task: { current: newTask('持续跟随') },
+    },
   };
   const config = {
     ...testAgentConfig(),
@@ -142,17 +149,16 @@ try {
     ]);
   };
   const controller = new AbortController();
-  const following = runAgent(
-    agent,
-    new AgentRunner(undefined, request),
-    config,
-    controller.signal,
-    () => {},
-    memory,
-  );
+  const following = createAgentRuntime({
+    session: agent,
+    endpoint: undefined,
+    request: request,
+    log: () => {},
+    state: memory,
+  }).runUntilSettled(config, controller.signal);
   try {
     await delay(3000);
-    assert(memory.effects.follow, 'native tool registers follow');
+    assert(memory.execution.effects.follow, 'native tool registers follow');
     let o = await agent.observe();
     assert(Math.abs(o.self.x - 4) <= 1.5, `follow arrival ${o.self.x}`);
     for (let i = 0; i < 8; i++) {
@@ -184,7 +190,7 @@ try {
     'cancel stops held input',
   );
   assert.equal(
-    memory.task.current!.status,
+    memory.execution.task.current!.status,
     'waiting',
     'being near target never completes a continuous task',
   );

@@ -17,8 +17,8 @@
 
 - **依赖单向**：只能沿 `api → agent/world/persistence → contracts/kernel` 方向 import，反向和横穿一律禁止。
 - **领域无 IO**：时间、随机数、id、日志全部通过端口注入，业务规则在假时钟下可测。
-- **宿主只认门面**：宿主不拼事件 id、不解析控制指令、不读写 `AgentRunState` 内部字段。
-- **存档版本集中**：旧格式兼容只在 `persistence/migrate.ts`，升级必须附带旧档 fixture。
+- **宿主只认门面**：宿主不拼事件 id、不解析控制指令、不读写 `RuntimeState` 内部字段。
+- **存档格式明确**：`persistence/state.ts` 只接受当前 version 4 运行时存档，旧版本和损坏数据报错，不自动迁移或静默重置。
 
 ## 目录结构与职责
 
@@ -31,20 +31,17 @@ packages/agent-runtime/
     ├── index.ts            # 只 export * from './api'
     ├── api/                # 宿主唯一接触面
     │   ├── index.ts        # 公共导出汇总
-    │   ├── runtime.ts      # AgentRuntime / AgentRunner、单执行槽与 CLI 循环
+    │   ├── runtime.ts      # AgentRuntime、单执行槽与 CLI 循环
     │   ├── execution.ts    # 任务操作、只读视图、存档与宿主生命周期
     │   ├── receive.ts      # 消息去重、持久化后入队、控制指令路由
-    │   ├── intake.ts       # WorldEvent → CharacterEvent：事件 id、控制词、审计入队
-    │   ├── state.ts        # 计划任务启动、历史恢复与事务回滚入口
-    │   ├── standalone.ts   # runAgent 独立运行适配
-    │   └── ports.ts        # RuntimePorts（session/model/store/log/state）
+    │   └── ports.ts        # RuntimeOptions（session/model/store/log/state）
     ├── contracts/          # 纯类型叶子层，只依赖 @voxel/shared
     │   ├── index.ts
     │   ├── observation.ts  # Observation
     │   ├── action.ts       # AgentAction / ActionResult / BatchResult / NavigationResult
     │   ├── config.ts       # CharacterConfig / ModelConfig / LimitsConfig
     │   ├── task.ts         # TaskCommand / TaskAuthority / TaskLease / TaskOutcome
-    │   ├── state.ts        # AgentRunState v3、CharacterEvent、PiCheckpoint
+    │   ├── state.ts        # RuntimeState v4、CharacterEvent、PiCheckpoint
     │   ├── tool-state.ts   # 单次 turn 的工具状态位
     │   └── errors.ts
     ├── kernel/             # 叶子原语层：取消、超时与信号组合
@@ -65,7 +62,7 @@ packages/agent-runtime/
     │   └── nav/{map,astar,controller}.ts
     ├── agent/              # 角色智能与任务编排
     │   ├── state/          # 角色/执行状态归属投影与恢复
-    │   │   └── ownership.ts recovery.ts
+    │   │   └── transitions.ts recovery.ts
     │   ├── task/           # 任务实体、命令、授权、租约、预算、事件收件箱
     │   │   └── service.ts policy.ts state.ts inbox.ts budget.ts commands.ts
     │   ├── turn/           # 一次决策的生命周期
@@ -95,7 +92,7 @@ packages/agent-runtime/
     │   ├── model/{pi,stream,charge,failure}.ts
     │   └── schedule.ts     # 唤醒等待间隔策略
     ├── persistence/        # 存档格式与迁移
-    │   └── migrate.ts      # v3 状态归一化与恢复
+    │   └── state.ts        # 当前 version 4 存档校验与加载
     └── testing/            # "./testing"：内存 Session、可控 Clock/Id 夹具
 ```
 
@@ -108,14 +105,14 @@ packages/agent-runtime/
 | `world/observe/` | 观察提取、注意力过滤、结果核对谓词 | 写回状态、调度唤醒 |
 | `world/actions/` | 动作解析、权限校验、单动作/批执行、建造 | 任务归属、模型循环 |
 | `world/nav/` | 局部地图、可站立节点搜索、可取消位置闭环 | 任务状态、跟随意图 |
-| `agent/state/` | 角色/执行状态拆分、v3 分区投影、事务快照恢复 | 任务规则、IO |
+| `agent/state/` | 计划启动、执行恢复与重启状态修复 | 任务规则、IO |
 | `agent/task/` | 任务实体、命令与授权、租约、预算计算与提交 | 发起模型请求、执行世界写操作 |
 | `agent/turn/` | 单次决策状态机、事件与转录、观察核对、守卫与检查点 | 宿主协议、具体连接实现 |
 | `agent/tools/` | 工具 schema 与 handler，只依赖 `ToolHost` | 直接访问 Session、持久化细节 |
 | `agent/action/` | 任务绑定的动作执行、后台动作槽、跟随推进 | 模型决策 |
 | `agent/prompt/` | 系统提示词、技能指引、模型输入视图构造 | 工具执行 |
 | `agent/model/` | Pi 模型配置、流式请求、请求计量与失败分类 | 工具执行、任务状态转换 |
-| `persistence/` | 存档序列化与版本迁移 | 运行时决策、世界访问 |
+| `persistence/` | 当前存档格式校验与加载 | 运行时决策、世界访问 |
 | `testing/` | 确定性测试夹具，供包内单测和 CLI 使用 | 生产代码依赖 |
 
 ## 依赖方向
@@ -160,13 +157,13 @@ const runtime = createAgentRuntime({
   endpoint: { type: provider.type, baseUrl: provider.baseUrl },
   store: { save: () => save(runtime.snapshot()) },
 });
-await runtime.submit(message);
+await runtime.receive(message);
 await runtime.run(config, { signal });
 ```
 
 | 宿主场景 | 运行时方法 |
 | --- | --- |
-| 接收世界消息 | `receive()`（`submit()` 用于仅提交普通聊天） |
+| 接收世界消息 | `receive()` |
 | 登记计划、启动计划执行 | `queuePlan()`、`startScheduled()` |
 | 控制任务 | `control()`；联合存档事务使用 `stageControl()` |
 | 读取角色视图、捕获任务记录 | `view()`、`runtimeView(snapshot)`、`executionRecord()` |
@@ -176,7 +173,7 @@ await runtime.run(config, { signal });
 | 唤醒、查询下次调度间隔、中断 | `run()`、`runUntilSettled()`、`nextWakeDelay()`、`interrupt()` |
 
 - `control()` 在校验后停止当前执行并持久化；`stageControl()` 仅同步变更内存状态，供服务端在停止执行后与任务账本一起原子保存。
-- `view()` 与 `runtimeView(snapshot)` 返回脱离内部状态的只读投影；`snapshot()` 与 `archive()` 导出 v3 存档数据，宿主直接持久化，不读写内部字段。
+- `view()` 与 `runtimeView(snapshot)` 返回脱离内部状态的只读投影；`snapshot()` 与 `archive()` 导出 version 4 存档数据，宿主直接持久化，不读写内部字段。
 
 ## 执行路径与动作生命周期
 
@@ -211,15 +208,19 @@ await runtime.run(config, { signal });
 
 ## 状态与存档
 
-内部按生命周期拆分为两类状态，序列化存档保持 v3 结构（`AgentRunState`）：
+内存与存档共同使用 `RuntimeState` version 4，直接保存两个独立的生命周期所有者：
 
-| 生命周期 | 内部类型 | 包含内容 | 对应 v3 存档字段 |
-| --- | --- | --- | --- |
-| 角色长期状态 | `CharacterState` | 累计用量、按受众隔离的对话、聊天节流时间、事件收件箱 | `task.usage`、`conversation.exchanges / lastChatAt`、`inbox` |
-| 单次任务执行 | `TaskExecutionState` | 当前任务与租约、会话有效性、检查点、动作进度与结果、健康状态 | `task.current / identity`、`conversation.audienceExpired / lastReply`、`checkpoint`、`effects`、`health` |
+| 生命周期 | 类型 | 存档位置与内容 |
+| --- | --- | --- |
+| 角色长期状态 | `CharacterState` | `character`：累计用量、受众会话、聊天节流时间与收件箱 |
+| 单次任务执行 | `TaskExecutionState` | `execution`：任务与租约、执行会话、检查点、动作进度和健康状态 |
 
-- `agent/state/ownership.ts` 负责两类状态与 v3 结构之间的投影组装；`TaskPolicy` 只接收 `TaskExecutionState`，不接触角色累计用量、对话历史或收件箱。
-- `persistence/migrate.ts` 的 `restoreState(raw)` 是唯一读取存档的入口（幂等，未知字段安全降级），`emptyState()` 构造初始状态，`snapshotState()` 生成不含累计 `usage` 的历史执行快照。
+`TaskPolicy` 直接接收 `state.execution`。不再存在旧分区投影、回填或兼容类型。`persistence/state.ts` 校验当前格式并返回独立副本；只在未提供存档时创建空状态。旧 version 3 及更早运行时存档、缺少分区的数据、旧模型检查点均报错，不自动迁移。服务端恢复失败会阻止写入，关闭服务也不会覆盖原存档。
+
+`AgentRuntime` 拥有传入状态的副本。宿主使用 `view()`、`snapshot()`、`archive()` 读取，使用运行时方法修改；没有 `state`、`attention`、`Job.memory` 或 `Job.attention` 可变别名。`runAgent`、`submit`、`RuntimePorts` 及底层状态操作的公共导出已删除。宿主只能选择模型端点与请求函数，不再替换 Runner；`AgentRunner` 仅作为包内实现和测试执行器存在。
+
+服务端外层 characters/plans/runs 聚合存档仍使用自己的 version 3；其中嵌入的运行时状态必须为 version 4。两者版本独立。
+
 - **状态切换与回滚**：
   - 创建聊天任务时只替换执行状态，保留角色长期状态；
   - `startScheduled()` 启动计划任务时保留会话历史、收件箱及累计用量，重置聊天节流时间；
@@ -227,7 +228,6 @@ await runtime.run(config, { signal });
   - 保存失败时回滚状态与宿主钩子修改，但保留已实际发生的模型请求计费。
 - **故障恢复与预算规则**：
   - 服务启动时，执行中的任务自动转为暂停，未决动作标记为 `unknown`，**不重放**未确认的移动、聊天或世界写入；
-  - 旧档升级前自动生成 `.before-character-events-v3.bak` 备份；
   - 预算只统计真实模型请求：普通事件使用独立单轮额度，绑定任务后切换为任务额度，计划排队期间不计费；
   - 默认上限：单任务 100 次调用、50,000 tokens、900,000 ms，连续 3 次失败或无进展停止自动重试。
 
@@ -268,4 +268,4 @@ pnpm bench:navigation
 
 - **导航真实模型验收**：`NAVIGATION_PROVIDERS=/absolute/path/providers.json pnpm test:navigation:live`（会产生真实模型调用费用，默认使用 `deepseek`，可通过 `NAVIGATION_PROVIDER` 切换；结果写入 `artifacts/navigation-live-model.json`）。详细规则见 [统一运行时](../../docs/agent/runtime.md)。
 - **CLI 多客户端集成测试**：`SERVER_URL=ws://127.0.0.1:12567 pnpm test:integration`。需连接带 PostgreSQL 持久化的独立测试世界，会修改世界固定坐标，请勿直接对正在使用的世界运行。
-- **Docker 验证**：需单独构建服务端并在隔离实例或备份后验证真实模型任务、重启恢复及旧存档兼容，切勿使用 `down -v` 清空现有数据卷。
+- **Docker 验证**：需单独构建服务端并在隔离实例或备份后验证真实模型任务、当前存档恢复及旧格式拒绝行为，切勿使用 `down -v` 清空现有数据卷。

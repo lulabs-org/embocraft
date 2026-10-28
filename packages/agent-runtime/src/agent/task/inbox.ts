@@ -1,5 +1,5 @@
 import type { ChatData, WorldEvent } from '@voxel/shared';
-import type { AgentRunState, CharacterEvent } from '../../contracts/state';
+import type { CharacterEvent, RuntimeState } from '../../contracts/state';
 
 /** One stable id per generation/actor/seq so retries never duplicate input. */
 export function chatEventId(
@@ -16,7 +16,7 @@ export function chatAudience(event: Pick<WorldEvent, 'actor' | 'data'>) {
 
 /** Record a chat event before it is queued so a crash cannot lose the input. */
 export function recordChatEvent(
-  memory: AgentRunState,
+  memory: RuntimeState,
   event: WorldEvent,
   generation?: string,
 ): CharacterEvent {
@@ -32,8 +32,8 @@ export function recordChatEvent(
 }
 
 /** Record an event into the agent's mailbox, deduplicating and pruning audit history. */
-export function recordEvent(memory: AgentRunState, event: CharacterEvent) {
-  const inbox = (memory.inbox ??= { version: 1, events: [] });
+export function recordEvent(memory: RuntimeState, event: CharacterEvent) {
+  const inbox = (memory.character.inbox ??= { version: 1, events: [] });
   const old = inbox.events.find((e) => e.id === event.id);
   if (old) return old;
   inbox.events.push(event);

@@ -1,10 +1,11 @@
 import {
   executeAction,
-  nextIntervalMs,
   parseAction,
   type Observation,
   type Session,
 } from '@voxel/agent-runtime';
+import { nextIntervalMs } from '../src/agent/schedule';
+
 import { describe, expect, it, vi } from 'vitest';
 import { testAgentConfig } from '../../../tests/support/agent-config';
 

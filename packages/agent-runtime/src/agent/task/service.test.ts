@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { emptyState } from '../../contracts/state';
-import { characterState, taskExecutionState } from '../state/ownership';
 import { testAgentConfig } from '../../../../../tests/support/agent-config';
+import { emptyState } from '../../contracts/state';
 import { TaskPolicy } from './policy';
 import { TaskService } from './service';
 import { newTask } from './state';
@@ -11,14 +10,14 @@ const config = testAgentConfig();
 
 function previousState() {
   const state = emptyState();
-  state.task.current = { ...newTask('old'), status: 'cancelled' };
-  state.task.usage = { calls: 7, tokens: 700, estimated: false };
-  state.conversation = {
+  state.execution.task.current = { ...newTask('old'), status: 'cancelled' };
+  state.character.usage = { calls: 7, tokens: 700, estimated: false };
+  state.character.conversation = {
     exchanges: { public: ['hello'], alice: ['private'] },
     lastChatAt: 123,
-    audienceExpired: true,
   };
-  state.inbox = {
+  state.execution.conversation.audienceExpired = true;
+  state.character.inbox = {
     version: 1,
     events: [
       {
@@ -30,66 +29,66 @@ function previousState() {
       },
     ],
   };
-  state.checkpoint.unknownEffect = {
+  state.execution.checkpoint.unknownEffect = {
     id: 'old-effect',
     name: 'chat',
     state: 'unknown',
   };
-  state.effects.follow = {
+  state.execution.effects.follow = {
     action: { type: 'follow', playerId: 'alice', distance: 1 },
-    taskStartedAt: state.task.current.startedAt,
+    taskStartedAt: state.execution.task.current.startedAt,
     pursuing: false,
   };
-  state.health.failures = 2;
+  state.execution.health.failures = 2;
   return state;
 }
 
 describe('task execution lifecycle', () => {
   it('retains live partition references while leasing and controlling an existing execution', () => {
     const memory = previousState();
-    memory.task.current!.status = 'running';
-    delete memory.conversation.audienceExpired;
-    const task = memory.task;
-    const conversation = memory.conversation;
+    memory.execution.task.current!.status = 'running';
+    delete memory.execution.conversation.audienceExpired;
+    const task = memory.execution.task;
+    const conversation = memory.execution.conversation;
     const service = new TaskService(memory);
     service.lease();
     service.command({ type: 'pause' }, operator, config);
     service.command({ type: 'resume' }, operator, config);
-    expect(memory.task).toBe(task);
-    expect(memory.conversation).toBe(conversation);
+    expect(memory.execution.task).toBe(task);
+    expect(memory.execution.conversation).toBe(conversation);
     expect(task.current?.status).toBe('running');
   });
 
   it('starts a new execution without replacing the character, its usage, conversations or mailbox', () => {
     const memory = previousState();
     const service = new TaskService(memory);
-    const character = characterState(memory);
+    const character = memory.character;
     const before = structuredClone(character);
     const oldLease = service.lease();
 
     service.command({ type: 'start', goal: 'new' }, operator, config);
 
     expect(service.memory).toBe(memory);
-    expect(characterState(memory)).toEqual(before);
-    expect(memory.task.usage).toBe(character.usage);
-    expect(memory.conversation.exchanges).toBe(
+    expect(memory.character).toEqual(before);
+    expect(memory.character.usage).toBe(character.usage);
+    expect(memory.character.conversation.exchanges).toBe(
       character.conversation.exchanges,
     );
-    expect(memory.inbox).toBe(character.inbox);
-    expect(memory.task.current).toMatchObject({
+    expect(memory.character.inbox).toBe(character.inbox);
+    expect(memory.execution.task.current).toMatchObject({
       goal: 'new',
       calls: 0,
       tokens: 0,
     });
-    expect(memory.conversation.audienceExpired).toBeUndefined();
-    expect(memory.checkpoint).toEqual({});
-    expect(memory.effects).toEqual({});
-    expect(memory.health).toEqual({});
+    expect(memory.execution.conversation.audienceExpired).toBeUndefined();
+    expect(memory.execution.checkpoint).toEqual({});
+    expect(memory.execution.effects).toEqual({});
+    expect(memory.execution.health).toEqual({});
     expect(service.current(oldLease)).toBe(false);
   });
 
   it('runs task rules with only execution state and retains progress on pause/resume', () => {
-    const policy = new TaskPolicy(taskExecutionState(emptyState()));
+    const policy = new TaskPolicy(emptyState().execution);
     policy.command({ type: 'start', goal: 'follow' }, operator, config);
     const lease = policy.lease();
     policy.memory.task.current!.tokens = 123;
@@ -117,7 +116,7 @@ describe('task execution lifecycle', () => {
     const service = new TaskService(memory);
     service.lease();
     const before = structuredClone(memory);
-    const usage = memory.task.usage!;
+    const usage = memory.character.usage!;
 
     await expect(
       service.commit(
@@ -130,8 +129,8 @@ describe('task execution lifecycle', () => {
         undefined,
         async (_task, previous) => {
           expect(previous).toEqual(before);
-          memory.conversation.exchanges!.public.push('uncommitted');
-          memory.inbox!.events[0].state = 'done';
+          memory.character.conversation.exchanges!.public.push('uncommitted');
+          memory.character.inbox!.events[0].state = 'done';
           usage.calls++;
           usage.tokens += 100;
         },
@@ -139,8 +138,12 @@ describe('task execution lifecycle', () => {
     ).rejects.toThrow('检查点');
 
     expect(service.memory).toBe(memory);
-    expect(memory).toEqual({ ...before, task: { ...before.task, usage } });
-    expect(memory.task.usage).toBe(usage);
+    expect(memory).toEqual({
+      version: 4,
+      character: { ...before.character, usage },
+      execution: { ...before.execution, task: { ...before.execution.task } },
+    });
+    expect(memory.character.usage).toBe(usage);
     expect(usage).toMatchObject({ calls: 8, tokens: 800 });
   });
 });

@@ -1,6 +1,6 @@
 import type { AICharacterTask, ChatData, WorldEvent } from '@voxel/shared';
 import type { DecisionContext, Observation } from '../../contracts/observation';
-import type { AgentRunState } from '../../contracts/state';
+import type { RuntimeState } from '../../contracts/state';
 import { worldSignature } from '../../world/observe/extract';
 import type { AgentSession } from '../../world/session/port';
 import {
@@ -14,11 +14,11 @@ import {
  */
 export async function prepareDecision(
   session: Pick<AgentSession, 'observe'>,
-  memory: AgentRunState,
+  memory: RuntimeState,
   signal: AbortSignal,
   addressed?: WorldEvent,
 ): Promise<DecisionContext | undefined> {
-  const task = memory.task.current;
+  const task = memory.execution.task.current;
   const observation = await session.observe();
   signal.throwIfAborted();
   if (waitStillUnchanged(addressed, task, observation, memory))
@@ -32,18 +32,19 @@ function waitStillUnchanged(
   addressed: WorldEvent | undefined,
   task: AICharacterTask | undefined,
   observation: Observation,
-  memory: AgentRunState,
+  memory: RuntimeState,
 ): boolean {
   return (
     !addressed &&
     task?.status === 'waiting' &&
-    worldSignature(observation, task.waitFor) === memory.health.waitSignature
+    worldSignature(observation, task.waitFor) ===
+      memory.execution.health.waitSignature
   );
 }
 
 /** Everything one decision may see, filtered by the audience that triggered it. */
 function buildDecisionContext(
-  memory: AgentRunState,
+  memory: RuntimeState,
   task: AICharacterTask | undefined,
   observation: Observation,
   addressed?: WorldEvent,
@@ -65,7 +66,9 @@ function buildDecisionContext(
       // Conversation and task audiences are independent: a public question never
       // sees a private task, and that task's effects stay hidden with it.
       ...actionDecisionContext(memory, !!visibleTask),
-      decisionError: visibleTask ? memory.health.decisionError : undefined,
+      decisionError: visibleTask
+        ? memory.execution.health.decisionError
+        : undefined,
       trigger: decisionTrigger(addressed, task),
     },
   };

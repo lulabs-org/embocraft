@@ -1,11 +1,11 @@
 import {
-  AgentRunner,
+  createAgentRuntime,
   houseBlocks,
-  runAgent,
   Session,
   until,
   type BuildAction,
 } from '@voxel/agent-runtime';
+
 import assert from 'node:assert/strict';
 import { toolResponse } from '../../../../tests/support/pi-response';
 import { createTestServer } from '../helpers/test-server';
@@ -73,13 +73,12 @@ try {
     maxTurns: 2,
     intervalMs: 0,
   };
-  await runAgent(
-    session,
-    new AgentRunner(undefined, request),
-    config,
-    new AbortController().signal,
-    () => {},
-  );
+  await createAgentRuntime({
+    session: session,
+    endpoint: undefined,
+    request: request,
+    log: () => {},
+  }).runUntilSettled(config, new AbortController().signal);
   const last = await session.observe();
   assert(last.self.x > first.self.x);
   assert(

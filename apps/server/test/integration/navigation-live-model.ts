@@ -12,13 +12,8 @@ import {
 } from '../../src/modules/ai-characters';
 import { reserveRun } from '../../src/modules/tasks/services/execution.service';
 
-import {
-  AgentRunner,
-  Session,
-  delay,
-  until,
-  type BatchResult,
-} from '@voxel/agent-runtime';
+import { Session, delay, until, type BatchResult } from '@voxel/agent-runtime';
+
 import { key } from '@voxel/shared';
 
 const source = process.env.NAVIGATION_PROVIDERS;
@@ -65,49 +60,42 @@ try {
     providers: store,
     agentDependencies: {
       session: (endpoint) => new Session(endpoint),
-      runner: (_config, endpoint) => ({
-        run: async (options) => {
-          await new AgentRunner(endpoint, async (input, init) => {
-            assert(
-              ++calls <= 8,
-              'Bound real provider calls to eight per case.',
-            );
-            return fetch(input, init);
-          }).run({
-            ...options,
-            signal: AbortSignal.any([
-              options.signal,
-              AbortSignal.timeout(120000),
-            ]),
-            checkpoint: async () => {
-              await options.checkpoint?.();
-              const task = options.memory.task.current;
-              if (task) taskStates.add(task.status);
-              const batch = options.memory.effects.previous as
-                | BatchResult
-                | undefined;
-              if (batch?.batchId)
-                for (const r of batch.results) {
-                  if (r.action.type === 'goto')
-                    actions.set(batch.batchId, {
-                      action: r.action,
-                      status: r.status,
-                      result: r.result,
-                      task: task && {
-                        goal: task.goal,
-                        status: task.status,
-                        owner: task.owner,
-                        privateTo: task.privateTo,
-                      },
-                    });
-                }
-            },
-          });
+      model: (_config, endpoint) => ({
+        endpoint,
+        request: async (input, init) => {
+          assert(++calls <= 8, 'Bound real provider calls to eight per case.');
+          return fetch(input, init);
         },
       }),
     },
   });
   manager = server.characters;
+  manager.events.on(() => {
+    for (const job of manager!.jobs.values()) {
+      const memory = job.runtime.snapshot();
+      const task = memory.execution.task.current;
+      if (task) taskStates.add(task.status);
+      const batch = memory.execution.effects.previous as
+        | BatchResult
+        | undefined;
+      if (batch?.batchId)
+        for (const r of batch.results) {
+          if (r.action.type === 'goto')
+            actions.set(batch.batchId, {
+              action: r.action,
+              status: r.status,
+              result: r.result,
+              task: task && {
+                goal: task.goal,
+                status: task.status,
+                owner: task.owner,
+                privateTo: task.privateTo,
+              },
+            });
+        }
+    }
+  });
+
   const room = server.world,
     url = server.url;
   human = await new Session(url).join('Explorer4', 'human');
@@ -231,7 +219,7 @@ try {
       const saved = archive.characters.find(
         (a: { id: string }) => a.id === managed.id,
       );
-      assert.equal(saved.runtime.task.current.status, 'completed');
+      assert.equal(saved.runtime.execution.task.current.status, 'completed');
       assert(
         !archive.plans.some(
           (p: { characterId?: string }) => p.characterId === managed.id,

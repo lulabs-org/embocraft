@@ -1,24 +1,23 @@
 import type { AICharacterTask, AICharacterUsage } from '@voxel/shared';
-import type { AgentConfig } from '../contracts/config';
-import {
-  emptyState,
-  snapshotState,
-  type AgentRunState,
-} from '../contracts/state';
-import type { TaskAuthority, TaskCommand, TaskLease } from '../contracts/task';
-import { TaskService } from '../agent/task/service';
-import { isActiveTask, isEndedTask, newTask } from '../agent/task/state';
-import { recordEvent } from '../agent/task/inbox';
 import {
   recoverCharacter,
   recoverHistoricalExecution,
 } from '../agent/state/recovery';
-import { restoreState } from '../persistence/migrate';
 import {
   resumeTaskState,
-  rollbackTaskState,
   startScheduledTaskState,
-} from './state';
+} from '../agent/state/transitions';
+import { recordEvent } from '../agent/task/inbox';
+import { TaskService } from '../agent/task/service';
+import { isActiveTask, isEndedTask, newTask } from '../agent/task/state';
+import type { AgentConfig } from '../contracts/config';
+import {
+  emptyState,
+  snapshotState,
+  type RuntimeState,
+} from '../contracts/state';
+import type { TaskAuthority, TaskCommand, TaskLease } from '../contracts/task';
+import { restoreState } from '../persistence/state';
 
 export type RuntimeView = {
   task?: AICharacterTask;
@@ -52,61 +51,56 @@ type ActionBatchRecord = {
   }[];
 };
 
-export function runtimeView(state: AgentRunState): RuntimeView {
-  const action = state.effects.activeAction;
+export function runtimeView(state: RuntimeState): RuntimeView {
+  const action = state.execution.effects.activeAction;
   return structuredClone({
-    task: state.task.current,
-    identity: state.task.identity,
-    usage: state.task.usage,
+    task: state.execution.task.current,
+    identity: state.execution.task.identity,
+    usage: state.character.usage,
     action: action
       ? { id: action.id, name: action.name, status: action.status }
       : undefined,
-    lastResponse: state.health.lastResponse,
-    requiresReassignment: !!state.conversation.audienceExpired,
-    audienceExpired: state.conversation.audienceExpired,
-    following: !!state.effects.follow,
-    active: isActiveTask(state.task.current),
-    occupied: !isEndedTask(state.task.current),
+    lastResponse: state.execution.health.lastResponse,
+    requiresReassignment: !!state.execution.conversation.audienceExpired,
+    audienceExpired: state.execution.conversation.audienceExpired,
+    following: !!state.execution.effects.follow,
+    active: isActiveTask(state.execution.task.current),
+    occupied: !isEndedTask(state.execution.task.current),
   });
 }
 
 /** State operations shared by online characters, CLI hosts and offline archives. */
 export class RuntimeExecution {
-  private memory: AgentRunState;
+  protected memory: RuntimeState;
   private epoch = 0;
 
-  constructor(state: AgentRunState = emptyState()) {
-    this.memory = state;
+  constructor(state?: RuntimeState) {
+    this.memory = restoreState(state);
   }
 
   protected assertIdle(): void {}
 
-  /** Legacy compatibility only. Production hosts read view()/snapshot() instead. */
-  get state(): AgentRunState {
-    return this.memory;
-  }
   get stateEpoch(): number {
     return this.epoch;
   }
 
-  /** Legacy root replacement; only call after the host has stopped execution. */
-  replaceState(state: AgentRunState) {
+  protected replaceState(state: RuntimeState) {
     this.assertIdle();
-    this.memory = state;
+    this.memory = structuredClone(state);
     this.epoch++;
   }
 
   restore(raw: unknown) {
     this.replaceState(restoreState(raw));
   }
-  rollback(snapshot: AgentRunState, replace = false) {
+  rollback(snapshot: RuntimeState, replace = false) {
     if (replace) this.replaceState(snapshot);
-    else rollbackTaskState(this.memory, snapshot);
+    else Object.assign(this.memory, structuredClone(snapshot));
   }
-  snapshot(): AgentRunState {
+  snapshot(): RuntimeState {
     return structuredClone(this.memory);
   }
-  archive(): AgentRunState {
+  archive(): RuntimeState {
     return snapshotState(this.memory);
   }
 
@@ -116,11 +110,11 @@ export class RuntimeExecution {
 
   /** Immutable ledger projection; archive internals remain opaque to the host. */
   executionRecord() {
-    if (this.memory.task.current) this.lease();
+    if (this.memory.execution.task.current) this.lease();
     return {
-      task: structuredClone(this.memory.task.current),
-      calls: this.memory.task.usage?.calls,
-      batch: structuredClone(this.memory.effects.previous) as
+      task: structuredClone(this.memory.execution.task.current),
+      calls: this.memory.character.usage?.calls,
+      batch: structuredClone(this.memory.execution.effects.previous) as
         | ActionBatchRecord
         | undefined,
       runtime: this.archive(),
@@ -149,14 +143,14 @@ export class RuntimeExecution {
       authority,
       config,
     );
-    if (command.type === 'cancel') delete this.memory.effects.follow;
+    if (command.type === 'cancel') delete this.memory.execution.effects.follow;
     if (reason !== undefined) task.reason = reason;
     return structuredClone(task);
   }
 
   /** CLI's initial goal retains the original default-task semantics. */
   ensureTask(goal: string) {
-    this.memory.task.current ??= newTask(goal);
+    this.memory.execution.task.current ??= newTask(goal);
   }
 
   queuePlan(input: RuntimePlanInput & { revision: number }): string {
@@ -177,7 +171,8 @@ export class RuntimeExecution {
 
   startScheduled(input: RuntimePlanInput) {
     const task = newTask(input.goal);
-    const initial = { ...emptyState(), task: { current: task } };
+    const initial = emptyState();
+    initial.execution.task.current = task;
     this.replaceState(startScheduledTaskState(this.memory, task));
     const lease = this.lease();
     const event = recordEvent(this.memory, {
@@ -198,7 +193,7 @@ export class RuntimeExecution {
     return structuredClone({ task, runtime: initial });
   }
 
-  resumeExecution(archived: AgentRunState, config: AgentConfig) {
+  resumeExecution(archived: RuntimeState, config: AgentConfig) {
     this.replaceState(resumeTaskState(this.memory, archived));
     this.stageControl({ type: 'resume' }, { kind: 'operator' }, config);
   }
@@ -220,7 +215,7 @@ export class RuntimeExecution {
       at: Date.now(),
       audience: input.queued
         ? 'public'
-        : (this.memory.task.current?.privateTo ?? 'public'),
+        : (this.memory.execution.task.current?.privateTo ?? 'public'),
       ...(input.queued
         ? {}
         : { actor: input.actor, taskId: lease!.id, revision: lease!.revision }),
@@ -237,7 +232,7 @@ export class RuntimeExecution {
   reconcilePlanEvents(
     resolve: (runId?: string) => { ended: boolean; reason: string } | undefined,
   ) {
-    for (const event of this.memory.inbox?.events ?? []) {
+    for (const event of this.memory.character.inbox?.events ?? []) {
       if (event.kind !== 'plan' || event.state !== 'pending') continue;
       const run = resolve(event.runId);
       if (!run || run.ended) {
@@ -248,7 +243,7 @@ export class RuntimeExecution {
   }
 
   pauseForHost(config: AgentConfig, reason: string) {
-    if (!isEndedTask(this.memory.task.current))
+    if (!isEndedTask(this.memory.execution.task.current))
       this.stageControl(
         { type: 'pause' },
         { kind: 'operator' },
@@ -257,24 +252,24 @@ export class RuntimeExecution {
       );
   }
   joined() {
-    const task = this.memory.task.current;
+    const task = this.memory.execution.task.current;
     if (task && ['running', 'waiting', 'paused'].includes(task.status)) {
       task.status = 'paused';
       task.reason = '已加入世界待命，任务进度保留。';
     }
   }
   offline(config: AgentConfig) {
-    if (isActiveTask(this.memory.task.current))
+    if (isActiveTask(this.memory.execution.task.current))
       this.pauseForHost(config, '角色已离开世界，任务进度已保留。');
   }
   modelChanged(config: AgentConfig) {
     this.pauseForHost(config, '模型已修改，进度已保留，请确认后继续。');
-    if (this.memory.checkpoint.pi?.inFlight)
-      this.memory.checkpoint.unknownEffect = {
-        ...this.memory.checkpoint.pi.inFlight,
+    if (this.memory.execution.checkpoint.pi?.inFlight)
+      this.memory.execution.checkpoint.unknownEffect = {
+        ...this.memory.execution.checkpoint.pi.inFlight,
         state: 'unknown',
       };
-    delete this.memory.checkpoint.pi;
+    delete this.memory.execution.checkpoint.pi;
   }
   recoverAfterRestart() {
     this.assertIdle();

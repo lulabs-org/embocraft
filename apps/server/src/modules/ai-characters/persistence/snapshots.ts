@@ -1,7 +1,8 @@
 import { runtimeView } from '@voxel/agent-runtime';
+
 import type { AICharacterView } from '@voxel/shared';
-import type { CharacterRecord } from './record';
 import type { AICharacterRegistry } from '../services/job';
+import type { CharacterRecord } from './record';
 
 /** Character snapshots and failure handling; no file writes or task-ledger ownership. */
 export class CharacterSnapshots {

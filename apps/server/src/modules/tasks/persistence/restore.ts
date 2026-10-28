@@ -1,16 +1,17 @@
 import {
   createAgentRuntime,
   runtimeView,
-  type AgentRunState,
+  type RuntimeState,
 } from '@voxel/agent-runtime';
+
 import { isRepeating } from '@voxel/shared';
 import { duePlans, endedRun, newRun, nextOccurrence } from '../domain/model';
-import { captureTask } from '../services/execution.service';
 import type { TaskExecutionState } from '../ports';
+import { captureTask } from '../services/execution.service';
 
 export function restoreTaskMemory(
-  runtime: AgentRunState | undefined,
-): AgentRunState {
+  runtime: RuntimeState | undefined,
+): RuntimeState {
   const agent = createAgentRuntime();
   agent.restore(runtime);
   return agent.snapshot();

@@ -1,12 +1,19 @@
 import type { Message } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { emptyState, type AgentRunState } from '../../contracts/state';
+import { emptyState, type RuntimeState } from '../../contracts/state';
 import { newTask } from '../task/state';
 import { restoreCheckpoint } from './checkpoint';
 import { persistTranscript } from './transcript';
 
-function memory(): AgentRunState {
-  return { ...emptyState(), task: { current: newTask('goal') } };
+function memory(): RuntimeState {
+  return {
+    version: 4 as const,
+    character: { ...emptyState().character },
+    execution: {
+      ...emptyState().execution,
+      task: { current: newTask('goal') },
+    },
+  };
 }
 
 function transcript(text: string): Message[] {
@@ -33,36 +40,38 @@ describe('checkpoint restoration', () => {
       save: async () => {},
     });
     restoreCheckpoint(state);
-    expect(state.checkpoint.pi?.messages).toEqual(transcript('hello'));
+    expect(state.execution.checkpoint.pi?.messages).toEqual(
+      transcript('hello'),
+    );
   });
 
   it('drops a checkpoint from another task revision', () => {
     const state = memory();
-    state.checkpoint.pi = {
+    state.execution.checkpoint.pi = {
       version: 3,
       taskId: 'other',
       revision: 1,
-      taskStartedAt: state.task.current!.startedAt,
+      taskStartedAt: state.execution.task.current!.startedAt,
       audience: 'public',
       messages: [],
     };
     restoreCheckpoint(state);
-    expect(state.checkpoint.pi).toBeUndefined();
+    expect(state.execution.checkpoint.pi).toBeUndefined();
   });
 
   it('turns an in-flight tool call into an unknown effect', () => {
     const state = memory();
-    state.checkpoint.pi = {
+    state.execution.checkpoint.pi = {
       version: 3,
       taskId: 'x',
       revision: 0,
-      taskStartedAt: state.task.current!.startedAt,
+      taskStartedAt: state.execution.task.current!.startedAt,
       audience: 'public',
       messages: [],
       inFlight: { id: 'call', name: 'edit', state: 'executing' },
     };
     restoreCheckpoint(state);
-    expect(state.checkpoint.unknownEffect).toEqual({
+    expect(state.execution.checkpoint.unknownEffect).toEqual({
       id: 'call',
       name: 'edit',
       state: 'unknown',

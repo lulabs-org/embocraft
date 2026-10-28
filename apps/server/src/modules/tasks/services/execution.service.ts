@@ -1,5 +1,13 @@
+import {
+  AgentRuntimeError,
+  createAgentRuntime,
+  runtimeView,
+  type AgentConfig,
+  type AgentRuntime,
+  type RuntimeState,
+} from '@voxel/agent-runtime';
 import { isRepeating, type TaskPlan, type TaskRun } from '@voxel/shared';
-import { hasPlanTokenLimit, executionLimits } from '../domain/limits';
+import { executionLimits, hasPlanTokenLimit } from '../domain/limits';
 import {
   endedRun,
   newRun,
@@ -7,19 +15,12 @@ import {
   settleTaskUsage,
   syncPlanStateFromRun,
 } from '../domain/model';
-import {
-  createAgentRuntime,
-  runtimeView,
-  AgentRuntimeError,
-  type AgentRuntime,
-  type AgentRunState,
-  type AgentConfig,
-} from '@voxel/agent-runtime';
+
+import type { AICharacterSettings } from '@voxel/shared';
+import { AppError } from '../../../core/errors/app-error';
 import { object } from '../../../core/http/validation';
 import { taskLimits } from '../domain/validation';
-import { AppError } from '../../../core/errors/app-error';
 import type { TaskExecutionState } from '../ports';
-import type { AICharacterSettings } from '@voxel/shared';
 const active = (status: TaskExecutionState['view']['status']) =>
   ['joining', 'running', 'stopping'].includes(status);
 
@@ -531,7 +532,7 @@ export function pauseTaskForHost(state: TaskExecutionState, reason: string) {
 /** Chat execution has no planId, but obeys the same durable history and occupied-slot rules. */
 export async function beginChatExecution(
   state: TaskExecutionState,
-  previousMemory: AgentRunState,
+  previousMemory: RuntimeState,
   config: AgentConfig,
   save: () => Promise<void>,
 ) {

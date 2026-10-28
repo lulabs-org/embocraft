@@ -1,9 +1,10 @@
 /** Real local model acceptance, isolated world and fixture-only provider store. */
+import { delay, Session, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createTestServer } from '../helpers/test-server';
-import { AgentRunner, Session, until, delay } from '@voxel/agent-runtime';
+
 import { key } from '@voxel/shared';
 
 const output = resolve(
@@ -14,24 +15,24 @@ let calls = 0;
 const server = await createTestServer({
   agentDependencies: {
     session: (url) => new Session(url),
-    runner: (_config, endpoint) => ({
-      run: (options) =>
-        new AgentRunner(endpoint, async (url, init) => {
-          assert(++calls <= 24, 'Real model acceptance bounded to 24 requests');
-          const response = await fetch(url, init);
-          const reply = await response
-            .clone()
-            .json()
-            .catch(() => ({}));
-          console.log(
-            JSON.stringify({
-              call: calls,
-              tools: reply.message?.tool_calls,
-              text: reply.message?.content,
-            }),
-          );
-          return response;
-        }).run(options),
+    model: (_config, endpoint) => ({
+      endpoint,
+      request: async (url, init) => {
+        assert(++calls <= 24, 'Real model acceptance bounded to 24 requests');
+        const response = await fetch(url, init);
+        const reply = await response
+          .clone()
+          .json()
+          .catch(() => ({}));
+        console.log(
+          JSON.stringify({
+            call: calls,
+            tools: reply.message?.tool_calls,
+            text: reply.message?.content,
+          }),
+        );
+        return response;
+      },
     }),
   },
 });
@@ -128,8 +129,8 @@ try {
   await say('请持续跟随我，保持 1.5 格距离，不要结束跟随任务。');
   await until(
     () =>
-      !!server.characters.jobs.get(role.id)?.memory.effects.follow &&
-      view().status === 'idle',
+      !!server.characters.jobs.get(role.id)?.runtime.snapshot().execution
+        .effects.follow && view().status === 'idle',
     300000,
   );
   const identity = view().task!.startedAt;
@@ -182,8 +183,8 @@ try {
       task: c.task,
       lastResponse: c.lastResponse,
       logEntries: c.logEntries.slice(-8),
-      exchanges: server.characters.jobs.get(c.id)?.memory.conversation
-        .exchanges,
+      exchanges: server.characters.jobs.get(c.id)?.runtime.snapshot().character
+        .conversation.exchanges,
     })),
   });
   throw error;

@@ -1,10 +1,11 @@
+import { AgentRunner } from '@voxel/agent-runtime/testing';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { controlRun, startTask } from '../../../tests/support/managed-tasks';
 import {
-  scriptedRunnerFactory,
+  scriptedModelFactory,
   testObservation,
   type ModelResponder,
 } from '../../../tests/support/model-fixture';
-import { controlRun, startTask } from '../../../tests/support/managed-tasks';
 import { AICharacterManager } from '../src/modules/ai-characters';
 import { bootstrapProviders } from '../src/modules/providers';
 import {
@@ -73,7 +74,7 @@ function setup(
     store.archive,
     {
       session: () => s as unknown as Session,
-      runner: scriptedRunnerFactory(() => ({ respond: decide })),
+      model: scriptedModelFactory(() => ({ respond: decide })),
     },
     voices,
   );
@@ -753,7 +754,8 @@ it('retains capability settings and construction progress across edits, reload a
       note: '等待确认',
     },
   };
-  archive.characters[0].runtime.effects.unfinishedBuild = unfinishedBuild;
+  archive.characters[0].runtime.execution.effects.unfinishedBuild =
+    unfinishedBuild;
   // Persisted v3 profiles are normalized once before runtime restoration.
   archive.characters[0].allowEdits = true;
   delete archive.characters[0].permissions;
@@ -783,9 +785,11 @@ it('retains capability settings and construction progress across edits, reload a
   expect(updated.usage).toEqual(before.usage);
   expect(decide).toHaveBeenCalledTimes(1);
   const saved = JSON.parse(store.archive.json!).characters[0];
-  expect(saved.runtime.effects.unfinishedBuild).toEqual(unfinishedBuild);
-  expect(saved.runtime.effects.previous).toEqual(
-    archive.characters[0].runtime.effects.previous,
+  expect(saved.runtime.execution.effects.unfinishedBuild).toEqual(
+    unfinishedBuild,
+  );
+  expect(saved.runtime.execution.effects.previous).toEqual(
+    archive.characters[0].runtime.execution.effects.previous,
   );
   await restored.close();
   const finalSession = fakeSession();
@@ -929,7 +933,7 @@ it('uses newly saved provider configuration on the next decision without resetti
   const configs: unknown[] = [];
   manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
     session: () => s as unknown as Session,
-    runner: scriptedRunnerFactory((config) => {
+    model: scriptedModelFactory((config) => {
       configs.push(config);
       return {
         respond: async () => [
@@ -1083,20 +1087,21 @@ it.each(['cancel', 'pause'] as const)(
   async (operation) => {
     const s = fakeSession();
     let entered = false;
+    vi.spyOn(AgentRunner.prototype, 'run').mockImplementationOnce(
+      async ({ memory, signal, checkpoint }) => {
+        entered = true;
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        // Simulate an already-confirmed action finishing its durable checkpoint.
+        memory.execution.task.current!.status = 'completed';
+        memory.execution.task.current!.reason = '动作已确认完成';
+        await checkpoint?.();
+      },
+    );
     manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
       session: () => s as unknown as Session,
-      runner: () => ({
-        async run({ memory, signal, checkpoint }) {
-          entered = true;
-          await new Promise<void>((resolve) =>
-            signal.addEventListener('abort', () => resolve(), { once: true }),
-          );
-          // Simulate an already-confirmed action finishing its durable checkpoint.
-          memory.task.current!.status = 'completed';
-          memory.task.current!.reason = '动作已确认完成';
-          await checkpoint?.();
-        },
-      }),
+      model: () => ({}),
     });
     const job = await createWithTask(manager, settings);
     await vi.waitFor(() => expect(entered).toBe(true));
@@ -1238,4 +1243,27 @@ it('forwards the task lease, stable command ID and player event through the real
   await vi.waitFor(() => expect(m.list()[0].task?.status).toBe('paused'));
   session.onEvent!(message);
   expect(control).toHaveBeenCalledTimes(1);
+});
+
+it('rejects old runtime archives without overwriting them on shutdown', async () => {
+  const originalManager = setup(fakeSession());
+  const created = originalManager.create({ ...settings, goal: '' });
+  await originalManager.settled(created.id);
+  await originalManager.close();
+  const archive = JSON.parse(store.archive.json!);
+  archive.characters[0].runtime = {
+    version: 3,
+    task: {},
+    conversation: {},
+    checkpoint: {},
+    effects: {},
+    health: {},
+  };
+  const original = JSON.stringify(archive);
+  store.archive.json = original;
+  const restored = setup(fakeSession());
+  await expect(restored.load()).rejects.toThrow('version 4');
+  expect(() => restored.assertWritable()).toThrow('存档恢复失败');
+  await restored.close();
+  expect(store.archive.json).toBe(original);
 });

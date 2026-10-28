@@ -1,26 +1,22 @@
-import { randomUUID } from 'node:crypto';
 import type { AICharacterTask, ChatData } from '@voxel/shared';
+import { randomUUID } from 'node:crypto';
 import type { AgentConfig } from '../../contracts';
+import { AgentRuntimeError } from '../../contracts/errors';
 import type { TaskExecutionState } from '../../contracts/state';
 import type {
-  TaskCommand,
   TaskAuthority,
+  TaskCommand,
   TaskLease,
   TaskOutcome,
 } from '../../contracts/task';
-import { AgentRuntimeError } from '../../contracts/errors';
 import { checkBudgetCap } from './budget';
 import { isEndedTask, newTask } from './state';
 
 /** All task state changes use the same policy, independent of models and transports. */
 export class TaskPolicy {
-  /** The compatibility adapter stamps v3 only when the old service issued a lease. */
-  issuedLease = false;
-
   constructor(readonly memory: TaskExecutionState) {}
 
   lease(): TaskLease {
-    this.issuedLease = true;
     const task = this.memory.task.current;
     if (!task) throw new AgentRuntimeError('没有当前任务。');
     if (

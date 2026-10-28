@@ -33,17 +33,18 @@ export type FollowIntent = {
   lastResult?: NavigationResult;
 };
 
-/** Legacy task partition; usage belongs to the character, current/identity to execution. */
+/** Task identity and progress belong to a single execution. */
 export type TaskSection = {
   current?: AICharacterTask;
   identity?: { id: string; revision: number; startedAt: number };
-  usage?: AICharacterUsage;
 };
 
-/** Legacy conversation partition; audienceExpired/lastReply are execution-local. */
-export type ConversationSection = {
+export type CharacterConversation = {
   exchanges?: Record<string, unknown[]>;
   lastChatAt?: number;
+};
+
+export type ExecutionConversation = {
   lastReply?: BatchResult;
   audienceExpired?: boolean;
 };
@@ -76,36 +77,28 @@ export type HealthSection = {
 /** Character lifetime: survives the creation and completion of task executions. */
 export type CharacterState = {
   usage?: AICharacterUsage;
-  conversation: Pick<ConversationSection, 'exchanges' | 'lastChatAt'>;
+  conversation: CharacterConversation;
   inbox?: { version: 1; events: CharacterEvent[] };
 };
 
 /** One task execution. Task policy cannot access character history, usage or inbox. */
 export type TaskExecutionState = {
-  task: Omit<TaskSection, 'usage'>;
-  conversation: Pick<ConversationSection, 'lastReply' | 'audienceExpired'>;
-  checkpoint: CheckpointSection;
-  effects: EffectsSection;
-  health: HealthSection;
-};
-
-/**
- * Public v3 compatibility shape. Character and execution state share this wire
- * format, but lifecycle operations use their separate ownership projections.
- */
-export type AgentRunState = {
-  version?: 3;
   task: TaskSection;
-  conversation: ConversationSection;
+  conversation: ExecutionConversation;
   checkpoint: CheckpointSection;
   effects: EffectsSection;
   health: HealthSection;
-  inbox?: { version: 1; events: CharacterEvent[] };
 };
 
-export function emptyState(): AgentRunState {
+/** Native runtime state; the stored schema has the same ownership boundaries. */
+export type RuntimeState = {
+  version: 4;
+  character: CharacterState;
+  execution: TaskExecutionState;
+};
+
+export function emptyExecutionState(): TaskExecutionState {
   return {
-    version: 3,
     task: {},
     conversation: {},
     checkpoint: {},
@@ -114,17 +107,25 @@ export function emptyState(): AgentRunState {
   };
 }
 
-/** Archived run snapshots exclude usage; the task ledger accounts for it separately. */
-export function snapshotState(state: AgentRunState): AgentRunState {
+export function emptyState(): RuntimeState {
+  return {
+    version: 4 as const,
+    character: { conversation: {} },
+    execution: emptyExecutionState(),
+  };
+}
+
+/** The ledger accounts for character usage separately from an execution archive. */
+export function snapshotState(state: RuntimeState): RuntimeState {
   const copy = structuredClone(state);
-  delete copy.task.usage;
+  delete copy.character.usage;
   return copy;
 }
 
 export type PiCheckpoint = {
-  version: 1 | 2 | 3;
-  taskId?: string;
-  revision?: number;
+  version: 3;
+  taskId: string;
+  revision: number;
   taskStartedAt: number;
   audience: string;
   /** Opaque adapter data; only the Pi boundary interprets model messages. */

@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import {
   CHAT_PACE_INTERVAL_MS,
   type AICharacterPermissions,
 } from '@voxel/shared';
+import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type {
   AgentAction,
@@ -11,11 +11,11 @@ import type {
   BuildResult,
   Observation,
 } from '../../contracts';
-import type { AgentSession } from '../../world/session/port';
 import { cancellable } from '../../kernel/abort';
+import type { AgentSession } from '../../world/session/port';
+import type { NavigationOptions } from '../nav/controller';
 import { executeAction } from './execute';
 import { parseActions } from './parse';
-import type { NavigationOptions } from '../nav/controller';
 
 export type BatchOptions = {
   navigation?: NavigationOptions;
@@ -33,7 +33,7 @@ export type BatchOptions = {
  * Low-level Physical Batch Execution Engine:
  * Sequences and dispatches atomic AgentAction commands against the world Session,
  * handling physical step verification, movement stalling checks, and observation refreshing.
- * Does not depend on high-level TaskService, lease validation, or AgentRunState.
+ * Does not depend on high-level TaskService, lease validation, or RuntimeState.
  */
 export async function executeBatch(
   session: AgentSession,

@@ -1,32 +1,34 @@
+import { Session, until } from '@voxel/agent-runtime';
 import {
   ManagementEvents,
+  type CommandReceipt,
+  type ManagementEvent,
   type PublicAICharacterView,
   type PublicPlanView,
   type PublicRunView,
-  type ManagementEvent,
-  type CommandReceipt,
 } from '@voxel/shared/management';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
-import { createTestServer } from '../helpers/test-server';
+import { toolResponse } from '../../../../tests/support/pi-response';
 import { HttpManagementProbe } from '../helpers/management-probe';
-import { Session, until } from '@voxel/agent-runtime';
+import { createTestServer } from '../helpers/test-server';
+
 const token = 'fixture-gateway-token-for-tests',
   origin = 'http://127.0.0.1:5188';
 const server = await createTestServer({
   origin,
   agentDependencies: {
     session: (url) => new Session(url),
-    runner: () => ({
-      async run(o) {
-        if (o.memory.task.current) {
-          o.memory.task.current.status = 'waiting';
-          o.memory.task.current.reason = 'fixture';
-        }
-        await o.checkpoint?.();
-      },
+    model: () => ({
+      request: async () =>
+        toolResponse([
+          {
+            name: 'wait_for',
+            arguments: { condition: 'players', reason: 'fixture' },
+          },
+        ]),
     }),
   },
 });

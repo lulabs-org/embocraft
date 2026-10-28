@@ -1,23 +1,24 @@
-import { paceChat } from './chat-pacing';
-import { launchBackgroundWorldAction } from './lifecycle';
+import { aiCharacterPermissions } from '@voxel/shared';
+import type { AgentAction, AgentConfig, Observation } from '../../contracts';
+import { AgentRuntimeError } from '../../contracts/errors';
+import type { RuntimeState } from '../../contracts/state';
+import type { TaskLease } from '../../contracts/task';
+import { initialToolState, type ToolState } from '../../contracts/tool-state';
+import { mergeSignals, withDeadline } from '../../kernel/abort';
+import { executeBatch } from '../../world/actions/batch';
+import type { AgentAttention } from '../../world/observe/attention';
+import type { AgentSession } from '../../world/session/port';
+import type { RequestBudget } from '../task/budget';
+import { TaskService } from '../task/service';
 import { formatActionResult } from './build-tracker';
+import { paceChat } from './chat-pacing';
 import {
   actionPolicy,
   activateContinuingAction,
   createActionEffects,
   settleActionEffects,
 } from './effects';
-import { aiCharacterPermissions } from '@voxel/shared';
-import type { AgentAction, AgentConfig, Observation } from '../../contracts';
-import { AgentRuntimeError } from '../../contracts/errors';
-import type { AgentSession } from '../../world/session/port';
-import type { AgentRunState } from '../../contracts/state';
-import { initialToolState, type ToolState } from '../../contracts/tool-state';
-import { TaskService, type TaskLease } from '../task/service';
-import type { AgentAttention } from '../../world/observe/attention';
-import { mergeSignals, withDeadline } from '../../kernel/abort';
-import { executeBatch } from '../../world/actions/batch';
-import type { RequestBudget } from '../task/budget';
+import { launchBackgroundWorldAction } from './lifecycle';
 
 function guardSessionWithLease(
   session: AgentSession,
@@ -63,7 +64,7 @@ export async function executeTaskActions(
   observation: Observation,
   config: AgentConfig,
   signal: AbortSignal,
-  memory: AgentRunState,
+  memory: RuntimeState,
   budget: RequestBudget,
   lease: TaskLease,
   checkpoint: () => Promise<void>,
@@ -74,7 +75,7 @@ export async function executeTaskActions(
   service.assertCurrent(lease);
   signal.throwIfAborted();
 
-  const task = memory.task.current!;
+  const task = memory.execution.task.current!;
   const routed = routeTaskActions(actions, task.privateTo);
   const deadline = withDeadline(signal, budget.remainingMs, 'task_timeout');
   const effects = createActionEffects(memory, checkpoint);
@@ -103,7 +104,7 @@ export async function executeTaskActions(
         },
         checkpoint: async (batch) => {
           service.assertCurrent(lease);
-          memory.effects.previous = batch;
+          memory.execution.effects.previous = batch;
           effects.checkpoint(batch);
           await checkpoint();
         },
@@ -120,8 +121,8 @@ export async function executeTaskActions(
     batch.stopReason = 'timeout';
     batch.ok = false;
   }
-  memory.effects.previous = batch;
-  if (batch.ok) delete memory.health.decisionError;
+  memory.execution.effects.previous = batch;
+  if (batch.ok) delete memory.execution.health.decisionError;
   await checkpoint();
   signal.throwIfAborted();
   return { batch, observation: finalObservation };
@@ -135,7 +136,7 @@ export type TurnActionContext = {
   config: AgentConfig;
   budget: RequestBudget;
   service: TaskService;
-  memory: AgentRunState;
+  memory: RuntimeState;
   state: ToolState;
   activeSignal: AbortSignal;
   attention?: AgentAttention;
@@ -199,22 +200,22 @@ async function runSingleWorldAction(
   )
     throw new AgentRuntimeError('当前批次已停止。');
   if (
-    memory.checkpoint.unknownEffect?.name === name &&
+    memory.execution.checkpoint.unknownEffect?.name === name &&
     actionPolicy(name).blocksUnknownReplay
   )
     throw new AgentRuntimeError(
       '上次聊天或移动结果未知，不能自动重放；请核对结果或等待玩家明确的新指令。',
     );
 
-  memory.checkpoint.pi ??= {
-    version: 2,
+  memory.execution.checkpoint.pi ??= {
+    version: 3,
     taskId: lease.id,
     revision: lease.revision,
     taskStartedAt: lease.startedAt,
-    audience: memory.task.current?.privateTo ?? 'public',
+    audience: memory.execution.task.current?.privateTo ?? 'public',
     messages: [],
   };
-  memory.checkpoint.pi.inFlight = { id, name, state: 'executing' };
+  memory.execution.checkpoint.pi.inFlight = { id, name, state: 'executing' };
   await ctx.save();
 
   let known = false;
@@ -237,7 +238,7 @@ async function runSingleWorldAction(
     known = batch.stopReason !== 'unknown' && batch.stopReason !== 'executing';
     const mutating = actionPolicy(name).mutating;
     if (!batch.ok) {
-      if (mutating) memory.effects.pendingEffects = batch;
+      if (mutating) memory.execution.effects.pendingEffects = batch;
       state.skipBatch = true;
       throw new AgentRuntimeError(JSON.stringify(batch));
     }
@@ -253,8 +254,8 @@ async function runSingleWorldAction(
     return formatActionResult(action, batch, ctx.observation(), memory);
   } finally {
     if (ctx.service.current(lease) && !state.persistenceFailed) {
-      if (known && memory.checkpoint.pi?.inFlight?.id === id)
-        delete memory.checkpoint.pi.inFlight;
+      if (known && memory.execution.checkpoint.pi?.inFlight?.id === id)
+        delete memory.execution.checkpoint.pi.inFlight;
       await ctx.save();
     }
   }

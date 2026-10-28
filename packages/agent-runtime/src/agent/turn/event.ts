@@ -1,8 +1,8 @@
 import type { WorldEvent } from '@voxel/shared';
-import type { AgentRunState, CharacterEvent } from '../../contracts/state';
+import type { CharacterEvent, RuntimeState } from '../../contracts/state';
+import type { TaskLease } from '../../contracts/task';
 import type { AgentAttention } from '../../world/observe/attention';
 import { recordChatEvent } from '../task/inbox';
-import type { TaskLease } from '../task/service';
 
 /** The event this turn will process; `event` is absent for unattended task turns. */
 export type EventClaim = { event?: CharacterEvent };
@@ -16,7 +16,7 @@ export type EventClaim = { event?: CharacterEvent };
  * pending.
  */
 export async function claimEvent(input: {
-  memory: AgentRunState;
+  memory: RuntimeState;
   message?: WorldEvent;
   attention?: AgentAttention;
   expected?: TaskLease;
@@ -24,7 +24,7 @@ export async function claimEvent(input: {
 }): Promise<EventClaim | undefined> {
   const event: CharacterEvent | undefined = input.message
     ? recordChatEvent(input.memory, input.message, input.attention?.generation)
-    : input.memory.inbox?.events.find(
+    : input.memory.character.inbox?.events.find(
         (candidate) =>
           candidate.state === 'pending' &&
           candidate.kind !== 'chat' &&
