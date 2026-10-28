@@ -1,64 +1,29 @@
 import { AppError } from '../core/errors/app-error';
-import type {
-  CharacterRecord,
-  ManagementArchive,
-  LegacyAgentArchive,
-} from './archive';
-import { migrateBinding, migrateCharacterTasks } from '../modules/tasks';
+import type { ManagementArchive } from './archive';
 
-/** Pure, repeatable migration; disk backup and atomic replacement belong to the host. */
-export function migrateArchive(
-  saved: CharacterRecord[] | LegacyAgentArchive | ManagementArchive,
-): ManagementArchive {
-  if (!Array.isArray(saved)) {
-    if (
-      !saved ||
-      ![1, 2, 3].includes(saved.version) ||
-      !Array.isArray(saved.version === 1 ? saved.agents : saved.characters) ||
-      !Array.isArray(saved.plans) ||
-      !Array.isArray(saved.runs) ||
-      !saved.requests ||
-      typeof saved.requests !== 'object'
-    )
-      throw new AppError('网关存档格式无效。', 500);
-    const copy: ManagementArchive =
-      saved.version === 1
-        ? {
-            version: 3,
-            characters: structuredClone(saved.agents),
-            plans: saved.plans.map((plan) => {
-              const converted = migrateBinding(plan);
-              if (converted.latestRun)
-                converted.latestRun = migrateBinding(converted.latestRun);
-              return converted;
-            }),
-            runs: saved.runs.map(migrateBinding),
-            requests: structuredClone(saved.requests),
-          }
-        : structuredClone(saved);
-    copy.version = 3;
-    for (const plan of copy.plans) plan.limitsMode ??= 'override';
-    for (const run of copy.runs) run.snapshot.limitsMode ??= 'override';
-    validateArchive(copy);
-    return copy;
-  }
-  const result: ManagementArchive = {
-    version: 3,
-    characters: [],
-    plans: [],
-    runs: [],
-    requests: {},
-  };
-  for (const original of saved) {
-    const a = structuredClone(original);
-    migrateCharacterTasks(a, result);
-    delete a.taskBook;
-    result.characters.push(a);
-  }
-  for (const plan of result.plans) plan.limitsMode ??= 'override';
-  for (const run of result.runs) run.snapshot.limitsMode ??= 'override';
-  validateArchive(result);
-  return result;
+/** Validate and normalize a persisted v3 management archive before restoration. */
+export function migrateArchive(saved: unknown): ManagementArchive {
+  const candidate = saved as Partial<ManagementArchive> | null | undefined;
+  if (
+    !candidate ||
+    typeof candidate !== 'object' ||
+    Array.isArray(candidate) ||
+    candidate.version !== 3 ||
+    !Array.isArray(candidate.characters) ||
+    !Array.isArray(candidate.plans) ||
+    !Array.isArray(candidate.runs) ||
+    !candidate.requests ||
+    typeof candidate.requests !== 'object' ||
+    Array.isArray(candidate.requests)
+  )
+    throw new AppError('网关存档格式无效。', 500);
+  if (candidate.characters.length > 50)
+    throw new AppError('Agent 记录格式无效。', 500);
+  const copy = structuredClone(candidate as ManagementArchive);
+  for (const plan of copy.plans) plan.limitsMode ??= 'override';
+  for (const run of copy.runs) run.snapshot.limitsMode ??= 'override';
+  validateArchive(copy);
+  return copy;
 }
 
 function validateArchive(s: ManagementArchive) {

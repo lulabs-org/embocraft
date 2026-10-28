@@ -1,9 +1,5 @@
 import { expect, it } from 'vitest';
-import {
-  appendAICharacterLog,
-  migrateLegacyLogs,
-  restoreAICharacterLogs,
-} from './activity-log';
+import { appendAICharacterLog, restoreAICharacterLogs } from './activity-log';
 
 it('retains the newest 500 entries with their original timestamps', () => {
   const view = restoreAICharacterLogs([]);
@@ -16,10 +12,11 @@ it('retains the newest 500 entries with their original timestamps', () => {
   expect(restoreAICharacterLogs(archived.logEntries)).toEqual(view);
 });
 
-it('keeps legacy entries without inventing times, and timestamps only new entries', () => {
-  const view = {
-    logEntries: migrateLegacyLogs(['old-1', 'old-2'], undefined),
-  };
+it('keeps entries without timestamps as null, and timestamps only new entries', () => {
+  const view = restoreAICharacterLogs([
+    { time: null, text: 'old-1' },
+    { time: null, text: 'old-2' },
+  ]);
   appendAICharacterLog(view, 'new', 1234);
   expect(view.logEntries).toEqual([
     { time: null, text: 'old-1' },
@@ -49,12 +46,4 @@ it('discards invalid entries while preserving time and text', () => {
       { time: 8.64e15, text: 'e' },
     ],
   });
-});
-
-it('migrates the legacy parallel logs/logTimes arrays into logEntries', () => {
-  expect(migrateLegacyLogs(['a', 'b', 'c'], [100, undefined, 9e15])).toEqual([
-    { time: 100, text: 'a' },
-    { time: null, text: 'b' },
-    { time: null, text: 'c' },
-  ]);
 });

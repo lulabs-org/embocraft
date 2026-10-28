@@ -66,14 +66,10 @@ it('keeps joint persistence independent of management, runtime and HTTP implemen
     for (const dep of deps) {
       const target = relative(root, dep);
       if (name.startsWith('persistence/')) {
-        const taskMigration =
-          name === 'persistence/migrate-archive.ts' &&
-          target === 'modules/tasks/index.ts';
         expect(
           target.startsWith('persistence/') ||
             target.startsWith('core/errors/') ||
-            target.startsWith('core/database/') ||
-            taskMigration,
+            target.startsWith('core/database/'),
           `${name} -> ${target}`,
         ).toBe(true);
       }

@@ -1,40 +1,23 @@
 import {
-  newTask,
   restoreBatchHistory,
   restoreCheckpoint,
   emptyState,
   restoreState,
   type AgentRunState,
 } from '@voxel/agent-runtime';
-import { isRepeating, type AICharacterTask } from '@voxel/shared';
+import { isRepeating } from '@voxel/shared';
 import { duePlans, endedRun, newRun, nextOccurrence } from '../domain/model';
 import { captureTask } from '../services/execution.service';
 import type { TaskExecutionState } from '../ports';
 
-/** Read compatibility only. New task creation must use the task service. */
 export function restoreTaskMemory(
   runtime: AgentRunState | undefined,
-  task: AICharacterTask | undefined,
-  goal: string,
 ): AgentRunState {
-  if (runtime) return restoreState(runtime);
-  return {
-    ...emptyState(),
-    task: {
-      current: task ?? {
-        ...newTask(goal),
-        status: 'paused',
-        reason: '旧任务已迁移，请确认后继续。',
-      },
-    },
-  };
+  return runtime ? restoreState(runtime) : emptyState();
 }
 
 /** Restore task policy without starting a host, replaying unknown actions or dispatching missed triggers. */
-export function restoreTaskExecution(
-  job: TaskExecutionState,
-  migrating: boolean,
-) {
+export function restoreTaskExecution(job: TaskExecutionState) {
   if (job.memory.effects.activeAction?.status === 'running')
     job.memory.effects.activeAction.status = 'unknown';
   // World-session recipients cannot survive a restart. Retain audit, never replay old chat.
@@ -130,9 +113,7 @@ export function restoreTaskExecution(
     }
     if (
       !endedRun(run) &&
-      (migrating ||
-        interruptedRuns.has(run.id) ||
-        run.runtime?.conversation.audienceExpired)
+      (interruptedRuns.has(run.id) || run.runtime?.conversation.audienceExpired)
     ) {
       const p = job.ledger.plans.find((p) => p.id === run.planId);
       if (p) {

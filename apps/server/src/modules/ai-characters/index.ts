@@ -7,7 +7,6 @@ export { CharacterVoiceCoordinator } from './services/voice-coordinator.service'
 export { validateAICharacter } from './domain/validation';
 export {
   appendAICharacterLog,
-  migrateLegacyLogs,
   restoreAICharacterLogs,
 } from './domain/activity-log';
 export {

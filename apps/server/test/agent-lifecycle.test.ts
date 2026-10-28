@@ -95,8 +95,10 @@ it.each([
   '{invalid-json',
   JSON.stringify({ version: 99, agents: [{ id: 'keep-me' }] }),
   JSON.stringify({
-    version: 1,
-    agents: [{ id: 'keep-me', providerId: 'missing-provider', name: '保留' }],
+    version: 3,
+    characters: [
+      { id: 'keep-me', providerId: 'missing-provider', name: '保留' },
+    ],
     plans: [],
     runs: [],
     requests: {},
@@ -1038,7 +1040,7 @@ it('uses newly saved provider configuration on the next decision without resetti
   expect((configs[0] as { apiKey: string }).apiKey).toBe('updated-key');
 });
 
-it('migrates a legacy archive and reloads 500 timestamped activity records without truncating to the old limit', async () => {
+it('reloads 500 timestamped activity records and truncates excess entries', async () => {
   const m = setup(fakeSession());
   const created = m.create({ ...settings, goal: '' });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -1054,28 +1056,15 @@ it('migrates a legacy archive and reloads 500 timestamped activity records witho
   await m.close();
   const archive = JSON.parse(store.archive.json!);
   archive.characters[0].status = 'stopped';
-  // Simulate the pre-logEntries archive: two parallel legacy arrays.
-  archive.characters[0].logs = Array.from(
-    { length: 510 },
-    (_, i) => `entry-${i}`,
-  );
-  archive.characters[0].logTimes = Array.from(
-    { length: 510 },
-    (_, i) => 1000 + i,
-  );
-  delete archive.characters[0].logEntries;
+  archive.characters[0].logEntries = Array.from({ length: 510 }, (_, i) => ({
+    time: 1000 + i,
+    text: `entry-${i}`,
+  }));
   store.archive.json = JSON.stringify(archive);
-  const expected = archive.characters[0].logs
-    .slice(-500)
-    .map((text: string, i: number) => ({
-      time: archive.characters[0].logTimes.slice(-500)[i],
-      text,
-    }));
+  const expected = archive.characters[0].logEntries.slice(-500);
   const restored = setup(fakeSession());
   await restored.load();
   expect(restored.list()[0].logEntries).toEqual(expected);
-  const persisted = JSON.parse(store.archive.json!);
-  expect(persisted.characters[0].logEntries).toEqual(expected);
 });
 
 it('deletes a resident character and its tasks durably, preserving shared services', async () => {

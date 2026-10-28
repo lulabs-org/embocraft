@@ -348,29 +348,6 @@ it('restart preserves paused progress and skips missed schedules without calling
   await manager.tasks.dispatchDue(now);
   expect(decide).not.toHaveBeenCalled();
 });
-it('migrates old records without inference, preserving checkpoints and terminal state', async () => {
-  const id = await role();
-  const p = await manager.tasks.createTaskPlan(id, draft());
-  await idle();
-  await manager.close();
-  const archive = JSON.parse(store.archive.json!);
-  delete archive.characters[0].currentRunId;
-  const old = JSON.stringify(archive.characters);
-  store.archive.json = old;
-  manager = build();
-  decide.mockClear();
-  await manager.load();
-  const migrated = manager.tasks.taskPlans(id);
-  expect(migrated).toHaveLength(1);
-  expect(migrated[0].latestRun).toMatchObject({
-    status: 'completed',
-    totalTokens: 600,
-  });
-  expect(decide).not.toHaveBeenCalled();
-  const saved = JSON.parse(store.archive.json!);
-  expect(saved.runs[0].runtime.effects.previous).toBeDefined();
-  expect(p.goal).toBe(migrated[0].goal);
-});
 it('archives only ended runs and paginates independent history', async () => {
   const id = await role();
   const p = await manager.tasks.createTaskPlan(id, draft());
