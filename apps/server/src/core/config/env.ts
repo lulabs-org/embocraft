@@ -47,7 +47,7 @@ function parsePort(
 ): number {
   const port = Number(raw ?? defaultPort);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error('PORT 必须是 0..65535 的整数。');
+    throw new Error('SERVER_PORT 必须是 0..65535 的整数。');
   }
   return port;
 }
@@ -113,9 +113,7 @@ function readSpeechConfig(env: EnvLookup = process.env) {
     whisperModel: env.WHISPER_MODEL,
     whisperBin: env.WHISPER_BIN,
     ffmpegBin: env.FFMPEG_BIN ?? 'ffmpeg',
-    whisperApiUrl: env.WHISPER_API_URL,
     speechApiUrl: env.SPEECH_API_URL,
-    piperApiUrl: env.PIPER_API_URL,
   };
 }
 
@@ -128,7 +126,7 @@ function readRealtimeConfig(env: EnvLookup = process.env) {
 }
 
 function readServerConfig(env: EnvLookup = process.env) {
-  const port = parsePort(env.PORT);
+  const port = parsePort(env.SERVER_PORT);
   const host = parseHost(env.HOST);
   const origin = validateWebOrigin(webOrigin(env));
   const gatewayOrigins = parseGatewayOrigins(

@@ -54,6 +54,7 @@ export default withMermaid(
           collapsed: false,
           items: [
             { text: '语音服务管理', link: '/voice/setup' },
+            { text: 'Speaches 语音服务', link: '/voice/speaches-service' },
             { text: '百炼实时语音', link: '/voice/aliyun-realtime' },
           ],
         },

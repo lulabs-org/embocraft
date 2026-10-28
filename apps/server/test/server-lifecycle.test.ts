@@ -31,20 +31,19 @@ describe('server assembly and lifecycle', () => {
       databaseUrl: '',
     });
     expect(
-      env.readServer({ PORT: '0', HOST: '0.0.0.0', WEB_ORIGIN: '*' }).port,
+      env.readServer({ SERVER_PORT: '0', HOST: '0.0.0.0', WEB_ORIGIN: '*' }).port,
     ).toBe(0);
     for (const testEnv of [
-      { PORT: 'no' },
-      { PORT: '65536' },
-      { PORT: '-1' },
+      { SERVER_PORT: 'no' },
+      { SERVER_PORT: '65536' },
+      { SERVER_PORT: '-1' },
       { HOST: '' },
       { WEB_ORIGIN: 'https://example.test/path' },
     ])
       expect(() => env.readServer(testEnv)).toThrow();
     expect(
-      env.readSpeech({ WHISPER_API_URL: 'http://whisper:8000/v1' })
-        .whisperApiUrl,
-    ).toBe('http://whisper:8000/v1');
+      env.readSpeech({ SPEECH_API_URL: 'http://speech:8000/v1' }).speechApiUrl,
+    ).toBe('http://speech:8000/v1');
   });
 
   it('preserves HTTP contracts and closes SSE, ASR, Gateway and world clients idempotently', async () => {
