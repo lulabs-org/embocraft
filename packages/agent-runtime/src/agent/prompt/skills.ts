@@ -1,4 +1,4 @@
-import type { AICharacterSkillId } from '@voxel/shared';
+import { AI_CHARACTER_SKILLS, type AICharacterSkillId } from '@voxel/shared';
 
 export const SKILL_GUIDANCE: Record<AICharacterSkillId, string> = {
   building:
@@ -8,3 +8,11 @@ export const SKILL_GUIDANCE: Record<AICharacterSkillId, string> = {
   guide:
     'For assigned guiding, explain observed surroundings clearly and move in short stages with the player. Do not invent landmarks or facts about unseen areas.',
 };
+
+/** Formats selected character skills into the system prompt block. */
+export function skillsPrompt(skills?: string[]): string {
+  const selected = AI_CHARACTER_SKILLS.filter((s) => skills?.includes(s.id))
+    .map((s) => `${s.name}: ${SKILL_GUIDANCE[s.id]}`)
+    .join('\n');
+  return `Selected skills:\n${selected || 'None.'}`;
+}

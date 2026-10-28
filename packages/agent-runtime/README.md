@@ -49,7 +49,6 @@ packages/agent-runtime/
     │   ├── observe/
     │   │   ├── extract.ts  # 观察裁剪、worldView、worldSignature
     │   │   ├── attention.ts # 纯过滤：是否为发给自己的真人消息
-    │   │   ├── scope.ts    # 私聊与广播事件的可见性隔离
     │   │   └── verify.ts   # arrived / observedEmpty / 方块比对谓词
     │   ├── actions/
     │   │   ├── parse.ts    # 模型输出 → 合法动作
@@ -58,17 +57,17 @@ packages/agent-runtime/
     │   │   └── build.ts    # houseBlocks 规划 + executeBuild
     │   └── nav/{map,astar,controller}.ts
     ├── agent/              # 角色智能
-    │   ├── task/           # 纯策略：实体、命令、授权、租约、预算
-    │   │   └── task.ts policy.ts lease.ts budget.ts commands.ts
+    │   ├── task/           # 纯策略：实体、命令、授权、租约、预算、事件入队
+    │   │   └── service.ts state.ts inbox.ts budget.ts commands.ts
     │   ├── turn/           # 一次决策的生命周期
-    │   │   ├── turn.ts     # 显式 Turn：租约/预算/配置切换/动作槽，实现 ToolHost
+    │   │   ├── turn.ts     # 显式 Turn：事件生命周期与动作槽，实现 ToolHost
+    │   │   ├── binding.ts  # TurnBinding：单轮任务租约、预算与配置切换
     │   │   ├── wake.ts     # AgentRunner.run：执行槽与一次唤醒的事件循环
     │   │   ├── event.ts    # 事件认领与结算
     │   │   ├── prepare.ts  # 观察、跳过未变化的等待、可见任务计算
     │   │   ├── reconcile.ts # 未确认效果与未完成建造的核对
     │   │   ├── decide.ts   # 每次决策装配 Pi Agent、调用 prompt 并接入模型流
     │   │   ├── guards.ts   # 批次边界、截断、协议纠正
-    │   │   ├── input.ts    # 模型输入构造
     │   │   ├── health.ts   # 连续失败与无进展检测
     │   │   ├── window.ts   # 转录裁剪：只保留完整交互组
     │   │   ├── transcript.ts # 转录脱敏、按受众保留与检查点写入
@@ -78,12 +77,11 @@ packages/agent-runtime/
     │   │   └── schema.ts conversation.ts world.ts task.ts
     │   ├── action/         # 任务绑定的动作推进
     │   │   └── executor.ts background.ts follow.ts chat-pacing.ts
-    │   ├── prompt/{system,skills,view}.ts
+    │   ├── prompt/{character,skills,view}.ts
     │   ├── model/{pi,stream,charge,failure}.ts
     │   └── schedule.ts     # headless 循环，仅 CLI 使用
     ├── persistence/        # 存档格式与迁移
-    │   ├── migrate.ts      # v1/v2 → v3，唯一认识旧结构的地方
-    │   └── fixtures/       # 历史档快照，迁移回归用
+    │   └── migrate.ts      # v3 状态归一化与恢复
     └── testing/            # "./testing"：内存 Session、假模型、可控 Clock/Id
 ```
 
@@ -98,10 +96,10 @@ packages/agent-runtime/
 | `world/actions/` | 动作解析、权限校验、单动作/批执行、建造                              | 任务归属、模型循环               |
 | `world/nav/`     | 局部地图、可站立节点搜索、可取消的位置闭环                           | 任务状态、跟随意图               |
 | `agent/task/`    | 任务实体、命令与授权、租约、预算计算                                 | 发起模型请求、执行世界写操作     |
-| `agent/turn/`    | 一次决策的状态机、事件与转录、观察与效果核对、输入构造、守卫与检查点 | 宿主协议、具体连接实现           |
+| `agent/turn/`    | 一次决策的状态机、事件与转录、观察与效果核对、守卫与检查点           | 宿主协议、具体连接实现           |
 | `agent/tools/`   | 工具 schema 与 handler，只依赖 `ToolHost` 接口                       | 直接访问 Session、任务持久化细节 |
 | `agent/action/`  | 任务绑定的动作执行、后台动作槽、跟随 tick、时间与取消原语            | 模型决策                         |
-| `agent/prompt/`  | 系统提示词、技能指引、模型视图                                       | 工具执行                         |
+| `agent/prompt/`  | 系统提示词、技能指引、模型输入视图与决策载荷构造                     | 工具执行                         |
 | `agent/model/`   | Pi 模型配置、OpenAI Completions 请求流、请求计量与失败处理           | 工具执行、任务状态转换           |
 | `persistence/`   | 存档序列化与版本迁移                                                 | 运行时决策、世界访问             |
 | `testing/`       | 确定性夹具，供包内单测和 CLI 使用                                    | 生产代码依赖                     |
@@ -140,7 +138,7 @@ flowchart TD
 1. **入口**：宿主通过 `api/runtime.ts` 导出的 `AgentRunner.run()` 执行；`agent/turn/wake.ts` 保证一个角色只有一个执行槽，重复唤醒直接拒绝。
 2. **接入**：宿主或 `AgentRuntime.submit()` 接收聊天消息；`agent/task/inbox.ts` 生成去重 id 并记录事件，保存后再入队，队列满时标记 `unknown`。任务控制由 `TaskService` 授权和提交；`api/intake.ts` 只导出这些接入辅助函数。
 3. **唤醒**：`agent/turn/wake.ts` 用消息、任务推进、继续决策三种原因驱动循环；有已保存的跟随意图且无新消息时推进一次本地跟随；后台动作未结束时等它结束或等新消息，不并发发起第二次决策。
-4. **决策**：`agent/turn/turn.ts` 按 `claim → prepare → decide → settle` 推进；`binding.ts` 持有当前配置、预算和租约，并处理聊天转任务时的切换。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`input.ts` 构造模型输入。`decide.ts` 每次创建 Pi Agent、回放已保存的历史、调用 `prompt()`，其 `streamFn` 直接调用 `agent/model/stream.ts` 的 `streamModel()`；`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
+4. **决策**：`agent/turn/turn.ts` 按 `claim → prepare → decide → settle` 推进；`binding.ts` 持有当前配置、预算和租约，并处理聊天转任务时的切换。`prepare.ts` 观察世界并交给 `reconcile.ts` 核对未确认效果，`agent/prompt/view.ts` 构造模型输入载荷。`decide.ts` 每次创建 Pi Agent、回放已保存的历史、调用 `prompt()`，其 `streamFn` 直接调用 `agent/model/stream.ts` 的 `streamModel()`；`guards.ts` 在工具边界拦截截断、已停止、预算耗尽和失败批次。
 5. **工具**：`agent/tools/*` 的 schema 是模型契约，handler 只依赖 `ToolHost`（定义在 `tools/port.ts`，由 `Turn` 实现）。`TaskService` 处理任务授权、命令与租约；世界工具把动作交给执行器。
 6. **动作**：`agent/action/executor.ts` 在执行时校验租约并保存进度。`goto`/`build`/`house` 作为后台动作运行，由 `agent/action/background.ts` 跟踪，结束后记录 `action_result` 事件；`follow` 由 `agent/action/follow.ts` 推进，不请求模型。
 7. **收尾**：任务进入结束态后清空可重放状态，`snapshot()` 提供只读投影，`store` 原子保存。宿主只持久化投影，不解析内部字段。
@@ -219,12 +217,8 @@ await runner.run({
 
 ```sh
 pnpm check
-pnpm test:agents
-pnpm test:agent:tasks
-pnpm test:chat
-pnpm test:agent:voice
-pnpm test:voice:services
-pnpm test:agent:deepseek   # Pi 工具与世界连接
+pnpm test
+pnpm vitest run packages/agent-runtime
 ```
 
 模型及语音集成使用 fixtures，不能替代真实服务验证；`apps/server/test/task-service.test.ts` 覆盖修订、保存失败和旧存档迁移。
@@ -253,9 +247,9 @@ Docker 验证需单独构建服务端，在隔离实例或短暂停机备份后�
 | `runtime/{world-tools,task-control-tools}.ts`              | `agent/tools/{world,conversation,task}.ts`                    |
 | `runtime/{task-executor,background-action,follow-step}.ts` | `agent/action/{executor,background,follow}.ts`                |
 | `perception/observation.ts`                                | `world/observe/{extract,verify}.ts` + `agent/turn/prepare.ts` |
-| `perception/{attention,chat-context}.ts`                   | `world/observe/{attention,scope}.ts` + `api/intake.ts`        |
-| `runtime/{decision-payload,options,turn-context}.ts`       | `agent/turn/{input,options,turn}.ts`                          |
-| `cognition/{prompts,skill-guidance}.ts`                    | `agent/prompt/{system,skills}.ts`                             |
+| `perception/{attention,chat-context}.ts`                   | `world/observe/attention.ts` + `api/intake.ts`                |
+| `runtime/{decision-payload,options,turn-context}.ts`       | `agent/prompt/view.ts` + `agent/turn/turn.ts`                 |
+| `cognition/{prompts,skill-guidance}.ts`                    | `agent/prompt/{character,skills,view}.ts`                     |
 | `cognition/{context,checkpoint,tool-schemas}.ts`           | `agent/turn/{window,checkpoint}.ts`、`agent/tools/schema.ts`  |
 | `models/*`                                                 | `agent/model/*`                                               |
 | `transport/session.ts`、`transport/cancellable.ts`         | `world/session/colyseus.ts`、`kernel/abort.ts`                |

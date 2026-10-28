@@ -23,7 +23,8 @@ import {
   executeTaskActions,
   executeTurnWorldAction,
 } from '../action/executor';
-import { characterPrompt } from '../prompt/system';
+import { characterPrompt } from '../prompt/character';
+import { buildDecisionPayload } from '../prompt/view';
 import { checkBudgetCap } from '../task/budget';
 import {
   type TaskCommand,
@@ -40,7 +41,6 @@ import { checkpointMessages } from './checkpoint';
 import { runDecisionLoop } from './decide';
 import { claimEvent, settleEvent } from './event';
 import { TurnHealthMonitor } from './health';
-import { buildDecisionPayload } from './input';
 import { prepareDecision } from './prepare';
 import { persistTranscript } from './transcript';
 
@@ -251,12 +251,20 @@ export class Turn implements ToolHost {
       aiCharacterPermissions(this.config).chat &&
       this.memory.checkpoint.unknownEffect?.name !== 'chat'
     ) {
-      await this.runTaskAction(
-        lease,
-        { type: 'chat', text: questionToAsk },
+      const chatOutcome = await executeTaskActions(
+        this.session,
+        [{ type: 'chat', text: questionToAsk }],
+        this.prepared().observation,
+        this.config,
         this.activeSignal,
-        false,
+        this.memory,
+        this.budget,
+        lease,
+        () => this.save(),
+        this.attention,
+        this.log,
       );
+      await this.refreshObservation(chatOutcome.observation);
     }
     return {
       status: this.memory.task.current!.status,
@@ -278,15 +286,18 @@ export class Turn implements ToolHost {
       id,
       action,
       lease,
+      session: this.session,
+      config: this.config,
+      budget: this.budget,
       service: this.service,
       memory: this.memory,
       state: this.state,
       activeSignal: this.activeSignal,
       attention: this.attention,
+      log: this.log,
       observation: () => this.prepared().observation,
+      refreshObservation: (observation) => this.refreshObservation(observation),
       save: () => this.save(),
-      execute: (nextAction, signal, background) =>
-        this.runTaskAction(lease, nextAction, signal, background),
       launch: (actionId, controller, work) =>
         this.launch(actionId, controller, work),
     });
@@ -306,31 +317,12 @@ export class Turn implements ToolHost {
     return this.service.lease();
   }
 
-  private async runTaskAction(
-    lease: TaskLease,
-    action: AgentAction,
-    signal: AbortSignal,
-    background: boolean,
-  ) {
-    const outcome = await executeTaskActions(
-      this.session,
-      [action],
-      this.prepared().observation,
-      this.config,
-      signal,
-      this.memory,
-      this.budget,
-      lease,
-      () => this.save(),
-      background ? undefined : this.attention,
-      this.log,
-    );
+  private async refreshObservation(observation: Observation) {
     this.prepared().observation = {
-      ...outcome.observation,
+      ...observation,
       attention: this.message,
     };
     await this.observe();
-    return outcome.batch;
   }
 
   private actionBusy() {
