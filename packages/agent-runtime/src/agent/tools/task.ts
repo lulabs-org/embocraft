@@ -1,194 +1,100 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { AgentAction, BatchResult } from '../../contracts';
+import { aiCharacterPermissions } from '@voxel/shared';
 import { AgentRuntimeError } from '../../contracts/errors';
-import { houseBlocks } from '../../world/actions/build';
-import { observedEmpty } from '../../world/observe/verify';
-import type { AgentRunState } from '../../contracts/state';
-import { TaskService, type TaskLease } from '../task/service';
-import type { DecisionContext } from '../../contracts/observation';
-import type { ToolState } from '../../contracts/tool-state';
-import { toolSchemas } from './schema';
-import { worldSignature, worldView } from '../../world/observe/extract';
+import { worldSignature } from '../../world/observe/extract';
+import { executeTaskActions } from '../action/executor';
+import { isActiveTask } from '../task/state';
+import type { ToolHost } from './port';
+import { taskToolSchemas } from './schema';
 
-/** Task-only tools. World effects are injected; no task creation or conversation mode. */
-export function createTaskTools(o: {
-  state: ToolState;
-  memory: AgentRunState;
-  service: TaskService;
-  lease: TaskLease;
-  prepared: () => DecisionContext;
-  observe: () => Promise<void>;
-  canChat: boolean;
-  signal: AbortSignal;
-  save: () => Promise<void>;
-  shouldYield: () => boolean;
-  execute: (action: AgentAction) => Promise<BatchResult>;
-}): AgentTool[] {
-  const result = (value: unknown) => ({
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(value, (key, value) =>
-          key === 'batchId' ? undefined : value,
-        ),
-      },
-    ],
-    details: {},
-  });
-  return Object.entries(toolSchemas).map(([name, parameters]) => ({
+const result = (value: unknown) => ({
+  content: [{ type: 'text' as const, text: JSON.stringify(value) }],
+  details: {},
+});
+
+/**
+ * Task outcome tools (complete_task, report_blocked, request_input, wait_for).
+ * Settles the current task status on the host without routing through world tools.
+ */
+export function createTaskTools(o: ToolHost): AgentTool[] {
+  return Object.entries(taskToolSchemas).map(([name, parameters]) => ({
     name,
     label: name,
     parameters,
-    description:
-      name === 'complete_task'
-        ? 'Complete only after prior results confirm the goal.'
-        : `Execute ${name} for the current task.`,
-    execute: async (id, value) => {
-      const args = value as Record<string, unknown> & {
+    description: `Use ${name} for the current authorized activity. If no task exists, first call start_task(goal); a world tool never creates a task implicitly.`,
+    execute: async (_id, value) => {
+      const args = value as {
         condition: 'world' | 'players';
         reason: string;
         summary: string;
         question: string;
       };
-      o.signal.throwIfAborted();
-      o.service.assertCurrent(o.lease);
-      if (o.state.terminal || o.state.skipBatch || o.shouldYield())
-        throw new AgentRuntimeError('当前批次已停止。');
-      if (
-        o.memory.checkpoint.unknownEffect?.name === name &&
-        ['chat', 'move', 'goto', 'follow'].includes(name)
-      )
+      o.authorize();
+      if (o.actionBusy())
         throw new AgentRuntimeError(
-          '上次聊天或移动结果未知，不能自动重放；请核对结果或等待玩家明确的新指令。',
+          '当前动作尚未结束，请读取进度或先明确停止。',
         );
-      if (name === 'observe') {
-        await o.observe();
-        return result({
-          observation: worldView(o.prepared().observation),
-          unfinishedBuild: o.memory.effects.unfinishedBuild,
+      if (!isActiveTask(o.memory.task.current))
+        throw new AgentRuntimeError(
+          'No active running task. For a NEW human action request, call start_task(goal) FIRST, then retry the world tool. Do not claim completion: no world action was executed. A paused or exhausted task must be resumed, never recreated.',
+        );
+      o.attach();
+      const lease = o.service.lease();
+      o.activeSignal.throwIfAborted();
+      o.service.assertCurrent(lease);
+      if (o.state.terminal || o.state.skipBatch || !!o.attention?.pending)
+        throw new AgentRuntimeError('当前批次已停止。');
+      if (name === 'wait_for')
+        o.service.finish(lease, {
+          status: 'waiting',
+          waitFor: args.condition,
+          reason: args.reason,
+          signature: worldSignature(o.prepared().observation, args.condition),
         });
-      }
-      if (
-        [
-          'complete_task',
-          'report_blocked',
-          'request_input',
-          'wait_for',
-        ].includes(name)
-      ) {
-        if (name === 'wait_for')
-          o.service.finish(o.lease, {
-            status: 'waiting',
-            waitFor: args.condition,
-            reason: args.reason,
-            signature: worldSignature(o.prepared().observation, args.condition),
-          });
-        else
-          o.service.finish(
-            o.lease,
-            {
-              status:
-                name === 'complete_task'
-                  ? 'completed'
-                  : name === 'request_input'
-                    ? 'needs_input'
-                    : 'blocked',
-              reason: args.summary ?? args.question ?? args.reason,
-            },
-            o.state.turnMutated,
-          );
-        o.state.terminal = true;
-        await o.save();
-        if (
-          name === 'request_input' &&
-          o.canChat &&
-          o.memory.checkpoint.unknownEffect?.name !== 'chat'
-        ) {
-          // The host executor enforces the task audience and current chat permission.
-          await o.execute({ type: 'chat', text: args.question });
-        }
-        return result({
-          status: o.memory.task.current!.status,
-          summary: o.memory.task.current!.summary,
-        });
-      }
-      const action = { ...args, type: name } as AgentAction;
-      o.memory.checkpoint.pi ??= {
-        version: 2,
-        taskId: o.lease.id,
-        revision: o.lease.revision,
-        taskStartedAt: o.lease.startedAt,
-        audience: o.memory.task.current?.privateTo ?? 'public',
-        messages: [],
-      };
-      o.memory.checkpoint.pi.inFlight = { id, name, state: 'executing' };
+      else
+        o.service.finish(
+          lease,
+          {
+            status:
+              name === 'complete_task'
+                ? 'completed'
+                : name === 'request_input'
+                  ? 'needs_input'
+                  : 'blocked',
+            reason: args.summary ?? args.question ?? args.reason,
+          },
+          o.state.turnMutated,
+        );
+      o.state.terminal = true;
       await o.save();
-      let known = false;
-      try {
-        const batch = await o.execute(action);
-        known =
-          batch.stopReason !== 'unknown' && batch.stopReason !== 'executing';
-        if (!batch.ok) {
-          if (
-            ['move', 'goto', 'follow', 'edit', 'build', 'house'].includes(name)
-          )
-            o.memory.effects.pendingEffects = batch;
-          o.state.skipBatch = true;
-          throw new AgentRuntimeError(JSON.stringify(batch));
-        }
-        if (name === 'follow' && o.memory.effects.follow) {
-          o.service.finish(o.lease, {
-            status: 'waiting',
-            reason: '持续跟随中，由本地导航控制器推进。',
-            waitFor: 'players',
-            signature: worldSignature(o.prepared().observation, 'players'),
-          });
-          o.state.terminal = true;
-        }
-        if (['move', 'goto', 'follow', 'edit', 'build', 'house'].includes(name))
-          o.state.turnMutated = true;
-        const edits =
-          action.type === 'edit'
-            ? [action]
-            : action.type === 'build'
-              ? action.blocks
-              : action.type === 'house'
-                ? houseBlocks(action)
-                : [];
-        const observation = o.prepared().observation;
-        const unconfirmed = edits.filter((edit) =>
-          edit.material === null
-            ? !observedEmpty(observation, edit)
-            : !observation.blocks.some(
-                (b) =>
-                  b.x === edit.x &&
-                  b.y === edit.y &&
-                  b.z === edit.z &&
-                  b.material === edit.material,
-              ),
+      if (
+        name === 'request_input' &&
+        aiCharacterPermissions(o.config).chat &&
+        o.memory.checkpoint.unknownEffect?.name !== 'chat'
+      ) {
+        const outcome = await executeTaskActions(
+          o.session,
+          [{ type: 'chat', text: args.question }],
+          o.prepared().observation,
+          o.config,
+          o.activeSignal,
+          o.memory,
+          o.budget,
+          lease,
+          () => o.save(),
+          o.attention,
+          o.log,
         );
-        return result({
-          batch,
-          ...(edits.length
-            ? {
-                verification: {
-                  requested: edits.length,
-                  observedMatching: edits.length - unconfirmed.length,
-                  unconfirmed,
-                },
-              }
-            : {}),
-          position: observation.self,
-          revision: observation.revision,
-          unfinishedBuild: o.memory.effects.unfinishedBuild,
-        });
-      } finally {
-        if (o.service.current(o.lease) && !o.state.persistenceFailed) {
-          if (known && o.memory.checkpoint.pi?.inFlight?.id === id)
-            delete o.memory.checkpoint.pi.inFlight;
-          await o.save();
-        }
+        o.prepared().observation = {
+          ...outcome.observation,
+          attention: o.message,
+        };
+        await o.observe();
       }
+      return result({
+        status: o.memory.task.current!.status,
+        summary: o.memory.task.current!.summary,
+      });
     },
   }));
 }
