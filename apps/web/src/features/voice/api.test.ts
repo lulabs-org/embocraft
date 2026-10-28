@@ -45,7 +45,6 @@ it('uses distinct ASR resource URLs, encodes IDs, and handles deletion without p
 it('preserves readiness and cancellation at the request boundary', async () => {
   const data = {
     local: { available: false, reason: 'missing-model' },
-    ollamaConfigured: true,
   };
   const request = vi.fn(async () => new Response(JSON.stringify(data)));
   vi.stubGlobal('fetch', request);

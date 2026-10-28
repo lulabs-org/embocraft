@@ -41,13 +41,12 @@ describe('audio capabilities HTTP boundary', () => {
     vi.restoreAllMocks();
   });
 
-  it('advertises ASR, optional Ollama and TTS readiness without requiring an admin token', async () => {
+  it('advertises ASR and TTS readiness without requiring an admin token', async () => {
     const response = await fetch(url);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       local: { available: true },
       whisperModels: expect.any(Array),
-      ollamaConfigured: false,
       agentSpeech: { available: false },
     });
   });

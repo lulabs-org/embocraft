@@ -136,11 +136,6 @@ function readServerConfig(env: EnvLookup = process.env) {
     webOrigin: origin,
     databaseUrl: databaseUrl(env),
     isProduction: (env.NODE_ENV ?? '').trim() === 'production',
-    voice: {
-      provider: 'mock',
-      ollamaModel: '',
-      ollamaBaseUrl: undefined as string | undefined,
-    },
     gateway: {
       token: env.AGENT_GATEWAY_TOKEN,
       tokenFile:

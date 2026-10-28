@@ -176,7 +176,7 @@ export class Connection {
             if (r.ok) reply.resolve();
             else reply.reject(Error(r.error || '发送失败。'));
           }
-          if (!r.ok && r.error !== 'voice-provider-unavailable') {
+          if (!r.ok) {
             this.messages = [...this.messages, `⚠ ${r.error}`].slice(-30);
             this.onChange();
           }
