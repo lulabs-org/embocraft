@@ -1,4 +1,5 @@
 import { Type } from '@earendil-works/pi-ai';
+
 const material = Type.Union(
   ['grass', 'dirt', 'stone', 'wood'].map((v) => Type.Literal(v)),
 );
@@ -11,7 +12,8 @@ const block = Type.Object({
   ...coordinates,
   material: Type.Union([material, Type.Null()]),
 });
-export const toolSchemas = {
+
+export const worldToolSchemas = {
   observe: Type.Object({}),
   chat: Type.Object({
     text: Type.String({ minLength: 1, maxLength: 240 }),
@@ -40,6 +42,9 @@ export const toolSchemas = {
       ['north', 'south', 'east', 'west'].map((v) => Type.Literal(v)),
     ),
   }),
+};
+
+export const taskToolSchemas = {
   complete_task: Type.Object({
     summary: Type.String({ minLength: 1, maxLength: 500 }),
   }),
@@ -54,9 +59,16 @@ export const toolSchemas = {
     reason: Type.String({ minLength: 1, maxLength: 500 }),
   }),
 };
+
+export const toolSchemas = {
+  ...worldToolSchemas,
+  ...taskToolSchemas,
+};
+
 const reply = Type.String({ minLength: 1, maxLength: 240 });
 const goal = Type.String({ minLength: 1, maxLength: 2000 });
 const command = { reply: Type.Optional(reply) };
+
 export const conversationToolSchemas = {
   reply: Type.Object({
     text: reply,

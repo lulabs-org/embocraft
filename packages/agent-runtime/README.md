@@ -145,7 +145,7 @@ flowchart TD
 6. **动作**：`agent/action/executor.ts` 在执行时校验租约并保存进度。`goto`/`build`/`house` 作为后台动作运行，由 `agent/action/background.ts` 跟踪，结束后记录 `action_result` 事件；`follow` 由 `agent/action/follow.ts` 推进，不请求模型。
 7. **收尾**：任务进入结束态后清空可重放状态，`snapshot()` 提供只读投影，`store` 原子保存。宿主只持久化投影，不解析内部字段。
 
-建房工具的执行链是 `agent/tools/world.ts` → `agent/tools/task.ts` → `agent/action/executor.ts` → `world/actions/batch.ts` → `world/actions/execute.ts` → `world/actions/build.ts`。工具绑定当前任务，执行器校验租约并保存进度，世界动作层展开蓝图并逐块调用 `session.request('edit')`；逐块施工不会逐块请求模型。
+建房工具的执行链是 `agent/tools/world.ts` → `agent/action/executor.ts` → `world/actions/batch.ts` → `world/actions/execute.ts` → `world/actions/build.ts`。工具绑定当前任务，执行器校验租约并保存进度，世界动作层展开蓝图并逐块调用 `session.request('edit')`；逐块施工不会逐块请求模型。
 
 headless 场景由 `agent/schedule.ts` 驱动：语义与宿主完全一致，只额外负责等待下一次唤醒。CLI 不直接调用 `turn`，也不另建第二套任务入口。
 

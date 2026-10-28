@@ -21,6 +21,7 @@ import { type TaskCommand } from '../task/service';
 import { isEndedTask } from '../task/state';
 import { createTaskControlTools } from '../tools/conversation';
 import type { ToolHost } from '../tools/port';
+import { createTaskTools } from '../tools/task';
 import { createRuntimeWorldTools } from '../tools/world';
 import { TurnBinding } from './binding';
 import { checkpointMessages } from './checkpoint';
@@ -264,6 +265,7 @@ export class Turn implements ToolHost {
       tools: [
         ...createTaskControlTools(this),
         ...createRuntimeWorldTools(this),
+        ...createTaskTools(this),
       ],
       history,
       input: buildDecisionPayload({
