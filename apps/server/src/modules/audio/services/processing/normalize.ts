@@ -1,4 +1,3 @@
-import { env } from '../../../../core/config/env';
 import { AppError } from '../../../../core/errors/app-error';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,7 +18,7 @@ export async function normalizeRecording(
   audio: Buffer,
   contentType: string,
   signal: AbortSignal,
-  ffmpeg = env.readSpeech().ffmpegBin,
+  ffmpeg = 'ffmpeg',
   runner: CommandRunner = runCommand,
 ) {
   const format = audioFormats[contentType.split(';')[0].trim().toLowerCase()];
@@ -72,7 +71,7 @@ export async function normalizeSpeech(
       output = join(dir, 'output.wav');
     await writeFile(input, bytes, { mode: 0o600 });
     await convertToPcmWav(input, output, signal, {
-      ffmpeg: env.readSpeech().ffmpegBin,
+      ffmpeg: 'ffmpeg',
       runner,
       maxSeconds: 91,
       timeoutMs: 30000,

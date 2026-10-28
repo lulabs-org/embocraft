@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, writeFile, access } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import { LocalSpeech } from './local-speech.service';
 import { validatePcmWav } from '../../domain/pcm-wav';
+
 function wav(seconds = 1, amplitude = 1000) {
   const data = Buffer.alloc(44 + Math.round(seconds * 32000));
   data.write('RIFF');
@@ -21,88 +19,20 @@ function wav(seconds = 1, amplitude = 1000) {
   for (let i = 44; i < data.length; i += 2) data.writeInt16LE(amplitude, i);
   return data;
 }
-describe('local Whisper transcription', () => {
-  let dir: string, model: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'speech-test-'));
-    model = join(dir, 'model');
-    await writeFile(model, Buffer.alloc(1024 * 1024));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-  it('checks missing dependencies before recording is offered', async () => {
-    expect(
-      (
-        await new LocalSpeech(
-          join(dir, 'missing'),
-          undefined,
-          undefined,
-          undefined,
-          '',
-        ).status()
-      ).available,
-    ).toBe(false);
-    expect(
-      (
-        await new LocalSpeech(
-          model,
-          join(dir, 'missing-binary'),
-          undefined,
-          undefined,
-          '',
-        ).status()
-      ).available,
-    ).toBe(false);
-  });
+
+describe('Whisper transcription service', () => {
   it('rejects silence, malformed, too short and too long audio', () => {
     expect(() => validatePcmWav(wav(1, 0))).toThrow('清晰声音');
     expect(() => validatePcmWav(Buffer.from('invalid'))).toThrow();
     expect(() => validatePcmWav(wav(0.1))).toThrow('太短');
     expect(() => validatePcmWav(wav(21))).toThrow('20 秒');
   });
-  it('normalizes audio, passes only fixed arguments, and removes temporary files', async () => {
-    const runner = vi.fn(async (_file: string, args: string[]) => {
-      if (args.includes('-protocol_whitelist'))
-        await writeFile(args.at(-1)!, wav());
-      else
-        await writeFile(
-          `${args[args.indexOf('-of') + 1]}.txt`,
-          '  你好，世界。\n',
-        );
-    });
+
+  it('rejects unsupported input before invoking speech service', async () => {
+    const fetcher = vi.fn();
     const speech = new LocalSpeech(
-      model,
-      process.execPath,
-      process.execPath,
-      runner,
-      '',
-    );
-    const text = await speech.transcribe(
-      Buffer.from('compressed'),
-      'audio/webm;codecs=opus',
-      'zh',
-      new AbortController().signal,
-    );
-    expect(text).toBe('你好，世界。');
-    expect(runner.mock.calls[0][1]).toContain('file,pipe');
-    expect(runner.mock.calls[1][1]).toContain('zh');
-    const whisperArgs = runner.mock.calls[1][1];
-    expect(whisperArgs[whisperArgs.indexOf('--prompt') + 1]).toContain(
-      '简体中文',
-    );
-    await expect(
-      access(dirname(runner.mock.calls[0][1].at(-1)!)),
-    ).rejects.toThrow();
-  });
-  it('rejects unsupported input before launching a subprocess', async () => {
-    const runner = vi.fn();
-    const speech = new LocalSpeech(
-      model,
-      process.execPath,
-      process.execPath,
-      runner,
-      '',
+      'http://whisper:8000/v1',
+      fetcher as unknown as typeof fetch,
     );
     await expect(
       speech.transcribe(
@@ -128,57 +58,32 @@ describe('local Whisper transcription', () => {
         new AbortController().signal,
       ),
     ).rejects.toThrow('中文');
-    expect(runner).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
   });
-  it('releases the busy slot and cleans files after subprocess failure', async () => {
-    const runner = vi.fn().mockRejectedValue(new Error('timeout'));
-    const speech = new LocalSpeech(
-      model,
-      process.execPath,
-      process.execPath,
-      runner,
-      '',
-    );
-    await expect(
-      speech.transcribe(
-        Buffer.from('x'),
-        'audio/wav',
-        'en',
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ status: 502 });
-    await expect(
-      access(dirname(runner.mock.calls[0][1].at(-1))),
-    ).rejects.toThrow();
-    await expect(
-      speech.transcribe(
-        Buffer.from('x'),
-        'audio/wav',
-        'en',
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ status: 502 });
-  });
+
   it('serializes inference and forwards cancellation', async () => {
     let started!: () => void;
     const start = new Promise<void>((r) => {
       started = r;
     });
-    const runner = vi.fn(
-      (_file: string, _args: string[], signal: AbortSignal) =>
-        new Promise<void>((_resolve, reject) => {
-          started();
-          signal.addEventListener('abort', () => reject(signal.reason), {
-            once: true,
-          });
-        }),
-    );
+    const fetcher = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('/health')) {
+        return Promise.resolve(
+          new Response('{"status":"ok"}', { status: 200 }),
+        );
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        started();
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(init.signal?.reason),
+          { once: true },
+        );
+      });
+    });
     const speech = new LocalSpeech(
-      model,
-      process.execPath,
-      process.execPath,
-      runner,
-      '',
+      'http://whisper:8000/v1',
+      fetcher as unknown as typeof fetch,
     );
     const controller = new AbortController();
     const first = speech.transcribe(
@@ -200,53 +105,7 @@ describe('local Whisper transcription', () => {
     controller.abort();
     await rejected;
   });
-  it('applies per-request Whisper parameters as separate CLI arguments without changing defaults', async () => {
-    const runner = vi.fn(async (_file: string, args: string[]) => {
-      if (args.includes('-protocol_whitelist'))
-        await writeFile(args.at(-1)!, wav());
-      else await writeFile(`${args[args.indexOf('-of') + 1]}.txt`, 'hello');
-    });
-    const speech = new LocalSpeech(
-      model,
-      process.execPath,
-      process.execPath,
-      runner,
-      '',
-    );
-    const settings = {
-      model: 'default',
-      threads: 2,
-      beamSize: 8,
-      temperature: 0.2,
-      prompt: 'terms --model /not-an-option',
-    };
-    await speech.transcribe(
-      Buffer.from('audio'),
-      'audio/wav',
-      'zh',
-      new AbortController().signal,
-      settings,
-    );
-    const args = runner.mock.calls[1][1];
-    expect(args[args.indexOf('-m') + 1]).toBe(model);
-    expect(args[args.indexOf('-t') + 1]).toBe('2');
-    expect(args[args.indexOf('-bs') + 1]).toBe('8');
-    expect(args[args.indexOf('-tp') + 1]).toBe('0.2');
-    expect(args[args.indexOf('--prompt') + 1]).toBe(settings.prompt);
-    await speech.transcribe(
-      Buffer.from('audio'),
-      'audio/wav',
-      'en',
-      new AbortController().signal,
-    );
-    const defaults = runner.mock.calls[3][1];
-    expect(defaults[defaults.indexOf('-t') + 1]).toBe('4');
-    expect(defaults).not.toContain('--prompt');
-    expect(
-      (await speech.status({ ...settings, model: 'ggml-not-installed.bin' }))
-        .available,
-    ).toBe(false);
-  });
+
   it('supports API mode for independent faster-whisper service', async () => {
     const mockFetcher = vi.fn(async (url: string | URL | Request) => {
       const urlStr = String(url);
@@ -263,10 +122,6 @@ describe('local Whisper transcription', () => {
     });
 
     const speech = new LocalSpeech(
-      model,
-      'whisper-cli',
-      'ffmpeg',
-      vi.fn(),
       'http://whisper:8000/v1',
       mockFetcher as unknown as typeof fetch,
     );
@@ -288,15 +143,12 @@ describe('local Whisper transcription', () => {
       expect.objectContaining({ method: 'POST' }),
     );
   });
+
   it('API mode handles server failure and empty transcript', async () => {
     const failFetcher = vi.fn(async () => {
       return new Response('Service Unavailable', { status: 503 });
     });
     const speech = new LocalSpeech(
-      model,
-      'whisper-cli',
-      'ffmpeg',
-      vi.fn(),
       'http://whisper:8000/v1',
       failFetcher as unknown as typeof fetch,
     );
@@ -310,10 +162,6 @@ describe('local Whisper transcription', () => {
       return new Response(JSON.stringify({ text: '' }), { status: 200 });
     });
     const emptySpeech = new LocalSpeech(
-      model,
-      'whisper-cli',
-      'ffmpeg',
-      vi.fn(),
       'http://whisper:8000/v1',
       emptyFetcher as unknown as typeof fetch,
     );
@@ -334,6 +182,7 @@ describe('local Whisper transcription', () => {
       ),
     ).rejects.toMatchObject({ status: 400, code: 'no-speech' });
   });
+
   it.each([
     ['zh', undefined, '以下是简体中文的语音转写。'],
     ['zh', '   ', '以下是简体中文的语音转写。'],
@@ -352,14 +201,7 @@ describe('local Whisper transcription', () => {
           return new Response('{}');
         },
       );
-      const speech = new LocalSpeech(
-        model,
-        'whisper-cli',
-        'ffmpeg',
-        vi.fn(),
-        'http://whisper:8000/v1',
-        fetcher,
-      );
+      const speech = new LocalSpeech('http://whisper:8000/v1', fetcher);
       const settings =
         prompt === undefined
           ? undefined
@@ -381,6 +223,7 @@ describe('local Whisper transcription', () => {
       ).toBe('原樣輸出');
     },
   );
+
   it.each([
     ['audio/webm;codecs=opus', 'audio/webm', 'audio.webm'],
     ['audio/mp4', 'audio/mp4', 'audio.m4a'],
@@ -398,14 +241,7 @@ describe('local Whisper transcription', () => {
           return new Response('{}');
         },
       );
-      const speech = new LocalSpeech(
-        model,
-        'whisper-cli',
-        'ffmpeg',
-        vi.fn(),
-        'http://whisper:8000/v1',
-        fetcher,
-      );
+      const speech = new LocalSpeech('http://whisper:8000/v1', fetcher);
       expect(
         await speech.transcribe(
           Buffer.from('audio'),

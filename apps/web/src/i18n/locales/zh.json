@@ -842,7 +842,6 @@
       "checkFinished": "检查完成",
       "recheck": "重新检查",
       "whisperServerNote": "自托管 Whisper 的识别模型部署在服务器上。请在“识别服务分配”中分别为聊天听写、附近麦克风和聊天录语音指定服务。",
-      "whisperSetupHint": "服务未就绪时，可在服务器的项目目录运行 pnpm voice:setup 准备识别模型。",
       "tryAsrHeading": "试用语音识别",
       "startRecording": "开始录音",
       "toggleFileTestShow": "用音频文件测试",

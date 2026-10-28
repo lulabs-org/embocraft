@@ -845,7 +845,6 @@
       "checkFinished": "Check finished",
       "recheck": "Recheck",
       "whisperServerNote": "Self-hosted Whisper models stay on the server. Assign a service to chat dictation, the nearby microphone, and recorded chat voice in ASR Assignments.",
-      "whisperSetupHint": "If service is not ready, run pnpm voice:setup in the server root to download models.",
       "tryAsrHeading": "Test Speech Recognition",
       "startRecording": "Start Recording",
       "toggleFileTestShow": "Test with Audio File",

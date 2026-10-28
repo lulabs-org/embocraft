@@ -32,8 +32,7 @@ services:
     container_name: embocraft-speech
     restart: unless-stopped
     networks:
-      embocraft-network:
-        aliases: [whisper]
+      - embocraft-network
     environment:
       # CPU image: reduce inference cost and avoid reloading after five idle minutes.
       WHISPER__COMPUTE_TYPE: int8

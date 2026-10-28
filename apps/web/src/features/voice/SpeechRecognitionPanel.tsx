@@ -331,11 +331,6 @@ export function SpeechRecognitionPanel({
                 </button>
               </div>
               <p className="agent-hint">{t('console.asr.whisperServerNote')}</p>
-              {!capabilities?.local.available && (
-                <p className="agent-hint">
-                  {t('console.asr.whisperSetupHint')}
-                </p>
-              )}
             </section>
           )}
           <section
