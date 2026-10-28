@@ -1,8 +1,4 @@
-import {
-  AI_CHARACTER_LOG_LIMIT,
-  type AICharacterLogEntry,
-  type AICharacterView,
-} from '@voxel/shared';
+import { AI_CHARACTER_LOG_LIMIT, type AICharacterView } from '@voxel/shared';
 
 type LogView = Pick<AICharacterView, 'logEntries'>;
 
@@ -39,30 +35,4 @@ export function appendAICharacterLog(
     ...previous.logEntries,
     { time: now, text: message },
   ].slice(-AI_CHARACTER_LOG_LIMIT);
-}
-
-/**
- * Migrate the legacy parallel `logs`/`logTimes` arrays into the unified
- * `logEntries` shape so archived characters keep their history.
- */
-export function migrateLegacyLogs(
-  logs: unknown,
-  times: unknown,
-): AICharacterLogEntry[] {
-  if (!Array.isArray(logs)) return [];
-  return logs
-    .map((text, index): AICharacterLogEntry | null => {
-      if (typeof text !== 'string' || !text) return null;
-      const time = Array.isArray(times) ? times[index] : undefined;
-      const normalized =
-        typeof time === 'number' &&
-        Number.isFinite(time) &&
-        time >= 0 &&
-        time <= MAX_TIME
-          ? time
-          : null;
-      return { time: normalized, text };
-    })
-    .filter((entry): entry is AICharacterLogEntry => entry !== null)
-    .slice(-AI_CHARACTER_LOG_LIMIT);
 }

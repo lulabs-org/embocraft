@@ -1,10 +1,7 @@
 import type { AICharacterSettings } from '@voxel/shared';
 import { AgentAttention } from '@voxel/agent-runtime';
 import type { PlanService } from '../../tasks';
-import {
-  migrateLegacyLogs,
-  restoreAICharacterLogs,
-} from '../domain/activity-log';
+import { restoreAICharacterLogs } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort } from '../../providers';
@@ -39,27 +36,16 @@ export function restoreAICharacterJob(
       createdAt: view.createdAt,
       providerName: provider.name,
       status: 'stopped',
-      ...restoreAICharacterLogs(
-        Array.isArray(view.logEntries)
-          ? view.logEntries
-          : migrateLegacyLogs(
-              // Legacy archives persisted two parallel arrays before `logEntries`.
-              (view as { logs?: unknown }).logs,
-              (view as { logTimes?: unknown }).logTimes,
-            ),
-      ),
+      ...restoreAICharacterLogs(view.logEntries),
     },
     abort: new AbortController(),
-    memory: restoreTaskMemory(view.runtime, view.task, settings.goal),
+    memory: restoreTaskMemory(view.runtime),
     attention: new AgentAttention(),
     ledger,
     currentRunId: view.currentRunId,
   };
 
-  restoreTaskExecution(
-    executionState(job),
-    !view.currentRunId && !!view.runtime?.task.current,
-  );
+  restoreTaskExecution(executionState(job));
 
   const shouldAutoJoin = ['idle', 'running', 'joining', 'failed'].includes(
     view.status,

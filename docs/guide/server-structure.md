@@ -11,7 +11,7 @@
 5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务通常为 `*.service.ts`，保留 `character.manager.ts`、`world.room.ts`、`world.schema.ts` 等职责明确的命名；单元测试与源码同目录就近共置（`*.test.ts`），跨模块集成与架构测试另行集中。
 6. **API 静态契约 100% 覆盖**：显式注册的 REST 路由维护对应的 OpenAPI JSDoc 注解；AST 检查当前支持的 `app.get/post/put/patch/delete` 静态路径及数量一致性，检查范围与限制见第 5 节。
 7. **数据持久化安全保障**：PostgreSQL 强校验作为生产核心数据底座，启动前严格探活与脱敏；全局快照使用关系表驱动，离线测试显式注入内存存储。
-:::
+   :::
 
 ---
 
@@ -185,7 +185,7 @@ apps/server/
         ├── providers/                   # ── 6. 大模型提供商管理（DDD 标杆） ──
         │   ├── adapters/                # 外部适配器（健康探测、模型目录）
         │   ├── domain/                  # 实体、规范、纯校验函数
-        │   ├── persistence/             # 提供商仓储（PostgreSQL 数据库主干 + providers.json 兼容实现）
+        │   ├── persistence/             # 提供商仓储（PostgreSQL 数据库主干）
         │   ├── services/                # 核心业务服务与事件
         │   │   ├── provider.service.ts  # 提供商生命周期与健康检测调度
         │   │   ├── provider.service.test.ts
@@ -210,7 +210,6 @@ apps/server/
         │   ├── persistence/             # 任务计划快照捕获与状态仓储
         │   │   ├── snapshots.ts         # 存档快照序列化
         │   │   ├── restore.ts           # 历史快照还原
-        │   │   ├── archive-migration.ts # 历史任务快照迁移
         │   │   └── plan-store.ts        # 计划与执行历史内存状态仓储
         │   ├── routes/                  # HTTP REST API
         │   │   └── tasks.routes.ts      # /tasks 与 /task-runs 路由
@@ -413,7 +412,7 @@ import {
   - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交角色和任务的可见状态，再调用注入的提交通知回调；角色编排器将回调连接到 `ManagementEvents.commit()`，持久化协调器不依赖事件总线实现；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
 - **离线测试与恢复验证（`test/helpers/memory-storage.ts` / `src/persistence/migrate-archive.ts`）**：
   - 测试显式注入内存 Provider、角色存档与 TTS/ASR 配置存储；读写时复制数据，重新创建服务实例验证恢复，并注入保存失败验证回滚。
-  - `migrate-archive.ts` 保留存档结构校验及历史版本恢复；旧文件读写与自动备份已移除，磁盘上的历史 JSON 文件不会自动导入或删除。
+  - `migrate-archive.ts` 负责 v3 存档结构校验与规整；旧文件读写、自动备份与 v0/v1/v2 历史版本兼容已移除。
 
 ---
 

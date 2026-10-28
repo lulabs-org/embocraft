@@ -1,18 +1,18 @@
+import { randomUUID } from 'node:crypto';
 import {
   isRepeating,
-  type TaskPlan,
   type TaskPlanDraft,
+  type TaskPlan,
   type TaskRun,
 } from '@voxel/shared';
-import { randomUUID } from 'node:crypto';
 import { hasPlanTokenLimit } from './limits';
 import { nextOccurrence } from './timing';
-import type { StoredRun, TaskBook } from './types';
+import type { StoredRun } from './types';
 
 export { wallClockInstant } from '@voxel/shared';
 export { nextOccurrence } from './timing';
-export type { StoredRun, TaskBook } from './types';
 export { validatePlan } from './validation';
+export type { StoredRun } from './types';
 
 /**
  * 判断指定运行是否已经结束（不再处于活跃/待命状态）
@@ -102,10 +102,7 @@ export function newRun(
 /**
  * 查询任务簿中到期且待触发的任务计划，按下次执行时间与创建时间升序排列
  */
-export function duePlans(
-  book: Pick<TaskBook, 'plans'>,
-  now: number,
-): TaskPlan[] {
+export function duePlans(book: { plans: TaskPlan[] }, now: number): TaskPlan[] {
   return book.plans
     .filter(
       (p) =>

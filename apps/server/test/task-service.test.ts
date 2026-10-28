@@ -1,17 +1,13 @@
 import {
   emptyState,
   newTask,
-  restoreCheckpoint,
-  restoreState,
   TaskService,
   type AgentRunState,
 } from '@voxel/agent-runtime';
 import { describe, expect, it } from 'vitest';
-import { RequestBudget } from '../../../packages/agent-runtime/src/agent/task/budget';
 import { testAgentConfig } from '../../../tests/support/agent-config';
-import { bootstrapProviders } from '../src/modules/providers';
-import { migrateArchive } from '../src/persistence/migrate-archive';
-import { MemoryProviderRepository } from './helpers/memory-storage';
+import { RequestBudget } from '../../../packages/agent-runtime/src/agent/task/budget';
+
 const config = testAgentConfig();
 const operator = { kind: 'operator' as const };
 
@@ -101,100 +97,6 @@ describe('TaskService revision and commit boundary', () => {
       service.finish(lease, { status: 'completed', reason: 'done' }),
     ).toThrow('未确认');
   });
-});
-
-it('migrates current and historical runtimes while preserving uncertain effects and budgets', async () => {
-  const providers = new MemoryProviderRepository();
-
-  await bootstrapProviders(providers);
-
-  const task = { ...newTask('old build'), calls: 3, tokens: 600 };
-
-  task.status = 'completed';
-
-  // Persisted v2 archives are flat; restoreState is the only migration entry.
-  const legacyRuntime = {
-    task,
-    pi: {
-      version: 1,
-      taskStartedAt: task.startedAt,
-      audience: 'public',
-      messages: [],
-      inFlight: { id: 'old-chat', name: 'chat', state: 'executing' },
-    },
-  } as unknown as AgentRunState;
-
-  const record = {
-    ...config,
-    providerId: 'deepseek',
-    id: 'old-agent',
-    status: 'stopped',
-    createdAt: task.startedAt,
-    logs: [],
-    runtime: legacyRuntime,
-    taskBook: {
-      version: 1,
-      plans: [
-        {
-          id: 'old-plan',
-          name: 'old build',
-          goal: 'old build',
-          timing: { kind: 'immediate' },
-          state: 'completed',
-          revision: 1,
-          spentTokens: 600,
-          limits: {},
-          totalTokenBudget: 500000,
-        },
-      ],
-      runs: [
-        {
-          id: 'old-run',
-          planId: 'old-plan',
-          status: 'completed',
-          runtime: structuredClone(legacyRuntime),
-          snapshot: { limits: {}, timing: { kind: 'immediate' } },
-          accountedTokens: 600,
-          totalTokens: 600,
-          logs: [],
-        },
-      ],
-    },
-  };
-
-  // Keep the current run ended to avoid fabricating another plan during restore.
-  const saved = migrateArchive(JSON.parse(JSON.stringify([record])));
-
-  // The archive reader is deliberately lossless; migration belongs to restoration.
-  const migrated = saved!.characters[0];
-
-  migrated.runtime = restoreState(migrated.runtime);
-
-  restoreCheckpoint(migrated.runtime!);
-
-  for (const run of saved!.runs) {
-    run.runtime = restoreState(run.runtime);
-    restoreCheckpoint(run.runtime!);
-  }
-
-  expect(migrated.runtime).toMatchObject({
-    version: 3,
-    task: { current: { calls: 3, tokens: 600 } },
-    checkpoint: { unknownEffect: { name: 'chat', state: 'unknown' } },
-  });
-
-  expect(migrated.runtime!.checkpoint.pi).toBeUndefined();
-
-  expect(saved!.runs[0].runtime).toMatchObject({
-    version: 3,
-    checkpoint: { unknownEffect: { name: 'chat' } },
-  });
-
-  const again = structuredClone(migrated.runtime);
-
-  restoreCheckpoint(again!);
-
-  expect(again).toEqual(migrated.runtime);
 });
 
 it('counts overlapping activity model/action time once and excludes a later paused interval', async () => {
