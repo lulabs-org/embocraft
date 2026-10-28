@@ -109,10 +109,6 @@ function databaseUrl(env: EnvLookup = process.env): string {
 
 function readSpeechConfig(env: EnvLookup = process.env) {
   return {
-    path: env.PATH ?? '',
-    whisperModel: env.WHISPER_MODEL,
-    whisperBin: env.WHISPER_BIN,
-    ffmpegBin: env.FFMPEG_BIN ?? 'ffmpeg',
     speechApiUrl: env.SPEECH_API_URL,
   };
 }
