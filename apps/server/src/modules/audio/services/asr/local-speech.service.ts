@@ -33,12 +33,11 @@ export class LocalSpeech {
     private whisper = env.readSpeech().whisperBin ?? 'whisper-cli',
     private ffmpeg = env.readSpeech().ffmpegBin,
     private runner: CommandRunner = runCommand,
-    private apiUrl = !env.readSpeech().whisperApiUrl?.trim() &&
-    !env.readSpeech().speechApiUrl?.trim() &&
+    private apiUrl = !env.readSpeech().speechApiUrl?.trim() &&
     (env.readSpeech().whisperBin?.trim() ||
       env.readSpeech().whisperModel?.trim())
       ? ''
-      : speechEndpoint('whisper'),
+      : speechEndpoint(),
     private fetcher: typeof fetch = fetch,
   ) {}
   async status(settings?: WhisperAsrSettings) {

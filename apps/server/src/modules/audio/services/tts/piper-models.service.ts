@@ -17,7 +17,7 @@ export class PiperModels {
   private installing?: string;
   private failures = new Map<string, string>();
   constructor(
-    private endpoint = speechEndpoint('piper'),
+    private endpoint = speechEndpoint(),
     private request: typeof fetch = fetch,
     private installTimeoutMs = 600000,
   ) {}

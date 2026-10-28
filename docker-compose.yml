@@ -1,12 +1,14 @@
 services:
   db:
     image: postgres:17-alpine
-    container_name: voxel-postgres
+    container_name: embocraft-postgres
     restart: unless-stopped
+    networks:
+      - embocraft-network
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-voxel}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voxelpassword}
-      POSTGRES_DB: ${POSTGRES_DB:-voxel}
+      POSTGRES_USER: ${POSTGRES_USER:-embocraft}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-embocraftpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-embocraft}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -16,7 +18,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'pg_isready -U ${POSTGRES_USER:-voxel} -d ${POSTGRES_DB:-voxel}',
+          'pg_isready -U ${POSTGRES_USER:-embocraft} -d ${POSTGRES_DB:-embocraft}',
         ]
       interval: 3s
       timeout: 5s
@@ -27,17 +29,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.speech
-    container_name: voxel-speech
+    container_name: embocraft-speech
     restart: unless-stopped
+    networks:
+      embocraft-network:
+        aliases: [whisper]
     environment:
       # CPU image: reduce inference cost and avoid reloading after five idle minutes.
       WHISPER__COMPUTE_TYPE: int8
       WHISPER__TTL: -1
       # Standard HTTP downloads are more reliable on Docker Desktop/proxy networks.
       HF_HUB_DISABLE_XET: '1'
-    networks:
-      default:
-        aliases: [whisper]
     volumes:
       - speech_cache:/home/ubuntu/.cache/huggingface/hub
     ports:
@@ -47,8 +49,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.server
-    container_name: voxel-server
+    container_name: embocraft-server
     restart: unless-stopped
+    networks:
+      - embocraft-network
     depends_on:
       db:
         condition: service_healthy
@@ -56,14 +60,11 @@ services:
         condition: service_started
     environment:
       HOST: 0.0.0.0
-      PORT: 2567
-      DATABASE_URL: postgresql://${POSTGRES_USER:-voxel}:${POSTGRES_PASSWORD:-voxelpassword}@db:5432/${POSTGRES_DB:-voxel}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-embocraft}:${POSTGRES_PASSWORD:-embocraftpassword}@db:5432/${POSTGRES_DB:-embocraft}?schema=public
       WEB_ORIGIN: '${WEB_ORIGIN:-*}'
       AGENT_GATEWAY_TOKEN: '${AGENT_GATEWAY_TOKEN:-}'
       AGENT_GATEWAY_ALLOWED_ORIGINS: '${AGENT_GATEWAY_ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}'
       SPEECH_API_URL: '${SPEECH_API_URL:-http://speech:8000/v1}'
-      WHISPER_API_URL: '${WHISPER_API_URL:-}'
-      PIPER_API_URL: '${PIPER_API_URL:-}'
     volumes:
       - server_data:/app/.data
     ports:
@@ -73,17 +74,24 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
-    container_name: voxel-web
+    container_name: embocraft-web
     restart: unless-stopped
+    networks:
+      - embocraft-network
     depends_on:
       - server
     ports:
       - '${WEB_PORT:-80}:80'
 
+networks:
+  embocraft-network:
+    name: embocraft-network
+    driver: bridge
+
 volumes:
   postgres_data:
-    name: voxel_postgres_data
+    name: embocraft_postgres_data
   speech_cache:
-    name: voxel_whisper_cache
+    name: embocraft_speech_cache
   server_data:
-    name: voxel_server_data
+    name: embocraft_server_data

@@ -59,7 +59,7 @@ export async function createTestServer(
         options.voiceServices ??
         new VoiceServiceStore(join(directory, 'voices.json')),
       config: env.readServer({
-        PORT: String(options.port ?? 0),
+        SERVER_PORT: String(options.port ?? 0),
         HOST: '127.0.0.1',
         WEB_ORIGIN: options.origin ?? 'http://127.0.0.1:5173',
         DATABASE_URL: '',

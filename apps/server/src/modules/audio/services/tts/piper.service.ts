@@ -8,7 +8,7 @@ import type { SpeechSynthesizer } from './speech-synthesizer';
 export class PiperTts implements SpeechSynthesizer {
   constructor(
     private options: { model?: string; speed?: number } = {},
-    private endpoint = speechEndpoint('piper'),
+    private endpoint = speechEndpoint(),
     private request: typeof fetch = fetch,
   ) {}
   async synthesize(text: string, signal: AbortSignal) {
