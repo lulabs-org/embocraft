@@ -40,7 +40,7 @@ src/
 - App 和跨 feature 调用通过各域的 `index.ts`；域内部直接引用具体模块，不绕回自身入口。
 - `components`、`hooks`、`audio`、`graphics`、`network` 不依赖 features。音频、图形和网络模块不依赖 React。
 - 组件和业务 hooks 不直接调用 `fetch`，HTTP 请求由对应 `api.ts` 管理；控制台子域共享 `request.ts`。所有服务地址由 `network/endpoints.ts` 解析。
-- `audio/index.ts` 导出现有录音和播放会话，不创建全局 AudioContext 或改变资源所有权。两处 PCM 采集入口引用同一个 `core/pcm-worklet.js`。
+- `audio/index.ts` 导出现有录音和播放会话，不创建全局 AudioContext 或改变资源所有权。实时录音采集引用 `core/pcm-worklet.js`。
 - `Dialog` 只管理原生模态框和焦点恢复。关闭控制台不会卸载其子树；TTS/ASR 切换使用 `hidden`，同时以 `active` 控制资源活动。
 - Agent 修改仍通过共享互斥锁与 revision 防止旧轮询覆盖最新结果。关闭控制台取消读取和模型查询并停止轮询。
 - 切换大厅/游戏时，布局组件保持同一个画布位置；退出世界仍显式执行场景、连接和通信面板清理。

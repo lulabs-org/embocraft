@@ -1,5 +1,4 @@
 export { audioDuration, audioProgress } from './core/audio-timeline';
-export { PCMCapture, PCMPlayer, pcmFloats } from './core/realtime-audio';
 export { ClipRecorder } from './recording/clip-recorder';
 export { LiveRecorder, SpeechCapture } from './recording/live-recorder';
 export {

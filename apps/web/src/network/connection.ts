@@ -1,5 +1,4 @@
 import { serverHttpUrl, serverSocketUrl } from './endpoints';
-import type { RealtimeEvent } from '@voxel/shared/communication';
 import { Client, type Room } from 'colyseus.js';
 import {
   key,
@@ -63,7 +62,6 @@ export class Connection {
   }
   private clearCommunication() {
     this.chatToken = '';
-    this.onRealtimeReset();
     this.stopSpatialInput();
     for (const reply of this.replies.values()) {
       clearTimeout(reply.timer);
@@ -73,9 +71,6 @@ export class Connection {
   }
   onChange = () => {};
   onBlocks = () => {};
-  onVoice = (_value: unknown) => {};
-  onRealtime: (value: RealtimeEvent) => void = () => {};
-  onRealtimeReset = () => {};
   private counter = 0;
   private stopped = false;
   private generation = 0;
@@ -187,12 +182,6 @@ export class Connection {
           }
         },
       );
-      room.onMessage('realtime', (value: RealtimeEvent) => {
-        if (activeRoom()) this.onRealtime(value);
-      });
-      room.onMessage('voice', (value) => {
-        if (activeRoom()) this.onVoice(value);
-      });
       room.onMessage('observation', () => {});
       room.onStateChange((state) => {
         if (!activeRoom()) return;
@@ -206,10 +195,6 @@ export class Connection {
         this.clearCommunication();
         this.room = undefined;
         this.status = 'disconnected';
-        this.onVoice({
-          state: 'interrupted',
-          subtitle: i18n.t('voice.sessionInterrupted'),
-        });
         this.onChange();
         this.retry = setTimeout(() => {
           if (current() && this.status === 'disconnected')
@@ -269,10 +254,6 @@ export class Connection {
     this.clearCommunication();
     sessionStorage.removeItem('voxel-reconnect');
     sessionStorage.removeItem('voxel-name');
-    this.onVoice({
-      state: 'idle',
-      subtitle: i18n.t('voice.sessionExited'),
-    });
     this.onChange();
     if (room) void room.leave(true).catch(() => room.connection.close());
   }

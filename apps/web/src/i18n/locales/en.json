@@ -214,9 +214,7 @@
     "listenOff": "Mute Output",
     "listenOn": "Unmute Output",
     "captionPrivate": "Direct",
-    "captionNearby": "Proximity Voice",
-    "sessionInterrupted": "Connection interrupted; voice session stopped.",
-    "sessionExited": "Exited world; recording, recognition, and playback stopped."
+    "captionNearby": "Proximity Voice"
   },
   "console": {
     "eyebrow": "WORLD CONSOLE",
@@ -859,12 +857,6 @@
       "confirmedTextPlaceholder": "Shows live while speaking and appends each confirmed sentence",
       "langChinese": "Chinese",
       "langEnglish": "English"
-    },
-    "tts": {
-      "title": "Text-to-Speech (TTS)",
-      "piper": "Piper Local Voice",
-      "browser": "Browser System Speech",
-      "preview": "Voice Preview"
     }
   },
   "avatar": {
