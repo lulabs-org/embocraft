@@ -170,7 +170,7 @@ docker compose down -v
 | `POSTGRES_PASSWORD` | `voxelpassword` | 数据库初始化密码，部署前修改 |
 | `POSTGRES_DB`       | `voxel`         | 数据库名称                   |
 
-Compose 使用 `POSTGRES_*` 生成服务端的容器内 `DATABASE_URL`。示例的本地 `DATABASE_URL`、`HOST`、`PORT` 适用于本地开发。
+Compose 使用 `POSTGRES_*` 生成服务端的容器内 `DATABASE_URL`。示例的本地 `DATABASE_URL`、`SERVER_HOST`、`SERVER_PORT` 适用于本地开发。
 
 ---
 
