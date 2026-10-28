@@ -1,5 +1,3 @@
-import { env } from '../../core/config/env';
-import { RealtimeHub, type BailianConfig } from '../realtime';
 import { WorldChat, visibleEvent } from '../chat';
 import {
   AgentSpeech,
@@ -62,33 +60,12 @@ export class WorldRoom extends Room<WorldState> {
   private events: WorldEvent[] = [];
   private seq = 0;
   private ownsActive = false;
-  private realtimeConfig: () => BailianConfig = () => env.readRealtime();
   private spatialSignal = createSpatialSignaling(
     (id) => this.state.players.get(id),
     (recipient, signal) =>
       this.clients
         .find((c) => c.sessionId === recipient)
         ?.send('spatial.signal', signal),
-  );
-  private realtime = new RealtimeHub(
-    (owner) => ({
-      revision: () => this.state.revision,
-      observe: () => {
-        const player = this.state.players.get(owner);
-        if (!player?.connected) throw Error('disconnected');
-        return {
-          revision: this.state.revision,
-          self: { x: player.x, y: player.y, z: player.z, yaw: player.yaw },
-          blocks: [...this.blocks.values()]
-            .filter((b) => distance(b, player) <= 6)
-            .sort((a, b) => distance(a, player) - distance(b, player))
-            .slice(0, 64),
-        };
-      },
-    }),
-    (owner, event) =>
-      this.clients.find((c) => c.sessionId === owner)?.send('realtime', event),
-    () => this.realtimeConfig(),
   );
   private queue: Promise<void> = Promise.resolve();
   autoDispose = false;
@@ -97,7 +74,6 @@ export class WorldRoom extends Room<WorldState> {
     options: {
       voiceServices?: VoiceServiceStore;
       store?: WorldStore;
-      realtimeConfig?: () => BailianConfig;
     } = {},
   ) {
     this.voiceServices = options.voiceServices;
@@ -109,7 +85,6 @@ export class WorldRoom extends Room<WorldState> {
     activeRoom = true;
     this.ownsActive = true;
     this.store = options.store ?? new WorldStore();
-    if (options.realtimeConfig) this.realtimeConfig = options.realtimeConfig;
     this.setState(new WorldState());
     try {
       this.state.revision = await this.store.load(this.blocks);
@@ -130,28 +105,7 @@ export class WorldRoom extends Room<WorldState> {
         value.id.length > 80
       )
         return this.reply(client, '', false, 'invalid-envelope');
-      const { id } = value;
-      let { type, payload } = value;
-      if (typeof type === 'string' && type.startsWith('realtime.')) {
-        try {
-          if (this.state.players.get(client.sessionId)?.kind !== 'human')
-            throw Error('human-session-required');
-          if (type === 'realtime.approve') {
-            payload = this.realtime.approve(client.sessionId, payload);
-            type = 'edit'; // Reuse the authoritative serialized edit validation and persistence below.
-          } else {
-            this.realtime.handle(client.sessionId, type, payload);
-            return this.reply(client, id, true);
-          }
-        } catch (error) {
-          return this.reply(
-            client,
-            id,
-            false,
-            error instanceof Error ? error.message : 'realtime-failed',
-          );
-        }
-      }
+      const { id, type, payload } = value;
       if (type === 'agent.voice') {
         const player = this.state.players.get(client.sessionId);
         if (
@@ -332,7 +286,6 @@ export class WorldRoom extends Room<WorldState> {
   async onLeave(client: Client, consented: boolean) {
     // Colyseus also calls onLeave when onJoin rejects before creating an avatar.
     if (!this.state.players.has(client.sessionId)) return;
-    this.realtime.close(client.sessionId);
     this.agentSpeech.cancel(client.sessionId);
     const p = this.state.players.get(client.sessionId);
     this.chat.revoke(client.sessionId);
@@ -365,7 +318,6 @@ export class WorldRoom extends Room<WorldState> {
   }
   async onDispose() {
     this.releaseVoiceServices?.();
-    this.realtime.dispose();
     this.agentSpeech.close();
     this.chat.clear();
     await this.queue;

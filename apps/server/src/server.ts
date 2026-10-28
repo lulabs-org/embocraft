@@ -181,7 +181,6 @@ export async function createServer(options: ServerOptions = {}) {
   server.define('world', WorldRoom, {
     voiceServices,
     store,
-    realtimeConfig: () => config.realtime,
   });
   server.onBeforeShutdown(() => characters.close());
   let closing: Promise<void> | undefined;
