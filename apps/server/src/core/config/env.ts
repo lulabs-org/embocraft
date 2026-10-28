@@ -113,14 +113,6 @@ function readSpeechConfig(env: EnvLookup = process.env) {
   };
 }
 
-function readRealtimeConfig(env: EnvLookup = process.env) {
-  return {
-    enabled: env.BAILIAN_REALTIME_ENABLED === 'true',
-    workspace: env.BAILIAN_WORKSPACE_ID ?? '',
-    credential: () => env.DASHSCOPE_API_KEY ?? '',
-  };
-}
-
 function readServerConfig(env: EnvLookup = process.env) {
   const port = parsePort(env.SERVER_PORT);
   const host = parseHost(env.HOST);
@@ -142,7 +134,6 @@ function readServerConfig(env: EnvLookup = process.env) {
         env.AGENT_GATEWAY_TOKEN_FILE || dataPath('agent-gateway-token'),
       origins: gatewayOrigins,
     },
-    realtime: readRealtimeConfig(env),
   };
 }
 
@@ -163,7 +154,6 @@ export const env = {
   databaseUrl,
   readServer: readServerConfig,
   readSpeech: readSpeechConfig,
-  readRealtime: readRealtimeConfig,
 } as const;
 
 export default env;

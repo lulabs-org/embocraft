@@ -120,7 +120,6 @@ embocraft/
 |              | [Agent Gateway](docs/agent/gateway.md)        | 管理令牌、HTTP 控制端点与 WebSocket 状态订阅 |
 |              | [统一事件运行时](docs/agent/runtime.md)       | 任务执行器、检查点持久化与预算配额保护       |
 | **语音服务** | [语音服务管理](docs/voice/setup.md)           | Whisper ASR 与 Piper TTS 模型安装与配置      |
-|              | [百炼实时语音](docs/voice/aliyun-realtime.md) | 阿里云百炼实时对话协议与离线模拟验证         |
 | **变更记录** | [验证记录](docs/changelog/validation.md)      | 浏览器双端回归、网络异常恢复与功能验收记录   |
 |              | [Pi 架构迁移](docs/changelog/pi-migration.md) | Agent 运行时架构演进记录                     |
 

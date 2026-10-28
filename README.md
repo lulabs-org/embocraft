@@ -120,7 +120,6 @@ For in-depth architectural layering, module dependency contracts, and design bou
 |                         | [Agent Gateway](docs/agent/gateway.md)                         | Admin tokens, HTTP control endpoints, and WebSocket state subscription       |
 |                         | [Unified Event Runtime](docs/agent/runtime.md)                 | Task executor, checkpoint persistence, and token budget protection           |
 | **Voice Services**      | [Voice Service Management](docs/voice/setup.md)                | Whisper ASR and Piper TTS model installation and configuration               |
-|                         | [Bailian Realtime Voice](docs/voice/aliyun-realtime.md)        | Alibaba Cloud Bailian realtime voice protocol & offline simulation           |
 | **Changelog**           | [Validation Records](docs/changelog/validation.md)             | Dual-browser regression, network recovery, and acceptance tests              |
 |                         | [Pi Migration](docs/changelog/pi-migration.md)                 | Evolution records for Agent runtime architecture                             |
 
