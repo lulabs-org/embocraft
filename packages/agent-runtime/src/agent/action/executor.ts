@@ -194,18 +194,18 @@ export type TurnActionContext = {
   id: string;
   action: AgentAction;
   lease: TaskLease;
+  session: AgentSession;
+  config: AgentConfig;
+  budget: RequestBudget;
   service: TaskService;
   memory: AgentRunState;
   state: ToolState;
   activeSignal: AbortSignal;
   attention?: AgentAttention;
+  log?: (message: string) => void;
   observation: () => Observation;
+  refreshObservation: (observation: Observation) => Promise<void>;
   save: () => Promise<void>;
-  execute: (
-    action: AgentAction,
-    signal: AbortSignal,
-    background: boolean,
-  ) => Promise<BatchResult>;
   launch: (id: string, controller: AbortController, work: Promise<void>) => void;
 };
 
@@ -304,7 +304,21 @@ async function runSingleWorldAction(
 
   let known = false;
   try {
-    const batch = await ctx.execute(action, signal, background);
+    const outcome = await executeTaskActions(
+      ctx.session,
+      [action],
+      ctx.observation(),
+      ctx.config,
+      signal,
+      ctx.memory,
+      ctx.budget,
+      lease,
+      () => ctx.save(),
+      background ? undefined : ctx.attention,
+      ctx.log,
+    );
+    await ctx.refreshObservation(outcome.observation);
+    const { batch } = outcome;
     known = batch.stopReason !== 'unknown' && batch.stopReason !== 'executing';
     if (!batch.ok) {
       if (['goto', 'follow', 'edit', 'build', 'house'].includes(name))

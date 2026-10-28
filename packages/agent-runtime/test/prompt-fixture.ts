@@ -1,6 +1,6 @@
 import type { AgentConfig, Observation } from '@voxel/agent-runtime';
 import { testAgentConfig } from '../../../tests/support/agent-config';
-import { characterPrompt } from '../src/agent/prompt/system';
+import { characterPrompt } from '../src/agent/prompt/character';
 import { turnInput } from '../src/agent/prompt/view';
 
 export function buildMessages(

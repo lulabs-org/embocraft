@@ -4,10 +4,10 @@ import {
   characterPrompt,
   NAVIGATION_PROMPT,
   protocolAndSafetyPrompt,
-  skillsPrompt,
   TASK_LIFECYCLE_PROMPT,
   VERIFICATION_PROMPT,
-} from './system';
+} from './character';
+import { skillsPrompt } from './skills';
 import { testAgentConfig } from '../../../../../tests/support/agent-config';
 import { buildMessages, observation } from '../../../test/prompt-fixture';
 
@@ -97,3 +97,4 @@ describe('modular system prompt components', () => {
     expect(skillsPrompt()).toBe('Selected skills:\nNone.');
   });
 });
+

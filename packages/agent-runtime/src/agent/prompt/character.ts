@@ -1,6 +1,6 @@
-import { AI_CHARACTER_SKILLS, aiCharacterPermissions } from '@voxel/shared';
+import { aiCharacterPermissions } from '@voxel/shared';
 import type { AgentConfig } from '../../contracts/config';
-import { SKILL_GUIDANCE } from './skills';
+import { skillsPrompt } from './skills';
 
 /**
  * Correction message replayed once to local models that answer in prose
@@ -8,10 +8,6 @@ import { SKILL_GUIDANCE } from './skills';
  */
 export const TOOL_PROTOCOL_CORRECTION =
   'Protocol correction: your last answer was plain text and was NOT delivered or executed. Use the provided native function tools, never a bare JSON object or a .function prefix. This model requires the exact tool envelope: <tool_call>{"name":"FUNCTION_NAME","arguments":{}}</tool_call>. Replace FUNCTION_NAME and arguments with an available tool and valid values. Do not repeat successful world actions. If results verify the entire task, call complete_task. For a conversation response, call chat with your actual reply in the text argument.';
-
-/** One-step guidance when a human asks for world work while no activity exists. */
-export const NO_ACTIVITY_HINT =
-  'No activity exists. To perform requested world actions, first call start_task(goal), then the world tool. For questions use the native chat tool.';
 
 /** 1. Core interaction protocol, security boundary and permissions */
 export function protocolAndSafetyPrompt(config: AgentConfig): string {
@@ -47,14 +43,6 @@ Verify those results on the next model turn, then call complete_task(summary); d
 If needed, chat a brief completion report before the terminal status (same batch is allowed). Do not repeat completed work or unchanged failures. Use report_blocked for unsolvable obstacles, request_input for missing information, wait_for only for EXTERNAL changes. No arbitrary number of turns is required.
 A failed tool skips the rest of that batch. New human messages yield at tool boundaries; pause/cancel interrupts immediately. Never blindly replay unknown chat/movement. Task chat is bound to its audience; never leak private tasks in public. If chat permission is disabled, report status through task outcome tools. Terminal status prevents all later tools.`;
 
-/** 6. Selected skills guidance formatting */
-export function skillsPrompt(skills?: string[]): string {
-  const selected = AI_CHARACTER_SKILLS.filter((s) => skills?.includes(s.id))
-    .map((s) => `${s.name}: ${SKILL_GUIDANCE[s.id]}`)
-    .join('\n');
-  return `Selected skills:\n${selected || 'None.'}`;
-}
-
 export function characterPrompt(config: AgentConfig): string {
   return [
     protocolAndSafetyPrompt(config),
@@ -65,3 +53,4 @@ export function characterPrompt(config: AgentConfig): string {
     skillsPrompt(config.skills),
   ].join('\n\n');
 }
+

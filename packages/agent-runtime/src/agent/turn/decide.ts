@@ -7,7 +7,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import type { Message } from '@earendil-works/pi-ai';
 import type { ToolState } from '../../contracts/tool-state';
-import { TOOL_PROTOCOL_CORRECTION } from '../prompt/system';
+import { TOOL_PROTOCOL_CORRECTION } from '../prompt/character';
 import type { AgentConfig, ModelEndpoint } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
 import { createModel } from '../model/pi';
