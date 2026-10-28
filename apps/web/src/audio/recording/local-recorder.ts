@@ -1,7 +1,6 @@
 import { serverHttpUrl } from '../../network/endpoints';
 export type SpeechCapabilities = {
   local: { available: boolean; reason: string };
-  whisperModels?: string[];
 };
 export type RecordingCallbacks = {
   onState: (state: 'listening' | 'thinking', message: string) => void;

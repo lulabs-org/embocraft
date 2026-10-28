@@ -1,6 +1,6 @@
 import { AppError } from '../../../../core/errors/app-error';
 import { speechEndpoint } from '../../speech-endpoint';
-import type { WhisperAsrSettings } from '@voxel/shared';
+import { DEFAULT_WHISPER_ASR, type WhisperAsrSettings } from '@voxel/shared';
 import {
   audioFormats,
   MAX_AUDIO_BYTES,
@@ -19,7 +19,7 @@ export class LocalSpeech {
     private apiUrl = speechEndpoint(),
     private fetcher: typeof fetch = fetch,
   ) {}
-  async status(_settings?: WhisperAsrSettings) {
+  async status() {
     try {
       const base = this.apiUrl.replace(/\/v1\/?$/, '');
       const res = await this.fetcher(`${base}/health`, {
@@ -80,7 +80,7 @@ export class LocalSpeech {
       throw new AppError('服务器正在识别另一段录音，请稍后重试。', 429);
     this.busy = true;
     try {
-      const status = await this.status(settings);
+      const status = await this.status();
       if (!status.available) throw new AppError(status.reason, 503);
       signal.throwIfAborted();
       return await this.transcribeRemote(
@@ -129,7 +129,7 @@ export class LocalSpeech {
       'model',
       settings?.model && settings.model !== 'default'
         ? settings.model
-        : 'Systran/faster-whisper-base',
+        : DEFAULT_WHISPER_ASR.model,
     );
     form.append('language', language);
     const prompt = whisperPrompt(language, settings);
@@ -151,7 +151,7 @@ export class LocalSpeech {
       const modelId = encodeURIComponent(
         settings?.model && settings.model !== 'default'
           ? settings.model
-          : 'Systran/faster-whisper-base',
+          : DEFAULT_WHISPER_ASR.model,
       );
       const downloadEndpoint = `${this.apiUrl.replace(/\/+$/, '')}/models/${modelId}`;
       await this.fetcher(downloadEndpoint, {

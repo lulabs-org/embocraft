@@ -42,6 +42,7 @@ export type TaskRun = {
   planRevision?: number;
   characterId?: string;
   characterName?: string;
+  /** `legacy` is retained solely as provenance of already imported v3 run history. */
   source: 'scheduled' | 'manual' | 'chat' | 'legacy';
   scheduledAt: number;
   eventId?: string;

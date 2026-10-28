@@ -50,7 +50,10 @@ it('exposes goto/follow without low-level move and keeps complete maps out of pr
     ),
   ).toThrow('权限');
   expect(() =>
-    parseAction({ type: 'follow', playerId: 'a', distance: NaN }, false),
+    parseAction(
+      { type: 'follow', playerId: 'a', distance: NaN },
+      { move: true, chat: true, place: false, remove: false },
+    ),
   ).toThrow();
 });
 
@@ -295,7 +298,7 @@ it('refuses to complete an active follow and treats an interrupted goto as unfin
       w.session,
       [{ type: 'goto', x: 5, y: 2.5, z: 0 }],
       w.observe(),
-      false,
+      { move: true, chat: true, place: false, remove: false },
       signal(),
       { pending: () => pending },
     ),

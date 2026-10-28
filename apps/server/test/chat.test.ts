@@ -110,7 +110,7 @@ describe('private chat', () => {
       { request, move: vi.fn() },
       { type: 'chat', text: 'reply', scope: 'public', recipients: [] },
       observation,
-      false,
+      { move: true, chat: true, place: false, remove: false },
       new AbortController().signal,
     );
     expect(request).toHaveBeenCalledWith('chat', {
@@ -241,7 +241,7 @@ describe('nearby speech delivery', () => {
       { request, move: vi.fn() },
       { type: 'chat', text: '我听到了' },
       observation,
-      false,
+      { move: true, chat: true, place: false, remove: false },
       new AbortController().signal,
     );
     expect(request).toHaveBeenCalledWith('chat', {

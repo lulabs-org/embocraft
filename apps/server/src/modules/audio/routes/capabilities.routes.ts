@@ -6,7 +6,6 @@ import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { LocalSpeech } from '../services/asr/local-speech.service';
-import { listWhisperModels } from '../services/asr/whisper-settings';
 import { PiperModels } from '../services/tts/piper-models.service';
 export function installCapabilitiesRoutes(
   app: Express,
@@ -57,10 +56,6 @@ export function installCapabilitiesRoutes(
    *               properties:
    *                 local:
    *                   type: object
-   *                 whisperModels:
-   *                   type: array
-   *                   items:
-   *                     type: string
    *                 agentSpeech:
    *                   type: object
    */
@@ -75,8 +70,7 @@ export function installCapabilitiesRoutes(
         if (selected && selected.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
         res.json({
-          local: await speech.status(selected),
-          whisperModels: await listWhisperModels(),
+          local: await speech.status(),
           agentSpeech: await new PiperModels().status(),
         });
       } catch (error) {

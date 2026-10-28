@@ -92,8 +92,6 @@ export function validateAICharacter(
       21600000,
     ),
     intervalMs: integer(input.intervalMs, '轮次间隔', 3000, 1000, 60000),
-    allowEdits:
-      capabilities.permissions.place && capabilities.permissions.remove,
     voiceReplies: boolean(input.voiceReplies, false),
     voiceServiceId: text(
       input.voiceServiceId,
@@ -121,13 +119,10 @@ export function aiCharacterProfileInput(value: unknown) {
 export function validateCapabilities(input: {
   permissions?: unknown;
   skills?: unknown;
-  allowEdits?: unknown;
 }): { permissions: AICharacterPermissions; skills: AICharacterSkillId[] } {
   let permissions: AICharacterPermissions;
   if (input.permissions === undefined) {
-    if (input.allowEdits !== undefined && typeof input.allowEdits !== 'boolean')
-      throw Error('建造权限格式无效。');
-    permissions = resolvePermissions(input.allowEdits === true);
+    permissions = { move: true, chat: true, place: false, remove: false };
   } else {
     const value = input.permissions;
     if (

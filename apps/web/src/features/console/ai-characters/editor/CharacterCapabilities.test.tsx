@@ -34,14 +34,14 @@ function permission(id: string) {
     .querySelector<HTMLInputElement>('input')!;
 }
 
-it('keeps edit permissions synchronized with allowEdits', async () => {
+it('changes place and remove permissions independently', async () => {
   await act(async () => mount.render(<Harness />));
   await act(async () => permission('place').click());
   expect(draft.permissions?.place).toBe(true);
-  expect(draft.allowEdits).toBe(false);
+  expect(draft.permissions).toMatchObject({ place: true, remove: false });
   await act(async () => permission('remove').click());
-  expect(draft.allowEdits).toBe(true);
+  expect(draft.permissions).toMatchObject({ place: true, remove: true });
   await act(async () => permission('place').click());
-  expect(draft.allowEdits).toBe(false);
+  expect(draft.permissions).toMatchObject({ place: false, remove: true });
   expect(draft.permissions?.remove).toBe(true);
 });

@@ -256,7 +256,7 @@ export function SpeechRecognitionPanel({
                   value.provider === 'browser'
                     ? `${t('console.asr.typeBrowser')} · ${browserLanguages.find(([code]) => code === value.language)?.[1] ?? value.language}`
                     : value.provider === 'whisper'
-                      ? `Whisper · ${value.model === 'default' ? t('console.asr.defaultServerModel') : value.model} · ${value.threads} ${t('console.asr.threadsLabel')}`
+                      ? `Whisper · ${value.model}`
                       : `${t('console.asr.typeBailian')} · ${value.model}`,
               }))
               .map((item) => (
@@ -289,11 +289,7 @@ export function SpeechRecognitionPanel({
               {asr.notice}
             </p>
           )}
-          <BailianAsrConfig
-            manager={asr}
-            disabled={busy}
-            models={capabilities?.whisperModels}
-          />
+          <BailianAsrConfig manager={asr} disabled={busy} />
           {!isBrowser && asr.selected?.provider === 'whisper' && (
             <section className="console-panel-section">
               <h4>{t('console.asr.whisperStatusHeading')}</h4>

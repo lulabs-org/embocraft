@@ -3,8 +3,7 @@ import type { Edit } from '@voxel/shared';
 import type { AgentSession } from '@voxel/agent-runtime';
 import type { SavedProvider } from '../../apps/server/src/modules/providers';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
   AgentRunner,
@@ -15,12 +14,12 @@ import {
 } from '../../packages/agent-runtime/src/index';
 import { testAgentConfig } from '../support/agent-config';
 // Opt-in: this benchmark sends real requests using a locally configured provider.
-const providers = JSON.parse(
-  await readFile(
-    process.env.PI_BENCHMARK_PROVIDERS || '.data/agent-providers.json',
-    'utf8',
-  ),
-);
+const providerFile = process.env.PI_BENCHMARK_PROVIDERS;
+if (!providerFile)
+  throw new Error(
+    'Set PI_BENCHMARK_PROVIDERS to an explicit benchmark provider fixture.',
+  );
+const providers = JSON.parse(await readFile(providerFile, 'utf8'));
 const provider = providers.find((p: SavedProvider) =>
   process.env.PI_BENCHMARK_PROVIDER
     ? p.id === process.env.PI_BENCHMARK_PROVIDER
@@ -30,10 +29,6 @@ if (!provider)
   throw new Error(
     'Configure PI_BENCHMARK_PROVIDERS / PI_BENCHMARK_PROVIDER first.',
   );
-const baselineRoot = process.env.PI_BENCHMARK_BASELINE_ROOT;
-const baseline = baselineRoot
-  ? await import(pathToFileURL(resolve(baselineRoot, 'src/index.ts')).href)
-  : undefined;
 const output =
   process.env.PI_BENCHMARK_OUTPUT || 'artifacts/pi-migration/pi-benchmark.json';
 await mkdir(dirname(output), { recursive: true });
@@ -150,32 +145,19 @@ for (const name of cases)
     if (name === 'chat') message(goals[name]);
     else memory.task.current = newTask(goals[name], 'human', 'human');
     const runner = new AgentRunner(provider, fetch);
-    const planner = baseline
-      ? new baseline.ModelPlanner(config, fetch, provider)
-      : undefined;
     const start = performance.now();
     try {
       for (let i = 0; i < 15; i++) {
-        if (baseline)
-          await baseline.runTaskStep(
-            session,
-            planner,
-            config,
-            new AbortController().signal,
-            memory,
-            attention,
-          );
-        else
-          await runner.run({
-            session: {
-              ...session,
-              request: session.request as AgentSession['request'],
-            },
-            config,
-            signal: new AbortController().signal,
-            memory,
-            attention,
-          });
+        await runner.run({
+          session: {
+            ...session,
+            request: session.request as AgentSession['request'],
+          },
+          config,
+          signal: new AbortController().signal,
+          memory,
+          attention,
+        });
         if (
           name === 'update' &&
           !changed &&
@@ -231,7 +213,7 @@ for (const name of cases)
       output,
       JSON.stringify(
         {
-          engine: baseline ? 'baseline' : 'pi',
+          engine: 'pi',
           model: config.model,
           limits: {
             calls: config.maxTurns,

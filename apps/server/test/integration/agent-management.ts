@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  fixtureRunnerFactory,
-  DecisionFixture as ModelPlanner,
-} from '../../../../tests/support/decision-fixture';
+import { AgentRunner } from '@voxel/agent-runtime';
+import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
 import { bootstrapProviders } from '../../src/modules/providers';
 import { MemoryProviderRepository } from '../helpers/memory-storage';
@@ -39,36 +37,47 @@ try {
   const request: typeof fetch = async (_url, init) => {
     calls++;
     const body = JSON.parse(init!.body as string);
-    capabilitiesInRequests.push(JSON.parse(body.messages[1].content).character);
-    rolesInRequests.push(
-      JSON.parse(body.messages[1].content).character.roleDescription,
+    const userIndex = body.messages
+      .map((message: { role: string }) => message.role)
+      .lastIndexOf('user');
+    const content = body.messages[userIndex].content;
+    const input = JSON.parse(
+      typeof content === 'string' ? content : content[0].text,
     );
-    return new Response(
-      JSON.stringify({
-        choices: [
-          {
-            finish_reason: 'stop',
-            message: {
-              content: JSON.stringify({
-                actions:
-                  JSON.parse(body.messages[1].content).character
-                    .roleDescription === 'capability fixture'
-                    ? [
-                        { type: 'edit', x: 1, y: 3, z: 1, material: 'wood' },
-                        { type: 'chat', text: 'Forbidden capability receipt' },
-                      ]
-                    : [{ type: 'chat', text: 'Managed fixture hello' }],
-                task: {
-                  intent: 'continue',
-                  status: 'completed',
-                  summary: '已回复',
-                },
-              }),
-            },
-          },
-        ],
-      }),
-      { headers: { 'Content-Type': 'application/json' } },
+    observations.push(input.observation);
+    capabilitiesInRequests.push(input.character);
+    rolesInRequests.push(input.character.roleDescription);
+    if (input.character.roleDescription === 'capability fixture') {
+      const corrected = body.messages
+        .slice(userIndex + 1)
+        .some((message: { role: string }) => message.role === 'tool');
+      return toolResponse(
+        corrected
+          ? [
+              {
+                name: 'report_blocked',
+                arguments: { reason: '聊天权限未开启' },
+              },
+            ]
+          : [
+              {
+                name: 'chat',
+                arguments: { text: 'Forbidden capability receipt' },
+              },
+              {
+                name: 'edit',
+                arguments: { x: 1, y: 3, z: 1, material: 'wood' },
+              },
+            ],
+      );
+    }
+    return toolResponse(
+      input.currentRequest
+        ? [{ name: 'reply', arguments: { text: 'Managed fixture hello' } }]
+        : [
+            { name: 'chat', arguments: { text: 'Managed fixture hello' } },
+            { name: 'complete_task', arguments: { summary: '已回复' } },
+          ],
     );
   };
   globalThis.fetch = (async (input, init) => {
@@ -83,15 +92,7 @@ try {
     origin: process.env.WEB_ORIGIN,
     agentDependencies: {
       session: (url) => new Session(url),
-      runner: fixtureRunnerFactory((config, provider) => {
-        const planner = new ModelPlanner(config, request, provider);
-        const decide = planner.decide.bind(planner);
-        planner.decide = (...args) => {
-          observations.push(args[0]);
-          return decide(...args);
-        };
-        return planner;
-      }),
+      runner: (_config, provider) => new AgentRunner(provider, request),
     },
   });
   manager = server.characters;
@@ -482,7 +483,7 @@ try {
     manager.list().find((j) => j.id === created[0])?.task?.status ===
       'completed',
   );
-  // A forbidden tail must prevent even the permitted edit at the head.
+  // A forbidden tool must stop the remaining tools in the response.
   const beforeCapabilities = calls;
   const permissions = { move: true, chat: false, place: true, remove: false };
   const capabilityResponse = await api('/ai-characters', 'POST', {
@@ -529,7 +530,7 @@ try {
   assert.equal(
     room.state.revision,
     revisionBefore,
-    'No partial edit before rejecting a forbidden chat',
+    'No edit after rejecting a forbidden chat',
   );
   assert.equal(emitted.length, 0, 'No model chat or automatic receipt');
   assert.deepEqual(
@@ -540,12 +541,11 @@ try {
     (capabilitiesInRequests.at(-1) as { skills: unknown }).skills,
     ['building', 'guide'],
   );
-  assert(
-    manager
-      .list()
-      .find((j) => j.id === capabilityJob.id)!
-      .logEntries.some((entry) => entry.text.includes('聊天权限')),
+  assert.equal(
+    manager.list().find((j) => j.id === capabilityJob.id)!.task?.status,
+    'blocked',
   );
+
   // Task schedules use the same permission-checked runtime and origin boundary.
   const capabilityRuns = await (
     await api(`/tasks/${capabilityPlan.id}/runs`)
@@ -565,7 +565,6 @@ try {
   });
   assert.equal(schedule.status, 201);
   const plan = await schedule.json();
-  const plannedAt = plan.nextRunAt;
   const repeatCreate = await api(`/tasks`, 'POST', {
     characterId: capabilityJob.id,
     name: 'Scheduled capability check',
@@ -591,11 +590,11 @@ try {
   );
   const history = await (await api(`/tasks/${plan.id}/runs`)).json();
   assert.equal(history.items.length, 1);
-  assert.equal(history.items[0].task.calls, 1);
+  assert.equal(history.items[0].task.calls, 2);
   assert.equal(
     room.state.revision,
     revisionBefore,
-    'Scheduled work keeps atomic permission checks',
+    'Scheduled work stops the remaining tools after a permission failure',
   );
   assert.equal(
     emitted.length,
@@ -612,16 +611,17 @@ try {
   );
   assert.equal(
     calls,
-    beforeScheduled + 1,
+    beforeScheduled + 2,
     'Retried manual request never calls model twice',
   );
   const summary = (
     await (await api(`/tasks?characterId=${capabilityJob.id}`)).json()
   ).items.find((p: { id: string }) => p.id === plan.id);
+  assert.equal(summary.state, 'paused');
   assert.equal(
     summary.nextRunAt,
-    plannedAt,
-    'Manual execution does not move scheduled trigger',
+    undefined,
+    'Blocked manual work pauses the schedule to prevent unattended retries',
   );
   assert(!JSON.stringify(history).includes('fixture-secret'));
   assert.equal(
@@ -670,9 +670,7 @@ try {
     store.archive,
     {
       session: (url) => new Session(url),
-      runner: fixtureRunnerFactory(
-        (config, provider) => new ModelPlanner(config, request, provider),
-      ),
+      runner: (_config, provider) => new AgentRunner(provider, request),
     },
   );
   await manager.load();
@@ -705,7 +703,7 @@ try {
   for (const j of manager.list().filter((j) => j.sessionId)) manager.stop(j.id);
   await until(() => room.state.players.size === 0);
   console.log(
-    'PASS: origin guard, credential redaction, task completion stays online, reuse preserves player identity/position, task replacement, idle spends no inference, close/rejoin, canonical capabilities, atomic permission rejection, silent chat denial, online capacity and restart restoration without inference. Model responses are fixtures.',
+    'PASS: origin guard, credential redaction, task completion stays online, reuse preserves player identity/position, task replacement, idle spends no inference, close/rejoin, canonical capabilities, permission failure stops trailing tools, silent chat denial, online capacity and restart restoration without inference. Model responses are fixtures.',
   );
 } finally {
   globalThis.fetch = originalFetch;

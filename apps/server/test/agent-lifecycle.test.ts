@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
-  fixtureRunnerFactory,
-  type Planner,
-} from '../../../tests/support/decision-fixture';
+  scriptedRunnerFactory,
+  testObservation,
+  type ModelResponder,
+} from '../../../tests/support/model-fixture';
 import { controlRun, startTask } from '../../../tests/support/managed-tasks';
 import { AICharacterManager } from '../src/modules/ai-characters';
 import { bootstrapProviders } from '../src/modules/providers';
@@ -11,11 +12,7 @@ import {
   TestVoiceServiceStore as VoiceServiceStore,
 } from './helpers/memory-storage';
 
-import {
-  AgentRuntimeError,
-  type Observation,
-  type Session,
-} from '@voxel/agent-runtime';
+import { AgentRuntimeError, type Session } from '@voxel/agent-runtime';
 
 import type { WorldEvent } from '@voxel/shared';
 let store: MemoryProviderRepository, manager: AICharacterManager | undefined;
@@ -58,24 +55,16 @@ function fakeSession(wait = Promise.resolve()) {
       }
     }),
     move: vi.fn(),
-    observe: vi.fn(
-      async () =>
-        ({ self: { id: 'player-1' }, events: [] }) as unknown as Observation,
-    ),
+    observe: vi.fn(async () => testObservation('player-1')),
     request: vi.fn(async (_type: string, _payload?: unknown) => ({ ok: true })),
   };
   return session;
 }
 function setup(
   s: ReturnType<typeof fakeSession>,
-  decide: Planner['decide'] = vi.fn(async () => ({
-    actions: [{ type: 'wait' as const }],
-    task: {
-      intent: 'continue' as const,
-      status: 'completed' as const,
-      summary: '测试决策',
-    },
-  })),
+  decide: ModelResponder = vi.fn(async () => [
+    { name: 'complete_task', arguments: { summary: '测试决策' } },
+  ]),
   voices?: VoiceServiceStore,
 ) {
   manager = new AICharacterManager(
@@ -84,7 +73,7 @@ function setup(
     store.archive,
     {
       session: () => s as unknown as Session,
-      runner: fixtureRunnerFactory(() => ({ decide })),
+      runner: scriptedRunnerFactory(() => ({ respond: decide })),
     },
     voices,
   );
@@ -142,10 +131,9 @@ const settings = {
   maxTurns: 1,
 };
 it('saves task heartbeat independently without resetting or resuming progress', async () => {
-  const decide = vi.fn<Planner['decide']>(async () => ({
-    actions: [{ type: 'wait' }],
-    task: { intent: 'continue', status: 'needs_input', summary: '地基已完成' },
-  }));
+  const decide = vi.fn<ModelResponder>(async () => [
+    { name: 'request_input', arguments: { question: '地基已完成' } },
+  ]);
   const m = setup(fakeSession(), decide);
   const created = await createWithTask(m, { ...settings, maxTurns: 30 });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -232,14 +220,7 @@ it('toggles voice during inference without restarting the agent or making anothe
   const s = fakeSession();
   const decide = vi.fn(async () => {
     await new Promise<void>((resolve) => (release = resolve));
-    return {
-      actions: [{ type: 'wait' as const }],
-      task: {
-        intent: 'continue' as const,
-        status: 'completed' as const,
-        summary: '测试决策',
-      },
-    };
+    return [{ name: 'complete_task', arguments: { summary: '测试决策' } }];
   });
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
@@ -260,15 +241,8 @@ it('updates saved settings without inference, protects identity, validates input
   const s = fakeSession(),
     decide = vi.fn(
       async (): Promise<
-        import('../../../tests/support/decision-contracts').AgentDecision
-      > => ({
-        actions: [{ type: 'wait' as const }],
-        task: {
-          intent: 'continue' as const,
-          status: 'completed' as const,
-          summary: '测试决策',
-        },
-      }),
+        import('../../../tests/support/model-fixture').ToolCall[]
+      > => [{ name: 'complete_task', arguments: { summary: '测试决策' } }],
     );
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
@@ -286,7 +260,7 @@ it('updates saved settings without inference, protects identity, validates input
     intervalMinMs: 4000,
     intervalMaxMs: 8000,
     maxTokens: 1024,
-    allowEdits: true,
+    permissions: { move: true, chat: true, place: true, remove: true },
     voiceReplies: true,
     id: 'forged',
     status: 'running',
@@ -297,7 +271,7 @@ it('updates saved settings without inference, protects identity, validates input
     sessionId: 'player-1',
     maxTurns: 50,
     maxTokens: 1024,
-    allowEdits: true,
+    permissions: { move: true, chat: true, place: true, remove: true },
     voiceReplies: true,
   });
   expect(s.request).toHaveBeenCalledWith('agent.voice', { enabled: true });
@@ -320,8 +294,9 @@ it('task errors leave a joined character online until explicitly closed', async 
       .fn()
       .mockRejectedValue(new AgentRuntimeError('fixture failure', true));
   const m = setup(s, decide),
-    job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0]?.status).toBe('failed'));
+    job = await createWithTask(m, { ...settings, maxTurns: 30 });
+  await vi.waitFor(() => expect(m.list()[0]?.task?.status).toBe('blocked'));
+  expect(m.list()[0]?.status).toBe('idle');
   expect(s.close).not.toHaveBeenCalled();
   expect(m.list()[0]?.sessionId).toBe('player-1');
   m.stop(job.id);
@@ -333,15 +308,8 @@ it('closing while join is pending cannot leave an orphan player or start inferen
   const s = fakeSession(new Promise<void>((r) => (resolve = r))),
     decide = vi.fn(
       async (): Promise<
-        import('../../../tests/support/decision-contracts').AgentDecision
-      > => ({
-        actions: [{ type: 'wait' as const }],
-        task: {
-          intent: 'continue' as const,
-          status: 'completed' as const,
-          summary: '测试决策',
-        },
-      }),
+        import('../../../tests/support/model-fixture').ToolCall[]
+      > => [{ name: 'complete_task', arguments: { summary: '测试决策' } }],
     );
   const m = setup(s, decide),
     job = m.create({ ...settings, goal: '' });
@@ -376,14 +344,9 @@ it('unexpected disconnect releases identity and allows rejoining the same saved 
 it('human mentions wake an idle agent once and queue during inference without concurrent calls', async () => {
   const s = fakeSession();
   let release!: () => void;
-  const decide = vi.fn(async () => ({
-    actions: [{ type: 'wait' as const }],
-    task: {
-      intent: 'continue' as const,
-      status: 'completed' as const,
-      summary: '测试决策',
-    },
-  }));
+  const decide = vi.fn(async () => [
+    { name: 'complete_task', arguments: { summary: '测试决策' } },
+  ]);
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -407,14 +370,7 @@ it('human mentions wake an idle agent once and queue during inference without co
     await new Promise<void>((resolve) => {
       release = resolve;
     });
-    return {
-      actions: [{ type: 'wait' }],
-      task: {
-        intent: 'continue' as const,
-        status: 'completed' as const,
-        summary: '测试决策',
-      },
-    };
+    return [{ name: 'complete_task', arguments: { summary: '测试决策' } }];
   });
   s.onEvent!(mention(2));
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
@@ -434,14 +390,12 @@ it('human mentions wake an idle agent once and queue during inference without co
 
 it('pause, resume and cancel keep identity and retain task progress across restart', async () => {
   const s = fakeSession();
-  const decide = vi.fn(async () => ({
-    actions: [{ type: 'wait' as const }],
-    task: {
-      intent: 'continue' as const,
-      status: 'running' as const,
-      summary: '地基已规划',
+  const decide = vi.fn(async () => [
+    {
+      name: 'wait_for',
+      arguments: { condition: 'world', reason: '地基已规划' },
     },
-  }));
+  ]);
   const m = setup(s, decide),
     job = await createWithTask(m, {
       ...settings,
@@ -481,22 +435,18 @@ it('pausing pending inference drops late edits and does not close the character'
     await new Promise<void>((resolve) => {
       release = resolve;
     });
-    return {
-      actions: [
-        { type: 'edit' as const, x: 2, y: 3, z: 1, material: 'wood' as const },
-      ],
-      task: {
-        intent: 'continue' as const,
-        status: 'running' as const,
-        summary: '测试决策',
+    return [
+      {
+        name: 'edit',
+        arguments: { x: 2, y: 3, z: 1, material: 'wood' as const },
       },
-    };
+    ];
   });
   const m = setup(s, decide),
     job = await createWithTask(m, {
       ...settings,
       maxTurns: 30,
-      allowEdits: true,
+      permissions: { move: true, chat: true, place: true, remove: true },
     });
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
   const paused = controlRun(m, job.id, 'pause');
@@ -513,29 +463,16 @@ it('expired private task audiences cannot be resumed after server restart', asyn
   const s = fakeSession(),
     decide = vi.fn(
       async (): Promise<
-        import('../../../tests/support/decision-contracts').AgentDecision
-      > => ({
-        actions: [{ type: 'wait' as const }],
-        task: {
-          intent: 'continue' as const,
-          status: 'completed' as const,
-          summary: '测试决策',
-        },
-      }),
+        import('../../../tests/support/model-fixture').ToolCall[]
+      > => [{ name: 'complete_task', arguments: { summary: '测试决策' } }],
     );
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  decide.mockResolvedValueOnce({
-    actions: [{ type: 'wait' }],
-    task: {
-      intent: 'task',
-      status: 'waiting',
-      waitFor: 'world',
-      goal: 'private goal',
-      summary: 'waiting',
-    },
-  });
+  decide.mockResolvedValueOnce([
+    { name: 'start_task', arguments: { goal: 'private goal' } },
+    { name: 'wait_for', arguments: { condition: 'world', reason: 'waiting' } },
+  ]);
   s.onEvent!({
     seq: 1,
     at: Date.now(),
@@ -566,26 +503,16 @@ it('expired private task audiences cannot be resumed after server restart', asyn
 
 it('keeps the current chat-assigned goal consistent through editing, persistence and rerunning', async () => {
   const s = fakeSession();
-  const decide = vi.fn<Planner['decide']>(async () => ({
-    actions: [{ type: 'wait' }],
-    task: {
-      intent: 'continue' as const,
-      status: 'completed' as const,
-      summary: '测试决策',
-    },
-  }));
+  const decide = vi.fn<ModelResponder>(async () => [
+    { name: 'complete_task', arguments: { summary: '测试决策' } },
+  ]);
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  decide.mockResolvedValueOnce({
-    actions: [{ type: 'wait' }],
-    task: {
-      intent: 'task',
-      status: 'completed',
-      goal: 'Build a new house',
-      summary: 'House verified',
-    },
-  });
+  decide.mockResolvedValueOnce([
+    { name: 'start_task', arguments: { goal: 'Build a new house' } },
+    { name: 'complete_task', arguments: { summary: 'House verified' } },
+  ]);
   s.onEvent!({
     seq: 1,
     at: Date.now(),
@@ -633,16 +560,16 @@ it('keeps the current chat-assigned goal consistent through editing, persistence
 it('an online agent with a failed task still accepts a new human mention without automatic retries', async () => {
   const s = fakeSession();
   const decide = vi
-    .fn<Planner['decide']>()
+    .fn<ModelResponder>()
     .mockRejectedValueOnce(new AgentRuntimeError('fixture failure', true));
   const m = setup(s, decide),
     job = await createWithTask(m, { ...settings, maxTurns: 30 });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('failed'));
+  await vi.waitFor(() => expect(m.list()[0].task?.status).toBe('blocked'));
+  expect(m.list()[0].status).toBe('idle');
   expect(decide).toHaveBeenCalledTimes(1);
-  decide.mockResolvedValueOnce({
-    actions: [{ type: 'chat', text: '我还在，任务已暂停。' }],
-    task: { intent: 'reply', status: 'completed', summary: '已回复' },
-  });
+  decide.mockResolvedValueOnce([
+    { name: 'reply', arguments: { text: '我还在，任务已暂停。' } },
+  ]);
   s.onEvent!({
     seq: 1,
     at: Date.now(),
@@ -657,8 +584,8 @@ it('an online agent with a failed task still accepts a new human mention without
       name: 'Person',
     },
   });
+  await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  expect(decide).toHaveBeenCalledTimes(2);
   expect(m.list()[0]).toMatchObject({
     id: job.id,
     sessionId: 'player-1',
@@ -667,6 +594,8 @@ it('an online agent with a failed task still accepts a new human mention without
   expect(s.join).toHaveBeenCalledTimes(1);
   expect(s.request).toHaveBeenCalledWith('chat', {
     text: '我还在，任务已暂停。',
+    scope: 'public',
+    recipients: [],
   });
 });
 
@@ -686,7 +615,7 @@ it('creates and restores a standby character with no task or automatic model cal
     goal: '',
     sessionId: 'player-1',
     roleDescription: '你是一名建筑师，负责建造房屋。',
-    allowEdits: false,
+    permissions: { move: true, chat: true, place: false, remove: false },
   });
   expect(m.list()[0].task).toBeUndefined();
   expect(decide).not.toHaveBeenCalled();
@@ -695,7 +624,7 @@ it('creates and restores a standby character with no task or automatic model cal
   await m.update(created.id, {
     name: 'Renamed standby',
     model: 'deepseek-chat',
-    allowEdits: true,
+    permissions: { move: true, chat: true, place: true, remove: true },
     roleDescription: '你是一名建筑师，施工前先确认玩家需求。',
   });
   expect(m.list()[0].task).toBeUndefined();
@@ -716,10 +645,12 @@ it('creates and restores a standby character with no task or automatic model cal
 });
 
 it('keeps task progress and usage when only the role description changes', async () => {
-  const decide = vi.fn<Planner['decide']>(async () => ({
-    actions: [{ type: 'wait' }],
-    task: { intent: 'continue', status: 'running', summary: '地基已完成' },
-  }));
+  const decide = vi.fn<ModelResponder>(async () => [
+    {
+      name: 'wait_for',
+      arguments: { condition: 'world', reason: '地基已完成' },
+    },
+  ]);
   const m = setup(fakeSession(), decide);
   const created = await createWithTask(m, {
     ...settings,
@@ -740,10 +671,12 @@ it('keeps task progress and usage when only the role description changes', async
 
 it('joining a stopped character preserves the task without executing or resetting its budget', async () => {
   const session = fakeSession();
-  const decide = vi.fn<Planner['decide']>(async () => ({
-    actions: [{ type: 'wait' }],
-    task: { intent: 'continue', status: 'running', summary: 'Half done' },
-  }));
+  const decide = vi.fn<ModelResponder>(async () => [
+    {
+      name: 'wait_for',
+      arguments: { condition: 'world', reason: 'Half done' },
+    },
+  ]);
   const m = setup(session, decide);
   const created = await createWithTask(m, {
     ...settings,
@@ -793,19 +726,14 @@ it('standby creation rejects task input and still enforces online capacity', asy
 
 it('retains capability settings and construction progress across edits, reload and resume', async () => {
   const s = fakeSession();
-  const decide = vi.fn<Planner['decide']>(async () => ({
-    actions: [{ type: 'wait' }],
-    task: {
-      intent: 'continue',
-      status: 'needs_input',
-      summary: '地基已完成，等待确认',
-    },
-  }));
+  const decide = vi.fn<ModelResponder>(async () => [
+    { name: 'request_input', arguments: { question: '地基已完成，等待确认' } },
+  ]);
   const m = setup(s, decide);
   const created = await createWithTask(m, {
     ...settings,
     maxTurns: 30,
-    allowEdits: true,
+    permissions: { move: true, chat: true, place: true, remove: true },
     intervalMs: 60000,
   });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -826,7 +754,8 @@ it('retains capability settings and construction progress across edits, reload a
     },
   };
   archive.characters[0].runtime.effects.unfinishedBuild = unfinishedBuild;
-  // Simulate a pre-capability archive without losing its task history.
+  // Persisted v3 profiles are normalized once before runtime restoration.
+  archive.characters[0].allowEdits = true;
   delete archive.characters[0].permissions;
   delete archive.characters[0].skills;
   store.archive.json = JSON.stringify(archive);
@@ -885,14 +814,11 @@ it('retains capability settings and construction progress across edits, reload a
 it.each(['completed', 'cancelled'] as const)(
   'keeps %s tasks ended when capabilities change',
   async (status) => {
-    const m = setup(fakeSession(), async () => ({
-      actions: [{ type: 'wait' }],
-      task: {
-        intent: 'continue',
-        status: status === 'cancelled' ? 'needs_input' : 'completed',
-        summary: 'test',
-      },
-    }));
+    const m = setup(fakeSession(), async () => [
+      status === 'cancelled'
+        ? { name: 'request_input', arguments: { question: 'test' } }
+        : { name: 'complete_task', arguments: { summary: 'test' } },
+    ]);
     const job = await createWithTask(m, settings);
     await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
     if (status === 'cancelled') await controlRun(m, job.id, 'cancel');
@@ -911,10 +837,9 @@ it('suppresses voice bindings and direct pause receipts while retaining the save
   await voices.load();
   const bind = vi.spyOn(voices, 'bind');
   const s = fakeSession();
-  const decide = vi.fn<Planner['decide']>(async () => ({
-    actions: [{ type: 'wait' }],
-    task: { intent: 'continue', status: 'needs_input', summary: '等待确认' },
-  }));
+  const decide = vi.fn<ModelResponder>(async () => [
+    { name: 'request_input', arguments: { question: '等待确认' } },
+  ]);
   const m = setup(s, decide, voices);
   const job = await createWithTask(m, {
     ...settings,
@@ -958,14 +883,7 @@ it('suppresses voice bindings and direct pause receipts while retaining the save
 
 it('applies task budgets on assignment and renewal, rejecting invalid budgets before pausing', async () => {
   const s = fakeSession();
-  const decide = vi.fn(async () => ({
-    actions: [{ type: 'wait' as const }],
-    task: {
-      intent: 'continue' as const,
-      status: 'running' as const,
-      summary: '保留进展',
-    },
-  }));
+  const decide = vi.fn(async () => [{ name: 'observe', arguments: {} }]);
   const m = setup(s, decide);
   const job = m.create({ ...settings, goal: '' });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -1011,13 +929,12 @@ it('uses newly saved provider configuration on the next decision without resetti
   const configs: unknown[] = [];
   manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
     session: () => s as unknown as Session,
-    runner: fixtureRunnerFactory((config) => {
+    runner: scriptedRunnerFactory((config) => {
       configs.push(config);
       return {
-        decide: async () => ({
-          actions: [{ type: 'wait' }],
-          task: { intent: 'continue', status: 'completed', summary: 'done' },
-        }),
+        respond: async () => [
+          { name: 'complete_task', arguments: { summary: 'done' } },
+        ],
       };
     }),
   });
@@ -1088,15 +1005,15 @@ it('deletes a resident character and its tasks durably, preserving shared servic
 it('aborts an active decision and blocks concurrent join/delete before removal completes', async () => {
   let release!: () => void;
   let signal: AbortSignal | undefined;
-  const decide = vi.fn<Planner['decide']>(async (_obs, _history, abort) => {
+  const decide = vi.fn<ModelResponder>(async (_obs, _history, abort) => {
     signal = abort;
     await new Promise<void>((resolve) => {
       release = resolve;
     });
-    return {
-      actions: [{ type: 'chat', text: 'must not send' }],
-      task: { intent: 'continue', status: 'completed', summary: 'done' },
-    };
+    return [
+      { name: 'chat', arguments: { text: 'must not send' } },
+      { name: 'complete_task', arguments: { summary: 'done' } },
+    ];
   });
   const session = fakeSession();
   const m = setup(session, decide);
@@ -1130,14 +1047,11 @@ it('keeps a stopped character recoverable when deletion cannot be persisted', as
 it.each(['completed', 'cancelled'] as const)(
   'preserves %s task history, usage and restart state after repeated pause/cancel',
   async (status) => {
-    const m = setup(fakeSession(), async () => ({
-      actions: [{ type: 'wait' }],
-      task: {
-        intent: 'continue',
-        status: status === 'cancelled' ? 'needs_input' : 'completed',
-        summary: '保留结果',
-      },
-    }));
+    const m = setup(fakeSession(), async () => [
+      status === 'cancelled'
+        ? { name: 'request_input', arguments: { question: '保留结果' } }
+        : { name: 'complete_task', arguments: { summary: '保留结果' } },
+    ]);
     const job = await createWithTask(m, settings);
     await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
     if (status === 'cancelled') await controlRun(m, job.id, 'cancel');
@@ -1206,14 +1120,9 @@ it.each([
 ])(
   'rejects task fields %j on create/update without changing task state or history',
   async (input) => {
-    const decide = vi.fn<Planner['decide']>(async () => ({
-      actions: [{ type: 'wait' }],
-      task: {
-        intent: 'continue',
-        status: 'needs_input',
-        summary: 'Keep progress',
-      },
-    }));
+    const decide = vi.fn<ModelResponder>(async () => [
+      { name: 'request_input', arguments: { question: 'Keep progress' } },
+    ]);
     const m = setup(fakeSession(), decide);
     const job = await createWithTask(m, { ...settings, maxTurns: 30 });
     await m.settled(job.id);
@@ -1297,14 +1206,9 @@ it('restores the live task adapter and full profile after a failed task reservat
 
 it('forwards the task lease, stable command ID and player event through the real host control path', async () => {
   const session = fakeSession();
-  const m = setup(session, async () => ({
-    actions: [{ type: 'wait' }],
-    task: {
-      intent: 'continue',
-      status: 'needs_input',
-      summary: 'Waiting for player',
-    },
-  }));
+  const m = setup(session, async () => [
+    { name: 'request_input', arguments: { question: 'Waiting for player' } },
+  ]);
   const job = await createWithTask(m, { ...settings, maxTurns: 30 });
   await m.settled(job.id);
   const lease = structuredClone(m.taskIdentity(job.id));

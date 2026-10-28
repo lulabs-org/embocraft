@@ -1,5 +1,4 @@
 import {
-  AgentRuntimeError,
   executeAction,
   nextIntervalMs,
   parseAction,
@@ -8,9 +7,6 @@ import {
 } from '@voxel/agent-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { testAgentConfig } from '../../../tests/support/agent-config';
-import { parseDecision } from '../../../tests/support/decision-decision';
-import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
-import { runAgent } from '../../../tests/support/decision-loop';
 
 const config = () => ({
   ...testAgentConfig({ apiKey: 'test-key' }),
@@ -36,11 +32,6 @@ const observation: Observation = {
   players: [],
   events: [],
 };
-const response = (content: string, finish_reason = 'stop') =>
-  new Response(
-    JSON.stringify({ choices: [{ finish_reason, message: { content } }] }),
-    { headers: { 'Content-Type': 'application/json' } },
-  );
 const signal = () => new AbortController().signal;
 describe('DeepSeek agent boundary', () => {
   it.each([
@@ -54,120 +45,25 @@ describe('DeepSeek agent boundary', () => {
     { type: 'edit', x: 0, y: 0, z: 0, material: null },
     { type: 'edit', x: 1, y: 3, z: 0, material: ['wood'] },
   ])('rejects untrusted action %j', (value) => {
-    expect(() => parseAction(value, true)).toThrow();
+    expect(() =>
+      parseAction(value, { move: true, chat: true, place: true, remove: true }),
+    ).toThrow();
   });
   it('enforces edit opt-in even for otherwise valid edits', () => {
     expect(() =>
-      parseAction({ type: 'edit', x: 1, y: 3, z: 0, material: 'wood' }, false),
+      parseAction(
+        { type: 'edit', x: 1, y: 3, z: 0, material: 'wood' },
+        { move: true, chat: true, place: false, remove: false },
+      ),
     ).toThrow('未开启');
-    expect(parseAction({ type: 'wait', command: 'ignored' }, false)).toEqual({
+    expect(
+      parseAction(
+        { type: 'wait', command: 'ignored' },
+        { move: true, chat: true, place: false, remove: false },
+      ),
+    ).toEqual({
       type: 'wait',
     });
-  });
-  it('uses official JSON mode and sends world observations without credentials in the prompt', async () => {
-    const request = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        response(
-          '{"actions":[{"type":"chat","text":"你好"}],"task":{"intent":"continue","status":"completed","summary":"测试决策"}}',
-        ),
-      );
-    const planner = new ModelPlanner(config(), request);
-    expect(await planner.decide(observation, null, signal())).toMatchObject({
-      actions: [{ type: 'chat', text: '你好' }],
-      task: { intent: 'continue', status: 'completed' },
-    });
-    const [url, init] = request.mock.calls[0];
-    expect(url).toBe('https://api.deepseek.com/chat/completions');
-    expect(new Headers(init?.headers).get('authorization')).toBe(
-      'Bearer test-key',
-    );
-    const body = JSON.parse(init!.body as string);
-    expect(body).toMatchObject({
-      response_format: { type: 'json_object' },
-      thinking: { type: 'disabled' },
-      stream: false,
-      max_tokens: 512,
-    });
-    expect(JSON.stringify(body)).not.toContain('test-key');
-    expect(JSON.parse(body.messages[1].content).observation.revision).toBe(94);
-  });
-  it('passes DeepSeek thinking and high reasoning effort through the OpenAI SDK', async () => {
-    const request = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        response(
-          '{"actions":[{"type":"wait"}],"task":{"intent":"continue","status":"completed","summary":"测试决策"}}',
-        ),
-      );
-    const cfg = testAgentConfig({
-      apiKey: 'key',
-      thinking: 'enabled',
-      reasoningEffort: 'high',
-      maxTokens: 4096,
-    });
-    await new ModelPlanner(cfg, request).decide(observation, null, signal());
-    expect(JSON.parse(request.mock.calls[0][1]!.body as string)).toMatchObject({
-      model: 'deepseek-flash',
-      thinking: { type: 'enabled' },
-      reasoning_effort: 'high',
-      max_tokens: 4096,
-    });
-  });
-  it.each([
-    ['', 'stop'],
-    ['{"type":', 'length'],
-    ['not json', 'stop'],
-    ['{"type":"shell"}', 'stop'],
-  ])('skips empty, truncated and invalid plans', async (text, reason) => {
-    const planner = new ModelPlanner(
-      config(),
-      vi.fn<typeof fetch>().mockResolvedValue(response(text, reason)),
-    );
-    await expect(planner.decide(observation, null, signal())).rejects.toThrow();
-  });
-  it('redacts upstream errors and treats bad credentials as fatal', async () => {
-    const planner = new ModelPlanner(
-      config(),
-      vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          new Response('secret upstream test-key', { status: 401 }),
-        ),
-    );
-    await expect(
-      planner.decide(observation, null, signal()),
-    ).rejects.toMatchObject({
-      fatal: true,
-      message: 'DeepSeek HTTP 401：API Key 无效。',
-    });
-  });
-  it('aborts slow inference and never executes a late response after cancellation', async () => {
-    const request = vi.fn<typeof fetch>().mockImplementation(
-      (_url, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            'abort',
-            () => reject(Error('sensitive error')),
-            { once: true },
-          );
-        }),
-    );
-    await expect(
-      new ModelPlanner(config(), request).decide(observation, null, signal()),
-    ).rejects.toThrow('超时');
-    const abort = new AbortController();
-    abort.abort();
-    const late = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        response(
-          '{"actions":[{"type":"wait"}],"task":{"intent":"continue","status":"completed","summary":"测试决策"}}',
-        ),
-      );
-    await expect(
-      new ModelPlanner(config(), late).decide(observation, null, abort.signal),
-    ).rejects.toThrow('已停止');
   });
 });
 describe('AI action execution', () => {
@@ -186,7 +82,7 @@ describe('AI action execution', () => {
       s as unknown as Session,
       { type: 'edit', x: 1, y: 3, z: 0, material: 'wood' },
       observation,
-      true,
+      { move: true, chat: true, place: true, remove: true },
       signal(),
     );
     expect(s.request).toHaveBeenCalledExactlyOnceWith('edit', {
@@ -202,7 +98,7 @@ describe('AI action execution', () => {
         s as unknown as Session,
         { type: 'edit', x: 1, y: 3, z: 0, material: null },
         observation,
-        false,
+        { move: true, chat: true, place: false, remove: false },
         signal(),
       ),
     ).rejects.toThrow('未开启');
@@ -214,7 +110,7 @@ describe('AI action execution', () => {
       s as unknown as Session,
       { type: 'move', x: 1, z: 0, jump: false, durationMs: 1000 },
       observation,
-      false,
+      { move: true, chat: true, place: false, remove: false },
       abort.signal,
     );
     abort.abort();
@@ -223,49 +119,6 @@ describe('AI action execution', () => {
       [1, 0, false],
       [0, 0, false],
     ]);
-  });
-  it('caps model calls and supplies action results to the next decision', async () => {
-    const s = session(),
-      decide = vi.fn().mockResolvedValue({
-        actions: [{ type: 'chat', text: '你好' }],
-        task: { intent: 'continue', status: 'running', summary: '进行中' },
-      });
-    await runAgent(
-      s as unknown as Session,
-      { decide },
-      { ...config(), maxTurns: 2 },
-      signal(),
-      () => {},
-    );
-    expect(decide).toHaveBeenCalledTimes(2);
-    expect(decide.mock.calls[1][1]).toMatchObject({
-      previous: {
-        results: [
-          {
-            action: { type: 'chat' },
-            result: { ok: false, error: 'conflict' },
-          },
-        ],
-      },
-    });
-  });
-  it('stops after three provider failures without performing any actions', async () => {
-    const s = session(),
-      decide = vi
-        .fn()
-        .mockRejectedValue(new AgentRuntimeError('temporarily unavailable'));
-    await expect(
-      runAgent(
-        s as unknown as Session,
-        { decide },
-        config(),
-        signal(),
-        () => {},
-      ),
-    ).rejects.toThrow('已停止');
-    expect(decide).toHaveBeenCalledTimes(3);
-    expect(s.request).not.toHaveBeenCalled();
-    expect(s.move).not.toHaveBeenCalled();
   });
 });
 
@@ -289,177 +142,5 @@ describe('bounded and randomized scheduling', () => {
         () => 0.5,
       ),
     ).toBe(3000);
-  });
-  it('scheduled execution cannot bypass the task budget', async () => {
-    const decide = vi.fn(async () => ({
-      actions: [{ type: 'wait' as const }],
-      task: {
-        intent: 'continue' as const,
-        status: 'running' as const,
-        summary: 'Next step',
-      },
-    }));
-    await runAgent(
-      { observe: async () => observation, move: vi.fn(), request: vi.fn() },
-      { decide },
-      { ...config(), maxTurns: 1 },
-      signal(),
-      () => {},
-    );
-    expect(decide).toHaveBeenCalledTimes(1);
-  });
-  it('draws a fresh interval only between turns', async () => {
-    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
-    try {
-      await runAgent(
-        { observe: async () => observation, move: vi.fn(), request: vi.fn() },
-        {
-          decide: async () => ({
-            actions: [{ type: 'wait' }],
-            task: {
-              intent: 'continue',
-              status: 'running',
-              summary: 'Next step',
-            },
-          }),
-        },
-        {
-          ...config(),
-          maxTurns: 3,
-          intervalMode: 'random',
-          intervalMinMs: 0,
-          intervalMaxMs: 0,
-        },
-        signal(),
-        () => {},
-      );
-      expect(random).toHaveBeenCalledTimes(2);
-    } finally {
-      random.mockRestore();
-    }
-  });
-  it('interrupts a long randomized wait without starting another inference', async () => {
-    const abort = new AbortController(),
-      decide = vi.fn(async () => ({
-        actions: [{ type: 'wait' as const }],
-        task: {
-          intent: 'continue' as const,
-          status: 'running' as const,
-          summary: 'Next step',
-        },
-      }));
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const started = Date.now();
-    try {
-      await runAgent(
-        { observe: async () => observation, move: vi.fn(), request: vi.fn() },
-        { decide },
-        {
-          ...config(),
-
-          intervalMode: 'random',
-          intervalMinMs: 60000,
-          intervalMaxMs: 60000,
-        },
-        abort.signal,
-        () => {
-          timer = setTimeout(() => abort.abort(), 10);
-        },
-      );
-      expect(Date.now() - started).toBeLessThan(1000);
-      expect(decide).toHaveBeenCalledTimes(1);
-    } finally {
-      clearTimeout(timer);
-      abort.abort();
-    }
-  });
-  it('terminates scheduled execution after repeated provider failures', async () => {
-    const decide = vi
-      .fn()
-      .mockRejectedValue(new AgentRuntimeError('unavailable'));
-    await expect(
-      runAgent(
-        { observe: async () => observation, move: vi.fn(), request: vi.fn() },
-        { decide },
-        { ...config() },
-        signal(),
-        () => {},
-      ),
-    ).rejects.toThrow('已停止');
-    expect(decide).toHaveBeenCalledTimes(3);
-  });
-});
-
-describe('task decision output formats', () => {
-  it('accepts the actions/task decision and preserves private routing', async () => {
-    const value = {
-      actions: [
-        {
-          type: 'chat',
-          text: '你好！',
-          scope: 'private',
-          recipients: ['human'],
-        },
-      ],
-      task: {
-        intent: 'reply',
-        status: 'completed',
-        summary: 'Answered greeting privately.',
-      },
-    };
-    const request = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(response(JSON.stringify(value)));
-    expect(
-      await new ModelPlanner(config(), request).decide(
-        observation,
-        null,
-        signal(),
-      ),
-    ).toMatchObject({
-      actions: [
-        {
-          type: 'chat',
-          text: '你好！',
-          scope: 'private',
-          recipients: ['human'],
-        },
-      ],
-      task: { intent: 'reply' },
-    });
-  });
-  it('batch parsing does not bypass action permissions or task validation', () => {
-    expect(() =>
-      parseDecision(
-        {
-          actions: [{ type: 'edit', x: 1, y: 3, z: 1, material: 'wood' }],
-          task: {
-            intent: 'task',
-            status: 'running',
-            summary: 'build',
-            goal: 'house',
-          },
-        },
-        false,
-      ),
-    ).toThrow('权限');
-    expect(() =>
-      parseDecision(
-        {
-          actions: [{ type: 'shell' }],
-          task: { intent: 'reply', status: 'completed', summary: 'x' },
-        },
-        true,
-      ),
-    ).toThrow();
-    expect(() =>
-      parseDecision(
-        {
-          actions: [{ type: 'wait' }],
-          task: { intent: 'unknown', status: 'running', summary: 'x' },
-        },
-        true,
-      ),
-    ).toThrow();
   });
 });

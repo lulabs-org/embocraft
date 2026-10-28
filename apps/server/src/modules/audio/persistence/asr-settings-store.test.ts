@@ -108,19 +108,20 @@ it('persists multiple Whisper parameter profiles alongside cloud profiles', asyn
   const b = await store.save({
     ...base,
     name: 'Whisper B',
-    threads: 8,
-    beamSize: 8,
+    model: 'Systran/faster-whisper-large-v3',
     temperature: 0.3,
     prompt: '术语',
   });
   await store.save(draft);
-  await store.save({ ...base, threads: 2 }, a.id);
+  await store.save({ ...base, model: 'Systran/faster-whisper-small' }, a.id);
   const restored = new AsrSettingsStore(store.persistence);
   await restored.load();
-  expect(restored.get(a.id)).toMatchObject({ provider: 'whisper', threads: 2 });
+  expect(restored.get(a.id)).toMatchObject({
+    provider: 'whisper',
+    model: 'Systran/faster-whisper-small',
+  });
   expect(restored.get(b.id)).toMatchObject({
-    threads: 8,
-    beamSize: 8,
+    model: 'Systran/faster-whisper-large-v3',
     temperature: 0.3,
     prompt: '术语',
   });
@@ -128,9 +129,9 @@ it('persists multiple Whisper parameter profiles alongside cloud profiles', asyn
   expect(restored.list()[0]).not.toHaveProperty('apiKey');
   await expect(store.save(draft, a.id)).rejects.toThrow('类型');
   for (const patch of [
-    { threads: 0 },
-    { threads: 1.5 },
-    { beamSize: 9 },
+    { model: '' },
+    { model: 'bad model' },
+    { model: 'a'.repeat(201) },
     { temperature: NaN },
     { temperature: 1.1 },
     { model: '../../secret.bin' },
@@ -140,4 +141,26 @@ it('persists multiple Whisper parameter profiles alongside cloud profiles', asyn
   }
   await restored.remove(a.id);
   expect(restored.get(b.id).name).toBe('Whisper B');
+});
+
+it('drops unused local engine fields and normalizes an existing default model without losing profiles', async () => {
+  const store = new AsrSettingsStore();
+  await store.load();
+  const saved = await store.save({
+    ...DEFAULT_WHISPER_ASR,
+    model: 'default',
+    provider: 'whisper',
+    name: 'Existing',
+    threads: 8,
+    beamSize: 7,
+  });
+  const restored = new AsrSettingsStore(store.persistence);
+  await restored.load();
+  expect(restored.get(saved.id)).toMatchObject({
+    id: saved.id,
+    name: 'Existing',
+    model: DEFAULT_WHISPER_ASR.model,
+  });
+  expect(restored.get(saved.id)).not.toHaveProperty('threads');
+  expect(restored.get(saved.id)).not.toHaveProperty('beamSize');
 });

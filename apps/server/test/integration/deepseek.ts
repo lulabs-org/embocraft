@@ -58,7 +58,7 @@ try {
     name: 'Fixture',
     model: 'deepseek-flash',
     goal: '测试任务',
-    allowEdits: true,
+    permissions: { move: true, chat: true, place: true, remove: true },
     voiceReplies: false,
 
     intervalMode: 'fixed' as const,

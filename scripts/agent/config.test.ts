@@ -7,7 +7,7 @@ describe('CLI command-line configuration', () => {
     expect(agentConfig({ 'api-key': 'fixture' })).toMatchObject({
       model: 'deepseek-flash',
       maxTurns: 100,
-      allowEdits: false,
+      permissions: { move: true, chat: true, place: false, remove: false },
     });
     for (const env of [
       { 'max-turns': '0' },

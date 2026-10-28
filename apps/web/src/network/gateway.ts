@@ -47,7 +47,7 @@ export function onGatewayState(fn: () => void) {
     listeners.delete(fn);
   };
 }
-export function onGatewayChange(fn: (change: Change) => void) {
+function onGatewayChange(fn: (change: Change) => void) {
   changes.add(fn);
   return () => {
     changes.delete(fn);

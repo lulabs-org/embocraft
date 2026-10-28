@@ -70,3 +70,26 @@ it('rejects duplicate identities, dangling references and unsupported envelopes 
     }),
   ).toThrow('计划关联角色不存在');
 });
+
+it('preserves imported v3 run provenance and normalizes stored permissions only once', () => {
+  const plan = newPlan(draft, 100);
+  const run = newRun(plan, 101, 'legacy');
+  const input = {
+    version: 3,
+    characters: [{ id: 'a', allowEdits: true }],
+    plans: [plan],
+    runs: [run],
+    requests: {},
+  };
+  const restored = migrateArchive(input);
+  expect(restored.characters[0].permissions).toEqual({
+    move: true,
+    chat: true,
+    place: true,
+    remove: true,
+  });
+  expect(restored.characters[0]).not.toHaveProperty('allowEdits');
+  expect(restored.runs[0].source).toBe('legacy');
+  expect(migrateArchive(restored)).toEqual(restored);
+  expect(input.characters[0]).toEqual({ id: 'a', allowEdits: true });
+});

@@ -105,7 +105,7 @@ try {
         agent,
         target,
         observation,
-        false,
+        { move: true, chat: true, place: false, remove: false },
         AbortSignal.timeout(35000),
       );
       assert(result.ok, `${kind}: ${JSON.stringify(result)}`);

@@ -1,52 +1,18 @@
-import { env } from '../../../../core/config/env';
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { WhisperAsrSettings } from '@voxel/shared';
+import { DEFAULT_WHISPER_ASR, type WhisperAsrSettings } from '@voxel/shared';
 import { AppError } from '../../../../core/errors/app-error';
 
-export const whisperModelsDirectory = env.dataPath('voice/');
-const modelName = /^ggml-[a-zA-Z0-9][a-zA-Z0-9._-]{0,90}\.bin$/;
-export function whisperModelPath(model: string, fallback: string) {
-  if (model === 'default') return fallback;
-  if (!modelName.test(model) || model.includes('..'))
-    throw new AppError('请选择服务器已安装的 Whisper 模型。');
-  return join(whisperModelsDirectory, model);
-}
-export async function listWhisperModels() {
-  const entries = await readdir(whisperModelsDirectory, {
-    withFileTypes: true,
-  }).catch(() => []);
-  return [
-    'default',
-    ...entries
-      .filter(
-        (entry) =>
-          entry.isFile() &&
-          modelName.test(entry.name) &&
-          !entry.name.includes('..'),
-      )
-      .map((entry) => entry.name)
-      .sort(),
-  ];
-}
+/** Settings sent to the independent speech service; model IDs are not local paths. */
 export function validateWhisperSettings(
   value: Record<string, unknown>,
 ): WhisperAsrSettings {
-  if (typeof value.model !== 'string')
-    throw new AppError('请选择 Whisper 模型。');
-  whisperModelPath(value.model, 'default');
   if (
-    !Number.isInteger(value.threads) ||
-    Number(value.threads) < 1 ||
-    Number(value.threads) > 16
+    typeof value.model !== 'string' ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,199}$/.test(value.model) ||
+    value.model
+      .split('/')
+      .some((part) => !part || part === '.' || part === '..')
   )
-    throw new AppError('线程数须为 1–16 的整数。');
-  if (
-    !Number.isInteger(value.beamSize) ||
-    Number(value.beamSize) < 1 ||
-    Number(value.beamSize) > 8
-  )
-    throw new AppError('搜索宽度须为 1–8 的整数。');
+    throw new AppError('请填写有效的 Whisper 服务模型 ID。');
   if (
     typeof value.temperature !== 'number' ||
     !Number.isFinite(value.temperature) ||
@@ -61,9 +27,7 @@ export function validateWhisperSettings(
   )
     throw new AppError('提示词不能超过 500 字或包含空字符。');
   return {
-    model: value.model,
-    threads: Number(value.threads),
-    beamSize: Number(value.beamSize),
+    model: value.model === 'default' ? DEFAULT_WHISPER_ASR.model : value.model,
     temperature: value.temperature,
     prompt: value.prompt.trim(),
   };

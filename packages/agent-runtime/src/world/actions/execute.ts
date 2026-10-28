@@ -16,7 +16,7 @@ export async function executeAction(
   session: Pick<AgentSession, 'move' | 'request'>,
   action: AgentAction,
   observation: Observation,
-  allowEdits: boolean | AICharacterPermissions,
+  permissions: AICharacterPermissions,
   signal: AbortSignal,
   progress: (message: string) => void = () => {},
   checkpoint: (result: BuildResult) => void | Promise<void> = () => {},
@@ -24,7 +24,7 @@ export async function executeAction(
 ): Promise<ActionResult> {
   signal.throwIfAborted();
   // Revalidate at the execution boundary as well as the provider boundary.
-  action = parseAction(action, allowEdits);
+  action = parseAction(action, permissions);
   if (action.type === 'goto' || action.type === 'follow')
     return navigate(session, action, observation, signal, navigation);
   if (action.type === 'build' || action.type === 'house')

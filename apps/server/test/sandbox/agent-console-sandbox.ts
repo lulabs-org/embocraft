@@ -90,7 +90,7 @@ try {
     providerId: 'deepseek',
     model: 'fixture-model',
     name: '营地建筑师',
-    allowEdits: true,
+    permissions: { move: true, chat: true, place: true, remove: true },
   });
   await until(
     () => manager!.list().filter((j) => j.status === 'idle').length === 2,

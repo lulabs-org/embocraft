@@ -26,10 +26,7 @@ export type AICharacterSettings = {
   intervalMs: number;
   timeoutMs: number;
   maxTokens: number;
-  /** @deprecated Legacy input; use permissions for independent action control. */
-  allowEdits?: boolean;
-  /** Canonical permissions; absent only in legacy configurations. */
-  permissions?: AICharacterPermissions;
+  permissions: AICharacterPermissions;
   skills?: AICharacterSkillId[];
   voiceReplies?: boolean;
   voiceServiceId?: string;

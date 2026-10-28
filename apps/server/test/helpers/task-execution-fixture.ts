@@ -38,6 +38,7 @@ export function taskExecutionFixture() {
   const tasks = new TaskCoordinator(host);
   const state: TaskExecutionState = {
     view: {
+      permissions: { move: true, chat: true, place: false, remove: false },
       id: 'actor',
       name: 'Fixture',
       goal: '',

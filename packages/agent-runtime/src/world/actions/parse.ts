@@ -12,7 +12,7 @@ import { parseBuildAction } from './build';
 /** Model output is data: only these actions and bounded arguments can execute. */
 export function parseAction(
   value: unknown,
-  allowEdits: boolean | AICharacterPermissions,
+  permissions: AICharacterPermissions,
 ): AgentAction {
   const fail = () => {
     throw Error('模型动作无效或不在允许范围内。');
@@ -22,7 +22,8 @@ export function parseAction(
   const a = value as Record<string, unknown>;
   switch (a.type) {
     case 'goto':
-      if (!resolvePermissions(allowEdits).move) throw Error('移动权限未开启。');
+      if (!resolvePermissions(permissions).move)
+        throw Error('移动权限未开启。');
       if (
         ![a.x, a.y, a.z].every(
           (v) => typeof v === 'number' && Number.isFinite(v),
@@ -35,7 +36,8 @@ export function parseAction(
         return fail();
       return { type: 'goto', x: Number(a.x), y: Number(a.y), z: Number(a.z) };
     case 'follow':
-      if (!resolvePermissions(allowEdits).move) throw Error('移动权限未开启。');
+      if (!resolvePermissions(permissions).move)
+        throw Error('移动权限未开启。');
       if (
         typeof a.playerId !== 'string' ||
         !a.playerId.trim() ||
@@ -49,11 +51,11 @@ export function parseAction(
       return { type: 'follow', playerId: a.playerId, distance: a.distance };
     case 'build':
     case 'house':
-      return parseBuildAction(a, allowEdits);
+      return parseBuildAction(a, permissions);
     case 'wait':
       return { type: 'wait' };
     case 'chat':
-      if (!resolvePermissions(allowEdits).chat)
+      if (!resolvePermissions(permissions).chat)
         throw Error('发送聊天权限未开启。');
       if (typeof a.text !== 'string' || !a.text.trim() || a.text.length > 240)
         return fail();
@@ -61,7 +63,8 @@ export function parseAction(
         return { type: 'chat', text: a.text.trim() };
       return { type: 'chat', text: a.text.trim(), ...parseChatRoute(a) };
     case 'move':
-      if (!resolvePermissions(allowEdits).move) throw Error('移动权限未开启。');
+      if (!resolvePermissions(permissions).move)
+        throw Error('移动权限未开启。');
       if (
         typeof a.x !== 'number' ||
         !Number.isFinite(a.x) ||
@@ -84,7 +87,7 @@ export function parseAction(
       };
     case 'edit': {
       if (
-        !resolvePermissions(allowEdits)[
+        !resolvePermissions(permissions)[
           a.material === null ? 'remove' : 'place'
         ]
       )
@@ -113,11 +116,11 @@ export const MAX_ACTIONS = 8;
 
 export function parseActions(
   value: unknown,
-  allowEdits: boolean | AICharacterPermissions,
+  permissions: AICharacterPermissions,
 ): AgentAction[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_ACTIONS)
     throw Error(`动作序列须包含 1–${MAX_ACTIONS} 个动作。`);
-  const actions = value.map((action) => parseAction(action, allowEdits));
+  const actions = value.map((action) => parseAction(action, permissions));
   if (actions.slice(0, -1).some((a) => a.type === 'wait'))
     throw Error('wait 只能出现在序列末尾。');
   if (

@@ -1,4 +1,8 @@
-import { runAgent } from '../../../tests/support/decision-loop';
+import { AgentRunner, runAgent } from '@voxel/agent-runtime';
+import {
+  modelRequest,
+  type ModelResponder,
+} from '../../../tests/support/model-fixture';
 import { testAgentConfig } from '../../../tests/support/agent-config';
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -61,7 +65,9 @@ function fixture() {
 const signal = () => new AbortController().signal;
 describe('bounded multi-block construction', () => {
   it('generates supported layer order, a hollow interior, doorway and roof from compact JSON', () => {
-    expect(parseAction(house, true)).toEqual(house);
+    expect(
+      parseAction(house, { move: true, chat: true, place: true, remove: true }),
+    ).toEqual(house);
     const blocks = houseBlocks(house);
     expect(blocks).toHaveLength(32);
     expect(blocks.some((b) => b.x === 3 && b.y === 4 && b.z === 0)).toBe(false);
@@ -79,7 +85,7 @@ describe('bounded multi-block construction', () => {
           s as unknown as Session,
           action,
           observation,
-          false,
+          { move: true, chat: true, place: false, remove: false },
           signal(),
         ),
       ).rejects.toThrow('未开启');
@@ -99,7 +105,9 @@ describe('bounded multi-block construction', () => {
         blocks: [batch.blocks[0], { ...batch.blocks[1], y: 0 }],
       },
     ])
-      expect(() => parseAction(bad, true)).toThrow();
+      expect(() =>
+        parseAction(bad, { move: true, chat: true, place: true, remove: true }),
+      ).toThrow();
     expect(s.request).not.toHaveBeenCalled();
   });
   it('uses each acknowledged revision without a model call between blocks', async () => {
@@ -108,7 +116,7 @@ describe('bounded multi-block construction', () => {
       s as unknown as Session,
       batch,
       observation,
-      true,
+      { move: true, chat: true, place: true, remove: true },
       signal(),
     );
     expect(result).toMatchObject({
@@ -135,7 +143,7 @@ describe('bounded multi-block construction', () => {
         s as unknown as Session,
         house,
         observation,
-        true,
+        { move: true, chat: true, place: true, remove: true },
         signal(),
       ),
     ).toMatchObject({
@@ -156,7 +164,7 @@ describe('bounded multi-block construction', () => {
         s as unknown as Session,
         batch,
         observation,
-        true,
+        { move: true, chat: true, place: true, remove: true },
         signal(),
       ),
     ).toMatchObject({ ok: true, completed: 1, skipped: 1 });
@@ -172,7 +180,7 @@ describe('bounded multi-block construction', () => {
         s as unknown as Session,
         batch,
         observation,
-        true,
+        { move: true, chat: true, place: true, remove: true },
         signal(),
       ),
     ).toMatchObject({
@@ -200,7 +208,7 @@ describe('bounded multi-block construction', () => {
         s as unknown as Session,
         batch,
         observation,
-        true,
+        { move: true, chat: true, place: true, remove: true },
         signal(),
       ),
     ).toMatchObject({ ok: false, completed: 1, remaining: [batch.blocks[1]] });
@@ -224,7 +232,7 @@ describe('bounded multi-block construction', () => {
         s as unknown as Session,
         batch,
         observation,
-        true,
+        { move: true, chat: true, place: true, remove: true },
         signal(),
       ),
     ).toMatchObject({ ok: false, completed: 0, remaining: batch.blocks });
@@ -244,49 +252,32 @@ describe('bounded multi-block construction', () => {
         s as unknown as Session,
         batch,
         observation,
-        true,
+        { move: true, chat: true, place: true, remove: true },
         abort.signal,
       ),
     ).rejects.toThrow();
     expect(s.request.mock.calls.filter((c) => c[0] === 'edit')).toHaveLength(1);
   });
-  it('retains an unfinished blueprint across a repositioning turn', async () => {
+  it('retains an unfinished blueprint through observation and rejects premature completion', async () => {
     const s = fixture();
     s.request
       .mockResolvedValueOnce(observation)
       .mockResolvedValueOnce({ ok: false, error: 'out-of-reach', revision: 4 });
     const decide = vi
-      .fn()
-      .mockResolvedValueOnce({
-        actions: [{ type: 'build', blocks: [batch.blocks[0]] }],
-        task: {
-          intent: 'continue' as const,
-          status: 'running' as const,
-          summary: '测试决策',
-        },
-      })
-      .mockResolvedValueOnce({
-        actions: [{ type: 'move', x: 1, z: 0, jump: false, durationMs: 100 }],
-        task: {
-          intent: 'continue' as const,
-          status: 'running' as const,
-          summary: '测试决策',
-        },
-      })
-      .mockResolvedValueOnce({
-        actions: [{ type: 'wait' }],
-        task: {
-          intent: 'continue' as const,
-          status: 'completed' as const,
-          summary: '测试决策',
-        },
-      });
+      .fn<ModelResponder>()
+      .mockResolvedValueOnce([
+        { name: 'build', arguments: { blocks: [batch.blocks[0]] } },
+      ])
+      .mockResolvedValueOnce([{ name: 'observe', arguments: {} }])
+      .mockResolvedValueOnce([
+        { name: 'complete_task', arguments: { summary: '测试决策' } },
+      ]);
     await runAgent(
       s as unknown as Session,
-      { decide },
+      new AgentRunner(undefined, modelRequest(decide)),
       {
         ...testAgentConfig(),
-        allowEdits: true,
+        permissions: { move: true, chat: true, place: true, remove: true },
         maxTurns: 3,
         intervalMs: 0,
       },

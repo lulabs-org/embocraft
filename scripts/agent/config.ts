@@ -53,7 +53,12 @@ export function agentConfig(
     model,
     goal,
     name: (options['name']?.trim() || 'DeepSeek · AI').slice(0, 24),
-    allowEdits: options['allow-edits'] === 'true',
+    permissions: {
+      move: true,
+      chat: true,
+      place: options['allow-edits'] === 'true',
+      remove: options['allow-edits'] === 'true',
+    },
     voiceReplies: options['voice-replies'] === 'true',
     maxTurns: integer('max-turns', 100, 1, 1000),
     tokenBudget: integer('token-budget', 50000, 1000, 100000000),

@@ -113,7 +113,6 @@ export function CharacterCapabilities({
                     setAgent({
                       ...agent,
                       permissions: next,
-                      allowEdits: next.place && next.remove,
                     });
                   }}
                 />

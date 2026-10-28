@@ -85,7 +85,7 @@ export async function normalizeSpeech(
 }
 
 /** Fixed PCM output; each caller retains its input format, time and process limits. */
-export function convertToPcmWav(
+function convertToPcmWav(
   input: string,
   output: string,
   signal: AbortSignal,
