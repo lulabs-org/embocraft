@@ -1,6 +1,6 @@
 # AI 角色统一事件运行时
 
-AI 角色统一事件运行时（Unified Event Runtime）基于统一的 `CharacterRunner` 调度中枢和 Pi 工具决策循环，将玩家实时聊天、定时任务计划触发、异步动作执行反馈等所有外部输入归一化为标准的内部事件流。
+AI 角色统一事件运行时（Unified Event Runtime）通过 `AgentRuntime` 统一宿主入口，并使用 `AgentRunner` 和 Pi 工具决策循环，将玩家实时聊天、定时任务计划触发、异步动作执行反馈等所有外部输入归一化为标准的内部事件流。
 
 ```mermaid
 flowchart TD
@@ -9,13 +9,15 @@ flowchart TD
   Queue -->|前序任务结束或空闲| Inbox
   Controls[控制台 / 玩家打断指令] --> Cancel[鉴权后立即取消活跃动作]
   Cancel --> Inbox
-  Inbox --> Runner[CharacterRunner 统一 Pi 执行器]
+  Inbox --> Runner[AgentRuntime / AgentRunner 统一执行入口]
   Runner --> Policy[TaskService 归属与权限校验]
   Runner --> Actions[动作执行器: goto / build / house / follow]
   Actions -->|物理执行确认或阻碍| Inbox
   Runner --> Reply[按会话范围定向回复]
   Runner --> Save[事件 / 检查点原子持久化]
 ```
+
+服务端与 CLI 共用 `createAgentRuntime()` 门面。消息接入、任务控制、状态视图和重启恢复由运行时提供；计划账本、世界连接与联合存档提交由宿主负责。保存的 v3 状态格式和既有入口保持兼容。
 
 ---
 
@@ -25,7 +27,7 @@ flowchart TD
 
 每个 AI 角色在运行时内拥有且仅拥有一个**模型执行槽**：
 
-- **会话持久化**：角色在整个在线期间复用同一个底层 Pi Agent 实例，避免重复握手开销；
+- **会话持久化**：角色状态与会话历史由运行时持续保存；每次决策装配 Pi Agent 并回放对应历史；
 - **上下文热切换**：处理不同事件时，系统动态装配并注入当前事件对应的授权范围与消息历史；
 - **排队与调度**：同一时间仅允许一条任务处于活跃执行态（Active TaskRun），周期任务在未空闲时进入排队状态（Queued）。
 

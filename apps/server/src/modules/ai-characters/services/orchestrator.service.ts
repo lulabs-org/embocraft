@@ -9,11 +9,8 @@ import {
   type AICharacterSettings,
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
-import { emptyState } from '@voxel/agent-runtime';
 import type { ProviderRuntimePort, SavedProvider } from '../../providers';
 import {
-  AgentAttention,
-  nextIntervalMs,
   type Session,
   type AgentRunner,
   type AgentConfig,
@@ -28,6 +25,7 @@ import { AppError } from '../../../core/errors/app-error';
 
 import {
   active,
+  createCharacterJob,
   resident,
   isJobBusy,
   canWakeJob,
@@ -237,7 +235,7 @@ export class AICharacterOrchestrator {
   }
 
   taskIdentity(id: string) {
-    return this.jobs.get(id)?.memory.task.identity;
+    return this.jobs.get(id)?.runtime.view().identity;
   }
 
   private checkVoice(settings: AICharacterSettings) {
@@ -250,25 +248,26 @@ export class AICharacterOrchestrator {
 
   list() {
     return [...this.jobs.values()]
-      .map(({ view, memory, currentRunId }) => {
+      .map(({ view, runtime, currentRunId }) => {
+        const state = runtime.view();
         const run = this.plans.runs.find((run) => run.id === currentRunId);
         return structuredClone({
           ...view,
-          goal: memory.task.current?.goal ?? view.goal,
+          goal: state.task?.goal ?? view.goal,
           voiceServiceName: this.voiceCoordinator.getServiceName(
             view.voiceServiceId,
           ),
-          task: memory.task.current,
+          task: state.task,
           taskExecution: run
             ? {
                 runId: run.id,
                 limits: run.snapshot.limits,
                 source: run.source,
-                action: memory.effects.activeAction
+                action: state.action
                   ? {
-                      id: memory.effects.activeAction.id,
-                      name: memory.effects.activeAction.name,
-                      status: memory.effects.activeAction.status,
+                      id: state.action.id,
+                      name: state.action.name,
+                      status: state.action.status,
                     }
                   : undefined,
               }
@@ -282,9 +281,9 @@ export class AICharacterOrchestrator {
               scheduledAt: r.scheduledAt,
               coalescedTriggers: r.coalescedTriggers ?? 0,
             })),
-          usage: memory.task.usage,
-          lastResponse: memory.health.lastResponse,
-          taskRequiresReassignment: !!memory.conversation.audienceExpired,
+          usage: state.usage,
+          lastResponse: state.lastResponse,
+          taskRequiresReassignment: state.requiresReassignment,
         });
       })
       .reverse();
@@ -326,7 +325,7 @@ export class AICharacterOrchestrator {
         '最多保存 50 个 Agent；为保留任务历史，不能自动删除旧角色。',
         409,
       );
-    const job: Job = {
+    const job = createCharacterJob({
       view: {
         ...settings,
         id: randomUUID(),
@@ -336,10 +335,8 @@ export class AICharacterOrchestrator {
         logEntries: [],
       },
       abort: new AbortController(),
-      memory: emptyState(),
       ledger: this.plans,
-      attention: new AgentAttention(),
-    };
+    });
     this.jobs.set(job.view.id, job);
     if (joinWorld) job.done = this.execute(job, provider, false);
     void this.persist();
@@ -366,7 +363,7 @@ export class AICharacterOrchestrator {
       providerName: provider.name,
       status: 'joining',
     });
-    job.attention.clear();
+    job.runtime.clearMessages();
     job.abort = new AbortController();
     job.done = this.execute(job, provider, false);
     void this.persist();
@@ -383,7 +380,7 @@ export class AICharacterOrchestrator {
     const provider = this.providers.getRuntime(
       text(input.providerId, '模型服务', 80, job.view.providerId),
     );
-    const currentGoal = job.memory.task.current?.goal ?? job.view.goal;
+    const currentGoal = job.runtime.view().task?.goal ?? job.view.goal;
     const settings = validateAICharacter(
       {
         ...job.view,
@@ -423,14 +420,14 @@ export class AICharacterOrchestrator {
       ) {
         this.taskScheduler.cancel(job.view.id);
         modelChanged(executionState(job));
-        job.attention.clear();
+        job.runtime.clearMessages();
       } else if (
         JSON.stringify(aiCharacterPermissions(settings)) !==
           JSON.stringify(aiCharacterPermissions(job.view)) ||
         JSON.stringify(settings.skills) !== JSON.stringify(job.view.skills)
       ) {
         this.taskScheduler.cancel(job.view.id);
-        job.attention.clear();
+        job.runtime.clearMessages();
         pauseTaskForHost(
           executionState(job),
           '角色技能或动作权限已修改，进度已保留，请确认后继续。',
@@ -496,17 +493,9 @@ export class AICharacterOrchestrator {
   private schedule(job: Job) {
     this.taskScheduler.cancel(job.view.id);
     if (!canWakeJob(job, this.closing)) return;
-    if (job.attention.pending) {
-      this.taskScheduler.wake(job.view.id, 0, () => this.wake(job));
-    } else if (
-      ['running', 'waiting'].includes(job.memory.task.current?.status ?? '')
-    ) {
-      this.taskScheduler.wake(
-        job.view.id,
-        job.memory.effects.follow ? 100 : nextIntervalMs(job.view),
-        () => this.wake(job),
-      );
-    }
+    const delay = job.runtime.nextWakeDelay({ ...job.view, apiKey: '' });
+    if (delay !== undefined)
+      this.taskScheduler.wake(job.view.id, delay, () => this.wake(job));
   }
 
   /** Host primitive only: stop the runner, then let Tasks commit the chosen transition. */
@@ -519,7 +508,7 @@ export class AICharacterOrchestrator {
       throw new AppError('Agent 状态正在更新，请稍候。', 409);
     job.controlling = true;
     this.taskScheduler.cancel(id);
-    job.attention.clear();
+    job.runtime.clearMessages();
     job.abort.abort();
     try {
       await job.done;
@@ -565,7 +554,7 @@ export class AICharacterOrchestrator {
     ) {
       this.taskScheduler.cancel(job.view.id);
       job.view.status = 'stopping';
-      job.attention.clear();
+      job.runtime.clearMessages();
       job.abort.abort();
       const closed = job.session
         ?.close()

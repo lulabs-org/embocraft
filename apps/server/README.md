@@ -56,7 +56,7 @@ Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/a
 
 `ModelCatalog` 由 `createServer` 创建并直接注入 Provider 路由，角色编排器不再持有它。`agentDependencies` 仅配置角色的 session 与 runner。删除模型或音色服务仍经角色管理器检查关联约束。
 
-Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端。服务端与 CLI 都通过 `AgentRunner.run()` 进入统一协调器；对话、任务服务和任务执行使用独立职责，CLI 的 `runAgent` 保留自身调度循环。
+Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端。每个 Job 持有一个 `AgentRuntime`，服务端通过其消息、执行、控制、查询和恢复方法操作角色；CLI 使用同一门面的 `runUntilSettled()`，旧 `runAgent()` 作为兼容适配保留。宿主不再自行解析控制词、拼接事件标识或读写运行时分区；任务账本、连接、定时器和联合存档事务仍由服务端管理。`Job.memory/attention` 仅保留兼容别名，存档继续使用 v3 格式。
 
 `chat` 按 `domain/`、`services/` 与 `routes/` 分层：`domain/visibility.ts` 按消息范围、发送者与接收者判断可见性；`services/` 集中聊天、凭据、音频缓存、空间语音票据及 ASR 协调，统一使用 `*.service.ts` 命名；`routes/chats.routes.ts` 保留 `/chat` 的 HTTP 接口与 OpenAPI 注解。路由和语音协调测试与源码共置，跨包的 `test/chat.test.ts` 保留在集成测试目录。模块门面继续导出 `WorldChat`、`installChatRoutes` 与 `visibleEvent`，聊天鉴权、可见性、语音处理和票据生命周期保持不变。
 

@@ -1,4 +1,4 @@
-import { emptyState } from '@voxel/agent-runtime';
+import { createAgentRuntime } from '@voxel/agent-runtime';
 import { expect, it, vi } from 'vitest';
 import { DEFAULT_TASK_LIMITS } from '@voxel/shared';
 import { ManagementPersistence } from './management-persistence';
@@ -18,13 +18,21 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const committed = new PlanService();
   const events = new ManagementEvents();
   const jobs = new AICharacterRegistry();
-  for (const id of ['a', 'b'])
+  for (const id of ['a', 'b']) {
+    const runtime = createAgentRuntime();
     jobs.set(id, {
       view: { id, name: id, status: 'idle', sessionId: `session-${id}` },
-      memory: emptyState(),
+      runtime,
+      get memory() {
+        return runtime.state;
+      },
+      set memory(value) {
+        runtime.replaceState(value);
+      },
       ledger: plans,
       abort: new AbortController(),
     } as Job);
+  }
   const scheduler = new AICharacterWakeScheduler();
   const cancel = vi.spyOn(scheduler, 'cancel');
   const presence = new Map<string, 'idle'>();

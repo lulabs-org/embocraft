@@ -1,4 +1,9 @@
-import { emptyState, newTask, TaskService } from '@voxel/agent-runtime';
+import {
+  createAgentRuntime,
+  emptyState,
+  newTask,
+  TaskService,
+} from '@voxel/agent-runtime';
 
 import { vi } from 'vitest';
 
@@ -36,7 +41,19 @@ export function taskExecutionFixture() {
     assertWritable: () => {},
   };
   const tasks = new TaskCoordinator(host);
+  const runtime = createAgentRuntime({
+    state: {
+      ...emptyState(),
+      task: {
+        current: {
+          ...newTask('Private work', 'alice', 'alice'),
+          status: 'waiting',
+        },
+      },
+    },
+  });
   const state: TaskExecutionState = {
+    runtime,
     view: {
       permissions: { move: true, chat: true, place: false, remove: false },
       id: 'actor',
@@ -59,14 +76,11 @@ export function taskExecutionFixture() {
       thinking: 'disabled',
       reasoningEffort: 'none',
     },
-    memory: {
-      ...emptyState(),
-      task: {
-        current: {
-          ...newTask('Private work', 'alice', 'alice'),
-          status: 'waiting',
-        },
-      },
+    get memory() {
+      return runtime.state;
+    },
+    set memory(value) {
+      runtime.replaceState(value);
     },
     ledger: tasks.plans,
     online: true,

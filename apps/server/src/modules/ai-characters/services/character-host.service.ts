@@ -1,9 +1,5 @@
 import { aiCharacterPermissions, type AICharacterView } from '@voxel/shared';
-import {
-  AgentAttention,
-  AgentRuntimeError,
-  type AgentConfig,
-} from '@voxel/agent-runtime';
+import { AgentRuntimeError, type AgentConfig } from '@voxel/agent-runtime';
 import { appendAICharacterLog } from '../domain/activity-log';
 import type { Job } from './job';
 import { resolveInferenceDefaults, type SavedProvider } from '../../providers';
@@ -61,10 +57,10 @@ export class AICharacterHost {
 
       if (!job.session) {
         const session = ctx.dependencies.session(ctx.serverUrl);
-        job.attention = new AgentAttention();
         job.session = session;
         await session.join(job.view.name, 'ai-agent');
         job.view.sessionId = session.room.sessionId;
+        job.runtime.connect(session, session.room.sessionId);
 
         session.onEvent = (event) => {
           if (
@@ -74,8 +70,6 @@ export class AICharacterHost {
             !['running', 'idle', 'failed'].includes(job.view.status)
           )
             return;
-          if (!job.attention.accept(event, session.room.sessionId)) return;
-
           handleWorldEvent(event, job, session, ctx, log);
         };
 
@@ -88,6 +82,7 @@ export class AICharacterHost {
           ctx.voiceServices?.unbind(session.room.sessionId);
           if (job.session !== session) return;
           job.session = undefined;
+          job.runtime.disconnect();
           delete job.view.sessionId;
           job.abort.abort();
           if (job.view.status !== 'stopping') {
@@ -109,20 +104,21 @@ export class AICharacterHost {
 
       if (!job.abort.signal.aborted && run) {
         job.view.status = 'running';
-        if (!job.memory.effects.follow || job.attention.pending)
-          log(job.attention.pending ? '处理当前消息。' : '启动 Pi 任务执行。');
+        if (!job.runtime.view().following || job.runtime.pendingMessages)
+          log(
+            job.runtime.pendingMessages
+              ? '处理当前消息。'
+              : '启动 Pi 任务执行。',
+          );
 
-        await ctx.dependencies.runner(config, provider).run({
-          session: job.session,
-          config,
+        await job.runtime.run(config, {
+          runner: ctx.dependencies.runner(config, provider),
           defaults: {
             ...inferenceDefaults,
             ...job.view,
             apiKey: provider.apiKey,
           },
           signal: job.abort.signal,
-          memory: job.memory,
-          attention: job.attention,
           log,
           checkpoint: async () => {
             await ctx.save();
@@ -141,7 +137,7 @@ export class AICharacterHost {
 
       finalStatus =
         job.abort.signal.aborted && !job.controlling ? 'failed' : 'idle';
-      if (finalStatus === 'idle' && !job.memory.effects.follow)
+      if (finalStatus === 'idle' && !job.runtime.view().following)
         log(
           run
             ? '本次唤醒结束，按任务状态安排下一次检查。'

@@ -1,4 +1,4 @@
-import type { AgentRunState } from '@voxel/agent-runtime';
+import type { AgentRunState, AgentRuntime } from '@voxel/agent-runtime';
 import type { AICharacterSettings, AICharacterView } from '@voxel/shared';
 import type { PlanService } from './persistence/plan-store';
 import type { PlanQueryFilter } from './domain/types';
@@ -46,6 +46,7 @@ export interface TaskExecutionState {
   view: AICharacterSettings &
     Pick<AICharacterView, 'id' | 'status' | 'logEntries'>;
   memory: AgentRunState;
+  readonly runtime: AgentRuntime;
   readonly ledger: PlanService;
   currentRunId: string | undefined;
   taskMutating?: boolean;
