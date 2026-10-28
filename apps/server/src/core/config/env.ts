@@ -171,5 +171,4 @@ export const env = {
   readRealtime: readRealtimeConfig,
 } as const;
 
-export type AppEnv = typeof env;
 export default env;

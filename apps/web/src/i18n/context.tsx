@@ -38,5 +38,3 @@ export function useI18n(): I18nContextType {
     t: translate,
   };
 }
-
-export const useTranslation = useI18n;

@@ -40,8 +40,6 @@ export type {
   StoredRun,
   TaskBook,
   PlanQueryFilter,
-  PlanControlOperation,
-  RunControlOperation,
   TaskRunsPage,
 } from './domain/types';
 
