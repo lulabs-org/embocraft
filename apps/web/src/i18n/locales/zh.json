@@ -214,9 +214,7 @@
     "listenOff": "关闭收听",
     "listenOn": "开启收听",
     "captionPrivate": "私聊",
-    "captionNearby": "附近语音",
-    "sessionInterrupted": "连接中断，语音会话已停止。",
-    "sessionExited": "已退出游戏，录音、识别和朗读已停止。"
+    "captionNearby": "附近语音"
   },
   "console": {
     "eyebrow": "WORLD CONSOLE",
@@ -856,12 +854,6 @@
       "confirmedTextPlaceholder": "说话时实时显示，停顿确认后追加到这里",
       "langChinese": "中文",
       "langEnglish": "英语"
-    },
-    "tts": {
-      "title": "文本转语音（TTS）",
-      "piper": "Piper 本地语音",
-      "browser": "浏览器语音合成",
-      "preview": "试听语音"
     }
   },
   "avatar": {

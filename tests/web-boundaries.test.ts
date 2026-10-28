@@ -106,11 +106,8 @@ it('has no Web dependency cycles, including type imports and public re-exports',
   for (const file of graph.keys()) visit(file, []);
 });
 
-it('keeps both PCM worklet URLs pointed at a shipped JavaScript asset', () => {
-  for (const file of [
-    'audio/core/realtime-audio.ts',
-    'audio/recording/live-recorder.ts',
-  ]) {
+it('keeps the PCM worklet URL pointed at a shipped JavaScript asset', () => {
+  for (const file of ['audio/recording/live-recorder.ts']) {
     const source = readFileSync(resolve(root, file), 'utf8');
     const reference = source.match(
       /new URL\('([^']+pcm-worklet\.js)', import\.meta\.url\)/,
