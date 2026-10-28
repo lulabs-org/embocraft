@@ -20,6 +20,14 @@ A standalone, local multiplayer 3D voxel and embodied AI sandbox: TypeScript · 
 
 ## Quick Start
 
+Local development and Docker Compose share [.env.example](.env.example). Copy it to `.env` on first use, or update the relevant entries in an existing file:
+
+```sh
+cp -n .env.example .env
+```
+
+Follow the common, local, and Docker sections in the example. Set a database password before deploying with Docker; see [Configuration setup](docs/guide/getting-started.md#统一配置入口) for defaults and overrides.
+
 ### 1. Local Development Environment
 
 Prerequisites: Node.js 22.13+, pnpm 10, PostgreSQL 17 binaries. Fully runnable locally without any cloud accounts.
@@ -37,7 +45,8 @@ pnpm db:migrate    # Runs Prisma database migrations
 pnpm dev
 
 # 4. Start AI players in another terminal (or non-AI mock bots)
-pnpm agent:ai      # Mock bot: pnpm agent:mock
+pnpm agent:ai --api-key sk-your-deepseek-api-key
+# Non-AI mock bot: pnpm agent:mock
 ```
 
 Once started, open http://127.0.0.1:5173 in your browser. You can open two separate incognito windows with different nicknames to test multiplayer interaction.
@@ -62,7 +71,7 @@ After launch:
 - **Web Frontend**: Visit `http://localhost`
 - **Swagger API Docs**: Visit `http://localhost:2567/api-docs`
 
-> For detailed container configuration, upgrading from older versions, and microphone permission troubleshooting, see the [Docker Deployment Guide](docs/guide/getting-started.md#docker-容器化部署).
+> For detailed container configuration, upgrading from older versions, and microphone permission troubleshooting, see the [Docker Deployment Guide](docs/guide/getting-started.md#docker-全栈一键部署).
 
 ---
 

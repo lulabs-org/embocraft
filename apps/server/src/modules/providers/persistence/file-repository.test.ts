@@ -23,10 +23,12 @@ describe('FileProviderRepository and bootstrapProviders', () => {
     try {
       const path = join(dir, 'providers.json');
       const repo = new FileProviderRepository(path);
-      const defaults = createDefaultProviders({
-        DEEPSEEK_API_KEY: 'test-key',
-        DEEPSEEK_MODEL: 'custom-model',
-      });
+      const defaults = createDefaultProviders();
+      defaults[0] = {
+        ...defaults[0],
+        apiKey: 'test-key',
+        defaultModel: 'custom-model',
+      };
       await repo.seed(defaults);
 
       expect(repo.list()).toHaveLength(2);
@@ -57,17 +59,17 @@ describe('FileProviderRepository and bootstrapProviders', () => {
     try {
       const path = join(dir, 'providers.json');
       const repo = new FileProviderRepository(path);
-      await bootstrapProviders(repo, { DEEPSEEK_API_KEY: 'bootstrap-key' });
+      await bootstrapProviders(repo);
 
       expect(repo.list()).toHaveLength(2);
-      expect(repo.getRuntime('deepseek').apiKey).toBe('bootstrap-key');
+      expect(repo.getRuntime('deepseek').apiKey).toBe('');
 
       // Bootstrapping again on an existing repo does not overwrite modifications
       await repo.save(
         { name: 'DeepSeek Modified', type: 'deepseek', apiKey: 'new-key' },
         'deepseek',
       );
-      await bootstrapProviders(repo, { DEEPSEEK_API_KEY: 'another-key' });
+      await bootstrapProviders(repo);
       expect(repo.getRuntime('deepseek').apiKey).toBe('new-key');
     } finally {
       await rm(dir, { recursive: true, force: true });

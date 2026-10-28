@@ -4,7 +4,6 @@ import { Session, until, delay } from '@voxel/agent-runtime';
 import type { RealtimeEvent } from '@voxel/shared/communication';
 // Isolated ephemeral world. Does not load .env, credentials or production data.
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 process.env.BAILIAN_REALTIME_ENABLED = 'false';
 const server = await createTestServer();
 const sessions: Session[] = [];

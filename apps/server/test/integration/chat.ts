@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { LocalSpeech } from '../../src/modules/audio/services/asr/local-speech.service';
 import { Session, until, delay } from '@voxel/agent-runtime';
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5187';
 const speech = new LocalSpeech();
 const server = await createTestServer({

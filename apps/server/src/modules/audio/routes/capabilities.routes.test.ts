@@ -15,7 +15,6 @@ describe('audio capabilities HTTP boundary', () => {
   const status = vi.fn();
   const origin = 'http://127.0.0.1:5187';
   beforeEach(async () => {
-    vi.stubEnv('OLLAMA_MODEL', '');
     vi.spyOn(PiperModels.prototype, 'status').mockResolvedValue({
       available: false,
       reason: '请安装 Piper 模型。',

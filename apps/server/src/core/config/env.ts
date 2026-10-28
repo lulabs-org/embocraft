@@ -18,9 +18,6 @@ const DEFAULT_GATEWAY_ORIGINS = [
   'http://127.0.0.1:5173',
 ] as const;
 
-const VALID_VOICE_PROVIDERS = ['mock', 'browser', 'ollama'] as const;
-type VoiceProvider = (typeof VALID_VOICE_PROVIDERS)[number];
-
 const repositoryRoot = fileURLToPath(
   new URL('../../../../../', import.meta.url),
 );
@@ -92,14 +89,6 @@ function parseGatewayOrigins(
   return origins;
 }
 
-function assertValidVoiceProvider(
-  provider: string,
-): asserts provider is VoiceProvider {
-  if (!VALID_VOICE_PROVIDERS.includes(provider as VoiceProvider)) {
-    throw new Error('VOICE_PROVIDER 仅支持 mock、browser 或 ollama。');
-  }
-}
-
 // ---------------------------------------------------------------------------
 // 3. Config Readers
 // ---------------------------------------------------------------------------
@@ -118,14 +107,6 @@ function databaseUrl(env: EnvLookup = process.env): string {
   return env.DATABASE_URL ?? '';
 }
 
-function readVoiceConfig(env: EnvLookup = process.env) {
-  return {
-    provider: (env.VOICE_PROVIDER ?? 'mock') as string,
-    ollamaModel: env.OLLAMA_MODEL ?? '',
-    ollamaBaseUrl: env.OLLAMA_BASE_URL,
-  };
-}
-
 function readSpeechConfig(env: EnvLookup = process.env) {
   return {
     path: env.PATH ?? '',
@@ -138,20 +119,10 @@ function readSpeechConfig(env: EnvLookup = process.env) {
   };
 }
 
-function readProviderDefaults(env: EnvLookup = process.env) {
-  return {
-    deepseekApiKey: env.DEEPSEEK_API_KEY ?? '',
-    deepseekModel: env.DEEPSEEK_MODEL || 'deepseek-flash',
-    ollamaModel: env.OLLAMA_MODEL ?? '',
-  };
-}
-
 function readRealtimeConfig(env: EnvLookup = process.env) {
   return {
     enabled: env.BAILIAN_REALTIME_ENABLED === 'true',
     workspace: env.BAILIAN_WORKSPACE_ID ?? '',
-    model: env.BAILIAN_REALTIME_MODEL,
-    voice: env.BAILIAN_REALTIME_VOICE,
     credential: () => env.DASHSCOPE_API_KEY ?? '',
   };
 }
@@ -164,8 +135,6 @@ function readServerConfig(env: EnvLookup = process.env) {
     env.AGENT_GATEWAY_ALLOWED_ORIGINS,
     origin,
   );
-  const voice = readVoiceConfig(env);
-  assertValidVoiceProvider(voice.provider);
 
   return {
     port,
@@ -174,8 +143,9 @@ function readServerConfig(env: EnvLookup = process.env) {
     databaseUrl: databaseUrl(env),
     isProduction: (env.NODE_ENV ?? '').trim() === 'production',
     voice: {
-      ...voice,
-      provider: voice.provider as VoiceProvider,
+      provider: 'mock',
+      ollamaModel: '',
+      ollamaBaseUrl: undefined as string | undefined,
     },
     gateway: {
       token: env.AGENT_GATEWAY_TOKEN,
@@ -203,9 +173,7 @@ export const env = {
   webOrigin,
   databaseUrl,
   readServer: readServerConfig,
-  readVoice: readVoiceConfig,
   readSpeech: readSpeechConfig,
-  readProviders: readProviderDefaults,
   readRealtime: readRealtimeConfig,
 } as const;
 

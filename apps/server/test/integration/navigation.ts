@@ -21,7 +21,6 @@ import { toolResponse } from '../../../../tests/support/pi-response';
 import { testAgentConfig } from '../../../../tests/support/agent-config';
 
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 const dir = await mkdtemp(join(tmpdir(), 'voxel-navigation-'));
 let manager: AICharacterManager | undefined;

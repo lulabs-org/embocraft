@@ -11,7 +11,6 @@ import {
 } from '@voxel/agent-runtime';
 
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 const server = await createTestServer();
 let session: Session | undefined;
 try {

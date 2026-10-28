@@ -27,12 +27,21 @@ const provider = () =>
     defaultModel: 'deepseek-flash',
   });
 describe('provider configuration boundary', () => {
-  it('imports env once, persists privately, and never returns credentials', async () => {
+  it('saves console credentials privately and never returns them', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'voxel-providers-'));
     folders.push(dir);
     const path = join(dir, 'providers.json');
     const store = new FileProviderRepository(path);
-    await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture-secret' });
+    await bootstrapProviders(store);
+    await store.save(
+      {
+        name: 'DeepSeek',
+        type: 'deepseek',
+        apiKey: 'fixture-secret',
+        defaultModel: 'deepseek-flash',
+      },
+      'deepseek',
+    );
     expect(JSON.stringify(store.list())).not.toContain('fixture-secret');
     expect(store.list()[0].hasApiKey).toBe(true);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
@@ -45,7 +54,7 @@ describe('provider configuration boundary', () => {
     expect(store.get('deepseek')).not.toHaveProperty('apiKey');
     expect(store.getRuntime('deepseek').apiKey).toBe('fixture-secret');
     const reloaded = new FileProviderRepository(path);
-    await bootstrapProviders(reloaded, { DEEPSEEK_API_KEY: 'different' });
+    await bootstrapProviders(reloaded);
     expect(reloaded.get('deepseek')).not.toHaveProperty('apiKey');
     expect(reloaded.getRuntime('deepseek').apiKey).toBe('fixture-secret');
     await Promise.all([
@@ -357,7 +366,16 @@ it('persists provider configurations cleanly and resolves character inference de
   try {
     const path = join(dir, 'providers.json');
     const store = new FileProviderRepository(path);
-    await bootstrapProviders(store, { DEEPSEEK_API_KEY: 'fixture' });
+    await bootstrapProviders(store);
+    await store.save(
+      {
+        name: 'DeepSeek',
+        type: 'deepseek',
+        apiKey: 'fixture',
+        defaultModel: 'deepseek-flash',
+      },
+      'deepseek',
+    );
 
     await store.save(
       { ...store.get('deepseek'), defaultModel: 'deepseek-reasoner' },

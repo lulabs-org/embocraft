@@ -55,7 +55,16 @@ const providerUrl = `http://127.0.0.1:${(providerHttp.address() as { port: numbe
 const voices = new VoiceServiceStore(join(dir, 'voices.json'));
 await voices.load();
 const providers = new FileProviderRepository(join(dir, 'providers.json'));
-await bootstrapProviders(providers, { DEEPSEEK_API_KEY: 'fixture-model-key' });
+await bootstrapProviders(providers);
+await providers.save(
+  {
+    name: 'DeepSeek',
+    type: 'deepseek',
+    apiKey: 'fixture-model-key',
+    defaultModel: 'deepseek-flash',
+  },
+  'deepseek',
+);
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 const humans: Session[] = [],
   bots: Session[] = [];

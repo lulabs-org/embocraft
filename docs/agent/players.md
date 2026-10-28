@@ -173,53 +173,33 @@ flowchart TD
 
 除 Web 控制台外，项目支持在终端作为独立 Node.js 进程运行纯命令行 AI 玩家。
 
-### 1. 环境变量配置
+### 1. 启动与运行
 
-在项目根目录 `.env` 中追加以下配置（或直接在 shell 中导出）：
-
-```dotenv
-# 必需：模型连接凭据
-DEEPSEEK_API_KEY=sk-your-deepseek-api-key
-DEEPSEEK_MODEL=deepseek-flash
-
-# 角色基本参数
-AGENT_NAME=DeepSeek
-AGENT_GOAL=探索附近环境，用中文简短介绍你的观察，友好回应玩家。
-AGENT_MAX_TURNS=100
-AGENT_TOKEN_BUDGET=50000
-AGENT_TASK_TIMEOUT_MS=900000
-AGENT_ALLOW_EDITS=false
-```
-
-### 2. 启动与运行
+CLI 的角色、预算和模型选项通过命令行参数传入，不再读取 `.env` 的功能配置：
 
 ```sh
-# 启动独立 AI 玩家（默认连接本地 ws://127.0.0.1:2567）
-pnpm agent:ai
+pnpm agent:ai --api-key sk-your-deepseek-api-key --model deepseek-flash --name DeepSeek --goal '探索附近环境，用中文简短介绍观察结果。'
 
-# 启动无 LLM 的基础脚本巡逻机器人（用于快速测试网络与物理）
+# 部署地址仍可通过 SERVER_URL 指定
+SERVER_URL=ws://127.0.0.1:2577 pnpm agent:ai --api-key sk-your-deepseek-api-key
+
+# 无 LLM 的脚本巡逻机器人
 pnpm agent:mock
-
-# 若开发世界运行在非默认端口，可通过 SERVER_URL 显式指定：
-SERVER_URL=ws://127.0.0.1:2577 pnpm agent:ai
 ```
 
-### 3. 思考模式 (DeepSeek Reasoner)
+可选参数：`--max-turns`（100）、`--token-budget`（50000）、`--task-timeout-ms`（900000）、`--interval-ms`（3000）、`--interval-mode`（fixed/random）、`--interval-min-ms`（4000）、`--interval-max-ms`（8000）、`--continuous`（true/false）、`--allow-edits`（true/false）、`--voice-replies`（true/false）。布尔选项需显式传入值，默认 false。
 
-如需启用深度推理思考模式，可在 `.env` 中开启：
+### 2. 思考模式
 
-```dotenv
-DEEPSEEK_THINKING=enabled
-DEEPSEEK_REASONING_EFFORT=high
-DEEPSEEK_MAX_TOKENS=4096
-DEEPSEEK_TIMEOUT_MS=60000
+```sh
+pnpm agent:ai --api-key sk-your-deepseek-api-key --thinking enabled --reasoning-effort high --max-tokens 4096 --timeout-ms 60000
 ```
 
-::: tip 思考模式建议
-开启思考模式后建议将 `DEEPSEEK_MAX_TOKENS` 提升至 4096，以防止工具调用生成的 JSON 结构被截断。
-:::
+`--thinking` 默认 disabled；启用后 `--max-tokens` 默认 4096，否则默认 512。`--reasoning-effort` 默认 high，`--timeout-ms` 默认 30000。
 
-### 4. Agent 可执行动作清单
+模型服务凭据、托管 Agent 行为和语音参数统一在 Web 控制台配置并持久化到数据库。
+
+### 3. Agent 可执行动作清单
 
 | 动作工具 | 参数格式                                             | 物理规则与行为边界                                         |
 | -------- | ---------------------------------------------------- | ---------------------------------------------------------- |

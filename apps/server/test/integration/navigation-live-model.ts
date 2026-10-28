@@ -33,7 +33,6 @@ const output = resolve(
   process.env.NAVIGATION_OUTPUT || '../../artifacts/navigation-live-model.json',
 );
 process.env.DATABASE_URL = '';
-process.env.VOICE_PROVIDER = 'mock';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-navigation-live-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 let manager: AICharacterManager | undefined,

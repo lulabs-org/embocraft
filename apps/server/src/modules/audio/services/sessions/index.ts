@@ -1,4 +1,3 @@
-import { env } from '../../../../core/config/env';
 import type { VoiceProvider } from '../../domain/types';
 import { MockVoiceProvider } from './mock';
 import { BrowserVoiceProvider } from './browser';
@@ -16,8 +15,8 @@ export { BrowserVoiceProvider } from './browser';
 export { OllamaVoiceProvider } from './ollama';
 
 export function createVoiceProvider(
-  id = env.readVoice().provider,
-  config = env.readVoice(),
+  id = 'mock',
+  config: { ollamaModel: string; ollamaBaseUrl?: string } = { ollamaModel: '' },
 ): VoiceProvider {
   switch (id) {
     case 'mock':
@@ -27,6 +26,6 @@ export function createVoiceProvider(
     case 'ollama':
       return new OllamaVoiceProvider(config.ollamaModel, config.ollamaBaseUrl);
     default:
-      throw Error('VOICE_PROVIDER 仅支持 mock、browser 或 ollama。');
+      throw Error('语音提供者仅支持 mock、browser 或 ollama。');
   }
 }

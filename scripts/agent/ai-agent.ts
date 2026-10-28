@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import {
   aiCharacterPermissions,
   Session,
@@ -9,8 +7,6 @@ import {
 } from '@voxel/agent-runtime';
 import { agentConfig } from './config';
 
-const envPath = fileURLToPath(new URL('../../.env', import.meta.url));
-if (existsSync(envPath)) process.loadEnvFile(envPath);
 const abort = new AbortController();
 let session: Session | undefined;
 const stop = () => {
