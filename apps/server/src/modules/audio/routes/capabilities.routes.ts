@@ -7,7 +7,6 @@ import { listWhisperModels } from '../services/asr/whisper-settings';
 import type { Express } from 'express';
 import { LocalSpeech } from '../services/asr/local-speech.service';
 import { AppError } from '../../../core/errors/app-error';
-import { createVoiceProvider } from '../services/sessions';
 import { PiperModels } from '../services/tts/piper-models.service';
 export function installCapabilitiesRoutes(
   app: Express,
@@ -62,8 +61,6 @@ export function installCapabilitiesRoutes(
    *                   type: array
    *                   items:
    *                     type: string
-   *                 ollamaConfigured:
-   *                   type: boolean
    *                 agentSpeech:
    *                   type: object
    */
@@ -77,17 +74,9 @@ export function installCapabilitiesRoutes(
             : asrSettings.get(String(req.query.serviceId));
         if (selected && selected.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
-        let ollamaConfigured = false;
-        try {
-          createVoiceProvider('ollama');
-          ollamaConfigured = true;
-        } catch {
-          /* Optional. */
-        }
         res.json({
           local: await speech.status(selected),
           whisperModels: await listWhisperModels(),
-          ollamaConfigured,
           agentSpeech: await new PiperModels().status(),
         });
       } catch (error) {

@@ -7,8 +7,6 @@ export { DatabaseAsrServicePersistence } from './persistence/database-asr-servic
 export { installAsrSocket, type AsrBridge } from './sockets/asr.socket';
 export { LocalSpeech } from './services/asr/local-speech.service';
 export { scheduleSpeech } from './services/asr/speech-scheduler.service';
-export { createVoiceProvider, type VoiceProvider } from './services/sessions';
-export { VoiceSessions } from './services/sessions/voice-sessions.service';
 export { createSpatialSignaling } from './services/spatial/signaling.service';
 export { AgentSpeech } from './services/tts/agent-speech.service';
 export { DatabaseVoiceServicePersistence } from './persistence/database-voice-services';

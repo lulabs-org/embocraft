@@ -4,10 +4,7 @@ import { WorldChat, visibleEvent } from '../chat';
 import {
   AgentSpeech,
   PiperTts,
-  createVoiceProvider,
-  VoiceSessions,
   createSpatialSignaling,
-  type VoiceProvider,
   type VoiceServiceStore,
 } from '../audio';
 import { WorldStore } from './persistence/store';
@@ -65,9 +62,7 @@ export class WorldRoom extends Room<WorldState> {
   private events: WorldEvent[] = [];
   private seq = 0;
   private ownsActive = false;
-  private voiceProvider!: VoiceProvider;
   private realtimeConfig: () => BailianConfig = () => env.readRealtime();
-  private voices = new VoiceSessions(() => this.voiceProvider);
   private spatialSignal = createSpatialSignaling(
     (id) => this.state.players.get(id),
     (recipient, signal) =>
@@ -102,7 +97,6 @@ export class WorldRoom extends Room<WorldState> {
     options: {
       voiceServices?: VoiceServiceStore;
       store?: WorldStore;
-      voiceProvider?: VoiceProvider;
       realtimeConfig?: () => BailianConfig;
     } = {},
   ) {
@@ -115,7 +109,6 @@ export class WorldRoom extends Room<WorldState> {
     activeRoom = true;
     this.ownsActive = true;
     this.store = options.store ?? new WorldStore();
-    this.voiceProvider = options.voiceProvider ?? createVoiceProvider();
     if (options.realtimeConfig) this.realtimeConfig = options.realtimeConfig;
     this.setState(new WorldState());
     try {
@@ -191,19 +184,6 @@ export class WorldRoom extends Room<WorldState> {
         body.input = input;
         body.lastInput = Date.now();
         return;
-      }
-      if (type === 'voice.start') {
-        const error = this.voices.start(
-          client.sessionId,
-          id,
-          payload,
-          (event) => client.send('voice', event),
-        );
-        return this.reply(client, id, error === undefined, error);
-      }
-      if (type === 'voice.interrupt') {
-        this.voices.interrupt(client.sessionId);
-        return this.reply(client, id, true);
       }
       if (type === 'observe') {
         this.observe(client, id);
@@ -354,7 +334,6 @@ export class WorldRoom extends Room<WorldState> {
     if (!this.state.players.has(client.sessionId)) return;
     this.realtime.close(client.sessionId);
     this.agentSpeech.cancel(client.sessionId);
-    this.voices.close(client.sessionId);
     const p = this.state.players.get(client.sessionId);
     this.chat.revoke(client.sessionId);
     if (p) {
@@ -388,7 +367,6 @@ export class WorldRoom extends Room<WorldState> {
     this.releaseVoiceServices?.();
     this.realtime.dispose();
     this.agentSpeech.close();
-    this.voices.dispose();
     this.chat.clear();
     await this.queue;
     await this.store?.close();
@@ -513,14 +491,7 @@ export class WorldRoom extends Room<WorldState> {
       events: this.events
         .filter((event) => visibleEvent(event, client.sessionId))
         .slice(-30),
-      allowedActions: [
-        'move',
-        'edit',
-        'chat',
-        'observe',
-        'voice.start',
-        'voice.interrupt',
-      ],
+      allowedActions: ['move', 'edit', 'chat', 'observe'],
     });
   }
 }

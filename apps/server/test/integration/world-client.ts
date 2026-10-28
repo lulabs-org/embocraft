@@ -105,15 +105,6 @@ try {
     await fresh.close();
   }
   tests.push('new session loads saved edit from authoritative world');
-  await agent.request('voice.start', { text: 'test subtitles' });
-  await until(() =>
-    agent.voice.some((v) => (v as { state: string }).state === 'speaking'),
-  );
-  await agent.request('voice.interrupt');
-  await delay(1500);
-  assert.equal((agent.voice.at(-1) as { state: string }).state, 'interrupted');
-  assert.equal(a.voice.length, 0);
-  tests.push('voice subtitles, interruption and per-client privacy');
   const start = (await agent.observe()).self;
   for (let i = 0; i < 8; i++) {
     agent.move(0, -1);

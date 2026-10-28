@@ -32,7 +32,6 @@ export class Session {
   edits: Edit[] = [];
   events: WorldEvent[] = [];
   onEvent?: (event: WorldEvent) => void;
-  voice: unknown[] = [];
   chatToken = '';
   spatialSignals: unknown[] = [];
   private id = 0;
@@ -76,10 +75,6 @@ export class Session {
       this.events.push(e);
       if (this.events.length > 100) this.events.shift();
       this.onEvent?.(e);
-    });
-    room.onMessage('voice', (value) => {
-      this.voice.push(value);
-      if (this.voice.length > 100) this.voice.shift();
     });
     // Resolve matching pending promises on action result or observation response.
     for (const type of ['result', 'observation'])

@@ -31,7 +31,8 @@ describe('server assembly and lifecycle', () => {
       databaseUrl: '',
     });
     expect(
-      env.readServer({ SERVER_PORT: '0', HOST: '0.0.0.0', WEB_ORIGIN: '*' }).port,
+      env.readServer({ SERVER_PORT: '0', HOST: '0.0.0.0', WEB_ORIGIN: '*' })
+        .port,
     ).toBe(0);
     for (const testEnv of [
       { SERVER_PORT: 'no' },
@@ -64,8 +65,6 @@ describe('server assembly and lifecycle', () => {
         ok: true,
         protocol: 1,
         persistence: 'memory',
-        voice: 'mock',
-        voiceProviders: ['mock', 'browser'],
       });
       expect(await (await fetch(server.httpUrl + '/world')).json()).toEqual({
         roomId: server.world.roomId,

@@ -26,7 +26,6 @@ import {
   DatabaseVoiceServicePersistence,
   installAsrSocket,
   LocalSpeech,
-  createVoiceProvider,
   VoiceServiceStore,
   type AsrBridge,
 } from './modules/audio';
@@ -106,11 +105,6 @@ export async function createServer(options: ServerOptions = {}) {
   await (options.databaseCheck ?? checkStartupDatabase)(config.databaseUrl);
   if (!config.databaseUrl && !(options.providers && options.archive))
     throw new Error('必须配置 DATABASE_URL 才能持久化模型服务与 Agent 数据。');
-  // Validate voice configuration before allocating the long-lived database client.
-  const voiceProvider = createVoiceProvider(
-    config.voice.provider,
-    config.voice,
-  );
   const db = config.databaseUrl
     ? createDatabaseClient(config.databaseUrl)
     : undefined;
@@ -187,7 +181,6 @@ export async function createServer(options: ServerOptions = {}) {
   server.define('world', WorldRoom, {
     voiceServices,
     store,
-    voiceProvider,
     realtimeConfig: () => config.realtime,
   });
   server.onBeforeShutdown(() => characters.close());

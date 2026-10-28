@@ -16,28 +16,28 @@
 
 `core` 不引用业务领域或全局持久化层；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或顶层 HTTP 装配。管理 HTTP 管线与请求策略归入 `modules/management/routes/`，业务路由通过 management 门面复用该策略。management 的 HTTP 层不导入其他业务模块，由 `app.ts` 注入路由安装回调与命令指纹的请求体规整函数，避免模块循环依赖。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
 
-| 目录                              | 责任                                                 |
-| --------------------------------- | ---------------------------------------------------- |
-| `core/config`                     | 类型化配置、部署变量校验、`.env` 加载与数据路径      |
-| `core/database`                   | 数据库客户端与连接池创建、启动探活和异常脱敏         |
-| `core/errors`                     | 通用 `AppError`                                      |
-| `core/concurrency`                | 命令队列                                             |
-| `core/http`                       | HTTP 中间件、输入校验、Origin 判断与 health 路由     |
-| `core/openapi`                    | OpenAPI schema、Swagger 文档生成与 docs 路由         |
-| `core/transport`                  | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭 |
-| `persistence`                     | 角色与任务联合存档、迁移、提交及失败处理             |
-| `modules/management`              | 管理 HTTP 管线、指令路由、幂等回执与状态变更事件     |
-| `modules/ai-characters`           | 生产依赖注入、Agent 生命周期编排与配置文件适配       |
-| `modules/providers`               | 模型提供商持久化存储与模型列表服务                   |
-| `modules/tasks`                   | 任务计划、运行历史与执行控制领域服务                 |
-| `modules/gateway`                 | 管理令牌与 WebSocket 状态通知                        |
-| `modules/audio/persistence`       | ASR/音色配置存储、文件持久化与数据库适配             |
-| `modules/audio/services/asr`      | Whisper、百炼识别、识别调度与模型配置辅助            |
-| `modules/audio/services/tts`      | Piper/远程合成、模型安装、语音队列与世界内语音投递   |
-| `modules/audio/services/sessions` | mock/browser/Ollama 语音会话状态                     |
-| `modules/chat`                    | 消息、附件、音频票据及私聊权限                       |
-| `modules/realtime`                | 百炼实时会话、工具确认与离线协议模拟器               |
-| `modules/world`                   | 权威物理房间、Schema、世界持久化与在线状态 SSE       |
+| 目录                             | 责任                                                 |
+| -------------------------------- | ---------------------------------------------------- |
+| `core/config`                    | 类型化配置、部署变量校验、`.env` 加载与数据路径      |
+| `core/database`                  | 数据库客户端与连接池创建、启动探活和异常脱敏         |
+| `core/errors`                    | 通用 `AppError`                                      |
+| `core/concurrency`               | 命令队列                                             |
+| `core/http`                      | HTTP 中间件、输入校验、Origin 判断与 health 路由     |
+| `core/openapi`                   | OpenAPI schema、Swagger 文档生成与 docs 路由         |
+| `core/transport`                 | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭 |
+| `persistence`                    | 角色与任务联合存档、迁移、提交及失败处理             |
+| `modules/management`             | 管理 HTTP 管线、指令路由、幂等回执与状态变更事件     |
+| `modules/ai-characters`          | 生产依赖注入、Agent 生命周期编排与配置文件适配       |
+| `modules/providers`              | 模型提供商持久化存储与模型列表服务                   |
+| `modules/tasks`                  | 任务计划、运行历史与执行控制领域服务                 |
+| `modules/gateway`                | 管理令牌与 WebSocket 状态通知                        |
+| `modules/audio/persistence`      | ASR/音色配置存储、文件持久化与数据库适配             |
+| `modules/audio/services/asr`     | Whisper、百炼识别、识别调度与模型配置辅助            |
+| `modules/audio/services/tts`     | Piper/远程合成、模型安装、语音队列与世界内语音投递   |
+| `modules/audio/services/spatial` | 空间语音信令校验与转发                               |
+| `modules/chat`                   | 消息、附件、音频票据及私聊权限                       |
+| `modules/realtime`               | 百炼实时会话、工具确认与离线协议模拟器               |
+| `modules/world`                  | 权威物理房间、Schema、世界持久化与在线状态 SSE       |
 
 `services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库/文件实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
 
@@ -67,9 +67,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `services/spatial/signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。
 
-`audio/domain/types.ts` 集中语音状态、事件、输入、会话与 Provider 契约，`services/sessions/index.ts` 保留原有类型重导出，audio 根部门面保持不变。`domain/pcm-wav.ts` 只执行无 I/O 的 PCM WAV 格式、时长与音量校验，复用通用 `AppError`，不负责 WAV 封包。`services/processing/` 集中 `normalize.ts`、`command.ts` 及已有测试，负责 FFmpeg、子进程与临时文件处理；转换参数、时长限制、超时、取消、错误语义及清理行为保持不变。
-
-`audio/services/sessions/` 集中 Browser、Ollama、Mock 会话实现、Provider 工厂与已有测试，`voice-sessions.service.ts` 管理玩家会话生命周期；`services/spatial/signaling.service.ts` 负责空间信令校验与转发，测试与源码共置。模块门面继续导出 `createVoiceProvider`、`VoiceProvider`、`VoiceSessions` 和 `createSpatialSignaling`，保持 Provider 选择、会话中断与关闭、事件内容及信令转发行为不变。
+`audio/domain/pcm-wav.ts` 只执行无 I/O 的 PCM WAV 格式、时长与音量校验，复用通用 `AppError`，不负责 WAV 封包。`services/processing/` 集中 `normalize.ts`、`command.ts` 及已有测试，负责 FFmpeg、子进程与临时文件处理；转换参数、时长限制、超时、取消、错误语义及清理行为保持不变。`services/spatial/signaling.service.ts` 负责空间信令校验与转发，测试与源码共置，模块门面导出 `createSpatialSignaling`。
 
 `audio/services/asr/` 集中 `local-speech.service.ts`、`bailian.service.ts`、`speech-scheduler.service.ts` 及其已有测试，保留 `LocalSpeech`、`bridgeBailianAsr`、`SpeechScheduler` 与 `scheduleSpeech` 的实现和名称。`whisper-settings.ts` 包含模型目录读取、路径与配置校验，随服务迁移；模型目录、识别参数、队列限额、取消、超时、错误和清理行为保持不变，模块门面保留全部公开导出。ASR 配置存储及数据库适配位于 `persistence/`，共用的 `speech-endpoint.ts` 仍在模块根部。
 
