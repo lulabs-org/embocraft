@@ -26,7 +26,7 @@ export function databaseStartupMessage(error: unknown, databaseUrl: string) {
     case 'P1017':
       reason = `无法连接 PostgreSQL（${address}），数据库可能未启动或连接超时。`;
       advice = local
-        ? '如使用项目本地数据库，请手动运行 pnpm db:start。'
+        ? '如使用项目本地数据库，请手动运行 node scripts/database.mjs。'
         : '请检查数据库服务、网络和 DATABASE_URL 中的地址。';
       break;
     case 'P1000':
@@ -37,7 +37,7 @@ export function databaseStartupMessage(error: unknown, databaseUrl: string) {
     case 'P1003':
       reason = '配置的 PostgreSQL 数据库不存在。';
       advice = local
-        ? '请手动运行 pnpm db:start，再运行 pnpm db:migrate。'
+        ? '请手动运行 node scripts/database.mjs，再运行 pnpm db:migrate。'
         : '请确认 DATABASE_URL 指向已创建的数据库。';
       break;
     case 'P2021':

@@ -96,10 +96,4 @@ export class ToolProtocolCorrection {
     this.pending = false;
     return pending;
   }
-
-  /** Re-arms the guard for a new turn. */
-  reset() {
-    this.spent = false;
-    this.pending = false;
-  }
 }

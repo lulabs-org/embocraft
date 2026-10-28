@@ -38,7 +38,7 @@ pnpm install --frozen-lockfile
 
 # 2. Setup database and run migrations
 pnpm db:generate
-pnpm db:start      # Starts standalone PostgreSQL on local port 55432
+node scripts/database.mjs      # Starts standalone PostgreSQL on local port 55432
 pnpm db:migrate    # Runs Prisma database migrations
 
 # 3. Start frontend and server development servers
@@ -51,7 +51,7 @@ pnpm agent:ai --api-key sk-your-deepseek-api-key
 
 Once started, open http://127.0.0.1:5173 in your browser. You can open two separate incognito windows with different nicknames to test multiplayer interaction.
 
-> For in-memory database fallback, troubleshooting, and detailed step-by-step guides, refer to the [Getting Started Guide](docs/guide/getting-started.md).
+> For database setup, troubleshooting, and detailed step-by-step guides, refer to the [Getting Started Guide](docs/guide/getting-started.md).
 
 ### 2. One-Click Full-Stack Docker Deployment
 

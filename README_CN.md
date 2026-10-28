@@ -38,7 +38,7 @@ pnpm install --frozen-lockfile
 
 # 2. 准备数据库并启动迁移
 pnpm db:generate
-pnpm db:start      # 在本地端口 55432 启动独立 PostgreSQL
+node scripts/database.mjs      # 在本地端口 55432 启动独立 PostgreSQL
 pnpm db:migrate    # 执行 Prisma 数据迁移
 
 # 3. 启动前端与服务端开发环境
@@ -51,7 +51,7 @@ pnpm agent:ai --api-key sk-your-deepseek-api-key
 
 启动后在浏览器中打开 http://127.0.0.1:5173，可用两个独立无痕窗口以不同昵称加入世界测试多人互动。
 
-> 数据库内存回退、排错诊断及详细步骤请参阅 [快速开始指南](docs/guide/getting-started.md)。
+> 数据库配置、排错诊断及详细步骤请参阅 [快速开始指南](docs/guide/getting-started.md)。
 
 ### 2. Docker 一键全栈部署
 
