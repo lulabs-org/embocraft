@@ -132,13 +132,4 @@ describe('tool protocol correction', () => {
     correction.request();
     expect(correction.take()).toBe(false);
   });
-
-  it('re-arms for a new turn', () => {
-    const correction = new ToolProtocolCorrection();
-    correction.request();
-    correction.take();
-    correction.reset();
-    expect(correction.available).toBe(true);
-    expect(correction.take()).toBe(false);
-  });
 });

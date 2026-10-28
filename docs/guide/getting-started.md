@@ -54,17 +54,17 @@ pnpm install --frozen-lockfile
 pnpm db:generate
 
 # 3. 启动项目专有本地 PostgreSQL 17 实例（端口 55432）
-pnpm db:start
+node scripts/database.mjs
 
 # 4. 执行数据库架构迁移
 pnpm db:migrate
 ```
 
 ::: info 本地数据库隔离机制
-`pnpm db:start` 仅在当前项目的 `.data/postgres` 目录中初始化一个沙箱数据库，默认监听 `127.0.0.1:55432`，并自动生成被 Git 忽略的 `.env` 配置文件（绝不覆盖已存在的 `.env`）。
+`node scripts/database.mjs` 仅在当前项目的 `.data/postgres` 目录中初始化一个沙箱数据库，默认监听 `127.0.0.1:55432`，并自动生成被 Git 忽略的 `.env` 配置文件（绝不覆盖已存在的 `.env`）。
 
-- **停止数据库**：`pnpm db:stop`
-- **重启复用数据**：再次执行 `pnpm db:start` 即可，只要不删除 `.data` 目录，所有世界方块与 Agent 数据均持久保留。
+- **停止数据库**：`node scripts/database.mjs stop`
+- **重启复用数据**：再次执行 `node scripts/database.mjs` 即可，只要不删除 `.data` 目录，所有世界方块与 Agent 数据均持久保留。
   :::
 
 ### 2. 启动服务与进入世界
@@ -92,9 +92,9 @@ pnpm agent:mock
 
 | 异常现象 / 错误提示                        | 根本原因分析                     | 快速解决方案                                                |
 | :----------------------------------------- | :------------------------------- | :---------------------------------------------------------- |
-| **`connect ECONNREFUSED 127.0.0.1:55432`** | 本地沙箱 PostgreSQL 尚未启动     | 运行 `pnpm db:start` 检查数据库状态，随后重启 `pnpm dev`。  |
+| **`connect ECONNREFUSED 127.0.0.1:55432`** | 本地沙箱 PostgreSQL 尚未启动     | 运行 `node scripts/database.mjs` 检查数据库状态，随后重启 `pnpm dev`。  |
 | **提示表结构未准备好 (`Table not found`)** | 数据库连接正常，但未执行迁移脚本 | 终端运行 `pnpm db:migrate` 同步数据表。                     |
-| **控制台黄色警告：`memory 模式`**          | 未配置有效的 `DATABASE_URL`      | 若需持久化，运行 `pnpm db:start` 并在 `.env` 中确认连接串。 |
+| **提示必须配置 `DATABASE_URL`** | 未配置数据库连接串，后端拒绝启动 | 在 `.env` 中配置有效连接串并运行 `pnpm db:migrate`；不会自动回退到内存模式。 |
 | **Vite 显示 Ready 但无法连接世界**         | 后端服务尚未完全就绪             | 检查后端终端日志，服务需成功连接数据库后才开放 2567 端口。  |
 
 ---

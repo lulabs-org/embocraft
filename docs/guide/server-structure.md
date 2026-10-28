@@ -395,10 +395,10 @@ import {
   在系统分配网络端口与 Colyseus 房间创建前，必须执行只读查询（依次检查 `world`、`agentProvider`、`agentCharacter`、`ttsService` 等关键表）进行探活；若数据库未准备好或未完成迁移，立即阻断启动，防止 Colyseus 抛出二次崩溃。
   探活通过统一工厂创建独立短连接，并在成功或失败后释放；运行时客户端在探活与语音配置校验通过后创建。目录加载失败会释放运行时客户端，监听或房间启动失败走服务器的统一关闭流程。
 - **连接异常安全脱敏**：
-  数据库异常信息必须通过 `databaseStartupMessage` 进行过滤清洗，**绝不允许将带有数据库用户名、密码凭据的原始连接串输出到终端或网络响应中**；对于本地开发场景（`127.0.0.1:55432`），输出友好的修复提示（如 `pnpm db:start`）。
+  数据库异常信息必须通过 `databaseStartupMessage` 进行过滤清洗，**绝不允许将带有数据库用户名、密码凭据的原始连接串输出到终端或网络响应中**；对于本地开发场景（`127.0.0.1:55432`），输出友好的修复提示（如 `node scripts/database.mjs`）。
 - **强依赖保障与防隐式降级（Fail-Fast Enforcement）**：
   - 系统核心状态（World、Agent、Provider、TTS/ASR 等）全面依赖关系型持久化，**必须配置 `DATABASE_URL`**；
-  - 若未配置 `DATABASE_URL` 或连接检查失败，系统严格抛错终止启动，并输出明确的修复指导（如 `pnpm db:start` 或 `pnpm db:migrate`），**绝不静默吞错，也不会自动切换到内存模式**，杜绝无持久化下的数据隐式丢失。
+  - 若未配置 `DATABASE_URL` 或连接检查失败，系统严格抛错终止启动，并输出明确的修复指导（如 `node scripts/database.mjs` 或 `pnpm db:migrate`），**绝不静默吞错，也不会自动切换到内存模式**，杜绝无持久化下的数据隐式丢失。
 - **方块编辑乐观版本控制（CAS）**：
   `BlockEdit` 实体采用 `[worldId, x, y, z]` 复合主键，与 `World.revision` 协同工作，防止多人并发修改时的数据覆盖破坏。
 

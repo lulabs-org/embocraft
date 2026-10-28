@@ -240,10 +240,6 @@ export class AICharacterOrchestrator {
     return this.jobs.get(id)?.memory.task.identity;
   }
 
-  interrupt(id: string) {
-    this.jobs.get(id)?.abort.abort();
-  }
-
   private checkVoice(settings: AICharacterSettings) {
     this.voiceCoordinator.checkVoice(settings);
   }

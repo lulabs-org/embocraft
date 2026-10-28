@@ -85,7 +85,7 @@ describe('database startup diagnostics', () => {
     const error = await checkStartupDatabase().catch((error: Error) => error);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain('127.0.0.1:55432');
-    expect((error as Error).message).toContain('pnpm db:start');
+    expect((error as Error).message).toContain('node scripts/database.mjs');
     expect((error as Error).message).toContain('后端未启动');
     expect((error as Error).message).not.toContain('secret');
     expect((error as Error).message).not.toContain('Prisma');
@@ -117,7 +117,7 @@ describe('database startup diagnostics', () => {
       'postgresql://user:secret@db.example.com:5432/custom',
     );
     expect(message).toContain('db.example.com:5432');
-    expect(message).not.toContain('pnpm db:start');
+    expect(message).not.toContain('node scripts/database.mjs');
     expect(message).not.toContain('secret');
   });
 
