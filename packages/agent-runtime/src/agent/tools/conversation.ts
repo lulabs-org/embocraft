@@ -1,5 +1,4 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { AgentRuntimeError } from '../../contracts/errors';
 import type { TaskCommand } from '../task/service';
 import { conversationToolSchemas } from './schema';
 import type { ToolHost } from './port';
@@ -82,9 +81,6 @@ async function executePlayerTaskCommand(
   command: TaskCommand,
   reply?: string,
 ) {
-  if (!host.message)
-    throw new AgentRuntimeError('任务控制需要明确玩家指令。');
-  host.authorize();
-  await host.commitTask(command, reply);
-  return result({ task: host.memory.task.current });
+  const task = await host.commitTask(command, reply);
+  return result({ task });
 }

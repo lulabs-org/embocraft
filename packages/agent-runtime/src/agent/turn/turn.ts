@@ -5,9 +5,13 @@ import {
   type ChatData,
   type WorldEvent,
 } from '@voxel/shared';
+import type { AgentAction } from '../../contracts/action';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { AgentRuntimeError } from '../../contracts/errors';
-import type { DecisionContext } from '../../contracts/observation';
+import type {
+  DecisionContext,
+  Observation,
+} from '../../contracts/observation';
 import type { AgentRunState, CharacterEvent } from '../../contracts/state';
 import { initialToolState, type ToolState } from '../../contracts/tool-state';
 import { cancellable } from '../../kernel/abort';
@@ -15,12 +19,20 @@ import { worldSignature } from '../../world/observe/extract';
 import type { AgentAttention } from '../../world/observe/attention';
 import type { AgentSession } from '../../world/session/port';
 import { paceChat } from '../action/chat-pacing';
+import {
+  executeTaskActions,
+  executeTurnWorldAction,
+} from '../action/executor';
 import { characterPrompt } from '../prompt/system';
 import { checkBudgetCap } from '../task/budget';
-import { type TaskCommand } from '../task/service';
-import { isEndedTask } from '../task/state';
+import {
+  type TaskCommand,
+  type TaskLease,
+  type TaskOutcome,
+} from '../task/service';
+import { isActiveTask, isEndedTask } from '../task/state';
 import { createTaskControlTools } from '../tools/conversation';
-import type { ToolHost } from '../tools/port';
+import type { ToolHost, ToolTaskOutcome } from '../tools/port';
 import { createTaskTools } from '../tools/task';
 import { createRuntimeWorldTools } from '../tools/world';
 import { TurnBinding } from './binding';
@@ -70,14 +82,14 @@ export type TurnDeps = {
  * per-turn task lease, budget and configuration switch.
  */
 export class Turn implements ToolHost {
-  readonly session: AgentSession;
-  readonly state: ToolState = initialToolState();
-  readonly activeSignal: AbortSignal;
-  readonly memory: AgentRunState;
-  readonly message?: WorldEvent;
-  readonly attention?: AgentAttention;
-  readonly log?: (message: string) => void;
-  readonly beforeNewTaskHook?: (
+  private readonly session: AgentSession;
+  private readonly state: ToolState = initialToolState();
+  private readonly activeSignal: AbortSignal;
+  private readonly memory: AgentRunState;
+  private readonly message?: WorldEvent;
+  private readonly attention?: AgentAttention;
+  private readonly log?: (message: string) => void;
+  private readonly beforeNewTaskHook?: (
     task: AICharacterTask,
     previous: AgentRunState,
   ) => Promise<void>;
@@ -112,25 +124,25 @@ export class Turn implements ToolHost {
     this.scope = turnScope(deps.message, memory.task.current);
   }
 
-  get config(): AgentConfig {
+  private get config(): AgentConfig {
     return this.binding.config;
   }
 
-  get service() {
+  private get service() {
     return this.binding.service;
   }
 
-  get budget() {
+  private get budget() {
     return this.binding.budget;
   }
 
-  prepared(): DecisionContext {
+  private prepared(): DecisionContext {
     if (!this.preparedValue)
       throw new AgentRuntimeError('决策上下文尚未准备，请先观察世界。', true);
     return this.preparedValue;
   }
 
-  async observe() {
+  private async observe() {
     const next = await prepareDecision(
       this.session,
       this.memory,
@@ -140,7 +152,7 @@ export class Turn implements ToolHost {
     if (next) this.preparedValue = next;
   }
 
-  async save() {
+  private async save() {
     this.budget.flushTime();
     if (this.state.persistenceFailed)
       throw new AgentRuntimeError('无法保存事件检查点，已停止。', true);
@@ -153,12 +165,23 @@ export class Turn implements ToolHost {
     }
   }
 
-  authorize() {
+  private authorize() {
     this.binding.authorize();
   }
 
-  attach() {
+  private attach() {
     this.binding.attach();
+  }
+
+  async observeWorld(): Promise<{
+    observation: Observation;
+    activity: DecisionContext['context'];
+  }> {
+    await this.observe();
+    return {
+      observation: this.prepared().observation,
+      activity: this.prepared().context,
+    };
   }
 
   /** Answers the addressed message; a related question may use the task allowance. */
@@ -169,9 +192,13 @@ export class Turn implements ToolHost {
   }
 
   /** Stops the old action, commits the task binding, then refreshes the view. */
-  async commitTask(command: TaskCommand, reply?: string) {
+  async commitTask(
+    command: TaskCommand,
+    reply?: string,
+  ): Promise<AICharacterTask> {
     const message = this.message;
     if (!message) throw new AgentRuntimeError('任务控制需要明确玩家指令。');
+    this.authorize();
     await this.stopAction();
     try {
       await this.binding.commitTask(
@@ -190,13 +217,127 @@ export class Turn implements ToolHost {
     if (command.type === 'pause') this.state.terminal = true;
     await this.observe();
     if (reply) await this.send(reply);
+    return this.memory.task.current!;
   }
 
-  actionBusy() {
+  async settleTask(
+    outcome: ToolTaskOutcome,
+    questionToAsk?: string,
+  ): Promise<{ status: AICharacterTask['status']; summary: string }> {
+    const lease = this.claimActiveTaskLease();
+    this.activeSignal.throwIfAborted();
+    this.service.assertCurrent(lease);
+    if (
+      this.state.terminal ||
+      this.state.skipBatch ||
+      !!this.attention?.pending
+    )
+      throw new AgentRuntimeError('当前批次已停止。');
+    const taskOutcome: TaskOutcome =
+      outcome.status === 'waiting'
+        ? {
+            ...outcome,
+            signature: worldSignature(
+              this.prepared().observation,
+              outcome.waitFor,
+            ),
+          }
+        : outcome;
+    this.service.finish(lease, taskOutcome, this.state.turnMutated);
+    this.state.terminal = true;
+    await this.save();
+    if (
+      questionToAsk &&
+      aiCharacterPermissions(this.config).chat &&
+      this.memory.checkpoint.unknownEffect?.name !== 'chat'
+    ) {
+      await this.runTaskAction(
+        lease,
+        { type: 'chat', text: questionToAsk },
+        this.activeSignal,
+        false,
+      );
+    }
+    return {
+      status: this.memory.task.current!.status,
+      summary: this.memory.task.current!.summary,
+    };
+  }
+
+  async executeWorldAction(
+    id: string,
+    action: AgentAction,
+    relatedToTask = false,
+  ): Promise<unknown> {
+    if (action.type === 'chat' && this.message) {
+      await this.respond(action.text, relatedToTask);
+      return { replied: true };
+    }
+    const lease = this.claimActiveTaskLease();
+    return executeTurnWorldAction({
+      id,
+      action,
+      lease,
+      service: this.service,
+      memory: this.memory,
+      state: this.state,
+      activeSignal: this.activeSignal,
+      attention: this.attention,
+      observation: () => this.prepared().observation,
+      save: () => this.save(),
+      execute: (nextAction, signal, background) =>
+        this.runTaskAction(lease, nextAction, signal, background),
+      launch: (actionId, controller, work) =>
+        this.launch(actionId, controller, work),
+    });
+  }
+
+  private claimActiveTaskLease(): TaskLease {
+    this.authorize();
+    if (this.actionBusy())
+      throw new AgentRuntimeError(
+        '当前动作尚未结束，请读取进度或先明确停止。',
+      );
+    if (!isActiveTask(this.memory.task.current))
+      throw new AgentRuntimeError(
+        'No active running task. For a NEW human action request, call start_task(goal) FIRST, then retry the world tool. Do not claim completion: no world action was executed. A paused or exhausted task must be resumed, never recreated.',
+      );
+    this.attach();
+    return this.service.lease();
+  }
+
+  private async runTaskAction(
+    lease: TaskLease,
+    action: AgentAction,
+    signal: AbortSignal,
+    background: boolean,
+  ) {
+    const outcome = await executeTaskActions(
+      this.session,
+      [action],
+      this.prepared().observation,
+      this.config,
+      signal,
+      this.memory,
+      this.budget,
+      lease,
+      () => this.save(),
+      background ? undefined : this.attention,
+      this.log,
+    );
+    this.prepared().observation = {
+      ...outcome.observation,
+      attention: this.message,
+    };
+    await this.observe();
+    return outcome.batch;
+  }
+
+  private actionBusy() {
     return this.runningAction || this.launched;
   }
 
-  launch(id: string, controller: AbortController, work: Promise<void>) {
+  private launch(id: string, controller: AbortController, work: Promise<void>) {
     this.deps.actions.launch(id, controller, work);
     this.launched = true;
   }
