@@ -31,6 +31,7 @@ packages/agent-runtime/
     ├── index.ts            # 只 export * from './api'
     ├── api/                # 宿主唯一接触面
     │   ├── runtime.ts      # createAgentRuntime: submit/control/run/snapshot
+    │   ├── state.ts        # 宿主任务启动、历史恢复与事务回滚的兼容入口
     │   ├── intake.ts       # WorldEvent → CharacterEvent：事件 id、控制词、审计入队
     │   └── ports.ts        # RuntimePorts（session/model/store/log/state）
     ├── contracts/          # 纯类型叶子层，只依赖 @voxel/shared
@@ -57,8 +58,10 @@ packages/agent-runtime/
     │   │   └── build.ts    # houseBlocks 规划 + executeBuild
     │   └── nav/{map,astar,controller}.ts
     ├── agent/              # 角色智能
-    │   ├── task/           # 纯策略：实体、命令、授权、租约、预算、事件入队
-    │   │   └── service.ts state.ts inbox.ts budget.ts commands.ts
+    │   ├── state/          # 角色/执行状态归属投影与 v3 兼容组装
+    │   │   └── ownership.ts
+    │   ├── task/           # 实体、命令、授权、租约、预算、事件入队
+    │   │   └── service.ts policy.ts state.ts inbox.ts budget.ts commands.ts
     │   ├── turn/           # 一次决策的生命周期
     │   │   ├── turn.ts     # 显式 Turn：事件生命周期与动作槽，实现 ToolHost
     │   │   ├── binding.ts  # TurnBinding：单轮任务租约、预算与配置切换
@@ -95,7 +98,8 @@ packages/agent-runtime/
 | `world/observe/` | 观察提取、注意力过滤、结果核对谓词                                   | 写回内存、调度唤醒               |
 | `world/actions/` | 动作解析、权限校验、单动作/批执行、建造                              | 任务归属、模型循环               |
 | `world/nav/`     | 局部地图、可站立节点搜索、可取消的位置闭环                           | 任务状态、跟随意图               |
-| `agent/task/`    | 任务实体、命令与授权、租约、预算计算                                 | 发起模型请求、执行世界写操作     |
+| `agent/state/`   | 角色/执行状态拆分、v3 兼容组装、事务快照恢复                         | 任务规则、IO                    |
+| `agent/task/`    | 任务实体、命令与授权、租约、预算计算；service 负责兼容与提交          | 发起模型请求、执行世界写操作     |
 | `agent/turn/`    | 一次决策的状态机、事件与转录、观察与效果核对、守卫与检查点           | 宿主协议、具体连接实现           |
 | `agent/tools/`   | 工具 schema 与 handler，只依赖 `ToolHost` 接口                       | 直接访问 Session、任务持久化细节 |
 | `agent/action/`  | 任务绑定的动作执行、后台动作槽、跟随 tick、时间与取消原语            | 模型决策                         |
@@ -175,17 +179,31 @@ await runner.run({
 
 ## 状态与存档
 
-`AgentState` 为 v3，按 owner 分区，每个分区只有一个模块写入：
+内部按生命周期区分两类状态；公开的 `AgentRunState` 和存档仍保持 v3 字段布局，不引入第二份持久化状态：
 
-| 分区           | 内容                                                      | owner          |
-| -------------- | --------------------------------------------------------- | -------------- |
-| `task`         | 当前任务、租约身份、累计用量                              | `agent/task`   |
-| `conversation` | 公共与各私聊会话最近 8 组完整交互，最多追踪 16 个私聊对象 | `agent/turn`   |
-| `checkpoint`   | Pi 转录检查点、未确认动作                                 | `agent/turn`   |
-| `effects`      | 最近批次、未完成建造、跟随意图、后台动作                  | `agent/action` |
-| `inbox`        | 待处理事件与最近 64 条审计记录                            | `api/intake`   |
+| 生命周期 | 类型 | 内容 |
+| -------- | ---- | ---- |
+| 角色长期状态 | `CharacterState` | 累计用量、按受众保存的对话、聊天节流时间、事件收件箱 |
+| 单次任务执行 | `TaskExecutionState` | 当前任务与租约、执行会话有效性、检查点、动作进度与结果、执行健康状态 |
 
-`persistence/migrate.ts` 的 `restoreState(raw)` 是唯一读取旧档的入口（idempotent，未知输入降级为空分区），`emptyState()` 构造完整 v3 分区，`snapshotState()` 生成不含 `usage` 的历史运行快照。分区是原地写入的同一对象：现有调用方持有的 `memory` 引用在任务重置后仍然有效。
+`agent/state/ownership.ts` 是两种归属与 v3 布局之间的适配层。它产生短期使用的状态投影，不缓存副本；任务、动作、用量等数据保持原有引用。`TaskPolicy` 只接收执行状态，不能访问角色累计用量、对话历史或收件箱。`TaskService` 保持原有构造函数和方法，负责将同步策略结果写回兼容状态，以及持久化提交和失败回滚。
+
+创建聊天任务时只替换执行状态，保留角色状态及宿主持有的根对象引用。暂停、取消、修订和完成仍使用原来的任务规则与动作核对。保存失败时回滚两类状态及宿主 hook 的修改，但保留已产生的模型请求用量。
+
+宿主通过 `startScheduledTaskState`、`resumeTaskState`、`rollbackTaskState` 处理状态切换，不再自行拼接字段。这一批保持两项既有行为：计划任务启动保留会话历史、收件箱及累计用量，但重置聊天节流时间；历史执行恢复带回存档中的会话快照和收件箱，累计用量仍取当前角色。后者若要改为始终使用最新会话，应作为独立行为变更处理。
+
+v3 兼容字段与内部归属的对应关系：
+
+| 兼容字段 | 归属 |
+| -------- | ---- |
+| `task.usage` | 角色累计用量 |
+| `conversation.exchanges / lastChatAt` | 角色会话与聊天节流 |
+| `inbox` | 角色收件箱与审计记录 |
+| `task.current / identity` | 当前任务执行与租约 |
+| `conversation.audienceExpired / lastReply` | 执行关联的会话状态 |
+| `checkpoint / effects / health` | 执行检查点、动作与健康状态 |
+
+`persistence/migrate.ts` 的 `restoreState(raw)` 是唯一读取旧档的入口（idempotent，未知输入降级为空分区），`emptyState()` 构造完整 v3 分区，`snapshotState()` 生成不含 `usage` 的历史运行快照。现有调用方持有的 `memory` 引用在 `TaskService` 启动新任务或回滚后仍然有效；宿主主动切换历史执行时仍按原有约定替换根对象。
 
 规则：
 

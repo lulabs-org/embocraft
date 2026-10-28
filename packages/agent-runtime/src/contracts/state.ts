@@ -33,14 +33,14 @@ export type FollowIntent = {
   lastResult?: NavigationResult;
 };
 
-/** Task partition: one owner (agent/task) writes it. */
+/** Legacy task partition; usage belongs to the character, current/identity to execution. */
 export type TaskSection = {
   current?: AICharacterTask;
   identity?: { id: string; revision: number; startedAt: number };
   usage?: AICharacterUsage;
 };
 
-/** Conversation partition: transcripts never outlive their audience. */
+/** Legacy conversation partition; audienceExpired/lastReply are execution-local. */
 export type ConversationSection = {
   exchanges?: Record<string, unknown[]>;
   lastChatAt?: number;
@@ -73,7 +73,26 @@ export type HealthSection = {
   decisionError?: string;
 };
 
-/** Durable character state, partitioned by the module that owns each section. */
+/** Character lifetime: survives the creation and completion of task executions. */
+export type CharacterState = {
+  usage?: AICharacterUsage;
+  conversation: Pick<ConversationSection, 'exchanges' | 'lastChatAt'>;
+  inbox?: { version: 1; events: CharacterEvent[] };
+};
+
+/** One task execution. Task policy cannot access character history, usage or inbox. */
+export type TaskExecutionState = {
+  task: Omit<TaskSection, 'usage'>;
+  conversation: Pick<ConversationSection, 'lastReply' | 'audienceExpired'>;
+  checkpoint: CheckpointSection;
+  effects: EffectsSection;
+  health: HealthSection;
+};
+
+/**
+ * Public v3 compatibility shape. Character and execution state share this wire
+ * format, but lifecycle operations use their separate ownership projections.
+ */
 export type AgentRunState = {
   version?: 3;
   task: TaskSection;
