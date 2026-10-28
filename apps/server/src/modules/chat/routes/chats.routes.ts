@@ -1,13 +1,13 @@
-import { asyncRoute } from '../../../core/http/middleware/async-route';
 import cors from 'cors';
-import { env } from '../../../core/config/env';
-import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express } from 'express';
+import { env } from '../../../core/config/env';
+import { asyncRoute } from '../../../core/http/middleware/async-route';
+import { errorHandler } from '../../../core/http/middleware/error-handler';
+import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { type WorldChat } from '../services/chat.service';
 
-import { LocalSpeech, AsrSettingsStore, type AgentSpeech } from '../../audio';
 import { AppError } from '../../../core/errors/app-error';
+import { AsrSettingsStore, LocalSpeech, type AgentSpeech } from '../../audio';
 import { ChatSpeechService } from '../services/speech.service';
 export function installChatRoutes(
   app: Express,
@@ -15,7 +15,7 @@ export function installChatRoutes(
   speech = new LocalSpeech(),
   getAgentSpeech: () => AgentSpeech | undefined = () => undefined,
   origin = env.webOrigin(),
-  asrSettings = new AsrSettingsStore(),
+  asrSettings: AsrSettingsStore,
 ) {
   const speechService = new ChatSpeechService(speech, asrSettings);
   app.use(

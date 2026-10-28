@@ -38,9 +38,9 @@
 | `modules/chat`                   | 消息、附件、音频票据及私聊权限                       |
 | `modules/world`                  | 权威物理房间、Schema、世界持久化与在线状态 SSE       |
 
-`services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库/文件实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
+`services/asr/local-speech.service.ts` 负责 Whisper CLI/API 识别流程。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
 
-全局 `persistence/` 直接提供存档契约、数据库/文件驱动、迁移和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`；历史任务迁移通过 `modules/tasks/index.ts` 复用任务模块的迁移函数。它不依赖角色运行时、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
+全局 `persistence/` 直接提供存档契约、数据库驱动、迁移和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`；历史任务迁移通过 `modules/tasks/index.ts` 复用任务模块的迁移函数。它不依赖角色运行时、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
 
 业务错误与通用异常统一使用 `core/errors/app-error.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 扫描 `core/http`、`core/openapi` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
 
@@ -70,7 +70,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `audio/services/tts/` 集中 `piper.service.ts`、`remote.service.ts`、`agent-speech.service.ts`、`piper-models.service.ts` 及已有测试，合成契约位于同目录的 `speech-synthesizer.ts`。`PiperTts`、`RemoteTts`、`AgentSpeech`、`PiperModels` 及合成接口保持原名，模块门面保留全部公开导出；合成参数、模型安装调度、队列、听众筛选、取消、错误与缓存行为保持不变。音色配置存储、数据库适配及存储测试位于 `persistence/`，共用语音端点配置保留原位。
 
-`audio/persistence/` 集中 `asr-settings-store.ts`、`voice-service-store.ts` 及其同名测试，以及 `database-asr-services.ts` 和 `database-voice-services.ts`。保留 `AsrSettingsStore`、`VoiceServiceStore`、持久化契约及数据库适配类名，模块门面保持全部公开导出。两个 Store 仍包含原有校验与运行时协调职责，本次不拆分实现；配置文件路径、格式迁移、默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `test/`，共用 `speech-endpoint.ts` 及其测试仍在模块根部。
+`audio/persistence/` 集中 `asr-settings-store.ts`、`voice-service-store.ts` 及其同名测试，以及 `database-asr-services.ts` 和 `database-voice-services.ts`。保留 `AsrSettingsStore`、`VoiceServiceStore`、持久化契约及数据库适配类名，模块门面保持全部公开导出。两个 Store 仍包含原有校验与运行时协调职责，显式接收持久化适配器；生产使用 PostgreSQL，测试使用内存实现。旧 JSON 文件读写、语音格式迁移与自动备份已移除；默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `test/`，共用 `speech-endpoint.ts` 及其测试仍在模块根部。
 
 `AgentSpeech` 位于 `modules/audio/services/tts/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
 
@@ -80,9 +80,9 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 ## 状态与测试
 
-`dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；显式注入的兼容文件存储仍使用原路径与格式，网关令牌及本地语音模型文件保留原配置位置。本轮目录整理未修改数据格式或迁移逻辑。
+`dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；旧 JSON 存储后备路径已移除，网关令牌及本地语音模型文件保留原配置位置。现有数据库存档恢复与运行时迁移继续保留。
 
-`test/helpers/test-server.ts` 使用生产 `createServer`，默认配置临时目录、内存世界、随机 loopback 端口与 mock 语音。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
+`test/helpers/test-server.ts` 使用生产 `createServer`，通过 `test/helpers/memory-storage.ts` 注入内存模型服务、角色存档与语音配置；默认配置临时令牌目录、内存世界、随机 loopback 端口与 mock 语音。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
 
 ```sh
 pnpm --filter @voxel/server test  # 服务端就近测试与网络生命周期
@@ -113,7 +113,7 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 `persistence/plan-store.ts` 持有计划与执行历史的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照、恢复与历史迁移仍由该目录负责。`domain/command-policy.ts` 的 `taskCommandBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有现有公共导出继续通过模块根部 `index.ts` 提供，目录调整不改变类名、函数签名或存档格式。
 
-同一 Agent JSON 路径保存 v3 的 characters/plans/runs/requests 聚合对象，当前运行时检查点为 v3。历史存档由现有迁移与备份流程处理，迁移与保存成功后才能启动恢复；目录重构不改变存档格式、数据路径或迁移行为。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
+Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，当前运行时检查点为 v3。存档由现有迁移流程处理，迁移与保存成功后才能启动恢复；不再读写或备份旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
 
 ## HTTP 领域路径
 

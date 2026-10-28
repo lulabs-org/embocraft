@@ -1,20 +1,17 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer, type ServerOptions } from '../../src/server';
 import { env } from '../../src/core/config';
+import { bootstrapProviders } from '../../src/modules/providers';
+import { createServer, type ServerOptions } from '../../src/server';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../../src/modules/providers';
-import { VoiceServiceStore } from '../../src/modules/audio/persistence/voice-service-store';
-import { AsrSettingsStore } from '../../src/modules/audio/persistence/asr-settings-store';
-import {
-  readManagementArchive,
-  writeManagementArchive,
-} from '../../src/persistence/archive-file';
+  TestAsrSettingsStore as AsrSettingsStore,
+  MemoryArchive,
+  MemoryProviderRepository,
+  TestVoiceServiceStore as VoiceServiceStore,
+} from './memory-storage';
 
-/** Production assembly with isolated disk/world and a random loopback port by default. */
+/** Production assembly with isolated in-memory stores/world and a random loopback port by default. */
 export async function createTestServer(
   options: Omit<ServerOptions, 'config'> & {
     directory?: string;
@@ -26,13 +23,7 @@ export async function createTestServer(
     options.directory ?? (await mkdtemp(join(tmpdir(), 'voxel-test-')));
   let server: Awaited<ReturnType<typeof createServer>> | undefined;
   try {
-    const providers =
-      options.providers ??
-      new FileProviderRepository(join(directory, 'providers.json'));
-    const archivePath =
-      providers instanceof FileProviderRepository
-        ? `${providers.path}.agents.json`
-        : join(directory, 'providers.json.agents.json');
+    const providers = options.providers ?? new MemoryProviderRepository();
     if (!options.providers) {
       await bootstrapProviders(providers);
       await providers.save(
@@ -48,16 +39,13 @@ export async function createTestServer(
     server = await createServer({
       ...options,
       providers,
-      archive: options.archive ?? {
-        load: () => readManagementArchive(archivePath),
-        save: (records) => writeManagementArchive(archivePath, records),
-      },
-      asrSettings:
-        options.asrSettings ??
-        new AsrSettingsStore(join(directory, 'asr-settings.json')),
-      voiceServices:
-        options.voiceServices ??
-        new VoiceServiceStore(join(directory, 'voices.json')),
+      archive:
+        options.archive ??
+        (providers instanceof MemoryProviderRepository
+          ? providers.archive
+          : new MemoryArchive()),
+      asrSettings: options.asrSettings ?? new AsrSettingsStore(),
+      voiceServices: options.voiceServices ?? new VoiceServiceStore(),
       config: env.readServer({
         SERVER_PORT: String(options.port ?? 0),
         HOST: '127.0.0.1',

@@ -2,22 +2,6 @@
   position: relative;
   color: #3c5c51;
 }
-.controls-toggle {
-  padding: 8px 10px;
-  border-radius: var(--radius-control);
-  background: #f6f8ecb8;
-  color: #3c5c51;
-  font-size: 11px;
-}
-.controls-toggle span {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-}
 .controls-help {
   position: absolute;
   bottom: calc(100% + 12px);
@@ -67,7 +51,6 @@
   font-size: 11px;
   color: #668076;
 }
-.controls-toggle:focus-visible,
 .controls-help button:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;

@@ -1,16 +1,14 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { DEFAULT_WHISPER_ASR, DEFAULT_BAILIAN_ASR } from '@voxel/shared';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+
+import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
-import { installTranscribeRoutes } from './transcribe.routes';
-import { LocalSpeech } from '../services/asr/local-speech.service';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../../../core/errors/app-error';
+import { LocalSpeech } from '../services/asr/local-speech.service';
+import { installTranscribeRoutes } from './transcribe.routes';
 describe('transcription HTTP boundary', () => {
-  let server: Server, url: string, store: AsrSettingsStore, dir: string;
+  let server: Server, url: string, store: AsrSettingsStore;
   const transcribe = vi.fn();
   beforeEach(async () => {
     vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5187');
@@ -21,8 +19,7 @@ describe('transcription HTTP boundary', () => {
       reason: 'ready',
     });
     vi.spyOn(speech, 'transcribe').mockImplementation(transcribe);
-    dir = await mkdtemp(join(tmpdir(), 'whisper-route-'));
-    store = new AsrSettingsStore(join(dir, 'services.json'));
+    store = new AsrSettingsStore();
     await store.load();
     const app = express();
     installTranscribeRoutes(app, speech, store);
@@ -35,7 +32,6 @@ describe('transcription HTTP boundary', () => {
   afterEach(async () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await rm(dir, { recursive: true, force: true });
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });

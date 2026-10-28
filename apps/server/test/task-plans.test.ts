@@ -1,28 +1,23 @@
-import { toolResponse } from '../../../tests/support/pi-response';
-import type { Planner } from '../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from '../../../tests/support/decision-fixture';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, readFile, writeFile, rename } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { AICharacterManager } from '../src/modules/ai-characters';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../src/modules/providers';
+  AgentRunner,
+  AgentRuntimeError,
+  type Observation,
+  type Session,
+} from '@voxel/agent-runtime';
 import {
   DEFAULT_TASK_LIMITS,
   type TaskPlanDraft,
   type TaskTiming,
   type WorldEvent,
 } from '@voxel/shared';
-import {
-  type Session,
-  type Observation,
-  AgentRuntimeError,
-  AgentRunner,
-} from '@voxel/agent-runtime';
-let dir: string, store: FileProviderRepository, manager: AICharacterManager;
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { Planner } from '../../../tests/support/decision-fixture';
+import { fixtureRunnerFactory } from '../../../tests/support/decision-fixture';
+import { toolResponse } from '../../../tests/support/pi-response';
+import { AICharacterManager } from '../src/modules/ai-characters';
+import { bootstrapProviders } from '../src/modules/providers';
+import { MemoryProviderRepository } from './helpers/memory-storage';
+let store: MemoryProviderRepository, manager: AICharacterManager;
 
 let now: number;
 const response = (
@@ -63,7 +58,7 @@ function session() {
 }
 let currentSession: ReturnType<typeof session>;
 function build() {
-  return new AICharacterManager(store, 'ws://fixture', {
+  return new AICharacterManager(store, 'ws://fixture', store.archive, {
     session: () => {
       currentSession = session();
       return currentSession as unknown as Session;
@@ -97,8 +92,7 @@ async function role() {
   return j.id;
 }
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'task-plans-'));
-  store = new FileProviderRepository(join(dir, 'providers.json'));
+  store = new MemoryProviderRepository();
   await bootstrapProviders(store);
   await store.save(
     {
@@ -117,7 +111,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await manager.close().catch(() => {});
   vi.restoreAllMocks();
-  await rm(dir, { recursive: true, force: true });
 });
 it('persists immediate runs, deduplicates create and manual requests, and preserves history', async () => {
   const id = await role();
@@ -144,16 +137,14 @@ it('persists immediate runs, deduplicates create and manual requests, and preser
   await manager.tasks.controlTaskPlan(id, p.id, 'run', { requestId: 'run-2' });
   expect(decide).toHaveBeenCalledTimes(2);
   expect(manager.tasks.taskRuns(id, p.id).items).toHaveLength(2);
-  const disk = JSON.parse(await readFile(`${store.path}.agents.json`, 'utf8'));
+  const disk = JSON.parse(store.archive.json!);
   expect(disk.version).toBe(3);
   expect(disk.runs).toHaveLength(2);
 });
 it('reserves durably before inference', async () => {
   const id = await role();
   decide.mockImplementation(async () => {
-    const disk = JSON.parse(
-      await readFile(`${store.path}.agents.json`, 'utf8'),
-    );
+    const disk = JSON.parse(store.archive.json!);
     expect(disk.runs).toHaveLength(1);
     expect(disk.characters[0].currentRunId).toBe(disk.runs[0].id);
     return response();
@@ -164,13 +155,13 @@ it('reserves durably before inference', async () => {
 });
 it('does not start or retain a reservation when persistence fails', async () => {
   const id = await role();
-  await rename(dir, `${dir}-hold`);
+  store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(manager.tasks.createTaskPlan(id, draft())).rejects.toThrow();
     expect(decide).not.toHaveBeenCalled();
     expect(manager.tasks.taskPlans(id)).toHaveLength(0);
   } finally {
-    await rename(`${dir}-hold`, dir);
+    store.archive.saveError = undefined;
   }
 });
 it('queues simultaneous plans without replacing an occupied role', async () => {
@@ -357,20 +348,18 @@ it('restart preserves paused progress and skips missed schedules without calling
   await manager.tasks.dispatchDue(now);
   expect(decide).not.toHaveBeenCalled();
 });
-it('backs up and migrates old records without inference, preserving checkpoints and terminal state', async () => {
+it('migrates old records without inference, preserving checkpoints and terminal state', async () => {
   const id = await role();
   const p = await manager.tasks.createTaskPlan(id, draft());
   await idle();
   await manager.close();
-  const path = `${store.path}.agents.json`;
-  const archive = JSON.parse(await readFile(path, 'utf8'));
+  const archive = JSON.parse(store.archive.json!);
   delete archive.characters[0].currentRunId;
   const old = JSON.stringify(archive.characters);
-  await writeFile(path, old);
+  store.archive.json = old;
   manager = build();
   decide.mockClear();
   await manager.load();
-  expect(await readFile(`${path}.before-task-plans.bak`, 'utf8')).toBe(old);
   const migrated = manager.tasks.taskPlans(id);
   expect(migrated).toHaveLength(1);
   expect(migrated[0].latestRun).toMatchObject({
@@ -378,7 +367,7 @@ it('backs up and migrates old records without inference, preserving checkpoints 
     totalTokens: 600,
   });
   expect(decide).not.toHaveBeenCalled();
-  const saved = JSON.parse(await readFile(path, 'utf8'));
+  const saved = JSON.parse(store.archive.json!);
   expect(saved.runs[0].runtime.effects.previous).toBeDefined();
   expect(p.goal).toBe(migrated[0].goal);
 });
@@ -436,8 +425,7 @@ it('restores unconfirmed action history as unknown and expires private runs with
   const p = await manager.tasks.createTaskPlan(id, draft());
   await idle();
   await manager.close();
-  const path = `${store.path}.agents.json`,
-    archive = JSON.parse(await readFile(path, 'utf8'));
+  const archive = JSON.parse(store.archive.json!);
   const record = archive.runs[0];
   const previous = {
     actions: [{ type: 'edit', x: 1, y: 3, z: 1, material: 'wood' }],
@@ -468,7 +456,7 @@ it('restores unconfirmed action history as unknown and expires private runs with
   };
   archive.characters[0].runtime.effects.unfinishedBuild =
     record.runtime.effects.unfinishedBuild;
-  await writeFile(path, JSON.stringify(archive));
+  store.archive.json = JSON.stringify(archive);
   manager = build();
   decide.mockClear();
   await manager.load();
@@ -479,7 +467,7 @@ it('restores unconfirmed action history as unknown and expires private runs with
   await expect(
     manager.tasks.controlTaskRun(id, run.id, 'resume'),
   ).rejects.toThrow('私聊');
-  const restored = JSON.parse(await readFile(path, 'utf8'));
+  const restored = JSON.parse(store.archive.json!);
   expect(restored.runs[0].runtime.effects.previous.results[0].status).toBe(
     'unknown',
   );
@@ -626,7 +614,7 @@ it('persists an independently disabled plan total while retaining per-run limits
 
 it('retains multiple Pi tool batches within the same model call in actual action history', async () => {
   await manager.close();
-  manager = new AICharacterManager(store, 'ws://fixture', {
+  manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
     session: () => {
       const s = session();
       s.observe = async () => ({
@@ -768,13 +756,13 @@ it('does not publish an uncommitted reassignment or lose other plans on save fai
     draft({ kind: 'interval', everyMs: 60000 }),
   );
   const before = manager.tasks.publicPlan(p.id);
-  await rename(dir, `${dir}-away`);
+  store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(manager.tasks.reassignPlan(p.id, b)).rejects.toThrow();
     expect(manager.tasks.publicPlan(p.id)).toEqual(before);
     expect(manager.plans.get(p.id).characterId).toBe(a);
   } finally {
-    await rename(`${dir}-away`, dir);
+    store.archive.saveError = undefined;
   }
 });
 
@@ -832,7 +820,7 @@ it('rolls back deletion of the Agent, bindings and history together when storage
   const plan = await manager.tasks.createTaskPlan(id, draft());
   await idle();
   const history = manager.tasks.publicRuns(undefined, plan.id);
-  await rename(dir, `${dir}-away`);
+  store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(manager.remove(id)).rejects.toThrow();
     expect(manager.list().some((a) => a.id === id)).toBe(true);
@@ -842,7 +830,7 @@ it('rolls back deletion of the Agent, bindings and history together when storage
       history.items,
     );
   } finally {
-    await rename(`${dir}-away`, dir);
+    store.archive.saveError = undefined;
   }
 });
 

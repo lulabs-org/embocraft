@@ -50,16 +50,6 @@
   color: #3d674c;
   background: #e9f0e3;
 }
-.agent-dialog .agents-text-button {
-  background: transparent;
-  color: #6b7968;
-  padding: 8px 4px;
-  font-size: 11px;
-}
-.agent-dialog .agents-text-button:hover {
-  color: #304d3c;
-  background: #f0f3e9;
-}
 .agents-detail-nav {
   display: flex;
   gap: 22px;

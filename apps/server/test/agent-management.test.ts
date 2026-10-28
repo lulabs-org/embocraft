@@ -1,24 +1,15 @@
-import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
-import { testAgentConfig } from '../../../tests/support/agent-config';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import {
-  FileProviderRepository,
-  bootstrapProviders,
-  validateProvider,
-  ModelCatalog,
-} from '../src/modules/providers';
-import { validateAICharacter } from '../src/modules/ai-characters';
 import type { Observation } from '@voxel/agent-runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { testAgentConfig } from '../../../tests/support/agent-config';
+import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
+import { validateAICharacter } from '../src/modules/ai-characters';
+import {
+  bootstrapProviders,
+  ModelCatalog,
+  validateProvider,
+} from '../src/modules/providers';
+import { MemoryProviderRepository } from './helpers/memory-storage';
 
-const folders: string[] = [];
-afterEach(async () => {
-  await Promise.all(
-    folders.splice(0).map((path) => rm(path, { recursive: true, force: true })),
-  );
-});
 const provider = () =>
   validateProvider({
     name: 'Test',
@@ -28,10 +19,7 @@ const provider = () =>
   });
 describe('provider configuration boundary', () => {
   it('saves console credentials privately and never returns them', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'voxel-providers-'));
-    folders.push(dir);
-    const path = join(dir, 'providers.json');
-    const store = new FileProviderRepository(path);
+    const store = new MemoryProviderRepository();
     await bootstrapProviders(store);
     await store.save(
       {
@@ -44,7 +32,6 @@ describe('provider configuration boundary', () => {
     );
     expect(JSON.stringify(store.list())).not.toContain('fixture-secret');
     expect(store.list()[0].hasApiKey).toBe(true);
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
     const saved = await store.save(
       { ...store.list()[0], name: 'Updated', apiKey: '' },
       'deepseek',
@@ -53,7 +40,7 @@ describe('provider configuration boundary', () => {
     expect(store.get('deepseek')).toMatchObject({ hasApiKey: true });
     expect(store.get('deepseek')).not.toHaveProperty('apiKey');
     expect(store.getRuntime('deepseek').apiKey).toBe('fixture-secret');
-    const reloaded = new FileProviderRepository(path);
+    const reloaded = new MemoryProviderRepository(store.storage);
     await bootstrapProviders(reloaded);
     expect(reloaded.get('deepseek')).not.toHaveProperty('apiKey');
     expect(reloaded.getRuntime('deepseek').apiKey).toBe('fixture-secret');
@@ -61,7 +48,7 @@ describe('provider configuration boundary', () => {
       store.save({ name: 'A', type: 'ollama' }),
       store.save({ name: 'B', type: 'ollama' }),
     ]);
-    expect(JSON.parse(await readFile(path, 'utf8'))).toHaveLength(4);
+    expect(await store.storage.load()).toHaveLength(4);
     await store.remove('ollama');
     expect(store.list()).toHaveLength(3);
   });
@@ -278,10 +265,9 @@ describe('multi-provider SDK requests', () => {
 });
 
 describe('managed scheduling validation', () => {
-  it('accepts continuous random scheduling and keeps old requests finite', () => {
+  it('accepts random scheduling and keeps requests finite', () => {
     const base = { name: 'AI', goal: 'Observe' };
     expect(validateAICharacter(base, provider())).toMatchObject({
-      continuous: false,
       intervalMode: 'fixed',
       maxTurns: 100,
     });
@@ -289,7 +275,7 @@ describe('managed scheduling validation', () => {
       validateAICharacter(
         {
           ...base,
-          continuous: true,
+
           intervalMode: 'random',
           intervalMinMs: 4000,
           intervalMaxMs: 8000,
@@ -297,13 +283,10 @@ describe('managed scheduling validation', () => {
         provider(),
       ),
     ).toMatchObject({
-      continuous: true,
       intervalMinMs: 4000,
       intervalMaxMs: 8000,
     });
     for (const invalid of [
-      { continuous: 'true' },
-      { continuous: null },
       { intervalMode: 'bad' },
       { intervalMinMs: 8000, intervalMaxMs: 4000 },
       { intervalMinMs: 999 },
@@ -362,67 +345,77 @@ it('migrates legacy permissions and validates canonical capability settings', ()
 });
 
 it('persists provider configurations cleanly and resolves character inference defaults automatically', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'provider-clean-'));
-  try {
-    const path = join(dir, 'providers.json');
-    const store = new FileProviderRepository(path);
-    await bootstrapProviders(store);
-    await store.save(
-      {
-        name: 'DeepSeek',
-        type: 'deepseek',
-        apiKey: 'fixture',
-        defaultModel: 'deepseek-flash',
-      },
-      'deepseek',
-    );
+  const store = new MemoryProviderRepository();
 
-    await store.save(
-      { ...store.get('deepseek'), defaultModel: 'deepseek-reasoner' },
-      'deepseek',
-    );
-    const restored = new FileProviderRepository(path);
-    await bootstrapProviders(restored);
-    const provider = restored.getRuntime('deepseek');
-    expect(provider.defaultModel).toBe('deepseek-reasoner');
-    expect('inference' in provider).toBe(false);
+  await bootstrapProviders(store);
 
-    const reasoningRole = validateAICharacter(
-      { name: 'ReasoningBot' },
-      provider,
-    );
-    expect(reasoningRole.thinking).toBe('enabled');
-    expect(reasoningRole.maxTokens).toBe(4096);
-    expect(reasoningRole.timeoutMs).toBe(60000);
+  await store.save(
+    {
+      name: 'DeepSeek',
+      type: 'deepseek',
+      apiKey: 'fixture',
+      defaultModel: 'deepseek-flash',
+    },
+    'deepseek',
+  );
 
-    const chatProvider = { ...provider, defaultModel: 'deepseek-chat' };
-    const chatRole = validateAICharacter({ name: 'ChatBot' }, chatProvider);
-    expect(chatRole.thinking).toBe('disabled');
-    expect(chatRole.maxTokens).toBe(512);
+  await store.save(
+    { ...store.get('deepseek'), defaultModel: 'deepseek-reasoner' },
+    'deepseek',
+  );
 
-    const ollamaProvider = restored.getRuntime('ollama');
-    const ollamaRole = validateAICharacter(
-      { name: 'LocalBot', model: 'llama3' },
-      ollamaProvider,
-    );
-    expect(ollamaRole.timeoutMs).toBe(120000);
-    expect(ollamaRole.maxTokens).toBe(512);
+  const restored = new MemoryProviderRepository(store.storage);
 
-    const customRole = validateAICharacter(
-      {
-        name: 'Custom',
-        timeoutMs: 45000,
-        maxTokens: 2048,
-        thinking: 'enabled',
-      },
-      chatProvider,
-    );
-    expect(customRole.timeoutMs).toBe(45000);
-    expect(customRole.maxTokens).toBe(2048);
-    expect(customRole.thinking).toBe('enabled');
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+  await bootstrapProviders(restored);
+
+  const provider = restored.getRuntime('deepseek');
+
+  expect(provider.defaultModel).toBe('deepseek-reasoner');
+
+  expect('inference' in provider).toBe(false);
+
+  const reasoningRole = validateAICharacter({ name: 'ReasoningBot' }, provider);
+
+  expect(reasoningRole.thinking).toBe('enabled');
+
+  expect(reasoningRole.maxTokens).toBe(4096);
+
+  expect(reasoningRole.timeoutMs).toBe(60000);
+
+  const chatProvider = { ...provider, defaultModel: 'deepseek-chat' };
+
+  const chatRole = validateAICharacter({ name: 'ChatBot' }, chatProvider);
+
+  expect(chatRole.thinking).toBe('disabled');
+
+  expect(chatRole.maxTokens).toBe(512);
+
+  const ollamaProvider = restored.getRuntime('ollama');
+
+  const ollamaRole = validateAICharacter(
+    { name: 'LocalBot', model: 'llama3' },
+    ollamaProvider,
+  );
+
+  expect(ollamaRole.timeoutMs).toBe(120000);
+
+  expect(ollamaRole.maxTokens).toBe(512);
+
+  const customRole = validateAICharacter(
+    {
+      name: 'Custom',
+      timeoutMs: 45000,
+      maxTokens: 2048,
+      thinking: 'enabled',
+    },
+    chatProvider,
+  );
+
+  expect(customRole.timeoutMs).toBe(45000);
+
+  expect(customRole.maxTokens).toBe(2048);
+
+  expect(customRole.thinking).toBe('enabled');
 });
 
 it.each(['deepseek', 'ollama', 'compatible'] as const)(

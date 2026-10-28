@@ -1,16 +1,16 @@
-import { emptyState } from '@voxel/agent-runtime';
-import { parseTaskDirective } from '../../../tests/support/decision-directive';
-import type { AgentDecision } from '../../../tests/support/decision-contracts';
-import { runTaskStep } from '../../../tests/support/decision-step';
-import { testAgentConfig } from '../../../tests/support/agent-config';
-import { describe, expect, it, vi } from 'vitest';
 import {
   AgentAttention,
+  emptyState,
   newTask,
   type AgentRunState,
-  type Session,
   type Observation,
+  type Session,
 } from '@voxel/agent-runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { testAgentConfig } from '../../../tests/support/agent-config';
+import type { AgentDecision } from '../../../tests/support/decision-contracts';
+import { parseTaskDirective } from '../../../tests/support/decision-directive';
+import { runTaskStep } from '../../../tests/support/decision-step';
 
 const cfg = () => ({
   ...testAgentConfig(),
@@ -224,11 +224,11 @@ describe('task-driven wake decisions', () => {
     await f.step();
     expect(f.memory.task.current?.status).toBe('running');
   });
-  it('budget guards still apply to legacy continuous mode and ordinary chat cannot reset them', async () => {
+  it('budget guards apply to scheduled execution and ordinary chat cannot reset them', async () => {
     const f = fixture();
     f.memory.task.current = newTask('forever');
     f.planner.decide.mockResolvedValue(decision());
-    await f.step({ ...cfg(), maxTurns: 1, continuous: true });
+    await f.step({ ...cfg(), maxTurns: 1 });
     expect(f.memory.task.current.status).toBe('budget');
     f.message();
     f.planner.decide.mockResolvedValue(decision('reply', 'completed'));

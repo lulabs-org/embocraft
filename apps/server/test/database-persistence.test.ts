@@ -1,21 +1,21 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import { createDatabaseClient } from '../src/core/database/client';
-import { DatabaseProviderRepository } from '../src/modules/providers/persistence/database-repository';
-import { bootstrapProviders } from '../src/modules/providers/bootstrap';
-import { DatabaseManagementArchive } from '../src/persistence/database-archive';
-import { AICharacterManager } from '../src/modules/ai-characters';
-import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
-import { DatabaseVoiceServicePersistence } from '../src/modules/audio/persistence/database-voice-services';
-import { AsrSettingsStore } from '../src/modules/audio/persistence/asr-settings-store';
-import { DatabaseAsrServicePersistence } from '../src/modules/audio/persistence/database-asr-services';
-import type { ManagementArchive } from '../src/persistence/archive';
-import { createServer } from '../src/server';
-import { env } from '../src/core/config';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { env } from '../src/core/config';
+import { createDatabaseClient } from '../src/core/database/client';
+import { AICharacterManager } from '../src/modules/ai-characters';
+import { AsrSettingsStore } from '../src/modules/audio/persistence/asr-settings-store';
+import { DatabaseAsrServicePersistence } from '../src/modules/audio/persistence/database-asr-services';
+import { DatabaseVoiceServicePersistence } from '../src/modules/audio/persistence/database-voice-services';
+import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
+import { bootstrapProviders } from '../src/modules/providers/bootstrap';
+import { DatabaseProviderRepository } from '../src/modules/providers/persistence/database-repository';
+import type { ManagementArchive } from '../src/persistence/archive';
+import { DatabaseManagementArchive } from '../src/persistence/database-archive';
+import { createServer } from '../src/server';
 
 const url = process.env.TEST_DATABASE_URL;
 const db = url ? createDatabaseClient(url) : undefined;
@@ -38,8 +38,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
 
   it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
     const store = new VoiceServiceStore(
-      undefined,
-      undefined,
       new DatabaseVoiceServicePersistence(db!),
     );
     await store.load();
@@ -57,8 +55,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(store.get(cloud.id).apiKey).toBe('tts-secret');
     await store.save({ ...cloud, name: 'Cloud Updated', apiKey: '' }, cloud.id);
     const restored = new VoiceServiceStore(
-      undefined,
-      undefined,
       new DatabaseVoiceServicePersistence(db!),
     );
     await restored.load();
@@ -78,8 +74,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await restored.remove(cloud.id, () => false);
     await restored.remove('local-default', () => false);
     const empty = new VoiceServiceStore(
-      undefined,
-      undefined,
       new DatabaseVoiceServicePersistence(db!),
     );
     await empty.load();
@@ -87,10 +81,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   });
 
   it('persists ASR profiles, masks credentials, and protects active recognition', async () => {
-    const store = new AsrSettingsStore(
-      undefined,
-      new DatabaseAsrServicePersistence(db!),
-    );
+    const store = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
     await store.load();
     expect(store.list()).toEqual([]);
     const whisper = await store.save({
@@ -109,7 +100,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       cloud.id,
     );
     const restored = new AsrSettingsStore(
-      undefined,
       new DatabaseAsrServicePersistence(db!),
     );
     await restored.load();
@@ -136,7 +126,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         throw new Error('postgresql://user:secret@localhost/test');
       },
     } as unknown as PrismaClient;
-    const tts = new VoiceServiceStore(undefined, undefined, {
+    const tts = new VoiceServiceStore({
       load: async () => [],
       save: (values) =>
         new DatabaseVoiceServicePersistence(failingDb).save(values),
@@ -151,7 +141,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(voiceError?.message).toBe('无法保存语音服务数据库配置。');
     expect(tts.list()).toEqual([]);
 
-    const asr = new AsrSettingsStore(undefined, {
+    const asr = new AsrSettingsStore({
       load: async () => [],
       save: (values) =>
         new DatabaseAsrServicePersistence(failingDb).save(values),
@@ -321,8 +311,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const manager = new AICharacterManager(
       providers,
       'ws://fixture',
-      undefined,
-      undefined,
       new DatabaseManagementArchive(db!),
     );
     await manager.load();

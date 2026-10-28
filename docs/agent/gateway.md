@@ -9,7 +9,7 @@ flowchart TD
   HTTP --> Commands[HTTP 命令去重与回执]
   Commands --> Characters[AICharacterManager]
   Commands --> Tasks[TaskCoordinator]
-  Commands --> Providers[FileProviderRepository]
+  Commands --> Providers[DatabaseProviderRepository]
   Tasks --> Host[TaskHostPort / Agent 宿主]
   Characters --> Host
   Host --> Runtime[AgentRunner / Pi 运行时]

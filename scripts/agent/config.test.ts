@@ -19,25 +19,21 @@ describe('CLI command-line configuration', () => {
   });
   it('supports explicit CLI scheduling settings while preserving finite defaults', () => {
     expect(agentConfig({ 'api-key': 'fixture' })).toMatchObject({
-      continuous: false,
       intervalMode: 'fixed',
     });
     expect(
       agentConfig({
         'api-key': 'fixture',
-        continuous: 'true',
         'interval-mode': 'random',
         'interval-min-ms': '4000',
         'interval-max-ms': '8000',
       }),
     ).toMatchObject({
-      continuous: true,
       intervalMode: 'random',
       intervalMinMs: 4000,
       intervalMaxMs: 8000,
     });
     for (const env of [
-      { continuous: 'yes' },
       { 'interval-mode': 'bad' },
       { 'interval-min-ms': '9000', 'interval-max-ms': '4000' },
       { 'interval-min-ms': '0' },

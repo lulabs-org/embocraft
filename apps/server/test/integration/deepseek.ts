@@ -1,14 +1,14 @@
-import { createTestServer } from '../helpers/test-server';
-import { toolResponse } from '../../../../tests/support/pi-response';
-import assert from 'node:assert/strict';
 import {
-  Session,
   AgentRunner,
-  runAgent,
-  until,
   houseBlocks,
+  runAgent,
+  Session,
+  until,
   type BuildAction,
 } from '@voxel/agent-runtime';
+import assert from 'node:assert/strict';
+import { toolResponse } from '../../../../tests/support/pi-response';
+import { createTestServer } from '../helpers/test-server';
 
 process.env.DATABASE_URL = '';
 const server = await createTestServer();
@@ -60,7 +60,7 @@ try {
     goal: '测试任务',
     allowEdits: true,
     voiceReplies: false,
-    continuous: false,
+
     intervalMode: 'fixed' as const,
     intervalMinMs: 4000,
     intervalMaxMs: 8000,

@@ -1,14 +1,15 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { setImmediate } from 'node:timers/promises';
 import type { PrismaClient } from '@prisma/client';
+import { setImmediate } from 'node:timers/promises';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createServer } from '../src/server';
 import { env } from '../src/core/config';
 import { createDatabaseClient } from '../src/core/database/client';
-import { FileProviderRepository } from '../src/modules/providers';
-import { AsrSettingsStore, VoiceServiceStore } from '../src/modules/audio';
+import { createServer } from '../src/server';
+import {
+  TestAsrSettingsStore as AsrSettingsStore,
+  MemoryProviderRepository,
+  TestVoiceServiceStore as VoiceServiceStore,
+} from './helpers/memory-storage';
+
 import { WorldStore } from '../src/modules/world';
 
 vi.mock('../src/core/database/client', () => ({
@@ -21,14 +22,13 @@ const db = {
   $disconnect: disconnect,
   world: { upsert: loadWorld },
 } as unknown as PrismaClient;
-let directory: string;
+
 let server: Awaited<ReturnType<typeof createServer>> | undefined;
 
 beforeEach(async () => {
   vi.resetAllMocks();
   vi.mocked(createDatabaseClient).mockReturnValue(db);
   loadWorld.mockResolvedValue({ revision: 0, edits: [] });
-  directory = await mkdtemp(join(tmpdir(), 'voxel-database-lifecycle-'));
 });
 
 afterEach(async () => {
@@ -37,7 +37,6 @@ afterEach(async () => {
   } finally {
     server = undefined;
     vi.restoreAllMocks();
-    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -50,9 +49,9 @@ function options() {
       AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
     }),
     databaseCheck: async () => {},
-    providers: new FileProviderRepository(join(directory, 'providers.json')),
-    voiceServices: new VoiceServiceStore(join(directory, 'voices.json')),
-    asrSettings: new AsrSettingsStore(join(directory, 'asr.json')),
+    providers: new MemoryProviderRepository(),
+    voiceServices: new VoiceServiceStore(),
+    asrSettings: new AsrSettingsStore(),
     archive: { load: async () => undefined, save: async () => {} },
   };
 }

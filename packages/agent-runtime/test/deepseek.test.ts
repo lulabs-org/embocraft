@@ -1,16 +1,16 @@
-import { parseDecision } from '../../../tests/support/decision-decision';
-import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
-import { runAgent } from '../../../tests/support/decision-loop';
-import { testAgentConfig } from '../../../tests/support/agent-config';
-import { describe, it, expect, vi } from 'vitest';
 import {
-  parseAction,
   AgentRuntimeError,
   executeAction,
   nextIntervalMs,
+  parseAction,
   type Observation,
   type Session,
 } from '@voxel/agent-runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { testAgentConfig } from '../../../tests/support/agent-config';
+import { parseDecision } from '../../../tests/support/decision-decision';
+import { DecisionFixture as ModelPlanner } from '../../../tests/support/decision-fixture';
+import { runAgent } from '../../../tests/support/decision-loop';
 
 const config = () => ({
   ...testAgentConfig({ apiKey: 'test-key' }),
@@ -269,7 +269,7 @@ describe('AI action execution', () => {
   });
 });
 
-describe('continuous and randomized scheduling', () => {
+describe('bounded and randomized scheduling', () => {
   it('samples inclusive random bounds and preserves fixed intervals', () => {
     const cfg = {
       ...config(),
@@ -290,7 +290,7 @@ describe('continuous and randomized scheduling', () => {
       ),
     ).toBe(3000);
   });
-  it('legacy continuous flag cannot bypass the task budget', async () => {
+  it('scheduled execution cannot bypass the task budget', async () => {
     const decide = vi.fn(async () => ({
       actions: [{ type: 'wait' as const }],
       task: {
@@ -302,7 +302,7 @@ describe('continuous and randomized scheduling', () => {
     await runAgent(
       { observe: async () => observation, move: vi.fn(), request: vi.fn() },
       { decide },
-      { ...config(), continuous: true, maxTurns: 1 },
+      { ...config(), maxTurns: 1 },
       signal(),
       () => {},
     );
@@ -356,7 +356,7 @@ describe('continuous and randomized scheduling', () => {
         { decide },
         {
           ...config(),
-          continuous: true,
+
           intervalMode: 'random',
           intervalMinMs: 60000,
           intervalMaxMs: 60000,
@@ -373,7 +373,7 @@ describe('continuous and randomized scheduling', () => {
       abort.abort();
     }
   });
-  it('still terminates continuous mode after repeated provider failures', async () => {
+  it('terminates scheduled execution after repeated provider failures', async () => {
     const decide = vi
       .fn()
       .mockRejectedValue(new AgentRuntimeError('unavailable'));
@@ -381,7 +381,7 @@ describe('continuous and randomized scheduling', () => {
       runAgent(
         { observe: async () => observation, move: vi.fn(), request: vi.fn() },
         { decide },
-        { ...config(), continuous: true },
+        { ...config() },
         signal(),
         () => {},
       ),

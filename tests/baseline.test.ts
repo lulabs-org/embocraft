@@ -1,6 +1,5 @@
-import { test, expect } from 'vitest';
-import { WORLD_ID, PROTOCOL_VERSION } from '@voxel/shared';
-test('protocol baseline', () => {
+import { WORLD_ID } from '@voxel/shared';
+import { expect, test } from 'vitest';
+test('built-in world identity', () => {
   expect(WORLD_ID).toBe('meadow');
-  expect(PROTOCOL_VERSION).toBe(1);
 });

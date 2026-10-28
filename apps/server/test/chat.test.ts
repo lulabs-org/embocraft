@@ -1,12 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { executeAction, type Observation } from '@voxel/agent-runtime';
 import { parseChatRoute, spatialMix, type Player } from '@voxel/shared';
-import { visibleEvent } from '../src/modules/chat';
-import { WorldChat } from '../src/modules/chat';
-import {
-  isolateChatScope,
-  executeAction,
-  type Observation,
-} from '@voxel/agent-runtime';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { visibleEvent, WorldChat } from '../src/modules/chat';
 
 const player = (id: string): Player => ({
   id,
@@ -99,7 +94,7 @@ describe('private chat', () => {
     expect(() => chat.authenticate(token)).toThrow();
     chat.clear();
   });
-  it('does not carry private context into public turns and forces replies private', async () => {
+  it('forces replies to private messages to stay private', async () => {
     const observation: Observation = {
       id: 'x',
       revision: 0,
@@ -123,12 +118,6 @@ describe('private chat', () => {
       scope: 'private',
       recipients: ['a'],
     });
-    observation.events.push(event('b', 'public'));
-    expect(isolateChatScope(observation).events).toHaveLength(1);
-    observation.events.push(event('b', 'private', ['ai']));
-    expect(
-      isolateChatScope(observation).events.some((e) => e.actor === 'a'),
-    ).toBe(false);
   });
 });
 describe('spatial sound', () => {
@@ -236,7 +225,7 @@ describe('nearby speech delivery', () => {
     expect(() => chat.beginSpatial('s')).toThrow();
     chat.clear();
   });
-  it('keeps nearby replies scoped and excludes nearby history from public model turns', async () => {
+  it('keeps nearby replies scoped to their sender', async () => {
     const observation: Observation = {
       id: 'x',
       revision: 0,
@@ -260,7 +249,5 @@ describe('nearby speech delivery', () => {
       scope: 'private',
       recipients: ['s'],
     });
-    observation.events.push(event('b', 'public'));
-    expect(isolateChatScope(observation).events).toHaveLength(1);
   });
 });

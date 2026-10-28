@@ -57,38 +57,6 @@
   line-height: 1.7;
   margin-top: 5px;
 }
-.agents-start-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.agent-form .agents-start-options .agent-check {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
-  margin: 0;
-  padding: 14px;
-  border: 1px solid var(--agents-border);
-  border-radius: 7px;
-  cursor: pointer;
-  line-height: 1.5;
-}
-.agents-profile .agents-start-options input[type='radio'] {
-  width: 16px;
-  height: 16px;
-  margin: 1px 0 0;
-  accent-color: var(--agents-accent, #315548);
-}
-.agents-start-options label:has(input:focus-visible) {
-  outline: 2px solid var(--agents-accent, #315548);
-  outline-offset: 3px;
-}
-.agents-start-options label:has(input:checked) {
-  background: #edf3e5;
-  border-color: #8fa789;
-}
 .agents-task-limits {
   margin: 20px 0;
 }

@@ -1,26 +1,23 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import express from 'express';
-import { createServer, type Server } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import WebSocket from 'ws';
 import {
   DEFAULT_BAILIAN_ASR,
   DEFAULT_WHISPER_ASR,
   type BailianAsrDraft,
 } from '@voxel/shared';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { installAsrRoutes } from './asr.routes.ts';
+import express from 'express';
+import { createServer, type Server } from 'node:http';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import WebSocket from 'ws';
+import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
-import { createAsrSocket } from '../sockets/asr.socket';
-import { installCapabilitiesRoutes } from './capabilities.routes';
 import { LocalSpeech } from '../services/asr/local-speech.service';
+import { createAsrSocket } from '../sockets/asr.socket';
+import { installAsrRoutes } from './asr.routes.ts';
+import { installCapabilitiesRoutes } from './capabilities.routes';
 
 let server: Server,
   transport: RoutedWebSocketTransport,
   store: AsrSettingsStore,
-  dir: string,
   url: string;
 const clients: WebSocket[] = [];
 const bridge = vi.fn((client: WebSocket, _settings: BailianAsrDraft) => {
@@ -31,8 +28,7 @@ const origin = 'http://127.0.0.1:5173';
 beforeEach(async () => {
   vi.stubEnv('WEB_ORIGIN', origin);
   bridge.mockClear();
-  dir = await mkdtemp(join(tmpdir(), 'asr-route-'));
-  store = new AsrSettingsStore(join(dir, 'config.json'));
+  store = new AsrSettingsStore();
   await store.load();
   const app = express();
   const speech = new LocalSpeech();
@@ -59,7 +55,6 @@ afterEach(async () => {
     transport.shutdown();
     server.closeAllConnections();
   });
-  await rm(dir, { recursive: true, force: true });
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });

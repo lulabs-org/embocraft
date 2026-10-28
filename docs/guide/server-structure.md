@@ -10,8 +10,8 @@
 4. **统一模块门面导出**：所有模块对外统一通过根部 `index.ts` 暴露公共接口，严禁跨模块深层相对路径引用（No Deep Import）。
 5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务通常为 `*.service.ts`，保留 `character.manager.ts`、`world.room.ts`、`world.schema.ts` 等职责明确的命名；单元测试与源码同目录就近共置（`*.test.ts`），跨模块集成与架构测试另行集中。
 6. **API 静态契约 100% 覆盖**：显式注册的 REST 路由维护对应的 OpenAPI JSDoc 注解；AST 检查当前支持的 `app.get/post/put/patch/delete` 静态路径及数量一致性，检查范围与限制见第 5 节。
-7. **数据持久化安全保障**：PostgreSQL 强校验作为生产核心数据底座，启动前严格探活与脱敏；全局快照支持关系表驱动（主干）与 JSON 文件原子落盘（测试/离线兼容）双轨架构。
-   :::
+7. **数据持久化安全保障**：PostgreSQL 强校验作为生产核心数据底座，启动前严格探活与脱敏；全局快照使用关系表驱动，离线测试显式注入内存存储。
+:::
 
 ---
 
@@ -68,8 +68,7 @@ apps/server/
     │   ├── archive.ts                   # 跨模块快照契约（ArchivePort, ManagementArchive）
     │   ├── database-archive.ts          # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
     │   ├── management-persistence.ts    # 跨模块快照串行提交与 storageRevision 失败代次
-    │   ├── archive-file.ts              # 【兼容模式】测试与离线环境 .agents.json 原子落盘（Temp+Rename）
-    │   └── migrate-archive.ts           # 历史 JSON 存档向前平滑迁移管道
+    │   └── migrate-archive.ts           # 存档结构校验与历史版本迁移
     │
     └── modules/                         # ════════【业务领域模块层（各领域自闭环）】════════
         │
@@ -97,8 +96,7 @@ apps/server/
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
         ├── audio/                       # ── 2. 全双工音频管线与语音引擎 ──
-        │   ├── domain/                  # 音频会话契约与无 I/O 的校验规则
-        │   │   ├── types.ts             # 语音状态、事件、输入、会话与 Provider 契约
+        │   ├── domain/                  # 无 I/O 的音频校验规则
         │   │   └── pcm-wav.ts           # PCM WAV 格式、时长与音量校验（复用 AppError）
         │   ├── services/                # 具体的音频服务调度与引擎实现
         │   │   ├── processing/          # FFmpeg 转码与临时文件生命周期（有 I/O）
@@ -127,7 +125,7 @@ apps/server/
         │   │       ├── signaling.service.ts
         │   │       └── signaling.service.test.ts
         │   ├── persistence/             # ASR/音色配置存储及数据库适配
-        │   │   ├── asr-settings-store.ts # AsrSettingsStore：配置、迁移与识别占用
+        │   │   ├── asr-settings-store.ts # AsrSettingsStore：配置与识别占用
         │   │   ├── asr-settings-store.test.ts
         │   │   ├── voice-service-store.ts # VoiceServiceStore：配置、绑定与合成协调
         │   │   ├── voice-service-store.test.ts
@@ -245,7 +243,7 @@ apps/server/
 
 - **`domain/`（领域规则与实体）**：实体契约、计算与无网络/文件/数据库 I/O 的校验，可复用通用类型、`AppError` 与 `core/http/validation.ts` 中的纯值校验函数。现有规则中包含 UUID 生成，因此并非所有函数都是确定性纯函数；规则测试无需 I/O Mock。
 - **`services/`（业务流程与调度引擎）**：核心业务调度、状态机协调、外部厂商引擎适配（如 Whisper/Piper/百炼）。
-- **`persistence/`（可选，状态持久化）**：若模块持有独立持久化数据，其数据库访问或兼容文件存储严格内聚于此（如 `store.ts`、`database-repository.ts` 与兼容性 `file-repository.ts`）。
+- **`persistence/`（可选，状态持久化）**：若模块持有独立持久化数据，其数据库访问严格内聚于此（如 `store.ts` 与 `database-repository.ts`）；测试替身位于 `test/helpers/`。
 - **`routes/`（HTTP API 路由）**：模块对外的所有 REST 接口声明，统一命名为 `*.routes.ts`，由 `src/app.ts` 集中挂载。
 - **`sockets/`（可选，WebSocket 端点）**：若模块提供对外实时流式通信（如 `audio`, `gateway`），统一放入 `sockets/` 目录或按规范命名为 `*.socket.ts`。
 - **`ports.ts`（可选，依赖端口抽象）**：外部依赖契约反转接口，实现 Clean Architecture 解耦。
@@ -387,7 +385,7 @@ import {
 
 ## 4. 数据库与持久化可靠性标准（Database & Persistence Standards）
 
-服务端全面以 PostgreSQL 作为生产核心数据源（Single Source of Truth），同时为离线开发和测试提供文件型 JSON 兼容层，各自遵循严谨的可靠性设计：
+服务端全面以 PostgreSQL 作为生产核心数据源（Single Source of Truth），测试通过存储接口注入内存实现，不再提供文件型 JSON 后备路径：
 
 ### 4.1 Prisma 与 PostgreSQL 持久化与健康检查策略
 
@@ -405,7 +403,7 @@ import {
 - **方块编辑乐观版本控制（CAS）**：
   `BlockEdit` 实体采用 `[worldId, x, y, z]` 复合主键，与 `World.revision` 协同工作，防止多人并发修改时的数据覆盖破坏。
 
-### 4.2 全局快照持久化与双轨驱动（Database & Archive Engine）
+### 4.2 全局快照持久化与存储注入（Database & Archive Engine）
 
 - **生产主干：基于 PostgreSQL 的关系型快照驱动（`src/persistence/database-archive.ts`）**：
   - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 统一序列化并持久化至 PostgreSQL 表中；
@@ -413,9 +411,9 @@ import {
 - **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：
   - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各模块的 `persistence/` 内；
   - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交角色和任务的可见状态，再调用注入的提交通知回调；角色编排器将回调连接到 `ManagementEvents.commit()`，持久化协调器不依赖事件总线实现；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
-- **兼容模式：离线测试与 JSON 原子落盘（`src/persistence/archive-file.ts` / `migrate-archive.ts`）**：
-  - **原子落盘（Atomic Write）**：在无数据库的离线单元测试或纯文件兼容模式下，`.agents.json` 与 `providers.json` 采用 **“写入 `.tmp` 临时文件 -> 原子重命名 `rename` 覆盖”** 机制，避免读者看到尚未写完的目标文件；这不等同于断电持久性保证；
-  - **向前平滑迁移（Forward Migration）**：历史文件均包含 `version` 标识（如 `version: 3`），加载时由 `migrate-archive.ts` 管道按顺序执行结构升级，保障向后兼容性。
+- **离线测试与恢复验证（`test/helpers/memory-storage.ts` / `src/persistence/migrate-archive.ts`）**：
+  - 测试显式注入内存 Provider、角色存档与 TTS/ASR 配置存储；读写时复制数据，重新创建服务实例验证恢复，并注入保存失败验证回滚。
+  - `migrate-archive.ts` 保留存档结构校验及历史版本恢复；旧文件读写与自动备份已移除，磁盘上的历史 JSON 文件不会自动导入或删除。
 
 ---
 
@@ -469,7 +467,7 @@ graph LR
 音频模块实现了实时多模态交互全双工闭环，遵循标准分层架构：
 
 - **领域音频规则（`domain/`）**：
-  `types.ts` 定义语音状态、事件、输入、会话与 Provider 契约，`services/sessions/index.ts` 保留原有类型重导出。`pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；它不负责 WAV 封包，也不执行 I/O。
+  `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；它不负责 WAV 封包，也不执行 I/O。
 - **音频处理（`services/processing/`）**：
   `normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行与可执行文件查找，已有测试随源码共置。录音与合成音频各自的参数、时长限制、超时、取消传播和清理行为保持不变。
 - **ASR 服务（`services/asr/`）**：
@@ -477,9 +475,9 @@ graph LR
 - **TTS 服务（`services/tts/`）**：
   `piper.service.ts` 和 `remote.service.ts` 保留 `PiperTts`、`RemoteTts` 的合成流程；`agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存；`piper-models.service.ts` 保留 `PiperModels` 的模型查询及安装调度。`speech-synthesizer.ts` 保存 `SpeechSynthesizer` 与 `SynthesizedSpeech` 契约，已有测试与服务共置。模块门面继续导出 `AgentSpeech` 和 `PiperTts`，合成参数、模型安装、队列、权限校验、取消和缓存行为保持不变。`persistence/voice-service-store.ts`、其测试与 `persistence/database-voice-services.ts` 负责音色配置存储，共用 `speech-endpoint.ts` 保留原位。
 - **配置存储与数据库适配（`persistence/`）**：
-  `asr-settings-store.ts` 与 `voice-service-store.ts` 保留 `AsrSettingsStore`、`VoiceServiceStore` 及持久化契约，已有存储测试与源码共置。两个 Store 仍包含原有校验与运行时协调职责，本次不拆分实现。`database-asr-services.ts` 和 `database-voice-services.ts` 保留数据库适配类名，模块门面保持全部公开导出。配置文件路径、格式迁移、默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `apps/server/test/`。
+  `asr-settings-store.ts` 与 `voice-service-store.ts` 保留 `AsrSettingsStore`、`VoiceServiceStore` 及持久化契约，已有存储测试与源码共置。两个 Store 仍包含原有校验与运行时协调职责，本次不拆分实现。`database-asr-services.ts` 和 `database-voice-services.ts` 保留数据库适配类名，模块门面保持全部公开导出。持久化适配器由调用方显式注入，旧配置文件读写、迁移和备份已移除；默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `apps/server/test/`。
 - **空间信令（`services/spatial/`）**：
-  `services/spatial/signaling.service.ts` 提供 WebRTC 信令校验与转发，已有测试随实现共置。audio 根部门面保留 `createSpatialSignaling` 等全部公开导出，信令转发行为保持不变。
+  `services/spatial/signaling.service.ts` 提供 WebRTC 信令校验与转发，已有测试随实现共置；audio 根部门面导出 `createSpatialSignaling`。
 - **统一接口暴露（`routes/` & `sockets/`）**：
   HTTP 装配位于 `routes/audio.http.ts`，ASR 服务管理、音频转写、Piper 模型、TTS 服务及能力探针保留独立路由文件与现有测试。`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`，模块门面保留 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket`、`AsrBridge` 等全部公开导出。鉴权、Origin 策略、JSON/原始音频限制、装配顺序及连接生命周期保持不变。
 - **空间音频信令与听觉可见性解耦**：

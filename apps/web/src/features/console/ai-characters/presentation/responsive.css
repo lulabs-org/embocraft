@@ -17,8 +17,7 @@
   .agent-dialog .agents-filters button {
     padding: 6px 12px;
   }
-  .agents-profile .agent-grid,
-  .agents-start-options {
+  .agents-profile .agent-grid {
     grid-template-columns: 1fr;
   }
   .agents-detail-heading {

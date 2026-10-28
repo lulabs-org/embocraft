@@ -2,15 +2,15 @@ import { once } from 'node:events';
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { Server, matchMaker } from '@colyseus/core';
+import { matchMaker, Server } from '@colyseus/core';
 
+import type { PrismaClient } from '@prisma/client';
 import { createApp } from './app';
 import { env, type ServerConfig } from './core/config';
+import { createDatabaseClient } from './core/database/client';
 import { checkStartupDatabase } from './core/database/health';
 import type { ArchivePort } from './persistence/archive';
 import { DatabaseManagementArchive } from './persistence/database-archive';
-import { createDatabaseClient } from './core/database/client';
-import type { PrismaClient } from '@prisma/client';
 
 import type { SocketRoutes } from './core/transport/socket-routes';
 import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
@@ -33,12 +33,12 @@ import {
 import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 
 import {
-  DatabaseProviderRepository,
-  type ProviderRepository,
   bootstrapProviders,
+  DatabaseProviderRepository,
   ModelCatalog,
   ProviderHealthChecker,
   ProviderService,
+  type ProviderRepository,
 } from './modules/providers';
 
 import { WorldRoom, WorldStore } from './modules/world';
@@ -77,14 +77,10 @@ async function loadStores(
   const providers = options.providers ?? new DatabaseProviderRepository(db!);
   const voiceServices =
     options.voiceServices ??
-    new VoiceServiceStore(
-      undefined,
-      undefined,
-      new DatabaseVoiceServicePersistence(db!),
-    );
+    new VoiceServiceStore(new DatabaseVoiceServicePersistence(db!));
   const asrSettings =
     options.asrSettings ??
-    new AsrSettingsStore(undefined, new DatabaseAsrServicePersistence(db!));
+    new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
   const loads = [
     GatewayAuth.load(config.gateway),
     bootstrapProviders(providers),
@@ -120,9 +116,9 @@ export async function createServer(options: ServerOptions = {}) {
   const characters = new AICharacterManager(
     providers,
     () => url,
+    archive,
     options.agentDependencies,
     voiceServices,
-    archive,
   );
   const modelCatalog = new ModelCatalog(providers);
   const providerHealth = new ProviderHealthChecker(providers);

@@ -695,11 +695,6 @@
   font-size: 12px;
   color: #7b8e80;
 }
-.console-help-popover-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
 .agent-dialog .console-help-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -865,8 +860,7 @@
   border-top: 1px solid #edf2e8;
   padding-top: 6px;
 }
-.console-access-pending,
-.console-connection {
+.console-access-pending {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -883,9 +877,6 @@
 .console-access-pending p {
   margin: 0;
 }
-.console-connection {
-  margin: -6px 0 12px;
-}
 .console-connected::before {
   content: '';
   display: inline-block;
@@ -899,10 +890,6 @@
   .console-access {
     padding: 4px 18px 20px;
   }
-}
-
-.plans-actions {
-  flex-wrap: wrap;
 }
 .agent-tabs {
   flex-wrap: wrap;

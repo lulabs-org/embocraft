@@ -7,12 +7,6 @@
   padding: 18px;
   border-radius: 8px;
 }
-.voice-state {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #608267;
-  margin-top: 12px;
-}
 .voice p {
   font-size: 11px;
   line-height: 1.5;
@@ -66,33 +60,6 @@
   border-radius: 3px;
   background: #fff;
   font-size: 11px;
-}
-.voice-label {
-  display: block;
-  margin-top: 12px;
-  font-size: 11px;
-}
-.voice-label select {
-  margin-top: 6px;
-}
-.voice-options,
-.voice-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-.voice-options select {
-  width: auto;
-}
-.voice-options label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-}
-.voice-options input {
-  width: auto;
 }
 .voice p {
   max-height: 110px;

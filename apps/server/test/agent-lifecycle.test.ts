@@ -1,29 +1,26 @@
-import { startTask, controlRun } from '../../../tests/support/managed-tasks';
-import { type Planner } from '../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from '../../../tests/support/decision-fixture';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { AICharacterManager } from '../src/modules/ai-characters';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../src/modules/providers';
-import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
+  fixtureRunnerFactory,
+  type Planner,
+} from '../../../tests/support/decision-fixture';
+import { controlRun, startTask } from '../../../tests/support/managed-tasks';
+import { AICharacterManager } from '../src/modules/ai-characters';
+import { bootstrapProviders } from '../src/modules/providers';
+import {
+  MemoryProviderRepository,
+  TestVoiceServiceStore as VoiceServiceStore,
+} from './helpers/memory-storage';
+
 import {
   AgentRuntimeError,
-  type Session,
   type Observation,
+  type Session,
 } from '@voxel/agent-runtime';
 
 import type { WorldEvent } from '@voxel/shared';
-let dir: string,
-  store: FileProviderRepository,
-  manager: AICharacterManager | undefined;
+let store: MemoryProviderRepository, manager: AICharacterManager | undefined;
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'agent-life-'));
-  store = new FileProviderRepository(join(dir, 'providers.json'));
+  store = new MemoryProviderRepository();
   await bootstrapProviders(store);
   await store.save(
     {
@@ -38,7 +35,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await manager?.close();
   manager = undefined;
-  await rm(dir, { recursive: true, force: true });
 });
 function fakeSession(wait = Promise.resolve()) {
   let open = false;
@@ -85,6 +81,7 @@ function setup(
   manager = new AICharacterManager(
     store,
     'ws://fixture',
+    store.archive,
     {
       session: () => s as unknown as Session,
       runner: fixtureRunnerFactory(() => ({ decide })),
@@ -107,13 +104,12 @@ it.each([
 ])(
   'does not overwrite an unreadable or unrestorable archive during shutdown',
   async (original) => {
-    const path = `${store.path}.agents.json`;
-    await writeFile(path, original);
+    store.archive.json = original;
     const m = setup(fakeSession());
     await expect(m.load()).rejects.toThrow();
     expect(() => m.assertWritable()).toThrow('存档恢复失败');
     await m.close();
-    expect(await readFile(path, 'utf8')).toBe(original);
+    expect(store.archive.json!).toBe(original);
   },
 );
 async function createWithTask(
@@ -182,7 +178,7 @@ it('saves task heartbeat independently without resetting or resuming progress', 
   expect(decide).toHaveBeenCalledTimes(1);
 });
 it('protects a new voice binding while an Agent update is waiting for the world', async () => {
-  const voices = new VoiceServiceStore(join(dir, 'voices.json'));
+  const voices = new VoiceServiceStore();
   await voices.load();
   const next = await voices.save({ name: 'Next', type: 'piper' });
   const session = fakeSession();
@@ -209,7 +205,7 @@ it('protects a new voice binding while an Agent update is waiting for the world'
   await m.removeVoiceService(next.id);
 });
 it('restores a missing voice service as text-only without model calls', async () => {
-  const voices = new VoiceServiceStore(join(dir, 'voices.json'));
+  const voices = new VoiceServiceStore();
   await voices.load();
   const m = setup(fakeSession(), undefined, voices);
   await createWithTask(m, { ...settings, voiceReplies: true });
@@ -794,7 +790,6 @@ it('standby creation rejects task input and still enforces online capacity', asy
 });
 
 it('retains capability settings and construction progress across edits, reload and resume', async () => {
-  const { readFile, writeFile } = await import('node:fs/promises');
   const s = fakeSession();
   const decide = vi.fn<Planner['decide']>(async () => ({
     actions: [{ type: 'wait' }],
@@ -813,8 +808,7 @@ it('retains capability settings and construction progress across edits, reload a
   });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   await m.close();
-  const path = `${store.path}.agents.json`;
-  const archive = JSON.parse(await readFile(path, 'utf8'));
+  const archive = JSON.parse(store.archive.json!);
   const block = { x: 10, y: 3, z: 1, material: 'wood' };
   const unfinishedBuild = {
     action: { type: 'build', blocks: [block] },
@@ -833,7 +827,7 @@ it('retains capability settings and construction progress across edits, reload a
   // Simulate a pre-capability archive without losing its task history.
   delete archive.characters[0].permissions;
   delete archive.characters[0].skills;
-  await writeFile(path, JSON.stringify(archive));
+  store.archive.json = JSON.stringify(archive);
   const restored = setup(fakeSession(), decide);
   await restored.load();
   await vi.waitFor(() => expect(restored.list()[0].status).toBe('idle'));
@@ -857,7 +851,7 @@ it('retains capability settings and construction progress across edits, reload a
   });
   expect(updated.usage).toEqual(before.usage);
   expect(decide).toHaveBeenCalledTimes(1);
-  const saved = JSON.parse(await readFile(path, 'utf8')).characters[0];
+  const saved = JSON.parse(store.archive.json!).characters[0];
   expect(saved.runtime.effects.unfinishedBuild).toEqual(unfinishedBuild);
   expect(saved.runtime.effects.previous).toEqual(
     archive.characters[0].runtime.effects.previous,
@@ -911,7 +905,7 @@ it.each(['completed', 'cancelled'] as const)(
 );
 
 it('suppresses voice bindings and direct pause receipts while retaining the saved voice preference', async () => {
-  const voices = new VoiceServiceStore(join(dir, 'voices.json'));
+  const voices = new VoiceServiceStore();
   await voices.load();
   const bind = vi.spyOn(voices, 'bind');
   const s = fakeSession();
@@ -1013,7 +1007,7 @@ it('applies task budgets on assignment and renewal, rejecting invalid budgets be
 it('uses newly saved provider configuration on the next decision without resetting progress', async () => {
   const s = fakeSession();
   const configs: unknown[] = [];
-  manager = new AICharacterManager(store, 'ws://fixture', {
+  manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
     session: () => s as unknown as Session,
     runner: fixtureRunnerFactory((config) => {
       configs.push(config);
@@ -1045,7 +1039,6 @@ it('uses newly saved provider configuration on the next decision without resetti
 });
 
 it('migrates a legacy archive and reloads 500 timestamped activity records without truncating to the old limit', async () => {
-  const { readFile, writeFile } = await import('node:fs/promises');
   const m = setup(fakeSession());
   const created = m.create({ ...settings, goal: '' });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -1059,8 +1052,7 @@ it('migrates a legacy archive and reloads 500 timestamped activity records witho
   ).toBe(true);
   await m.stop(created.id);
   await m.close();
-  const path = `${store.path}.agents.json`;
-  const archive = JSON.parse(await readFile(path, 'utf8'));
+  const archive = JSON.parse(store.archive.json!);
   archive.characters[0].status = 'stopped';
   // Simulate the pre-logEntries archive: two parallel legacy arrays.
   archive.characters[0].logs = Array.from(
@@ -1072,7 +1064,7 @@ it('migrates a legacy archive and reloads 500 timestamped activity records witho
     (_, i) => 1000 + i,
   );
   delete archive.characters[0].logEntries;
-  await writeFile(path, JSON.stringify(archive));
+  store.archive.json = JSON.stringify(archive);
   const expected = archive.characters[0].logs
     .slice(-500)
     .map((text: string, i: number) => ({
@@ -1082,7 +1074,7 @@ it('migrates a legacy archive and reloads 500 timestamped activity records witho
   const restored = setup(fakeSession());
   await restored.load();
   expect(restored.list()[0].logEntries).toEqual(expected);
-  const persisted = JSON.parse(await readFile(path, 'utf8'));
+  const persisted = JSON.parse(store.archive.json!);
   expect(persisted.characters[0].logEntries).toEqual(expected);
 });
 
@@ -1134,19 +1126,15 @@ it('aborts an active decision and blocks concurrent join/delete before removal c
 });
 
 it('keeps a stopped character recoverable when deletion cannot be persisted', async () => {
-  const { mkdir, rename } = await import('node:fs/promises');
   const m = setup(fakeSession());
   const job = await createWithTask(m, settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  const blocked = `${store.path}.agents.json`;
-  await rename(blocked, blocked + '.fixture-backup');
-  await mkdir(blocked);
+  store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(m.remove(job.id)).rejects.toThrow();
     expect(m.list()[0]).toMatchObject({ id: job.id, status: 'stopped' });
   } finally {
-    await rm(blocked, { recursive: true, force: true });
-    await rename(blocked + '.fixture-backup', blocked);
+    store.archive.saveError = undefined;
   }
 });
 
@@ -1192,7 +1180,7 @@ it.each(['cancel', 'pause'] as const)(
   async (operation) => {
     const s = fakeSession();
     let entered = false;
-    manager = new AICharacterManager(store, 'ws://fixture', {
+    manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
       session: () => s as unknown as Session,
       runner: () => ({
         async run({ memory, signal, checkpoint }) {
@@ -1294,7 +1282,6 @@ it('creates an offline profile without joining or allocating a plan, then joins 
 });
 
 it('restores the live task adapter and full profile after a failed task reservation, without launching a runner', async () => {
-  const { rename } = await import('node:fs/promises');
   const decide = vi.fn();
   const m = setup(fakeSession(), decide);
   const job = m.create({
@@ -1304,7 +1291,7 @@ it('restores the live task adapter and full profile after a failed task reservat
   });
   await m.settled(job.id);
   const before = structuredClone(m.list()[0]);
-  await rename(dir, `${dir}-away`);
+  store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(
       startTask(m, job.id, { goal: 'Must not launch' }),
@@ -1315,7 +1302,7 @@ it('restores the live task adapter and full profile after a failed task reservat
     expect(m.plans.runs).toHaveLength(0);
     expect(decide).not.toHaveBeenCalled();
   } finally {
-    await rename(`${dir}-away`, dir);
+    store.archive.saveError = undefined;
   }
 });
 

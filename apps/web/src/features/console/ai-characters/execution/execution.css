@@ -10,14 +10,6 @@
   font-weight: 500;
   color: var(--agents-muted);
 }
-.agents-goal {
-  font-size: 17px;
-  font-weight: 550;
-  line-height: 1.65;
-  margin: 12px 0 18px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .agents-progress {
   border: 1px solid #e6ebdf;
   background: #f5f7ef;

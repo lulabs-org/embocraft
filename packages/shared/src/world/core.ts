@@ -1,7 +1,5 @@
 /** Canonical id of the built-in world. */
 export const WORLD_ID = 'meadow';
-/** Version of the client/server world protocol; bump on breaking message changes. */
-export const PROTOCOL_VERSION = 1;
 /** Horizontal half-extent of the playable volume: valid cells have |x|/|z| <= LIMIT. */
 export const LIMIT = 24;
 /** Build height limit: valid cells have 0 <= y <= MAX_Y. */

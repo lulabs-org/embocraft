@@ -1,28 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
-import { access } from 'node:fs/promises';
-import WebSocket from 'ws';
 import { Session, until } from '@voxel/agent-runtime';
 import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { MANAGEMENT_EVENTS_VERSION } from '@voxel/shared/management';
-import { createTestServer } from './helpers/test-server';
-import { createServer } from '../src/server';
+import { access } from 'node:fs/promises';
+import { describe, expect, it, vi } from 'vitest';
+import WebSocket from 'ws';
 import { env } from '../src/core/config/env';
-import { FileProviderRepository } from '../src/modules/providers';
-import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
-import { AsrSettingsStore } from '../src/modules/audio/persistence/asr-settings-store';
+import { createServer } from '../src/server';
+import { createTestServer } from './helpers/test-server';
+
 import { whisperModelsDirectory } from '../src/modules/audio/services/asr/whisper-settings';
-import { join } from 'node:path';
 import { WorldStore } from '../src/modules/world/persistence/store';
 
 describe('server assembly and lifecycle', () => {
   it('keeps original data locations and validates deployment configuration without dotenv side effects', () => {
-    expect(new FileProviderRepository().path).toBe(
-      join(env.root, '.data/agent-providers.json'),
-    );
-    expect(new VoiceServiceStore().path).toBe(
-      env.dataPath('voice-services.json'),
-    );
-    expect(new AsrSettingsStore().path).toBe(env.dataPath('asr-settings.json'));
     expect(whisperModelsDirectory).toBe(env.dataPath('voice'));
     expect(env.readServer({})).toMatchObject({
       port: 2567,

@@ -1,21 +1,21 @@
+import { delay, Session, until } from '@voxel/agent-runtime';
 import { LIMIT, type ChatData } from '@voxel/shared';
-import {
-  startTask,
-  controlRun as controlManagedRun,
-} from '../../../../tests/support/managed-tasks';
-import { createTestServer } from '../helpers/test-server';
-import { DecisionFixture as ModelPlanner } from '../../../../tests/support/decision-fixture';
-import { fixtureRunnerFactory } from '../../../../tests/support/decision-fixture';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AICharacterManager } from '../../src/modules/ai-characters';
 import {
-  FileProviderRepository,
-  bootstrapProviders,
-} from '../../src/modules/providers';
-import { Session, until, delay } from '@voxel/agent-runtime';
+  fixtureRunnerFactory,
+  DecisionFixture as ModelPlanner,
+} from '../../../../tests/support/decision-fixture';
+import {
+  controlRun as controlManagedRun,
+  startTask,
+} from '../../../../tests/support/managed-tasks';
+import { AICharacterManager } from '../../src/modules/ai-characters';
+import { bootstrapProviders } from '../../src/modules/providers';
+import { MemoryProviderRepository } from '../helpers/memory-storage';
+import { createTestServer } from '../helpers/test-server';
 
 import type { AICharacterView, TaskRun } from '@voxel/shared';
 
@@ -38,7 +38,7 @@ type FixturePrompt = {
 };
 const prompts: FixturePrompt[] = [];
 try {
-  const store = new FileProviderRepository(join(dir, 'providers.json'));
+  const store = new MemoryProviderRepository();
   await bootstrapProviders(store);
   await store.save(
     {
@@ -222,7 +222,7 @@ try {
     );
   };
   const dependencies: NonNullable<
-    ConstructorParameters<typeof AICharacterManager>[2]
+    ConstructorParameters<typeof AICharacterManager>[3]
   > = {
     session: (address) => new Session(address),
     runner: fixtureRunnerFactory(
@@ -239,7 +239,7 @@ try {
   const room = server.world,
     url = server.httpUrl;
   const makeManager = () =>
-    new AICharacterManager(store, server!.url, dependencies);
+    new AICharacterManager(store, server!.url, store.archive, dependencies);
   manager = server.characters;
   const httpRequest = async <T>(
     path: string,
@@ -556,9 +556,9 @@ try {
       false,
       'pause prevents trailing edit',
     );
-    const saved = JSON.parse(
-      await readFile(join(dir, 'providers.json.agents.json'), 'utf8'),
-    ).characters.find((j: { id: string }) => j.id === job.id);
+    const saved = JSON.parse(store.archive.json!).characters.find(
+      (j: { id: string }) => j.id === job.id,
+    );
     assert.equal(
       saved.runtime.effects.previous.results[0].status,
       'interrupted',

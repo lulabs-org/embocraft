@@ -1,26 +1,9 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-
-import { mkdtemp, rm } from 'node:fs/promises';
-
-import { tmpdir } from 'node:os';
-
-import { join } from 'node:path';
-
-import { VoiceServiceStore } from '../src/modules/audio/persistence/voice-service-store';
+import { expect, it, vi } from 'vitest';
+import { TestVoiceServiceStore as VoiceServiceStore } from './helpers/memory-storage';
 
 import { AgentSpeech } from '../src/modules/audio/services/tts/agent-speech.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS, type Player } from '@voxel/shared';
-
-let dir: string;
-
-beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'voice-services-test-'));
-});
-
-afterEach(async () => {
-  await rm(dir, { recursive: true, force: true });
-});
 
 const local = (name = 'Local', voice = '') => ({
   name,
@@ -51,7 +34,7 @@ const wav = () => {
 it('cancels old synthesis and private clips when a service binding changes', async () => {
   let finish!: (value: { bytes: Buffer; durationMs: number }) => void;
   let signal!: AbortSignal;
-  const store = new VoiceServiceStore(join(dir, 'voices.json'), () => ({
+  const store = new VoiceServiceStore(undefined, () => ({
     synthesize: async (_text, abort) => {
       signal = abort;
       return new Promise((resolve) => {

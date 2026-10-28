@@ -1,10 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
+import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  TestAsrSettingsStore as AsrSettingsStore,
+  TestAsrSettingsStore,
+} from '../../../../test/helpers/memory-storage';
 import type { LocalSpeech } from '../../audio';
 import { WorldChat } from './chat.service';
 import { ChatSpeechService } from './speech.service';
-import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
-import type { AsrSettingsStore } from '../../audio';
 
 const player = (id: string): Player => ({
   id,
@@ -34,7 +37,7 @@ function setup() {
     normalize,
     transcribe,
     speech,
-    service: new ChatSpeechService(speech),
+    service: new ChatSpeechService(speech, new TestAsrSettingsStore()),
   };
 }
 
