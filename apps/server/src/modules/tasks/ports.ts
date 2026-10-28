@@ -1,7 +1,7 @@
-import type { AgentRunState, AgentRuntime } from '@voxel/agent-runtime';
+import type { AgentRuntime, RuntimeState } from '@voxel/agent-runtime';
 import type { AICharacterSettings, AICharacterView } from '@voxel/shared';
-import type { PlanService } from './persistence/plan-store';
 import type { PlanQueryFilter } from './domain/types';
+import type { PlanService } from './persistence/plan-store';
 
 /**
  * Tasks / Plans 领域的管理接口契约（由 TaskCoordinator 实现）
@@ -45,7 +45,6 @@ export interface TaskPort {
 export interface TaskExecutionState {
   view: AICharacterSettings &
     Pick<AICharacterView, 'id' | 'status' | 'logEntries'>;
-  memory: AgentRunState;
   readonly runtime: AgentRuntime;
   readonly ledger: PlanService;
   currentRunId: string | undefined;
@@ -71,7 +70,7 @@ export interface TaskHostPort {
   ): AICharacterSettings;
   storageFailed(): boolean;
   committedName(id: string): string | undefined;
-  publicIdentity(id: string): AgentRunState['task']['identity'];
+  publicIdentity(id: string): RuntimeState['execution']['task']['identity'];
   resourceVersion(): number;
   isClosing(): boolean;
   assertWritable(id?: string): void;

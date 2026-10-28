@@ -1,4 +1,5 @@
-import { AgentAttention } from '@voxel/agent-runtime';
+import { AgentAttention } from './attention';
+
 import { expect, it } from 'vitest';
 
 import type { WorldEvent } from '@voxel/shared';

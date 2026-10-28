@@ -1,8 +1,8 @@
-import { MemoryArchive } from './helpers/memory-storage';
 import { expect, it, vi } from 'vitest';
-import { createTestServer } from './helpers/test-server';
 import { LocalSpeech } from '../src/modules/audio/services/asr/local-speech.service';
 import { PiperModels } from '../src/modules/audio/services/tts/piper-models.service';
+import { MemoryArchive } from './helpers/memory-storage';
+import { createTestServer } from './helpers/test-server';
 
 const token = 'Bearer fixture-gateway-token-for-tests';
 const origin = 'http://world.test';
@@ -464,7 +464,7 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
     archive,
     agentDependencies: {
       session,
-      runner: () => ({ run: async () => {} }),
+      model: () => ({}),
     },
   });
   const changed = vi.fn();

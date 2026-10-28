@@ -1,9 +1,10 @@
-import { emptyState } from '@voxel/agent-runtime';
+import { emptyState } from '../../contracts/state';
+
 import { expect, it, vi } from 'vitest';
-import { TurnHealthMonitor } from './health';
+import type { Observation } from '../../contracts';
 import { initialToolState } from '../../contracts/tool-state';
 import type { TaskService } from '../task/service';
-import type { Observation } from '../../contracts';
+import { TurnHealthMonitor } from './health';
 
 function fixture(maxStalledTurns?: number) {
   const monitor = new TurnHealthMonitor();
@@ -14,8 +15,12 @@ function fixture(maxStalledTurns?: number) {
     attached: true,
     current: () => true,
     memory: {
-      ...emptyState(),
-      task: { current: { status: 'running' } as never },
+      version: 4 as const,
+      character: { ...emptyState().character },
+      execution: {
+        ...emptyState().execution,
+        task: { current: { status: 'running' } as never },
+      },
     },
     service: { finish, lease: () => ({}) } as unknown as TaskService,
     hasMessage: false,

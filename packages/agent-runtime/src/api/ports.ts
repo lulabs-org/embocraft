@@ -1,32 +1,25 @@
-import type { AgentSession } from '../world/session/port';
-import type { AgentAttention } from '../world/observe/attention';
+import type { AICharacterTask, WorldEvent } from '@voxel/shared';
 import type { AgentConfig, ModelEndpoint } from '../contracts/config';
-import type { AgentRunState } from '../contracts/state';
-import type { RunOptions } from '../agent/turn/turn';
-import type { WorldEvent } from '@voxel/shared';
+import type { RuntimeState } from '../contracts/state';
 import type { TaskLease } from '../contracts/task';
+import type { AgentSession } from '../world/session/port';
 
 /** Persistence seam: the host decides how state is stored, the facade only commits. */
 export type RuntimeStore = { save(): Promise<void> | void };
 
-export type RuntimePorts = {
-  session: AgentSession;
-  /** Session id used to filter addressed chat. */
-  selfId: string;
+export type RuntimeModelOptions = {
   endpoint?: ModelEndpoint;
   request?: typeof fetch;
-  log?: (message: string) => void;
-  store?: RuntimeStore;
-  attention?: AgentAttention;
-  state?: AgentRunState;
-  runner?: RuntimeRunner;
 };
 
-/** Offline state/ledger operations may be constructed before a world connection exists. */
-export type RuntimeOptions = Omit<RuntimePorts, 'session' | 'selfId'> &
-  Partial<Pick<RuntimePorts, 'session' | 'selfId'>>;
-
-export type RuntimeRunner = { run(options: RunOptions): Promise<void> };
+export type RuntimeOptions = RuntimeModelOptions & {
+  session?: AgentSession;
+  /** Session id used to filter addressed chat. */
+  selfId?: string;
+  log?: (message: string) => void;
+  store?: RuntimeStore;
+  state?: RuntimeState;
+};
 
 export type RuntimeMessageControl = {
   operation: 'pause' | 'cancel';
@@ -56,7 +49,12 @@ export type RuntimeRunOptions = {
   defaults?: AgentConfig;
   signal: AbortSignal;
   checkpoint?: () => void | Promise<void>;
-  hooks?: RunOptions['hooks'];
-  runner?: RuntimeRunner;
+  hooks?: {
+    beforeNewTask?: (
+      task: AICharacterTask,
+      previous: RuntimeState,
+    ) => Promise<void>;
+  };
+  model?: RuntimeModelOptions;
   log?: (message: string) => void;
 };

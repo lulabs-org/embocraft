@@ -1,10 +1,10 @@
 import {
-  AgentRunner,
-  type AgentConfig,
   type AgentAction,
+  type AgentConfig,
   type ModelEndpoint,
   type Observation,
 } from '@voxel/agent-runtime';
+
 import { toolResponse } from './pi-response';
 
 export type ToolCall = { name: string; arguments: unknown };
@@ -42,7 +42,7 @@ export function modelRequest(
   };
 }
 
-export function scriptedRunnerFactory<T extends ModelEndpoint>(
+export function scriptedModelFactory<T extends ModelEndpoint>(
   factory: (
     config: AgentConfig,
     provider: T,
@@ -50,7 +50,7 @@ export function scriptedRunnerFactory<T extends ModelEndpoint>(
 ) {
   return (config: AgentConfig, provider: T) => {
     const { respond, tokens } = factory(config, provider);
-    return new AgentRunner(provider, modelRequest(respond, tokens));
+    return { endpoint: provider, request: modelRequest(respond, tokens) };
   };
 }
 

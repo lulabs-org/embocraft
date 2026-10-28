@@ -1,15 +1,15 @@
 import type { ChatData, WorldEvent } from '@voxel/shared';
-import type { AgentRunState } from '../contracts/state';
-import type { AgentAttention } from '../world/observe/attention';
-import type { AgentSession } from '../world/session/port';
 import { parseControlCommand } from '../agent/task/commands';
 import { recordChatEvent, recordEvent } from '../agent/task/inbox';
 import { TaskService } from '../agent/task/service';
+import type { RuntimeState } from '../contracts/state';
+import type { AgentAttention } from '../world/observe/attention';
+import type { AgentSession } from '../world/session/port';
 import type { RuntimeReceiveOptions, RuntimeReceiveResult } from './ports';
 
 /** One intake path, including persistence ordering and trusted control-message routing. */
 export async function receiveWorldEvent(input: {
-  state: () => AgentRunState;
+  state: () => RuntimeState;
   attention: () => AgentAttention;
   selfId: string;
   session?: AgentSession;
@@ -23,7 +23,7 @@ export async function receiveWorldEvent(input: {
     : undefined;
   const service = new TaskService(input.state());
   let authorized = false;
-  if (operation && input.state().task.current) {
+  if (operation && input.state().execution.task.current) {
     try {
       service.authorize({ kind: 'player', message: event });
       authorized = true;

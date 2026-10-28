@@ -1,33 +1,34 @@
-import { PlanService } from '../persistence/plan-store';
-import { TaskScheduler } from './scheduler.service';
-import { validatePlan } from '../domain/validation';
+import { createAgentRuntime, type TaskLease } from '@voxel/agent-runtime';
 import {
+  duePlans,
+  endedRun,
   newPlan,
   nextOccurrence,
-  duePlans,
   runView,
-  endedRun,
 } from '../domain/model';
-import { createAgentRuntime, type TaskLease } from '@voxel/agent-runtime';
+import { validatePlan } from '../domain/validation';
+import { PlanService } from '../persistence/plan-store';
+import { TaskScheduler } from './scheduler.service';
+
 import type { WorldEvent } from '@voxel/shared';
-import { CommandQueue } from '../../../core/concurrency/command-queue';
 import { isRepeating } from '@voxel/shared';
-import { hasPlanTokenLimit } from '../domain/limits';
 import type { PlanQueryFilter } from '@voxel/shared/management';
-import { object } from '../../../core/http/validation';
+import { CommandQueue } from '../../../core/concurrency/command-queue';
 import { AppError } from '../../../core/errors/app-error';
+import { object } from '../../../core/http/validation';
+import { hasPlanTokenLimit } from '../domain/limits';
 import type { TaskExecutionState, TaskHostPort } from '../ports';
 import {
-  commitExecution,
   captureTask,
+  commitExecution,
   currentRun,
+  executeTaskPlanControl,
+  executeTaskRunControl,
   getTaskPlans,
   getTaskRuns,
   reserveRun,
   startQueuedRun,
   taskBusy,
-  executeTaskPlanControl,
-  executeTaskRunControl,
 } from './execution.service';
 export class TaskCoordinator {
   readonly plans = new PlanService();

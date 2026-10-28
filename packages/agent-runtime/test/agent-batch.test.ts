@@ -1,27 +1,31 @@
 import { executeTaskActions } from '../src/agent/action/executor';
-import { TaskService, RequestBudget } from '@voxel/agent-runtime';
-import { emptyState } from '@voxel/agent-runtime';
+import { RequestBudget } from '../src/agent/task/budget';
+import { TaskService } from '../src/agent/task/service';
+
+import { emptyState } from '../src/contracts/state';
+
+import { AgentRunner } from '@voxel/agent-runtime/testing';
 import type { Edit } from '@voxel/shared';
-import { parseActions } from '../src/world/actions/parse';
 import {
   modelRequest,
   worldTool,
   type ModelResponder,
 } from '../../../tests/support/model-fixture';
-import { AgentRunner } from '@voxel/agent-runtime';
-import { describe, expect, it, vi } from 'vitest';
+import { parseActions } from '../src/world/actions/parse';
+
 import {
   executeBatch,
-  newTask,
-  AgentAttention,
-  restoreBatchHistory,
   type AgentAction,
   type AgentSession,
-  type Observation,
-  type AgentRunState,
   type BatchResult,
   type BuildResult,
+  type Observation,
+  type RuntimeState,
 } from '@voxel/agent-runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { newTask, restoreBatchHistory } from '../src/agent/task/state';
+import { AgentAttention } from '../src/world/observe/attention';
+
 import { testAgentConfig } from '../../../tests/support/agent-config';
 
 const edit = (x = 1, material: 'wood' | null = 'wood'): AgentAction => ({
@@ -328,9 +332,13 @@ describe('sequential batch effects', () => {
 
 function runtimeFixture() {
   const f = fixture();
-  const memory: AgentRunState = {
-    ...emptyState(),
-    task: { current: newTask('build') },
+  const memory: RuntimeState = {
+    version: 4 as const,
+    character: { ...emptyState().character },
+    execution: {
+      ...emptyState().execution,
+      task: { current: newTask('build') },
+    },
   };
   const attention = new AgentAttention();
   const planner = {
@@ -350,7 +358,7 @@ function runtimeFixture() {
       },
       'ai',
     );
-  const saved: AgentRunState[] = [];
+  const saved: RuntimeState[] = [];
   const step = (cfg = config()) =>
     new AgentRunner(undefined, modelRequest(planner.decide)).run({
       session: f.session,
@@ -379,7 +387,7 @@ describe('batch task lifecycle', () => {
         { name: 'complete_task', arguments: { summary: '推进任务' } },
       ]);
     await f.step();
-    expect(f.memory.task.current).toMatchObject({
+    expect(f.memory.execution.task.current).toMatchObject({
       status: 'completed',
       calls: 2,
       tokens: 100,
@@ -387,8 +395,8 @@ describe('batch task lifecycle', () => {
     expect(
       f.saved.some(
         (state) =>
-          state.task.current?.status === 'running' &&
-          state.task.current.calls === 1,
+          state.execution.task.current?.status === 'running' &&
+          state.execution.task.current.calls === 1,
       ),
     ).toBe(true);
     expect(f.world.blocks.map((block) => block.x)).toEqual([1, 2]);
@@ -419,17 +427,17 @@ describe('batch task lifecycle', () => {
     await f.step();
     expect(f.world.blocks.map((b) => b.x)).toEqual([1]);
     expect(f.planner.decide).toHaveBeenCalledTimes(3);
-    expect(f.memory.task.current?.status).toBe('needs_input');
+    expect(f.memory.execution.task.current?.status).toBe('needs_input');
     await f.step();
     expect(f.planner.decide).toHaveBeenCalledTimes(3);
   });
   it('does not drop queued addressed replies or disclose private batch history', async () => {
     const f = runtimeFixture();
-    f.memory.task.current = {
+    f.memory.execution.task.current = {
       ...newTask('secret', 'owner', 'owner'),
       status: 'paused',
     };
-    f.memory.effects.previous = {
+    f.memory.execution.effects.previous = {
       actions: [chat],
       results: [{ action: chat, status: 'succeeded', result: { ok: true } }],
       remaining: [],
@@ -442,7 +450,7 @@ describe('batch task lifecycle', () => {
     await f.step();
     await f.step();
     expect(f.request.mock.calls.filter(([t]) => t === 'chat')).toHaveLength(2);
-    expect(f.memory.effects.previous).toMatchObject({
+    expect(f.memory.execution.effects.previous).toMatchObject({
       actions: [chat],
       results: [{ status: 'succeeded' }],
     });
@@ -451,7 +459,7 @@ describe('batch task lifecycle', () => {
   });
   it('counts actual edits as progress even when the last action is chat', async () => {
     const f = runtimeFixture();
-    f.memory.health.noProgress = 2;
+    f.memory.execution.health.noProgress = 2;
     f.planner.decide
       .mockResolvedValueOnce([worldTool(edit()), worldTool(chat)])
       .mockResolvedValueOnce([
@@ -461,8 +469,10 @@ describe('batch task lifecycle', () => {
         },
       ]);
     await f.step();
-    expect(f.saved.some((state) => state.health.noProgress === 0)).toBe(true);
-    expect(f.memory.task.current?.status).toBe('waiting');
+    expect(
+      f.saved.some((state) => state.execution.health.noProgress === 0),
+    ).toBe(true);
+    expect(f.memory.execution.task.current?.status).toBe('waiting');
   });
   it('stops physical actions at the task deadline without executing the tail', async () => {
     const f = runtimeFixture();
@@ -477,7 +487,7 @@ describe('batch task lifecycle', () => {
       new RequestBudget(
         cfg,
         { calls: 0, tokens: 0, estimated: false },
-        f.memory.task.current,
+        f.memory.execution.task.current,
       ),
       new TaskService(f.memory).lease(),
       async () => {},
@@ -508,7 +518,7 @@ describe('batch task lifecycle', () => {
   it('does not infer a deleted block from an incomplete or distant observation', async () => {
     const f = runtimeFixture();
     const block = { x: 10, y: 3, z: 0, material: null } as const;
-    f.memory.effects.unfinishedBuild = {
+    f.memory.execution.effects.unfinishedBuild = {
       action: { type: 'build', blocks: [block] },
       result: {
         ok: false,
@@ -525,8 +535,10 @@ describe('batch task lifecycle', () => {
       { name: 'complete_task', arguments: { summary: '推进任务' } },
     ]);
     await f.step();
-    expect(f.memory.effects.unfinishedBuild?.result.remaining).toEqual([block]);
-    expect(f.memory.task.current?.status).toBe('blocked');
+    expect(
+      f.memory.execution.effects.unfinishedBuild?.result.remaining,
+    ).toEqual([block]);
+    expect(f.memory.execution.task.current?.status).toBe('blocked');
   });
 });
 
@@ -538,7 +550,7 @@ it('preserves older pending blueprint coordinates when only a subset is rebuilt'
     z: 0,
     material: 'wood' as const,
   }));
-  f.memory.effects.unfinishedBuild = {
+  f.memory.execution.effects.unfinishedBuild = {
     action: { type: 'build', blocks },
     result: {
       ok: false,
@@ -558,10 +570,10 @@ it('preserves older pending blueprint coordinates when only a subset is rebuilt'
       { name: 'request_input', arguments: { question: '剩余方块待确认' } },
     ]);
   await f.step();
-  expect(f.memory.effects.unfinishedBuild?.result.remaining).toEqual([
+  expect(f.memory.execution.effects.unfinishedBuild?.result.remaining).toEqual([
     blocks[1],
   ]);
-  expect(f.memory.task.current?.status).toBe('needs_input');
+  expect(f.memory.execution.task.current?.status).toBe('needs_input');
 });
 
 it('keeps an unconfirmed deletion outside the 500-block cutoff, even inside radius 8', async () => {
@@ -573,7 +585,7 @@ it('keeps an unconfirmed deletion outside the 500-block cutoff, even inside radi
     material: 'stone',
   }));
   const block = { x: 6, y: 3, z: 0, material: null } as const;
-  f.memory.effects.unfinishedBuild = {
+  f.memory.execution.effects.unfinishedBuild = {
     action: { type: 'build', blocks: [block] },
     result: {
       ok: false,
@@ -590,14 +602,16 @@ it('keeps an unconfirmed deletion outside the 500-block cutoff, even inside radi
     { name: 'complete_task', arguments: { summary: '推进任务' } },
   ]);
   await f.step();
-  expect(f.memory.effects.unfinishedBuild?.result.remaining).toEqual([block]);
-  expect(f.memory.task.current?.status).toBe('blocked');
+  expect(f.memory.execution.effects.unfinishedBuild?.result.remaining).toEqual([
+    block,
+  ]);
+  expect(f.memory.execution.task.current?.status).toBe('blocked');
 });
 
 it('confirms an unknown deletion by fresh complete observation without replaying the request', async () => {
   const f = runtimeFixture();
   const block = { x: 1, y: 3, z: 0, material: null } as const;
-  f.memory.effects.unfinishedBuild = {
+  f.memory.execution.effects.unfinishedBuild = {
     action: { type: 'build', blocks: [block] },
     result: {
       ok: false,
@@ -614,9 +628,9 @@ it('confirms an unknown deletion by fresh complete observation without replaying
     { name: 'complete_task', arguments: { summary: '推进任务' } },
   ]);
   await f.step();
-  expect(f.memory.effects.unfinishedBuild).toBeUndefined();
+  expect(f.memory.execution.effects.unfinishedBuild).toBeUndefined();
   expect(f.request).not.toHaveBeenCalled();
-  expect(f.memory.task.current?.status).toBe('completed');
+  expect(f.memory.execution.task.current?.status).toBe('completed');
 });
 
 it('stops repeated failed tools without executing trailing chat', async () => {
@@ -625,7 +639,7 @@ it('stops repeated failed tools without executing trailing chat', async () => {
   f.planner.decide.mockResolvedValue([worldTool(edit()), worldTool(chat)]);
   await f.step();
   expect(f.planner.decide).toHaveBeenCalledTimes(3);
-  expect(f.memory.task.current?.status).toBe('blocked');
+  expect(f.memory.execution.task.current?.status).toBe('blocked');
   expect(f.request.mock.calls.filter(([type]) => type === 'chat')).toEqual([]);
 });
 
@@ -747,7 +761,7 @@ describe('independent action permissions', () => {
   });
   it('records replies without sending chat when chat permission is disabled', async () => {
     const f = runtimeFixture();
-    f.memory.task.current!.status = 'paused';
+    f.memory.execution.task.current!.status = 'paused';
     f.message();
     f.planner.decide.mockResolvedValue([
       { name: 'reply', arguments: { text: '进展汇报' } },
@@ -756,16 +770,16 @@ describe('independent action permissions', () => {
     expect(f.request.mock.calls.filter(([type]) => type === 'chat')).toEqual(
       [],
     );
-    expect(f.memory.health.lastResponse).toBe('进展汇报');
+    expect(f.memory.execution.health.lastResponse).toBe('进展汇报');
   });
   it.each(['owner', 'ended'] as const)(
     'does not send the %s task-control receipt without chat permission',
     async (scenario) => {
       const f = runtimeFixture();
       f.message();
-      f.memory.task.current!.owner =
+      f.memory.execution.task.current!.owner =
         scenario === 'owner' ? 'someone-else' : 'human';
-      f.memory.task.current!.status =
+      f.memory.execution.task.current!.status =
         scenario === 'owner' ? 'paused' : 'completed';
       f.planner.decide.mockResolvedValue([
         { name: 'resume_task', arguments: {} },
@@ -774,7 +788,7 @@ describe('independent action permissions', () => {
       expect(f.request.mock.calls.filter(([type]) => type === 'chat')).toEqual(
         [],
       );
-      expect(f.memory.task.current!.status).toBe(
+      expect(f.memory.execution.task.current!.status).toBe(
         scenario === 'owner' ? 'paused' : 'completed',
       );
     },

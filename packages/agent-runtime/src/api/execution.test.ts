@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createAgentRuntime } from './runtime';
-import { emptyState } from '../contracts/state';
-import { newTask } from '../agent/task/state';
 import { testAgentConfig } from '../../../../tests/support/agent-config';
+import { newTask } from '../agent/task/state';
+import { emptyState } from '../contracts/state';
+import { createAgentRuntime } from './runtime';
 
 const plan = {
   runId: 'run',
@@ -19,10 +19,10 @@ describe('host execution boundary', () => {
     expect(runtime.queuePlan({ ...plan, revision: 4 })).toBe(eventId);
     expect(runtime.view().task).toBeUndefined();
     expect(runtime.view().usage).toBeUndefined();
-    expect(runtime.snapshot().inbox?.events).toHaveLength(1);
+    expect(runtime.snapshot().character.inbox?.events).toHaveLength(1);
     runtime.startScheduled({ ...plan, eventId });
-    expect(runtime.snapshot().inbox?.events).toHaveLength(1);
-    expect(runtime.snapshot().inbox?.events[0]).toMatchObject({
+    expect(runtime.snapshot().character.inbox?.events).toHaveLength(1);
+    expect(runtime.snapshot().character.inbox?.events[0]).toMatchObject({
       taskId: runtime.view().identity?.id,
       revision: 0,
       runId: plan.runId,
@@ -32,15 +32,15 @@ describe('host execution boundary', () => {
 
   it('exposes detached views and archives while retaining character usage across execution switches', () => {
     const state = emptyState();
-    state.task.usage = { calls: 10, tokens: 1000, estimated: false };
+    state.character.usage = { calls: 10, tokens: 1000, estimated: false };
     const runtime = createAgentRuntime({ state });
     runtime.startScheduled(plan);
     const view = runtime.view();
     view.task!.goal = 'changed';
     view.usage!.tokens = 0;
     const archive = runtime.archive();
-    expect(archive.task.usage).toBeUndefined();
-    archive.task.current!.status = 'paused';
+    expect(archive.character.usage).toBeUndefined();
+    archive.execution.task.current!.status = 'paused';
     runtime.stageControl(
       { type: 'cancel' },
       { kind: 'operator' },
@@ -56,9 +56,12 @@ describe('host execution boundary', () => {
 
   it('recovers an interrupted private execution without replaying its effects or stale messages', () => {
     const state = emptyState();
-    state.task.current = newTask('private', 'alice', 'alice');
-    state.conversation.exchanges = { public: ['public'], alice: ['secret'] };
-    state.inbox = {
+    state.execution.task.current = newTask('private', 'alice', 'alice');
+    state.character.conversation.exchanges = {
+      public: ['public'],
+      alice: ['secret'],
+    };
+    state.character.inbox = {
       version: 1,
       events: [
         {
@@ -70,15 +73,17 @@ describe('host execution boundary', () => {
         },
       ],
     };
-    state.effects.activeAction = {
+    state.execution.effects.activeAction = {
       id: 'action',
       name: 'goto',
       taskId: 'old',
       revision: 0,
       status: 'running',
     };
-    state.checkpoint.pi = {
-      version: 1,
+    state.execution.checkpoint.pi = {
+      taskId: 'fixture',
+      revision: 0,
+      version: 3,
       taskStartedAt: 1,
       audience: 'alice',
       messages: [],
@@ -89,12 +94,16 @@ describe('host execution boundary', () => {
     runtime.recoverAfterRestart();
     expect(runtime.view().task?.status).toBe('needs_input');
     expect(runtime.view().requiresReassignment).toBe(true);
-    expect(runtime.snapshot().effects.activeAction?.status).toBe('unknown');
-    expect(runtime.snapshot().checkpoint.unknownEffect?.state).toBe('unknown');
-    expect(runtime.snapshot().conversation.exchanges).toEqual({
+    expect(runtime.snapshot().execution.effects.activeAction?.status).toBe(
+      'unknown',
+    );
+    expect(runtime.snapshot().execution.checkpoint.unknownEffect?.state).toBe(
+      'unknown',
+    );
+    expect(runtime.snapshot().character.conversation.exchanges).toEqual({
       public: ['public'],
     });
-    expect(runtime.snapshot().inbox?.events[0].state).toBe('unknown');
+    expect(runtime.snapshot().character.inbox?.events[0].state).toBe('unknown');
     expect(runtime.pendingMessages).toBe(false);
   });
 });

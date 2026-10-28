@@ -1,9 +1,10 @@
 import type { AgentAction } from '../../contracts/action';
 import type { Observation } from '../../contracts/observation';
-import type { AgentRunState } from '../../contracts/state';
+import type { RuntimeState } from '../../contracts/state';
+import type { TaskLease } from '../../contracts/task';
 import type { ToolState } from '../../contracts/tool-state';
 import type { BatchOptions } from '../../world/actions/batch';
-import type { TaskLease, TaskService } from '../task/service';
+import { TaskService } from '../task/service';
 import { createBuildEffects } from './build-tracker';
 import {
   activateFollowing,
@@ -23,7 +24,7 @@ export function actionPolicy(name: AgentAction['type']) {
 
 /** Concrete progress hooks live here, never in the turn or generic task executor. */
 export function createActionEffects(
-  memory: AgentRunState,
+  memory: RuntimeState,
   save: () => Promise<void>,
 ) {
   const build = createBuildEffects(memory);
@@ -42,7 +43,7 @@ export function createActionEffects(
 
 export function settleActionEffects(
   name: AgentAction['type'],
-  memory: AgentRunState,
+  memory: RuntimeState,
   service: TaskService,
   lease: TaskLease,
   observation: Observation,
@@ -54,7 +55,7 @@ export function settleActionEffects(
 
 export function activateContinuingAction(
   name: AgentAction['type'],
-  memory: AgentRunState,
+  memory: RuntimeState,
   id: string,
   lease: TaskLease,
 ) {

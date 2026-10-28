@@ -8,29 +8,19 @@ import {
 import type { AgentAction } from '../../contracts/action';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { AgentRuntimeError } from '../../contracts/errors';
-import type {
-  DecisionContext,
-  Observation,
-} from '../../contracts/observation';
-import type { AgentRunState, CharacterEvent } from '../../contracts/state';
+import type { DecisionContext, Observation } from '../../contracts/observation';
+import type { CharacterEvent, RuntimeState } from '../../contracts/state';
+import type { TaskCommand, TaskLease, TaskOutcome } from '../../contracts/task';
 import { initialToolState, type ToolState } from '../../contracts/tool-state';
 import { cancellable } from '../../kernel/abort';
-import { worldSignature } from '../../world/observe/extract';
 import type { AgentAttention } from '../../world/observe/attention';
+import { worldSignature } from '../../world/observe/extract';
 import type { AgentSession } from '../../world/session/port';
 import { paceChat } from '../action/chat-pacing';
-import {
-  executeTaskActions,
-  executeTurnWorldAction,
-} from '../action/executor';
+import { executeTaskActions, executeTurnWorldAction } from '../action/executor';
 import { characterPrompt } from '../prompt/character';
 import { buildDecisionPayload } from '../prompt/view';
 import { checkBudgetCap } from '../task/budget';
-import {
-  type TaskCommand,
-  type TaskLease,
-  type TaskOutcome,
-} from '../task/service';
 import { isActiveTask, isEndedTask } from '../task/state';
 import { createTaskControlTools } from '../tools/conversation';
 import type { ToolHost, ToolTaskOutcome } from '../tools/port';
@@ -49,14 +39,14 @@ export type RunOptions = {
   config: AgentConfig;
   defaults?: AgentConfig;
   signal: AbortSignal;
-  memory: AgentRunState;
+  memory: RuntimeState;
   attention?: AgentAttention;
   log?: (message: string) => void;
   checkpoint?: () => void | Promise<void>;
   hooks?: {
     beforeNewTask?: (
       task: AICharacterTask,
-      previous: AgentRunState,
+      previous: RuntimeState,
     ) => Promise<void>;
   };
 };
@@ -85,13 +75,13 @@ export class Turn implements ToolHost {
   private readonly session: AgentSession;
   private readonly state: ToolState = initialToolState();
   private readonly activeSignal: AbortSignal;
-  private readonly memory: AgentRunState;
+  private readonly memory: RuntimeState;
   private readonly message?: WorldEvent;
   private readonly attention?: AgentAttention;
   private readonly log?: (message: string) => void;
   private readonly beforeNewTaskHook?: (
     task: AICharacterTask,
-    previous: AgentRunState,
+    previous: RuntimeState,
   ) => Promise<void>;
 
   private readonly deps: TurnDeps;
@@ -121,7 +111,7 @@ export class Turn implements ToolHost {
       deps.message,
     );
     this.runningAction = deps.actions.running();
-    this.scope = turnScope(deps.message, memory.task.current);
+    this.scope = turnScope(deps.message, memory.execution.task.current);
   }
 
   private get config(): AgentConfig {
@@ -217,7 +207,7 @@ export class Turn implements ToolHost {
     if (command.type === 'pause') this.state.terminal = true;
     await this.observe();
     if (reply) await this.send(reply);
-    return this.memory.task.current!;
+    return this.memory.execution.task.current!;
   }
 
   async settleTask(
@@ -249,7 +239,7 @@ export class Turn implements ToolHost {
     if (
       questionToAsk &&
       aiCharacterPermissions(this.config).chat &&
-      this.memory.checkpoint.unknownEffect?.name !== 'chat'
+      this.memory.execution.checkpoint.unknownEffect?.name !== 'chat'
     ) {
       const chatOutcome = await executeTaskActions(
         this.session,
@@ -267,8 +257,8 @@ export class Turn implements ToolHost {
       await this.refreshObservation(chatOutcome.observation);
     }
     return {
-      status: this.memory.task.current!.status,
-      summary: this.memory.task.current!.summary,
+      status: this.memory.execution.task.current!.status,
+      summary: this.memory.execution.task.current!.summary,
     };
   }
 
@@ -306,10 +296,8 @@ export class Turn implements ToolHost {
   private claimActiveTaskLease(): TaskLease {
     this.authorize();
     if (this.actionBusy())
-      throw new AgentRuntimeError(
-        '当前动作尚未结束，请读取进度或先明确停止。',
-      );
-    if (!isActiveTask(this.memory.task.current))
+      throw new AgentRuntimeError('当前动作尚未结束，请读取进度或先明确停止。');
+    if (!isActiveTask(this.memory.execution.task.current))
       throw new AgentRuntimeError(
         'No active running task. For a NEW human action request, call start_task(goal) FIRST, then retry the world tool. Do not claim completion: no world action was executed. A paused or exhausted task must be resumed, never recreated.',
       );
@@ -361,7 +349,7 @@ export class Turn implements ToolHost {
   private async prepare(): Promise<DecisionContext | undefined> {
     const { memory } = this;
     if (!this.message) {
-      const task = memory.task.current;
+      const task = memory.execution.task.current;
       if (!task) throw new AgentRuntimeError('没有可执行的任务。');
       const reason = checkBudgetCap(task, this.config);
       if (reason) throw new AgentRuntimeError(reason);
@@ -373,7 +361,7 @@ export class Turn implements ToolHost {
       this.message,
     );
     if (!prepared) return undefined;
-    memory.health.lastProgress ??=
+    memory.execution.health.lastProgress ??=
       worldSignature(prepared.observation, 'world') +
       JSON.stringify(prepared.observation.self);
     this.preparedValue = prepared;
@@ -384,7 +372,9 @@ export class Turn implements ToolHost {
   private async decide(prepared: DecisionContext) {
     const { memory } = this;
     const history = this.message
-      ? (memory.conversation.exchanges?.[this.scope] as Message[] | undefined)
+      ? (memory.character.conversation.exchanges?.[this.scope] as
+          | Message[]
+          | undefined)
       : checkpointMessages(memory);
     await runDecisionLoop({
       config: this.config,
@@ -413,7 +403,7 @@ export class Turn implements ToolHost {
         !this.binding.ownsLease() ||
         (!this.message && !!this.attention?.pending),
       contextEpoch: () =>
-        `${memory.task.identity?.id}:${memory.task.identity?.revision}`,
+        `${memory.execution.task.identity?.id}:${memory.execution.task.identity?.revision}`,
       afterTurn: () => this.recordDecisionHealth(),
       transcript: (messages) => this.saveDecisionTranscript(messages),
     });
@@ -452,7 +442,7 @@ export class Turn implements ToolHost {
     if (!this.activeSignal.aborted) {
       const reason =
         error instanceof Error ? error.message : '角色事件处理失败。';
-      memory.health.lastResponse = reason;
+      memory.execution.health.lastResponse = reason;
       this.log?.(reason);
       this.parkFailedTask(reason);
     }
@@ -462,7 +452,7 @@ export class Turn implements ToolHost {
 
   /** A failed decision parks an attached, current task as budget or blocked. */
   private parkFailedTask(reason: string) {
-    const task = this.memory.task.current;
+    const task = this.memory.execution.task.current;
     if (
       !this.binding.isAttached ||
       !this.binding.ownsLease() ||
@@ -482,7 +472,7 @@ export class Turn implements ToolHost {
 
   private async send(text: string) {
     const { memory, activeSignal } = this;
-    memory.health.lastResponse = text;
+    memory.execution.health.lastResponse = text;
     if (!aiCharacterPermissions(this.config).chat) {
       this.log?.(text);
       await this.save();

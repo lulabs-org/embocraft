@@ -1,17 +1,18 @@
 import { createAgentRuntime } from '@voxel/agent-runtime';
-import { expect, it, vi } from 'vitest';
+
 import { DEFAULT_TASK_LIMITS } from '@voxel/shared';
-import { ManagementPersistence } from './management-persistence';
-import type { ManagementArchive } from './archive';
-import { ManagementEvents } from '../modules/management';
+import { expect, it, vi } from 'vitest';
 import {
   AICharacterRegistry,
-  type Job,
   AICharacterWakeScheduler,
   executionState,
+  type Job,
 } from '../modules/ai-characters';
 import { CharacterSnapshots } from '../modules/ai-characters/persistence/snapshots';
+import { ManagementEvents } from '../modules/management';
 import { PlanService, TaskSnapshots, newPlan, newRun } from '../modules/tasks';
+import type { ManagementArchive } from './archive';
+import { ManagementPersistence } from './management-persistence';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const plans = new PlanService();
@@ -23,12 +24,6 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
     jobs.set(id, {
       view: { id, name: id, status: 'idle', sessionId: `session-${id}` },
       runtime,
-      get memory() {
-        return runtime.state;
-      },
-      set memory(value) {
-        runtime.replaceState(value);
-      },
       ledger: plans,
       abort: new AbortController(),
     } as Job);

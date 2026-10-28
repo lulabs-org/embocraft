@@ -1,9 +1,10 @@
 import { Session, until, type Observation } from '@voxel/agent-runtime';
+
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentRunner } from '@voxel/agent-runtime';
+
 import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
 import { bootstrapProviders } from '../../src/modules/providers';
@@ -92,7 +93,7 @@ try {
     origin: process.env.WEB_ORIGIN,
     agentDependencies: {
       session: (url) => new Session(url),
-      runner: (_config, provider) => new AgentRunner(provider, request),
+      model: (_config, provider) => ({ endpoint: provider, request: request }),
     },
   });
   manager = server.characters;
@@ -670,7 +671,7 @@ try {
     store.archive,
     {
       session: (url) => new Session(url),
-      runner: (_config, provider) => new AgentRunner(provider, request),
+      model: (_config, provider) => ({ endpoint: provider, request: request }),
     },
   );
   await manager.load();

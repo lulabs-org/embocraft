@@ -1,8 +1,6 @@
-import {
-  AgentRunner,
-  AgentRuntimeError,
-  type Session,
-} from '@voxel/agent-runtime';
+import { AgentRuntimeError, type Session } from '@voxel/agent-runtime';
+import { AgentRunner } from '@voxel/agent-runtime/testing';
+
 import {
   DEFAULT_TASK_LIMITS,
   type TaskPlanDraft,
@@ -12,7 +10,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ModelResponder } from '../../../tests/support/model-fixture';
 import {
-  scriptedRunnerFactory,
+  scriptedModelFactory,
   testObservation,
 } from '../../../tests/support/model-fixture';
 import { toolResponse } from '../../../tests/support/pi-response';
@@ -61,7 +59,7 @@ function build() {
       currentSession = session();
       return currentSession as unknown as Session;
     },
-    runner: scriptedRunnerFactory(() => ({
+    model: scriptedModelFactory(() => ({
       respond: decide,
       tokens: 600,
     })),
@@ -416,11 +414,12 @@ it('restores unconfirmed action history as unknown and expires private runs with
     ok: false,
     stopReason: 'executing',
   };
-  record.runtime.effects.previous = previous;
-  archive.characters[0].runtime.effects.previous = previous;
-  record.runtime.task.current.privateTo = 'expired-player';
-  archive.characters[0].runtime.task.current.privateTo = 'expired-player';
-  record.runtime.effects.unfinishedBuild = {
+  record.runtime.execution.effects.previous = previous;
+  archive.characters[0].runtime.execution.effects.previous = previous;
+  record.runtime.execution.task.current.privateTo = 'expired-player';
+  archive.characters[0].runtime.execution.task.current.privateTo =
+    'expired-player';
+  record.runtime.execution.effects.unfinishedBuild = {
     action: { type: 'build', blocks: [{ x: 1, y: 3, z: 1, material: 'wood' }] },
     result: {
       ok: false,
@@ -431,8 +430,8 @@ it('restores unconfirmed action history as unknown and expires private runs with
       failures: [],
     },
   };
-  archive.characters[0].runtime.effects.unfinishedBuild =
-    record.runtime.effects.unfinishedBuild;
+  archive.characters[0].runtime.execution.effects.unfinishedBuild =
+    record.runtime.execution.effects.unfinishedBuild;
   store.archive.json = JSON.stringify(archive);
   manager = build();
   decide.mockClear();
@@ -445,11 +444,11 @@ it('restores unconfirmed action history as unknown and expires private runs with
     manager.tasks.controlTaskRun(id, run.id, 'resume'),
   ).rejects.toThrow('私聊');
   const restored = JSON.parse(store.archive.json!);
-  expect(restored.runs[0].runtime.effects.previous.results[0].status).toBe(
-    'unknown',
-  );
   expect(
-    restored.runs[0].runtime.effects.unfinishedBuild.result.remaining,
+    restored.runs[0].runtime.execution.effects.previous.results[0].status,
+  ).toBe('unknown');
+  expect(
+    restored.runs[0].runtime.execution.effects.unfinishedBuild.result.remaining,
   ).toHaveLength(1);
 });
 
@@ -612,8 +611,9 @@ it('retains multiple Pi tool batches within the same model call in actual action
       });
       return s as unknown as Session;
     },
-    runner: () =>
-      new AgentRunner(undefined, async () =>
+    model: () => ({
+      endpoint: undefined,
+      request: async () =>
         toolResponse([
           { name: 'chat', arguments: { text: '完成' } },
           {
@@ -623,7 +623,7 @@ it('retains multiple Pi tool batches within the same model call in actual action
             },
           },
         ]),
-      ),
+    }),
   });
   const id = await role();
   const plan = await manager.tasks.createTaskPlan(id, {

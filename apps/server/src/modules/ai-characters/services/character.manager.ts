@@ -1,4 +1,5 @@
-import { AgentRunner, Session } from '@voxel/agent-runtime';
+import { Session } from '@voxel/agent-runtime';
+
 import type { ArchivePort } from '../../../persistence/archive';
 import type { VoiceServiceStore } from '../../audio';
 import type { ProviderRuntimePort } from '../../providers';
@@ -17,8 +18,10 @@ export class AICharacterManager extends AICharacterOrchestrator {
     archive: ArchivePort,
     dependencies: AICharacterDependencies = {
       session: (url) => new Session(url),
-      runner: (_config, provider) =>
-        new AgentRunner({ type: provider.type, baseUrl: provider.baseUrl }),
+      model: (_config, provider) => ({
+        endpoint: { type: provider.type, baseUrl: provider.baseUrl },
+        request: fetch,
+      }),
     },
     voiceServices?: VoiceServiceStore,
   ) {

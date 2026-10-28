@@ -1,7 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { TaskCommand } from '../task/service';
-import { conversationToolSchemas } from './schema';
+import type { TaskCommand } from '../../contracts/task';
 import type { ToolHost } from './port';
+import { conversationToolSchemas } from './schema';
 
 const TASK_CONTROL_DESCRIPTION =
   'Control the current activity, preserving its identity and spent budget. After start or revise, use world tools in this same session.';

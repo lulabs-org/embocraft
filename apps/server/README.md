@@ -56,7 +56,7 @@ Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/a
 
 `ModelCatalog` 由 `createServer` 创建并直接注入 Provider 路由，角色编排器不再持有它。`agentDependencies` 仅配置角色的 session 与 runner。删除模型或音色服务仍经角色管理器检查关联约束。
 
-Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端。每个 Job 持有一个 `AgentRuntime`，服务端通过其消息、执行、控制、查询和恢复方法操作角色；CLI 使用同一门面的 `runUntilSettled()`，旧 `runAgent()` 作为兼容适配保留。宿主不再自行解析控制词、拼接事件标识或读写运行时分区；任务账本、连接、定时器和联合存档事务仍由服务端管理。`Job.memory/attention` 仅保留兼容别名，存档继续使用 v3 格式。
+Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端。每个 Job 持有一个 `AgentRuntime`，服务端通过其消息、执行、控制、查询和恢复方法操作角色；CLI 使用同一门面的 `runUntilSettled()`。宿主不再自行解析控制词、拼接事件标识或读写运行时分区；任务账本、连接、定时器和联合存档事务仍由服务端管理。已删除 `Job.memory/attention` 别名；运行时存档使用 version 4 的角色/执行双分区，旧运行时存档会明确报错，不自动迁移。
 
 `chat` 按 `domain/`、`services/` 与 `routes/` 分层：`domain/visibility.ts` 按消息范围、发送者与接收者判断可见性；`services/` 集中聊天、凭据、音频缓存、空间语音票据及 ASR 协调，统一使用 `*.service.ts` 命名；`routes/chats.routes.ts` 保留 `/chat` 的 HTTP 接口与 OpenAPI 注解。路由和语音协调测试与源码共置，跨包的 `test/chat.test.ts` 保留在集成测试目录。模块门面继续导出 `WorldChat`、`installChatRoutes` 与 `visibleEvent`，聊天鉴权、可见性、语音处理和票据生命周期保持不变。
 
@@ -113,7 +113,7 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 `persistence/plan-store.ts` 持有计划与执行历史的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。`domain/command-policy.ts` 的 `taskCommandBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有现有公共导出继续通过模块根部 `index.ts` 提供，目录调整不改变类名、函数签名或存档格式。
 
-Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，当前运行时检查点为 v3。存档恢复前经过结构校验，不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
+Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，嵌入的运行时状态为 version 4，Pi 检查点为 v3。存档恢复前经过结构校验，不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
 
 ## HTTP 领域路径
 

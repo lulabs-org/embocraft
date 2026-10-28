@@ -1,38 +1,41 @@
-import {
-  emptyState,
-  newTask,
-  TaskService,
-  type AgentRunState,
-} from '@voxel/agent-runtime';
+import { type RuntimeState } from '@voxel/agent-runtime';
+import { TaskService } from '../src/agent/task/service';
+import { newTask } from '../src/agent/task/state';
+import { emptyState } from '../src/contracts/state';
+
 import { describe, expect, it } from 'vitest';
 import { testAgentConfig } from '../../../tests/support/agent-config';
-import { RequestBudget } from '../../../packages/agent-runtime/src/agent/task/budget';
+import { RequestBudget } from '../src/agent/task/budget';
 
 const config = testAgentConfig();
 const operator = { kind: 'operator' as const };
 
 describe('TaskService revision and commit boundary', () => {
   it('retains identity, costs and unknown effects when revising, but invalidates old results', () => {
-    const memory: AgentRunState = {
-      ...emptyState(),
-      task: {
-        current: newTask('old'),
+    const memory: RuntimeState = {
+      version: 4 as const,
+      character: {
+        ...emptyState().character,
         usage: { calls: 2, tokens: 400, estimated: false },
       },
-      checkpoint: {
-        unknownEffect: { id: 'effect', name: 'chat', state: 'unknown' },
+      execution: {
+        ...emptyState().execution,
+        task: { current: newTask('old') },
+        checkpoint: {
+          unknownEffect: { id: 'effect', name: 'chat', state: 'unknown' },
+        },
       },
     };
-    Object.assign(memory.task.current!, {
+    Object.assign(memory.execution.task.current!, {
       calls: 2,
       tokens: 400,
       elapsedMs: 500,
     });
     const service = new TaskService(memory),
       lease = service.lease();
-    memory.effects.follow = {
+    memory.execution.effects.follow = {
       action: { type: 'follow', playerId: 'human', distance: 1 },
-      taskStartedAt: memory.task.current!.startedAt,
+      taskStartedAt: memory.execution.task.current!.startedAt,
       pursuing: true,
     };
     service.command({ type: 'revise', goal: 'new' }, operator, config);
@@ -40,28 +43,32 @@ describe('TaskService revision and commit boundary', () => {
       id: lease.id,
       revision: lease.revision + 1,
     });
-    expect(memory.task.current).toMatchObject({
+    expect(memory.execution.task.current).toMatchObject({
       goal: 'new',
       calls: 2,
       tokens: 400,
       elapsedMs: 500,
     });
-    expect(memory.effects.follow).toBeUndefined();
-    expect(memory.checkpoint.unknownEffect).toBeDefined();
+    expect(memory.execution.effects.follow).toBeUndefined();
+    expect(memory.execution.checkpoint.unknownEffect).toBeDefined();
     expect(() =>
       service.finish(lease, { status: 'completed', reason: 'late' }),
     ).toThrow('过期');
   });
   it('rolls back a rejected durable command without losing provider usage', async () => {
-    const memory: AgentRunState = {
-      ...emptyState(),
-      task: {
-        current: newTask('old'),
+    const memory: RuntimeState = {
+      version: 4 as const,
+      character: {
+        ...emptyState().character,
         usage: { calls: 0, tokens: 0, estimated: false },
       },
+      execution: {
+        ...emptyState().execution,
+        task: { current: newTask('old') },
+      },
     };
-    const before = structuredClone(memory.task.current);
-    const budget = new RequestBudget(config, memory.task.usage!);
+    const before = structuredClone(memory.execution.task.current);
+    const budget = new RequestBudget(config, memory.character.usage!);
     budget.begin();
     budget.finish(100, false);
     await expect(
@@ -75,20 +82,24 @@ describe('TaskService revision and commit boundary', () => {
         budget,
       ),
     ).rejects.toThrow('检查点');
-    expect(memory.task.current).toEqual(before);
-    expect(memory.task.usage).toMatchObject({ calls: 1, tokens: 100 });
+    expect(memory.execution.task.current).toEqual(before);
+    expect(memory.character.usage).toMatchObject({ calls: 1, tokens: 100 });
   });
   it('checks a completion independently of model prose', () => {
-    const memory: AgentRunState = {
-      ...emptyState(),
-      task: { current: newTask('work') },
+    const memory: RuntimeState = {
+      version: 4 as const,
+      character: { ...emptyState().character },
+      execution: {
+        ...emptyState().execution,
+        task: { current: newTask('work') },
+      },
     };
     const service = new TaskService(memory),
       lease = service.lease();
     expect(() =>
       service.finish(lease, { status: 'completed', reason: 'done' }, true),
     ).toThrow('未确认');
-    memory.checkpoint.unknownEffect = {
+    memory.execution.checkpoint.unknownEffect = {
       id: 'unknown',
       name: 'goto',
       state: 'unknown',

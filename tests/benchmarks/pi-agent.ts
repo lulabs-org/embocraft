@@ -1,17 +1,13 @@
-import { emptyState } from '@voxel/agent-runtime';
-import type { Edit } from '@voxel/shared';
+import { AgentRunner, emptyState, newTask } from '@voxel/agent-runtime/testing';
+import { AgentAttention } from '../../packages/agent-runtime/src/world/observe/attention';
+
 import type { AgentSession } from '@voxel/agent-runtime';
-import type { SavedProvider } from '../../apps/server/src/modules/providers';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { type Observation, type RuntimeState } from '@voxel/agent-runtime';
+import type { Edit } from '@voxel/shared';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import {
-  AgentRunner,
-  newTask,
-  AgentAttention,
-  type Observation,
-  type AgentRunState,
-} from '../../packages/agent-runtime/src/index';
+import type { SavedProvider } from '../../apps/server/src/modules/providers';
 import { testAgentConfig } from '../support/agent-config';
 // Opt-in: this benchmark sends real requests using a locally configured provider.
 const providerFile = process.env.PI_BENCHMARK_PROVIDERS;
@@ -49,7 +45,7 @@ const results: {
   repeat: number;
   success: boolean;
   ms: number;
-  usage: AgentRunState['task']['usage'];
+  usage: RuntimeState['character']['usage'];
   status: string | undefined;
 }[] = [];
 for (const name of cases)
@@ -141,9 +137,9 @@ for (const name of cases)
       wait: '等待世界中有玩家出现。在没有玩家时保持等待，不要移动或建造。',
       update: '在 (2,3,0) 放一个木头方块，然后等待我进一步指示。',
     };
-    const memory: AgentRunState = emptyState();
+    const memory: RuntimeState = emptyState();
     if (name === 'chat') message(goals[name]);
-    else memory.task.current = newTask(goals[name], 'human', 'human');
+    else memory.execution.task.current = newTask(goals[name], 'human', 'human');
     const runner = new AgentRunner(provider, fetch);
     const start = performance.now();
     try {
@@ -170,7 +166,7 @@ for (const name of cases)
         }
         if (
           !attention.pending &&
-          !['running'].includes(memory.task.current?.status ?? '')
+          !['running'].includes(memory.execution.task.current?.status ?? '')
         )
           break;
       }
@@ -183,29 +179,29 @@ for (const name of cases)
       );
     const success =
       name === 'chat'
-        ? chats.length > 0 && !memory.task.current
+        ? chats.length > 0 && !memory.execution.task.current
         : name === 'move'
-          ? moved && memory.task.current?.status === 'completed'
+          ? moved && memory.execution.task.current?.status === 'completed'
           : name === 'build'
             ? at(2, 'wood') &&
               at(3, 'wood') &&
-              memory.task.current?.status === 'completed'
+              memory.execution.task.current?.status === 'completed'
             : name === 'correction'
               ? failed &&
                 at(2, 'wood') &&
-                memory.task.current?.status === 'completed'
+                memory.execution.task.current?.status === 'completed'
               : name === 'wait'
-                ? memory.task.current?.status === 'waiting' && !moved
+                ? memory.execution.task.current?.status === 'waiting' && !moved
                 : changed &&
                   at(3, 'stone') &&
-                  memory.task.current?.status === 'completed';
+                  memory.execution.task.current?.status === 'completed';
     const result = {
       name,
       repeat,
       success,
       ms: Math.round(performance.now() - start),
-      usage: memory.task.usage,
-      status: memory.task.current?.status,
+      usage: memory.character.usage,
+      status: memory.execution.task.current?.status,
     };
     results.push(result);
     console.log(JSON.stringify(result));

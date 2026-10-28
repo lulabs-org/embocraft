@@ -1,11 +1,12 @@
-import type { ActiveAction, AgentRunState } from '../../contracts/state';
+import type { ActiveAction, RuntimeState } from '../../contracts/state';
+import type { TaskLease } from '../../contracts/task';
 import type { ToolState } from '../../contracts/tool-state';
 import { recordEvent } from '../task/inbox';
-import type { TaskLease, TaskService } from '../task/service';
+import { TaskService } from '../task/service';
 
 export type BackgroundActionHost = {
   service: TaskService;
-  memory: AgentRunState;
+  memory: RuntimeState;
   state: ToolState;
   activeSignal: AbortSignal;
   save: () => Promise<void>;
@@ -18,12 +19,12 @@ export type BackgroundActionHost = {
 
 /** Marks an action as actively running in the durable effects section. */
 export function markActiveActionRunning(
-  memory: AgentRunState,
+  memory: RuntimeState,
   id: string,
   name: string,
   lease: TaskLease,
 ): void {
-  memory.effects.activeAction = {
+  memory.execution.effects.activeAction = {
     id,
     name,
     taskId: lease.id,
@@ -98,17 +99,17 @@ export async function launchBackgroundWorldAction(
 
 /** A late action may never replace the next task revision's result. */
 export function settleActiveAction(
-  memory: AgentRunState,
+  memory: RuntimeState,
   service: TaskService,
   lease: TaskLease,
   action: ActiveAction,
 ): void {
-  if (service.current(lease)) memory.effects.activeAction = action;
+  if (service.current(lease)) memory.execution.effects.activeAction = action;
 }
 
 /** Keep settlement and event publication separate to preserve checkpoint ordering. */
 export function recordActionResult(
-  memory: AgentRunState,
+  memory: RuntimeState,
   service: TaskService,
   lease: TaskLease,
   actionId: string,
@@ -120,7 +121,7 @@ export function recordActionResult(
     kind: 'action_result',
     state: 'pending',
     at: Date.now(),
-    audience: memory.task.current?.privateTo ?? 'public',
+    audience: memory.execution.task.current?.privateTo ?? 'public',
     taskId: lease.id,
     revision: lease.revision,
     actionId,

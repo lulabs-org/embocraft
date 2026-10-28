@@ -1,8 +1,9 @@
-import { AgentRunner, delay, Session, until } from '@voxel/agent-runtime';
+import { delay, Session, until } from '@voxel/agent-runtime';
+
 import type { ChatData } from '@voxel/shared';
 import assert from 'node:assert/strict';
-import { toolResponse } from '../../../../tests/support/pi-response';
 import { controlRun, startTask } from '../../../../tests/support/managed-tasks';
+import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
 import { bootstrapProviders } from '../../src/modules/providers';
 import { MemoryProviderRepository } from '../helpers/memory-storage';
@@ -174,7 +175,7 @@ try {
     ConstructorParameters<typeof AICharacterManager>[3]
   > = {
     session: (url) => new Session(url),
-    runner: (_config, provider) => new AgentRunner(provider, request),
+    model: (_config, provider) => ({ endpoint: provider, request: request }),
   };
   server = await createTestServer({
     providers: store,

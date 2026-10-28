@@ -1,33 +1,33 @@
+import { aiCharacterPermissions } from '@voxel/shared';
+import type { AgentAction, BatchResult, Observation } from '../../contracts';
+import type { RuntimeState } from '../../contracts/state';
+import type { TaskLease } from '../../contracts/task';
+import type { ToolState } from '../../contracts/tool-state';
 import { withDeadline } from '../../kernel/abort';
+import { parseAction } from '../../world/actions/parse';
+import { navigate, observeNavigation } from '../../world/nav/controller';
+import { worldSignature } from '../../world/observe/extract';
+import { TaskService } from '../task/service';
 import {
   markActiveActionRunning,
   recordActionResult,
   settleActiveAction,
 } from './lifecycle';
 import type { ActionRunOptions, ContinuingAction } from './port';
-import type { AgentAction, BatchResult, Observation } from '../../contracts';
-import type { TaskLease } from '../task/service';
-import { worldSignature } from '../../world/observe/extract';
-import type { ToolState } from '../../contracts/tool-state';
-import { TaskService } from '../task/service';
-import { aiCharacterPermissions } from '@voxel/shared';
-import { navigate, observeNavigation } from '../../world/nav/controller';
-import { parseAction } from '../../world/actions/parse';
-import type { AgentRunState } from '../../contracts/state';
 
 /** A bounded host tick: no model request, no new task, no replayed movement inputs. */
 export async function runFollowStep(options: ActionRunOptions) {
   const { memory, session, signal, config, attention } = options;
-  const follow = memory.effects.follow,
-    task = memory.task.current;
+  const follow = memory.execution.effects.follow,
+    task = memory.execution.task.current;
   if (!follow || !task || follow.taskStartedAt !== task.startedAt) {
-    delete memory.effects.follow;
+    delete memory.execution.effects.follow;
     return;
   }
   const service = new TaskService(memory);
   const lease = service.lease();
-  if (memory.effects.activeAction?.name === 'follow')
-    Object.assign(memory.effects.activeAction, {
+  if (memory.execution.effects.activeAction?.name === 'follow')
+    Object.assign(memory.execution.effects.activeAction, {
       revision: lease.revision,
       status: 'running',
     });
@@ -71,7 +71,7 @@ export async function runFollowStep(options: ActionRunOptions) {
       task.status = 'waiting';
       task.waitFor = 'players';
     }
-    memory.health.noProgress = 0;
+    memory.execution.health.noProgress = 0;
   } catch (error) {
     if (!signal.aborted && service.current(lease)) {
       task.status = deadline.expired ? 'budget' : 'blocked';
@@ -95,9 +95,9 @@ export async function runFollowStep(options: ActionRunOptions) {
       }
       if (
         task.status === 'blocked' &&
-        memory.effects.activeAction?.name === 'follow'
+        memory.execution.effects.activeAction?.name === 'follow'
       ) {
-        const action = memory.effects.activeAction;
+        const action = memory.execution.effects.activeAction;
         action.status = 'failed';
         action.result = follow.lastResult ?? task.reason;
         settleActiveAction(memory, service, lease, action);
@@ -113,17 +113,17 @@ export async function runFollowStep(options: ActionRunOptions) {
 
 /** The action layer owns both local continuation and its recovery decision. */
 export const followingAction: ContinuingAction = {
-  pending: (memory) => !!memory.effects.follow,
+  pending: (memory) => !!memory.execution.effects.follow,
   wakeDelayMs: 100,
   async advance(options) {
     await runFollowStep(options);
     const { memory } = options;
-    const task = memory.task.current;
+    const task = memory.execution.task.current;
     if (
       task?.status === 'blocked' &&
-      memory.effects.activeAction?.status === 'failed'
+      memory.execution.effects.activeAction?.status === 'failed'
     ) {
-      delete memory.effects.follow;
+      delete memory.execution.effects.follow;
       task.status = 'running';
       return 'resume';
     }
@@ -132,16 +132,16 @@ export const followingAction: ContinuingAction = {
 };
 
 /** Per-batch intent tracking; navigation to a destination supersedes following. */
-export function createFollowEffects(memory: AgentRunState) {
+export function createFollowEffects(memory: RuntimeState) {
   const control = { pursuing: true };
   return {
     control,
     before(action: AgentAction): boolean {
-      if (action.type === 'goto') delete memory.effects.follow;
+      if (action.type === 'goto') delete memory.execution.effects.follow;
       if (action.type !== 'follow') return false;
-      memory.effects.follow = {
+      memory.execution.effects.follow = {
         action,
-        taskStartedAt: memory.task.current!.startedAt,
+        taskStartedAt: memory.execution.task.current!.startedAt,
         pursuing: true,
       };
       return true;
@@ -150,10 +150,10 @@ export function createFollowEffects(memory: AgentRunState) {
       const result = batch.results.find(
         (r) => r.action.type === 'follow',
       )?.result;
-      if (memory.effects.follow && result && 'status' in result) {
-        memory.effects.follow.pursuing = control.pursuing;
-        memory.effects.follow.lastResult = result;
-        if (!result.ok) delete memory.effects.follow;
+      if (memory.execution.effects.follow && result && 'status' in result) {
+        memory.execution.effects.follow.pursuing = control.pursuing;
+        memory.execution.effects.follow.lastResult = result;
+        if (!result.ok) delete memory.execution.effects.follow;
       }
     },
   };
@@ -161,13 +161,13 @@ export function createFollowEffects(memory: AgentRunState) {
 
 /** A successful first slice parks the task; later slices run without a model. */
 export function settleFollowing(
-  memory: AgentRunState,
+  memory: RuntimeState,
   service: TaskService,
   lease: TaskLease,
   observation: Observation,
   state: ToolState,
 ) {
-  if (!memory.effects.follow) return;
+  if (!memory.execution.effects.follow) return;
   service.finish(lease, {
     status: 'waiting',
     reason: '持续跟随中，由本地导航控制器推进。',
@@ -179,10 +179,10 @@ export function settleFollowing(
 
 /** Retain the original checkpoint order: the first slice is saved before activation. */
 export function activateFollowing(
-  memory: AgentRunState,
+  memory: RuntimeState,
   id: string,
   lease: TaskLease,
 ) {
-  if (memory.effects.follow)
+  if (memory.execution.effects.follow)
     markActiveActionRunning(memory, id, 'follow', lease);
 }

@@ -1,5 +1,5 @@
 import type { Message } from '@earendil-works/pi-ai';
-import type { AgentRunState } from '../../contracts/state';
+import type { RuntimeState } from '../../contracts/state';
 import { updateCheckpoint } from './checkpoint';
 import { recentInteractions, recentTurns } from './window';
 
@@ -13,7 +13,7 @@ const REDACTED = '[已隐藏]';
  * keep the trimmed task transcript so a crashed run can resume.
  */
 export async function persistTranscript(input: {
-  memory: AgentRunState;
+  memory: RuntimeState;
   messages: Message[];
   scope: string;
   hasMessage: boolean;
@@ -26,7 +26,7 @@ export async function persistTranscript(input: {
     input.apiKey,
   );
   if (input.hasMessage) rememberExchange(input.memory, input.scope, clean);
-  if (input.attached && input.memory.task.current)
+  if (input.attached && input.memory.execution.task.current)
     updateCheckpoint(input.memory, clean);
   await input.save();
 }
@@ -41,11 +41,11 @@ function cleanTranscript(messages: Message[], apiKey?: string): Message[] {
 
 /** Keeps the newest private conversations; public and the current scope always survive. */
 function rememberExchange(
-  memory: AgentRunState,
+  memory: RuntimeState,
   scope: string,
   messages: Message[],
 ) {
-  const exchanges = (memory.conversation.exchanges ??= {});
+  const exchanges = (memory.character.conversation.exchanges ??= {});
   delete exchanges[scope];
   exchanges[scope] = messages;
   const privateScopes = Object.keys(exchanges).filter(

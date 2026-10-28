@@ -1,13 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { AgentRunner } from '@voxel/agent-runtime/testing';
 import type { ChatData, WorldEvent } from '@voxel/shared';
+import { describe, expect, it, vi } from 'vitest';
+import { testAgentConfig } from '../../../../tests/support/agent-config';
+import { newTask } from '../agent/task/state';
+import type { RunOptions } from '../agent/turn/turn';
 import type { AgentConfig } from '../contracts/config';
 import { emptyState } from '../contracts/state';
-import { newTask } from '../agent/task/state';
-import { createAgentRuntime } from './runtime';
 import { MemorySession } from '../testing/memory-session';
-import { testAgentConfig } from '../../../../tests/support/agent-config';
-import type { RunOptions } from '../agent/turn/turn';
 import type { RuntimeMessageControl } from './ports';
+import { createAgentRuntime } from './runtime';
 
 function deferred() {
   let resolve!: () => void;
@@ -40,7 +41,7 @@ describe('AgentRuntime facade', () => {
       selfId: 'ai',
     });
     const pending = runtime.receive(chat(1), { save: () => saved.promise });
-    expect(runtime.snapshot().inbox?.events).toHaveLength(1);
+    expect(runtime.snapshot().character.inbox?.events).toHaveLength(1);
     expect(runtime.pendingMessages).toBe(false);
     runtime.connect(new MemorySession(), 'ai');
     saved.resolve();
@@ -63,7 +64,7 @@ describe('AgentRuntime facade', () => {
       }),
     ).rejects.toThrow('disk');
     expect(runtime.pendingMessages).toBe(false);
-    expect(runtime.snapshot().inbox?.events[0].state).toBe('pending');
+    expect(runtime.snapshot().character.inbox?.events[0].state).toBe('pending');
   });
 
   it('marks overflow unknown and uses the host persistence hook only after the initial save', async () => {
@@ -71,14 +72,16 @@ describe('AgentRuntime facade', () => {
       session: new MemorySession(),
       selfId: 'ai',
     });
-    for (let seq = 1; seq <= 8; seq++) await runtime.submit(chat(seq));
+    for (let seq = 1; seq <= 8; seq++) await runtime.receive(chat(seq));
     const order: string[] = [];
     const result = await runtime.receive(chat(9), {
       save: () => {
         order.push('save');
       },
       onOverflow: () => {
-        expect(runtime.snapshot().inbox?.events.at(-1)?.state).toBe('unknown');
+        expect(runtime.snapshot().character.inbox?.events.at(-1)?.state).toBe(
+          'unknown',
+        );
         order.push('overflow');
       },
     });
@@ -88,8 +91,12 @@ describe('AgentRuntime facade', () => {
 
   it('routes authorized controls through host interruption and leaves unauthorized words as conversation', async () => {
     const state = {
-      ...emptyState(),
-      task: { current: newTask('private work', 'alice', 'alice') },
+      version: 4 as const,
+      character: { ...emptyState().character },
+      execution: {
+        ...emptyState().execution,
+        task: { current: newTask('private work', 'alice', 'alice') },
+      },
     };
     const runtime = createAgentRuntime({
       session: new MemorySession(),
@@ -119,7 +126,7 @@ describe('AgentRuntime facade', () => {
     ).resolves.toBe('controlled');
     expect(control).toHaveBeenCalledTimes(1);
     expect(runtime.view().task?.status).toBe('paused');
-    expect(runtime.snapshot().inbox?.events.at(-1)).toMatchObject({
+    expect(runtime.snapshot().character.inbox?.events.at(-1)).toMatchObject({
       kind: 'control',
       actor: 'alice',
       state: 'done',
@@ -130,25 +137,32 @@ describe('AgentRuntime facade', () => {
     const cleanup = deferred();
     const order: string[] = [];
     const config = testAgentConfig();
-    const state = { ...emptyState(), task: { current: newTask('work') } };
+    const state = {
+      version: 4 as const,
+      character: { ...emptyState().character },
+      execution: {
+        ...emptyState().execution,
+        task: { current: newTask('work') },
+      },
+    };
+    vi.spyOn(AgentRunner.prototype, 'run').mockImplementationOnce(
+      async (options: RunOptions) => {
+        await new Promise<void>((resolve) =>
+          options.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          }),
+        );
+        order.push('abort');
+        await cleanup.promise;
+        order.push('cleanup');
+      },
+    );
     const runtime = createAgentRuntime({
       session: new MemorySession(),
       state,
       store: {
         save: () => {
           order.push('save');
-        },
-      },
-      runner: {
-        run: async (options: RunOptions) => {
-          await new Promise<void>((resolve) =>
-            options.signal.addEventListener('abort', () => resolve(), {
-              once: true,
-            }),
-          );
-          order.push('abort');
-          await cleanup.promise;
-          order.push('cleanup');
         },
       },
     });
@@ -178,21 +192,25 @@ describe('AgentRuntime facade', () => {
   it('rejects unauthorized or invalid control before interrupting current work or clearing messages', async () => {
     const released = deferred();
     let signal!: AbortSignal;
+    vi.spyOn(AgentRunner.prototype, 'run').mockImplementationOnce(
+      async (options: RunOptions) => {
+        signal = options.signal;
+        await released.promise;
+      },
+    );
     const runtime = createAgentRuntime({
       session: new MemorySession(),
       selfId: 'ai',
       state: {
-        ...emptyState(),
-        task: { current: newTask('private', 'alice', 'alice') },
-      },
-      runner: {
-        run: async (options: RunOptions) => {
-          signal = options.signal;
-          await released.promise;
+        version: 4 as const,
+        character: { ...emptyState().character },
+        execution: {
+          ...emptyState().execution,
+          task: { current: newTask('private', 'alice', 'alice') },
         },
       },
     });
-    await runtime.submit(chat(1));
+    await runtime.receive(chat(1));
     const running = runtime.run(testAgentConfig(), {
       signal: new AbortController().signal,
     });
@@ -227,19 +245,19 @@ describe('AgentRuntime facade', () => {
       store,
     });
 
-    await expect(runtime.submit(chat(1))).resolves.toBe(true);
-    expect(runtime.attention.pending).toBe(true);
-    expect(runtime.state.inbox?.events).toHaveLength(1);
-    expect(runtime.state.inbox?.events[0]).toMatchObject({
-      id: `chat:${runtime.attention.generation}:alice:1`,
+    await expect(runtime.receive(chat(1))).resolves.toBe('queued');
+    expect(runtime.pendingMessages).toBe(true);
+    expect(runtime.snapshot().character.inbox?.events).toHaveLength(1);
+    expect(runtime.snapshot().character.inbox?.events[0]).toMatchObject({
+      id: expect.stringMatching(/^chat:.*:alice:1$/),
       kind: 'chat',
       state: 'pending',
       audience: 'alice',
     });
     expect(store.save).toHaveBeenCalledTimes(1);
 
-    await expect(runtime.submit(chat(1))).resolves.toBe(false);
-    expect(runtime.state.inbox?.events).toHaveLength(1);
+    await expect(runtime.receive(chat(1))).resolves.toBe('ignored');
+    expect(runtime.snapshot().character.inbox?.events).toHaveLength(1);
     expect(store.save).toHaveBeenCalledTimes(1);
   });
 
@@ -258,14 +276,18 @@ describe('AgentRuntime facade', () => {
         recipients: ['someone-else'],
       },
     };
-    await expect(runtime.submit(other)).resolves.toBe(false);
-    expect(runtime.state.inbox).toBeUndefined();
+    await expect(runtime.receive(other)).resolves.toBe('ignored');
+    expect(runtime.snapshot().character.inbox).toBeUndefined();
   });
 
   it('applies authorized operator control and exposes a copy-only snapshot', async () => {
     const state = {
-      ...emptyState(),
-      task: { current: newTask('walk') },
+      version: 4 as const,
+      character: { ...emptyState().character },
+      execution: {
+        ...emptyState().execution,
+        task: { current: newTask('walk') },
+      },
     };
     const runtime = createAgentRuntime({
       session: new MemorySession(),
@@ -278,11 +300,34 @@ describe('AgentRuntime facade', () => {
       { kind: 'operator' },
       {} as AgentConfig,
     );
-    expect(runtime.state.task.current?.status).toBe('paused');
+    expect(runtime.snapshot().execution.task.current?.status).toBe('paused');
 
     const snapshot = runtime.snapshot();
-    expect(snapshot).not.toBe(runtime.state);
-    snapshot.task.current!.status = 'completed';
-    expect(runtime.state.task.current?.status).toBe('paused');
+    expect(snapshot).not.toBe(runtime.snapshot());
+    snapshot.execution.task.current!.status = 'completed';
+    expect(runtime.snapshot().execution.task.current?.status).toBe('paused');
   });
+});
+
+it('owns constructor and restored snapshots without exposing caller-held mutable state', () => {
+  const input = emptyState();
+  input.execution.task.current = newTask('original');
+  const runtime = createAgentRuntime({ state: input });
+  input.execution.task.current.goal = 'outside mutation';
+  expect(runtime.view().task?.goal).toBe('original');
+  const archive = runtime.snapshot();
+  runtime.restore(archive);
+  archive.execution.task.current!.goal = 'mutated archive';
+  expect(runtime.view().task?.goal).toBe('original');
+  expect(() =>
+    runtime.restore({
+      version: 3,
+      task: {},
+      conversation: {},
+      checkpoint: {},
+      effects: {},
+      health: {},
+    }),
+  ).toThrow('version 4');
+  expect(runtime.view().task?.goal).toBe('original');
 });

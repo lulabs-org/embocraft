@@ -1,7 +1,7 @@
-import type { ModelEndpoint } from '../../contracts';
 import type { WorldEvent } from '@voxel/shared';
+import type { ModelEndpoint } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
-import type { AgentRunState } from '../../contracts/state';
+import type { RuntimeState } from '../../contracts/state';
 import { ActionRuntime } from '../action/runtime';
 import { defaultEndpoint } from '../model/pi';
 import { checkBudgetCap } from '../task/budget';
@@ -18,7 +18,7 @@ function nextWakeCause(attention: RunOptions['attention']): WakeCause {
   return message ? { kind: 'message', message } : { kind: 'tick' };
 }
 
-const running = new WeakSet<AgentRunState>();
+const running = new WeakSet<RuntimeState>();
 
 /** The single serialized execution entrypoint for a character's wake-up. */
 export class AgentRunner {
@@ -60,7 +60,11 @@ export class AgentRunner {
           cause = { kind: 'resume' };
           continue;
         }
-        if (cause.kind === 'tick' && !isActiveTask(memory.task.current)) return;
+        if (
+          cause.kind === 'tick' &&
+          !isActiveTask(memory.execution.task.current)
+        )
+          return;
         if (!actions.isRunning || cause.kind !== 'tick')
           await this.turn(
             o,
@@ -78,7 +82,7 @@ export class AgentRunner {
           }
           continue;
         }
-        if (memory.task.current?.status === 'running') {
+        if (memory.execution.task.current?.status === 'running') {
           cause = { kind: 'resume' };
           continue;
         }
@@ -91,7 +95,7 @@ export class AgentRunner {
 
   /** Saves a task that cannot afford another request as 'budget'. */
   private async parkBudgetExhausted(o: RunOptions): Promise<boolean> {
-    const task = o.memory.task.current;
+    const task = o.memory.execution.task.current;
     if (!isActiveTask(task)) return false;
     const reason = checkBudgetCap(task, o.config);
     if (!reason) return false;

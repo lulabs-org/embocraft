@@ -1,4 +1,5 @@
-import { AgentRunner, delay, Session, until } from '@voxel/agent-runtime';
+import { delay, Session, until } from '@voxel/agent-runtime';
+
 import type {
   AgentSpeechEvent,
   AICharacterView,
@@ -77,8 +78,9 @@ try {
       bots.push(session);
       return session;
     },
-    runner: () =>
-      new AgentRunner(undefined, async () => {
+    model: () => ({
+      endpoint: undefined,
+      request: async () => {
         calls++;
         return toolResponse([
           {
@@ -92,7 +94,8 @@ try {
             },
           },
         ]);
-      }),
+      },
+    }),
   };
   server = await createTestServer({
     directory: dir,

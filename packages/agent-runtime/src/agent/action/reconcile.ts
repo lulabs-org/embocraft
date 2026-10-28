@@ -1,4 +1,3 @@
-import { restoreBatchHistory } from '../task/state';
 import { key } from '@voxel/shared';
 import type {
   ActionExecution,
@@ -6,8 +5,9 @@ import type {
   PlannedEdit,
 } from '../../contracts/action';
 import type { Observation } from '../../contracts/observation';
-import type { AgentRunState } from '../../contracts/state';
+import type { RuntimeState } from '../../contracts/state';
 import { arrived, observedEmpty } from '../../world/observe/verify';
+import { restoreBatchHistory } from '../task/state';
 
 /**
  * Repairs world-write bookkeeping against a fresh observation before the model
@@ -18,10 +18,10 @@ import { arrived, observedEmpty } from '../../world/observe/verify';
 
 /** Drops blueprint blocks that the observation proves are already in place. */
 export function reconcileUnfinishedBuild(
-  memory: AgentRunState,
+  memory: RuntimeState,
   observation: Observation,
 ) {
-  const build = memory.effects.unfinishedBuild;
+  const build = memory.execution.effects.unfinishedBuild;
   if (!build) return;
   const observed = observedMaterials(observation);
   const remaining = build.result.remaining.filter((block) =>
@@ -30,7 +30,7 @@ export function reconcileUnfinishedBuild(
       : observed.get(key(block)) !== block.material,
   );
   if (!remaining.length) {
-    memory.effects.unfinishedBuild = undefined;
+    memory.execution.effects.unfinishedBuild = undefined;
     return;
   }
   build.result.remaining = remaining;
@@ -48,14 +48,14 @@ function observedMaterials(observation: Observation) {
 
 /** Drops a pending batch once every unacknowledged effect is observable. */
 export function reconcilePendingEffects(
-  memory: AgentRunState,
+  memory: RuntimeState,
   observation: Observation,
 ) {
-  const pending = memory.effects.pendingEffects;
+  const pending = memory.execution.effects.pendingEffects;
   if (!pending) return;
   const correctedArrival = replacementArrived(
     observation,
-    memory.effects.previous as BatchResult | undefined,
+    memory.execution.effects.previous as BatchResult | undefined,
   );
   const resolved = pending.results
     .filter((execution) => !['pending', 'succeeded'].includes(execution.status))
@@ -64,12 +64,12 @@ export function reconcilePendingEffects(
     );
   if (!resolved) return;
   clearReconciledUnknownEffect(memory, pending);
-  delete memory.effects.pendingEffects;
+  delete memory.execution.effects.pendingEffects;
 }
 
 /** Whether one unacknowledged execution can be seen in the current world. */
 function effectResolved(
-  memory: AgentRunState,
+  memory: RuntimeState,
   observation: Observation,
   execution: ActionExecution,
   correctedArrival: boolean,
@@ -85,14 +85,15 @@ function effectResolved(
       );
     case 'follow':
       return (
-        !!memory.effects.follow &&
-        memory.effects.follow.taskStartedAt === memory.task.current?.startedAt
+        !!memory.execution.effects.follow &&
+        memory.execution.effects.follow.taskStartedAt ===
+          memory.execution.task.current?.startedAt
       );
     case 'move':
       return movedSince(observation, execution.before);
     case 'build':
     case 'house':
-      return !memory.effects.unfinishedBuild;
+      return !memory.execution.effects.unfinishedBuild;
     default:
       return false;
   }
@@ -154,50 +155,54 @@ function replacementArrived(
 
 /** Forgets an unknown effect once its own batch has finished reconciling. */
 function clearReconciledUnknownEffect(
-  memory: AgentRunState,
+  memory: RuntimeState,
   pending: BatchResult,
 ) {
-  const unknown = memory.checkpoint.unknownEffect;
+  const unknown = memory.execution.checkpoint.unknownEffect;
   if (!unknown || unknown.name === 'chat') return;
   const ownsUnknownEffect = pending.results.some(
     (execution) => execution.action.type === unknown.name,
   );
   if (!ownsUnknownEffect) return;
-  delete memory.checkpoint.unknownEffect;
-  if (memory.checkpoint.pi?.inFlight?.id === unknown.id)
-    delete memory.checkpoint.pi.inFlight;
+  delete memory.execution.checkpoint.unknownEffect;
+  if (memory.execution.checkpoint.pi?.inFlight?.id === unknown.id)
+    delete memory.execution.checkpoint.pi.inFlight;
 }
 
 /** Reconcile observed progress before exposing action state to a decision. */
 export function reconcileActionEffects(
-  memory: AgentRunState,
+  memory: RuntimeState,
   observation: Observation,
 ) {
   reconcileUnfinishedBuild(memory, observation);
   reconcilePendingEffects(memory, observation);
 }
 
-/** Keep the legacy prompt fields while hiding action-specific state from the turn. */
-export function actionDecisionContext(memory: AgentRunState, visible: boolean) {
+/** Project prompt fields while hiding action-specific state from the turn. */
+export function actionDecisionContext(memory: RuntimeState, visible: boolean) {
   return {
-    previous: visible ? memory.effects.previous : undefined,
-    pendingEffects: visible ? memory.effects.pendingEffects : undefined,
-    follow: visible ? memory.effects.follow : undefined,
-    unfinishedBuild: visible ? memory.effects.unfinishedBuild : undefined,
+    previous: visible ? memory.execution.effects.previous : undefined,
+    pendingEffects: visible
+      ? memory.execution.effects.pendingEffects
+      : undefined,
+    follow: visible ? memory.execution.effects.follow : undefined,
+    unfinishedBuild: visible
+      ? memory.execution.effects.unfinishedBuild
+      : undefined,
   };
 }
 
 /** Picks up an interrupted effect ledger; unknown results stay pending for reconciliation. */
-export function restoreActionEffects(memory: AgentRunState) {
-  const previous = restoreBatchHistory(memory.effects.previous);
-  memory.effects.previous = previous;
-  if (memory.effects.pendingEffects)
-    memory.effects.pendingEffects = restoreBatchHistory(
-      memory.effects.pendingEffects,
+export function restoreActionEffects(memory: RuntimeState) {
+  const previous = restoreBatchHistory(memory.execution.effects.previous);
+  memory.execution.effects.previous = previous;
+  if (memory.execution.effects.pendingEffects)
+    memory.execution.effects.pendingEffects = restoreBatchHistory(
+      memory.execution.effects.pendingEffects,
     );
   if (
-    !memory.effects.pendingEffects &&
+    !memory.execution.effects.pendingEffects &&
     previous?.results?.some((result) => result.status === 'unknown')
   )
-    memory.effects.pendingEffects = structuredClone(previous);
+    memory.execution.effects.pendingEffects = structuredClone(previous);
 }

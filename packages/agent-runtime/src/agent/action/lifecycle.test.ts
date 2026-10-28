@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { testAgentConfig } from '../../../../../tests/support/agent-config';
-import { emptyState, type AgentRunState } from '../../contracts/state';
+import { emptyState, type RuntimeState } from '../../contracts/state';
 import { initialToolState } from '../../contracts/tool-state';
 import type { AgentSession } from '../../world/session/port';
 import { TaskService } from '../task/service';
@@ -23,8 +23,8 @@ function deferred<T>() {
 
 function fixture() {
   const memory = emptyState();
-  memory.task.current = newTask('goal');
-  memory.task.current.privateTo = 'owner';
+  memory.execution.task.current = newTask('goal');
+  memory.execution.task.current.privateTo = 'owner';
   const service = new TaskService(memory);
   const lease = service.lease();
   const controller = new AbortController();
@@ -43,7 +43,7 @@ function fixture() {
   };
   const runtime = new ActionRuntime(options);
   const state = initialToolState();
-  const snapshots: AgentRunState[] = [];
+  const snapshots: RuntimeState[] = [];
   const save = vi.fn(async () => {
     snapshots.push(structuredClone(memory));
   });
@@ -92,7 +92,7 @@ it('keeps the action slot occupied until its result and event are durably saved'
       work: work.promise,
     }),
   ).toEqual({ actionId: 'build-1', status: 'running' });
-  expect(f.snapshots[0].effects.activeAction?.status).toBe('running');
+  expect(f.snapshots[0].execution.effects.activeAction?.status).toBe('running');
   expect(f.state.terminal).toBe(true);
   work.resolve({ batchId: 'internal', ok: true });
   await savingResult.promise;
@@ -102,12 +102,12 @@ it('keeps the action slot occupied until its result and event are durably saved'
   await f.runtime.complete();
   expect(f.runtime.isRunning).toBe(false);
   const saved = f.snapshots[1];
-  expect(saved.effects.activeAction).toMatchObject({
+  expect(saved.execution.effects.activeAction).toMatchObject({
     id: 'build-1',
     status: 'completed',
     result: { content: [{ type: 'text', text: '{"ok":true}' }], details: {} },
   });
-  expect(saved.inbox?.events).toEqual([
+  expect(saved.character.inbox?.events).toEqual([
     expect.objectContaining({
       id: 'action:build-1',
       kind: 'action_result',
@@ -166,17 +166,17 @@ it.each([false, true])(
     await f.runtime.cleanup();
     expect(controller.signal.aborted).toBe(true);
     expect(f.runtime.isRunning).toBe(false);
-    expect(f.snapshots.at(-1)?.effects.activeAction?.status).toBe(
+    expect(f.snapshots.at(-1)?.execution.effects.activeAction?.status).toBe(
       hostInterrupted ? 'unknown' : 'failed',
     );
-    expect(f.memory.inbox?.events).toHaveLength(1);
+    expect(f.memory.character.inbox?.events).toHaveLength(1);
   },
 );
 
 function following(f: ReturnType<typeof fixture>) {
-  f.memory.effects.follow = {
+  f.memory.execution.effects.follow = {
     action: { type: 'follow', playerId: 'human', distance: 2 },
-    taskStartedAt: f.memory.task.current!.startedAt,
+    taskStartedAt: f.memory.execution.task.current!.startedAt,
     pursuing: true,
   };
   markActiveActionRunning(f.memory, 'follow-1', 'follow', f.lease);
@@ -188,7 +188,7 @@ it('does not advance saved actions while paused or denied by the task budget', a
   expect(actionWakeDelay(f.memory)).toBe(100);
   const budget = vi.fn(async () => false);
   expect(await f.runtime.advance(budget)).toBe('stop');
-  f.memory.task.current!.status = 'paused';
+  f.memory.execution.task.current!.status = 'paused';
   expect(await f.runtime.advance(budget)).toBe('idle');
   expect(budget).toHaveBeenCalledTimes(1);
   expect(f.session.observe).not.toHaveBeenCalled();
@@ -200,22 +200,22 @@ it('publishes a failed continuation once and requests a recovery decision', asyn
   following(f);
   f.options.config.permissions.move = false;
   expect(await f.runtime.advance(async () => true)).toBe('resume');
-  expect(f.memory.task.current?.status).toBe('running');
-  expect(f.memory.effects.follow).toBeUndefined();
+  expect(f.memory.execution.task.current?.status).toBe('running');
+  expect(f.memory.execution.effects.follow).toBeUndefined();
   expect(actionWakeDelay(f.memory)).toBeUndefined();
-  expect(f.memory.effects.activeAction?.status).toBe('failed');
+  expect(f.memory.execution.effects.activeAction?.status).toBe('failed');
   expect(f.session.observe).not.toHaveBeenCalled();
   expect(f.session.move).toHaveBeenCalledWith(0, 0, false);
-  expect(f.memory.inbox?.events).toEqual([
+  expect(f.memory.character.inbox?.events).toEqual([
     expect.objectContaining({
       id: `action:follow-1:${f.lease.revision}`,
       actionId: 'follow-1',
       audience: 'owner',
       revision: f.lease.revision,
       kind: 'action_result',
-      detail: f.memory.task.current?.reason,
+      detail: f.memory.execution.task.current?.reason,
     }),
   ]);
   expect(await f.runtime.advance(async () => true)).toBe('idle');
-  expect(f.memory.inbox?.events).toHaveLength(1);
+  expect(f.memory.character.inbox?.events).toHaveLength(1);
 });

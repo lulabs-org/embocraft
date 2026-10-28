@@ -1,9 +1,5 @@
-import {
-  createAgentRuntime,
-  emptyState,
-  newTask,
-  TaskService,
-} from '@voxel/agent-runtime';
+import { createAgentRuntime } from '@voxel/agent-runtime';
+import { emptyState, newTask } from '@voxel/agent-runtime/testing';
 
 import { vi } from 'vitest';
 
@@ -35,7 +31,7 @@ export function taskExecutionFixture() {
     validateExecution: (_id, overrides) => ({ ...state.view, ...overrides }),
     storageFailed: () => false,
     committedName: () => state.view.name,
-    publicIdentity: () => state.memory.task.identity,
+    publicIdentity: () => state.runtime.view().identity,
     resourceVersion: () => 1,
     isClosing: () => false,
     assertWritable: () => {},
@@ -43,11 +39,15 @@ export function taskExecutionFixture() {
   const tasks = new TaskCoordinator(host);
   const runtime = createAgentRuntime({
     state: {
-      ...emptyState(),
-      task: {
-        current: {
-          ...newTask('Private work', 'alice', 'alice'),
-          status: 'waiting',
+      version: 4 as const,
+      character: { ...emptyState().character },
+      execution: {
+        ...emptyState().execution,
+        task: {
+          current: {
+            ...newTask('Private work', 'alice', 'alice'),
+            status: 'waiting',
+          },
         },
       },
     },
@@ -76,17 +76,11 @@ export function taskExecutionFixture() {
       thinking: 'disabled',
       reasoningEffort: 'none',
     },
-    get memory() {
-      return runtime.state;
-    },
-    set memory(value) {
-      runtime.replaceState(value);
-    },
     ledger: tasks.plans,
     online: true,
     currentRunId: undefined,
   };
-  const lease = new TaskService(state.memory).lease();
+  const lease = runtime.lease();
   const message: WorldEvent = {
     seq: 1,
     type: 'chat',

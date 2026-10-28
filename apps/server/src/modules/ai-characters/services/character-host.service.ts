@@ -1,23 +1,24 @@
-import { aiCharacterPermissions, type AICharacterView } from '@voxel/shared';
 import { AgentRuntimeError, type AgentConfig } from '@voxel/agent-runtime';
-import { appendAICharacterLog } from '../domain/activity-log';
-import type { Job } from './job';
+import { aiCharacterPermissions, type AICharacterView } from '@voxel/shared';
+
 import { resolveInferenceDefaults, type SavedProvider } from '../../providers';
 import {
+  beginChatExecution,
   captureTask,
   currentRun,
   executionConfigOverrides,
-  beginChatExecution,
 } from '../../tasks';
+import { appendAICharacterLog } from '../domain/activity-log';
+import type { ExecutionContext } from './execution-context';
+import type { Job } from './job';
 import { executionState } from './task-adapter';
 import { handleWorldEvent } from './world-event-handler';
-import type { ExecutionContext } from './execution-context';
 
 export type { ExecutionContext };
 
 /**
  * AICharacterHost 代表单个 AI 角色在游戏世界中的会话运行宿主，
- * 负责维护 Colyseus 房间长连接与驱动 AgentRunner 执行管道。
+ * 负责维护 Colyseus 房间长连接与驱动 AgentRuntime 执行管道。
  */
 export class AICharacterHost {
   constructor(
@@ -112,7 +113,7 @@ export class AICharacterHost {
           );
 
         await job.runtime.run(config, {
-          runner: ctx.dependencies.runner(config, provider),
+          model: ctx.dependencies.model(config, provider),
           defaults: {
             ...inferenceDefaults,
             ...job.view,

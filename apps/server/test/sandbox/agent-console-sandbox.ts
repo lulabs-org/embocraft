@@ -5,7 +5,8 @@ import {
 } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 /** Isolated UI acceptance world: no dotenv, no production config and no paid model calls. */
-import { AgentRunner, Session, until } from '@voxel/agent-runtime';
+import { Session, until } from '@voxel/agent-runtime';
+
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,8 +41,9 @@ try {
     origin: process.env.WEB_ORIGIN,
     agentDependencies: {
       session: (url) => new Session(url),
-      runner: () =>
-        new AgentRunner(undefined, async (_url, init) => {
+      model: () => ({
+        endpoint: undefined,
+        request: async (_url, init) => {
           calls++;
           const body = JSON.parse(String(init?.body));
           const input = body.messages
@@ -72,7 +74,8 @@ try {
                   },
                 ],
           );
-        }),
+        },
+      }),
     },
   });
   manager = server.characters;
