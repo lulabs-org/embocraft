@@ -16,6 +16,9 @@ import {
   type AgentConfig,
   emptyState,
   snapshotState,
+  startScheduledTaskState,
+  resumeTaskState,
+  rollbackTaskState,
 } from '@voxel/agent-runtime';
 import { object } from '../../../core/http/validation';
 import { taskLimits } from '../domain/validation';
@@ -323,12 +326,7 @@ export function startQueuedRun(job: TaskExecutionState, id: string) {
   run.status = 'running';
   run.reason = '';
   job.currentRunId = run.id;
-  job.memory = {
-    ...emptyState(),
-    task: { current: task, usage: job.memory.task.usage },
-    conversation: { exchanges: job.memory.conversation.exchanges },
-    inbox: job.memory.inbox,
-  };
+  job.memory = startScheduledTaskState(job.memory, task);
   const lease = new TaskService(job.memory).lease();
   const event = recordEvent(job.memory, {
     id: run.eventId ?? `run:${run.id}`,
@@ -515,10 +513,7 @@ export async function executeTaskRunControl(
         tokenBudget: settings.tokenBudget!,
         taskTimeoutMs: settings.taskTimeoutMs!,
       };
-      job.memory = {
-        ...structuredClone(run.runtime!),
-        task: { ...run.runtime!.task, usage: job.memory.task.usage },
-      };
+      job.memory = resumeTaskState(job.memory, run.runtime!);
       new TaskService(job.memory).command(
         { type: 'resume' },
         { kind: 'operator' },
@@ -632,9 +627,7 @@ export async function beginChatExecution(
     const failed = state.currentRunId;
     state.ledger.runs = state.ledger.runs.filter((r) => r.id !== failed);
     state.currentRunId = beforeRunId;
-    for (const key of Object.keys(state.memory))
-      delete (state.memory as Record<string, unknown>)[key];
-    Object.assign(state.memory, beforeMemory);
+    rollbackTaskState(state.memory, beforeMemory);
     throw error;
   }
 }

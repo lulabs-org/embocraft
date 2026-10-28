@@ -1,0 +1,181 @@
+import { randomUUID } from 'node:crypto';
+import type { AICharacterTask, ChatData } from '@voxel/shared';
+import type { AgentConfig } from '../../contracts';
+import type { TaskExecutionState } from '../../contracts/state';
+import type {
+  TaskCommand,
+  TaskAuthority,
+  TaskLease,
+  TaskOutcome,
+} from '../../contracts/task';
+import { AgentRuntimeError } from '../../contracts/errors';
+import { checkBudgetCap } from './budget';
+import { isEndedTask, newTask } from './state';
+
+/** All task state changes use the same policy, independent of models and transports. */
+export class TaskPolicy {
+  /** The compatibility adapter stamps v3 only when the old service issued a lease. */
+  issuedLease = false;
+
+  constructor(readonly memory: TaskExecutionState) {}
+
+  lease(): TaskLease {
+    this.issuedLease = true;
+    const task = this.memory.task.current;
+    if (!task) throw new AgentRuntimeError('没有当前任务。');
+    if (
+      !this.memory.task.identity ||
+      this.memory.task.identity.startedAt !== task.startedAt
+    )
+      this.memory.task.identity = {
+        id: randomUUID(),
+        revision: 0,
+        startedAt: task.startedAt,
+      };
+    return { ...this.memory.task.identity };
+  }
+
+  current(lease: TaskLease) {
+    const now = this.memory.task.identity;
+    return (
+      !!this.memory.task.current &&
+      this.memory.task.current.startedAt === lease.startedAt &&
+      now?.id === lease.id &&
+      now.revision === lease.revision
+    );
+  }
+
+  assertCurrent(lease: TaskLease) {
+    if (!this.current(lease))
+      throw new AgentRuntimeError('任务已修改，忽略过期执行结果。', true);
+  }
+
+  authorize(authority: TaskAuthority) {
+    if (authority.kind === 'operator') return;
+    const task = this.memory.task.current;
+    const message = authority.message;
+    const privateTo =
+      (message.data as ChatData).scope !== 'public' ? message.actor : undefined;
+    if (
+      task &&
+      !isEndedTask(task) &&
+      ((task.owner && task.owner !== message.actor) ||
+        (task.privateTo && task.privateTo !== privateTo))
+    )
+      throw new AgentRuntimeError(
+        '保留原任务：仅任务发起者可修改或取消，请由发起者操作或在控制台安排新任务。',
+      );
+  }
+
+  /** Synchronous mutation. The caller must commit it before allowing any world effect. */
+  command(
+    command: TaskCommand,
+    authority: TaskAuthority,
+    config: AgentConfig,
+  ): AICharacterTask {
+    this.authorize(authority);
+    const memory = this.memory;
+    let task = memory.task.current;
+    if (command.type === 'start' || command.type === 'revise') {
+      if (!command.goal.trim() || command.goal.length > 2000)
+        throw new AgentRuntimeError('任务目标无效。');
+    }
+    if (command.type === 'start') {
+      if (!isEndedTask(task))
+        throw new AgentRuntimeError(
+          '已有正在执行或未结束的任务，请修改或取消原任务。',
+        );
+      const message =
+        authority.kind === 'player' ? authority.message : undefined;
+      task = newTask(
+        command.goal.trim(),
+        message?.actor,
+        message && (message.data as ChatData).scope !== 'public'
+          ? message.actor
+          : undefined,
+      );
+      // Only this execution is replaced; character state is outside this policy.
+      Object.assign(memory, {
+        task: { current: task },
+        conversation: {},
+        checkpoint: {},
+        effects: {},
+        health: {},
+      } satisfies TaskExecutionState);
+      this.lease();
+      return task;
+    }
+    if (!task) throw new AgentRuntimeError('没有可控制的任务，请先布置任务。');
+    if (isEndedTask(task)) {
+      if (command.type === 'pause' || command.type === 'cancel') return task;
+      throw new AgentRuntimeError(
+        '任务已结束，请在控制台重新执行或布置新任务。',
+      );
+    }
+    if (command.type === 'resume' || command.type === 'revise') {
+      if (memory.conversation.audienceExpired)
+        throw new AgentRuntimeError('原私聊会话已失效，请重新通过聊天发起。');
+      const reason = checkBudgetCap(task, config);
+      if (reason) throw new AgentRuntimeError(reason);
+    }
+    this.lease();
+    memory.task.identity!.revision++;
+    if (memory.effects.activeAction?.status === 'running')
+      memory.effects.activeAction.status =
+        command.type === 'pause' ? 'paused' : 'cancelled';
+    // The old transcript may contain queued tool calls against the old revision.
+    if (memory.checkpoint.pi) memory.checkpoint.pi.messages = [];
+    if (command.type === 'revise') {
+      task.goal = command.goal.trim();
+      delete memory.effects.follow;
+    }
+    task.status =
+      command.type === 'pause'
+        ? 'paused'
+        : command.type === 'cancel'
+          ? 'cancelled'
+          : 'running';
+    task.reason =
+      command.type === 'pause'
+        ? '已由玩家暂停，进度保留。'
+        : command.type === 'cancel'
+          ? '已由玩家取消。'
+          : '';
+    if (command.type === 'cancel') {
+      delete memory.effects.follow;
+      delete memory.effects.unfinishedBuild;
+    }
+    if (command.type === 'resume' || command.type === 'revise') {
+      memory.health.failures = 0;
+      memory.health.noProgress = 0;
+      delete memory.health.waitSignature;
+    }
+    return task;
+  }
+
+  finish(lease: TaskLease, outcome: TaskOutcome, turnMutated = false) {
+    this.assertCurrent(lease);
+    const memory = this.memory;
+    if (
+      outcome.status === 'completed' &&
+      (turnMutated ||
+        memory.effects.pendingEffects ||
+        memory.effects.unfinishedBuild ||
+        memory.effects.follow ||
+        memory.checkpoint.unknownEffect ||
+        (memory.effects.previous &&
+          !(memory.effects.previous as { ok?: boolean }).ok))
+    )
+      throw new AgentRuntimeError(
+        '当前仍有未确认或失败动作，先读取结果或重新观察，再确认完成。',
+      );
+    const task = memory.task.current!;
+    task.status = outcome.status;
+    task.summary = outcome.reason;
+    task.reason = outcome.reason;
+    task.waitFor = outcome.status === 'waiting' ? outcome.waitFor : undefined;
+    if (outcome.status === 'waiting')
+      memory.health.waitSignature = outcome.signature;
+    if (outcome.status === 'completed') delete memory.checkpoint.pi;
+  }
+}

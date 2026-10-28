@@ -42,6 +42,11 @@ export {
   type PiCheckpoint,
 } from '../contracts/state';
 export { restoreState } from '../persistence/migrate';
+export {
+  startScheduledTaskState,
+  resumeTaskState,
+  rollbackTaskState,
+} from './state';
 
 export { worldSignature } from '../world/observe/extract';
 
