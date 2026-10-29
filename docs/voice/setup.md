@@ -28,6 +28,8 @@
 
 ### 1. Piper 本地语音引擎
 
+控制台仅负责选择音色、配置语速和试听；模型由 Docker 启动流程自动准备。使用外部语音服务时，由部署者提前准备对应模型。
+
 Piper 运行在与主服务共享的 `speaches` 容器内，模型持久化保存在 Docker 卷中，服务重启无需重新下载。
 
 ```
@@ -39,7 +41,8 @@ Piper 运行在与主服务共享的 `speaches` 容器内，模型持久化保�
 +-------------------------------------------------------------+
 ```
 
-- **安装模型**：在控制台点击“安装”按钮，系统在后台拉取模型并校验 SHA-256。安装通常在 1–3 分钟内完成（上限 10 分钟），成功后状态更新为“已安装”。
+- **启动时自动安装**：`docker compose up -d --build speech` 会在启动语音 API 前自动准备上述三个 Piper 模型，已有完整模型直接复用，无需联网重复下载。首次启动需要联网下载，耗时取决于网络；模型保存在 `embocraft_speech_cache` 卷中，正常重启或重建容器不会丢失。
+- **进度与失败处理**：通过 `docker compose logs -f speech` 查看 `[speech-init]` 日志。每个模型最多尝试三次；仍失败则容器启动失败，由重启策略再次尝试，不会把未准备完成的服务标记为就绪。首次启动的健康检查宽限期为 20 分钟，全栈启动时游戏后端等待语音服务健康后启动。若下载超过宽限期，等待模型准备完成后再次运行 `docker compose up -d` 启动后端。
 - **超文 (Chaowen) 专有优化**：安装时自动包含 `g2pW` 中文多音字注音词表与 BERT 分词词典，保存在 `.voxel-piper/chaowen-v1` 路径下，合成时不发生动态网络请求。
 - **服务地址解析**：优先读取 `SPEECH_API_URL` 环境变量，未设置时默认使用本机 `http://127.0.0.1:8000/v1`（Docker 内默认 `http://speech:8000/v1`）。
 - **详细服务说明与 API 测试**：完整架构、cURL 测试用例与故障排查见 [Speaches 本地独立语音微服务说明](./speaches-service.md)。
@@ -144,10 +147,6 @@ POST   /voice/tts/services              # 创建新 TTS 配置
 PUT    /voice/tts/services/:id          # 修改配置
 DELETE /voice/tts/services/:id          # 删除未被引用的服务
 POST   /voice/tts/services/:id/preview  # 试听合成 ({ text }) -> audio/wav
-
-# Piper 模型管理
-GET    /voice/tts/piper/models          # 查询模型列表与安装状态
-POST   /voice/tts/piper/install         # 异步触发模型下载 ({ model })
 
 # ASR 服务管理
 GET    /voice/asr/services              # 获取 ASR 服务列表

@@ -13,3 +13,6 @@ COPY --chown=ubuntu:ubuntu docker/patch-piper.py /tmp/patch-piper.py
 RUN python /tmp/patch-piper.py && rm /tmp/patch-piper.py
 COPY --chown=ubuntu:ubuntu docker/test-piper.py /tmp/test-piper.py
 RUN python /tmp/test-piper.py && rm /tmp/test-piper.py
+COPY --chown=ubuntu:ubuntu docker/speech-entrypoint.py /home/ubuntu/speaches/speech-entrypoint.py
+ENTRYPOINT ["/home/ubuntu/speaches/.venv/bin/python", "/home/ubuntu/speaches/speech-entrypoint.py"]
+CMD ["uvicorn", "--factory", "speaches.main:create_app"]

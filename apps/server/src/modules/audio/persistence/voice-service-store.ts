@@ -2,7 +2,7 @@ import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
 import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
-import { PiperModels, piperModel } from '../services/tts/piper-models.service';
+import { piperModel } from '../services/tts/piper-models.service';
 import { PiperTts } from '../services/tts/piper.service';
 import { RemoteTts } from '../services/tts/remote.service';
 import type { SpeechSynthesizer } from '../services/tts/speech-synthesizer';
@@ -115,7 +115,6 @@ export function validateVoiceService(
 }
 
 export class VoiceServiceStore {
-  readonly piperModels = new PiperModels();
   private values: SavedVoice[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   private deleting = new Set<string>();

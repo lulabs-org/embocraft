@@ -313,7 +313,6 @@ export function VoiceServices({
               <PiperModelSelect
                 value={draft.model}
                 onChange={(model) => change({ model })}
-                active={active}
               />
             ) : (
               <label>

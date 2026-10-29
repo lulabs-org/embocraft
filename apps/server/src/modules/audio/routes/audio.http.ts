@@ -6,7 +6,6 @@ import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { installAsrRoutes } from './asr.routes';
 import { installTranscribeRoutes } from './transcribe.routes';
 import { installCapabilitiesRoutes } from './capabilities.routes';
-import { installPiperRoutes } from './piper.routes';
 import { installVoiceServiceRoutes } from './voice-services.routes';
 
 export type AudioRouteDependencies = {
@@ -35,7 +34,6 @@ export function installAudioRoutes(app: Express, deps: AudioRouteDependencies) {
         () => deps.voiceServices,
         deps.removeVoiceService,
       );
-      installPiperRoutes(app, deps.voiceServices.piperModels);
     },
   );
 }

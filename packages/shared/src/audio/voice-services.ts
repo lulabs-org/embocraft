@@ -20,13 +20,6 @@ export const PIPER_MODELS = [
   },
 ] as const;
 export const DEFAULT_PIPER_MODEL = PIPER_MODELS[0].id;
-export type PiperModelView = {
-  id: string;
-  name: string;
-  language: string;
-  state: 'missing' | 'installing' | 'installed' | 'failed';
-  error?: string;
-};
 export type VoiceServiceSettings = {
   name: string;
   type: VoiceServiceType;

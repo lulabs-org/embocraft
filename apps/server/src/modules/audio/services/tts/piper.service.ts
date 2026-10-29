@@ -36,7 +36,7 @@ export class PiperTts implements SpeechSynthesizer {
         await response.body?.cancel();
         throw new AppError(
           response.status === 404
-            ? 'Piper 模型未安装，请在控制台安装所选模型。'
+            ? 'Piper 模型未安装，请检查语音服务的启动日志。'
             : `Piper 合成失败（HTTP ${response.status}），请检查语音服务。`,
           502,
         );

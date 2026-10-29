@@ -68,7 +68,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `audio/services/asr/` 集中 `local-speech.service.ts`、`bailian.service.ts`、`speech-scheduler.service.ts` 及其已有测试，保留 `LocalSpeech`、`bridgeBailianAsr`、`SpeechScheduler` 与 `scheduleSpeech` 的实现和名称。`whisper-settings.ts` 包含模型目录读取、路径与配置校验，随服务迁移；模型目录、识别参数、队列限额、取消、超时、错误和清理行为保持不变，模块门面保留全部公开导出。ASR 配置存储及数据库适配位于 `persistence/`，共用的 `speech-endpoint.ts` 仍在模块根部。
 
-`audio/services/tts/` 集中 `piper.service.ts`、`remote.service.ts`、`agent-speech.service.ts`、`piper-models.service.ts` 及已有测试，合成契约位于同目录的 `speech-synthesizer.ts`。`PiperTts`、`RemoteTts`、`AgentSpeech`、`PiperModels` 及合成接口保持原名，模块门面保留全部公开导出；合成参数、模型安装调度、队列、听众筛选、取消、错误与缓存行为保持不变。音色配置存储、数据库适配及存储测试位于 `persistence/`，共用语音端点配置保留原位。
+`audio/services/tts/` 集中 `piper.service.ts`、`remote.service.ts`、`agent-speech.service.ts`、`piper-models.service.ts` 及已有测试，合成契约位于同目录的 `speech-synthesizer.ts`。`PiperTts`、`RemoteTts`、`AgentSpeech`、`PiperModels` 及合成接口保持原名，模块门面保留全部公开导出；合成参数、模型就绪查询、队列、听众筛选、取消、错误与缓存行为保持不变。音色配置存储、数据库适配及存储测试位于 `persistence/`，共用语音端点配置保留原位。
 
 `audio/persistence/` 集中 `asr-settings-store.ts`、`voice-service-store.ts` 及其同名测试，以及 `database-asr-services.ts` 和 `database-voice-services.ts`。保留 `AsrSettingsStore`、`VoiceServiceStore`、持久化契约及数据库适配类名，模块门面保持全部公开导出。两个 Store 仍包含原有校验与运行时协调职责，显式接收持久化适配器；生产使用 PostgreSQL，测试使用内存实现。旧 JSON 文件读写、语音格式迁移与自动备份已移除；默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `test/`，共用 `speech-endpoint.ts` 及其测试仍在模块根部。
 

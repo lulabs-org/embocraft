@@ -1,86 +1,51 @@
-import { afterEach, expect, it, vi } from 'vitest';
-
-import { PiperModels } from './piper-models.service';
-
+import { expect, it, vi } from 'vitest';
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
+import { PiperModels, piperModel } from './piper-models.service';
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.restoreAllMocks();
-});
-
-const json = (data: unknown) => new Response(JSON.stringify(data));
-
-const catalog = (installed = false) =>
-  json({ data: installed ? [{ id: DEFAULT_PIPER_MODEL }] : [] });
-
-it('deduplicates installs, rejects other models, and verifies cache after download', async () => {
-  let installed = false;
-  let finish!: () => void;
-  const request = vi.fn<typeof fetch>(async (_url, init) => {
-    if (init?.method === 'POST') {
-      await new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      installed = true;
-      return new Response(null);
-    }
-    return catalog(installed);
-  });
+it('reports readiness from installed models without starting downloads', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: DEFAULT_PIPER_MODEL }] })),
+    );
   const models = new PiperModels('http://speech/v1', request);
-  expect((await models.list())[0].state).toBe('missing');
-  models.start(DEFAULT_PIPER_MODEL);
-  models.start(DEFAULT_PIPER_MODEL);
-  expect(() => models.start(PIPER_MODELS[1].id)).toThrow('另一个');
-  expect(() => models.start('other/model')).toThrow('支持');
-  await vi.waitFor(() => expect(finish).toBeDefined());
-  expect((await models.list())[0].state).toBe('installing');
-  finish();
-  await vi.waitFor(async () =>
-    expect((await models.list())[0].state).toBe('installed'),
-  );
-  expect(
-    request.mock.calls.filter(([, init]) => init?.method === 'POST'),
-  ).toHaveLength(1);
-  expect(
-    (await new PiperModels('http://speech/v1', request).list())[0].state,
-  ).toBe('installed');
-});
-
-it('does not treat a successful download response as proof of installation; retries failures', async () => {
-  let installed = false;
-  const request = vi.fn<typeof fetch>(async (_url, init) =>
-    init?.method === 'POST' ? new Response(null) : catalog(installed),
-  );
-  const models = new PiperModels('http://speech/v1', request);
-  models.start(DEFAULT_PIPER_MODEL);
-  await vi.waitFor(async () =>
-    expect((await models.list())[0].state).toBe('failed'),
-  );
-  installed = true;
-  models.start(DEFAULT_PIPER_MODEL);
-  await vi.waitFor(async () =>
-    expect((await models.list())[0].state).toBe('installed'),
-  );
-});
-
-it('bounds installation waiting and makes failure retryable', async () => {
-  const request = vi.fn<typeof fetch>(async (_url, init) => {
-    if (init?.method !== 'POST') return catalog();
-    return new Promise((_resolve, reject) => {
-      init.signal?.addEventListener(
-        'abort',
-        () => reject(init.signal?.reason),
-        { once: true },
-      );
-    });
+  expect(await models.status()).toEqual({
+    available: true,
+    reason: 'Piper 本地语音已就绪。',
   });
-  const models = new PiperModels('http://speech/v1', request, 20);
-  models.start(DEFAULT_PIPER_MODEL);
-  await vi.waitFor(async () =>
-    expect((await models.list())[0]).toMatchObject({
-      state: 'failed',
-      error: expect.stringContaining('超时'),
+  expect(request).toHaveBeenCalledOnce();
+  expect(request).toHaveBeenCalledWith(
+    'http://speech/v1/models?task=text-to-speech',
+    expect.objectContaining({
+      redirect: 'error',
+      signal: expect.any(AbortSignal),
     }),
   );
+  expect(request.mock.calls[0][1]?.method).toBeUndefined();
+});
+
+it('directs missing-model diagnosis to service startup', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(JSON.stringify({ data: [] })));
+  expect(await new PiperModels('http://speech/v1', request).status()).toEqual({
+    available: false,
+    reason: 'Piper 中文模型尚未就绪，请检查语音服务的启动日志。',
+  });
+});
+
+it.each([
+  () => Promise.reject(Error('offline')),
+  () => Promise.resolve(new Response('', { status: 503 })),
+  () => Promise.resolve(new Response('{}')),
+])('reports unreachable or invalid readiness responses', async (request) => {
+  expect(await new PiperModels('http://speech/v1', request).status()).toEqual({
+    available: false,
+    reason: '无法连接语音服务，请检查 speech 容器和接口地址。',
+  });
+});
+
+it('accepts only models in the configured Piper catalog', () => {
+  for (const model of PIPER_MODELS) expect(piperModel(model.id)).toBe(model);
+  expect(() => piperModel('unknown')).toThrow('请选择支持的 Piper 模型。');
 });
