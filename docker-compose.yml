@@ -43,6 +43,17 @@ services:
       - speech_cache:/home/ubuntu/.cache/huggingface/hub
     ports:
       - '${SPEECH_PORT:-${WHISPER_PORT:-8000}}:8000'
+    # The API starts only after all three Piper voices are cached.
+    healthcheck:
+      test:
+        - CMD
+        - /home/ubuntu/speaches/.venv/bin/python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20m
 
   server:
     build:
@@ -56,7 +67,7 @@ services:
       db:
         condition: service_healthy
       speech:
-        condition: service_started
+        condition: service_healthy
     environment:
       SERVER_HOST: 0.0.0.0
       DATABASE_URL: postgresql://${POSTGRES_USER:-embocraft}:${POSTGRES_PASSWORD:-embocraftpassword}@db:5432/${POSTGRES_DB:-embocraft}?schema=public

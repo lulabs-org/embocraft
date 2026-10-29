@@ -219,9 +219,9 @@ it('routes task plan queries and controls through HTTP REST endpoints', async ()
 it('retains authenticated HTTP voice management and actionable HTTP errors', async () => {
   const signal = new AbortController().signal;
   http.mockResolvedValueOnce(new Response('[]'));
-  await voiceApi.listPiperModels(signal);
+  await voiceApi.listVoiceServices(signal);
   expect(http).toHaveBeenCalledWith(
-    'https://world.example/voice/tts/piper/models',
+    'https://world.example/voice/tts/services',
     expect.objectContaining({
       signal: expect.any(AbortSignal),
       headers: expect.objectContaining({
@@ -233,10 +233,10 @@ it('retains authenticated HTTP voice management and actionable HTTP errors', asy
   http.mockResolvedValueOnce(
     new Response(JSON.stringify({ error: '音色不可用' }), { status: 503 }),
   );
-  await expect(voiceApi.listPiperModels(signal)).rejects.toThrow('音色不可用');
+  await expect(voiceApi.listVoiceServices(signal)).rejects.toThrow('音色不可用');
 });
 
-it('uses the TTS domain for service CRUD, model installation and binary preview', async () => {
+it('uses the TTS domain for service CRUD and binary preview', async () => {
   const signal = new AbortController().signal;
   await voiceApi.listVoiceServices(signal);
   expect(http).toHaveBeenLastCalledWith(
@@ -267,15 +267,6 @@ it('uses the TTS domain for service CRUD, model installation and binary preview'
   expect(http).toHaveBeenLastCalledWith(
     'https://world.example/voice/tts/services/custom%2Fvoice',
     expect.objectContaining({ method: 'DELETE' }),
-  );
-  await voiceApi.installPiperModel('fixture-model', signal);
-  expect(http).toHaveBeenLastCalledWith(
-    'https://world.example/voice/tts/piper/install',
-    expect.objectContaining({
-      method: 'POST',
-      body: '{"model":"fixture-model"}',
-      signal: expect.any(AbortSignal),
-    }),
   );
   http.mockResolvedValueOnce(
     new Response('wav', { headers: { 'Content-Type': 'audio/wav' } }),

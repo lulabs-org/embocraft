@@ -1,25 +1,10 @@
 import { adminHeaders } from '../../../network/gateway';
-import type {
-  PiperModelView,
-  VoiceServiceDraft,
-  VoiceServiceView,
-} from '@voxel/shared';
+import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
 import { serverHttpUrl } from '../../../network/endpoints';
 import { readAgentResponse } from '../agent-response';
 import { consoleFetch } from '../request';
 
 export const voiceApi = {
-  listPiperModels: (signal?: AbortSignal) =>
-    consoleFetch<PiperModelView[]>('/voice/tts/piper/models', { signal }),
-  installPiperModel: (model: string, signal?: AbortSignal) =>
-    consoleFetch<{ model: string; state: 'installing' }>(
-      '/voice/tts/piper/install',
-      {
-        method: 'POST',
-        body: { model },
-        signal,
-      },
-    ),
   listVoiceServices: (signal?: AbortSignal) =>
     consoleFetch<VoiceServiceView[]>('/voice/tts/services', { signal }),
   saveVoiceService: (draft: VoiceServiceDraft, id?: string) =>

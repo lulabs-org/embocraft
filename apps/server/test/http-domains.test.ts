@@ -54,13 +54,25 @@ it('assembles public audio endpoints separately from protected management routes
       error: '管理接口不存在，请确认前后端版本一致。',
     });
     const spec = await (await fetch(server.httpUrl + '/api-docs.json')).json();
+    expect(spec.paths['/voice/tts/piper/models']).toBeUndefined();
+    expect(spec.paths['/voice/tts/piper/install']).toBeUndefined();
+    expect(
+      (
+        await fetch(server.httpUrl + '/voice/tts/piper/install', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'speaches-ai/piper-en_US-lessac-medium',
+          }),
+        })
+      ).status,
+    ).toBe(404);
     for (const [path, method] of [
       ['/health', 'get'],
       ['/voice/capabilities', 'get'],
       ['/voice/transcribe', 'post'],
       ['/voice/asr/services', 'get'],
       ['/voice/tts/services', 'get'],
-      ['/voice/tts/piper/models', 'get'],
     ]) {
       expect(spec.paths[path]?.[method], `${method} ${path}`).toBeDefined();
     }
@@ -81,7 +93,6 @@ it('protects each management domain and retains transport policies after path mi
       '/task-runs/missing/pause',
       '/management/commands/missing',
       '/voice/tts/services',
-      '/voice/tts/piper/models',
       '/voice/asr/services',
     ];
     for (const path of paths) {
@@ -346,6 +357,7 @@ it('routes resource IDs and request bodies to their owning domain without old Ag
       '/ai-characters/tasks',
       '/ai-characters/task-runs/missing/pause',
       '/ai-characters/voice-services',
+      '/voice/tts/piper/models',
       '/ai-characters/voice-services/piper/models',
     ]) {
       expect(
