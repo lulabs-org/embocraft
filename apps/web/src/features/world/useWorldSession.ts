@@ -6,7 +6,7 @@ export function useWorldSession(
   leaveWorldScene: () => void,
 ) {
   const [, render] = useState(0);
-  const [name, setName] = useState(savedName ?? 'Explorer');
+  const [name, setName] = useState(savedName ?? '');
   const [joined, setJoined] = useState(!!savedName);
 
   useEffect(() => {
@@ -22,7 +22,8 @@ export function useWorldSession(
 
   const joinWorld = async () => {
     if (connection.status === 'connected') return true;
-    const explorerName = name.trim() || 'Explorer';
+    const explorerName = name.trim();
+    if (!explorerName) return false;
     setName(explorerName);
     setJoined(true);
     sessionStorage.setItem('voxel-name', explorerName);

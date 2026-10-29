@@ -52,9 +52,6 @@ export function TaskPlanSidebar({
       >
         {t('console.plans.createButton')}
       </button>
-      <p className="console-sidebar-meta">
-        {t('console.plans.totalCount', { total: page.total })}
-      </p>
       <div className="plans-sidebar-filter">
         <div
           className="plans-state-pills"
