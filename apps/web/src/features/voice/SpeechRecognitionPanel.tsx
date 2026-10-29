@@ -232,9 +232,6 @@ export function SpeechRecognitionPanel({
           className="console-sidebar"
           aria-label={t('console.asr.listAria')}
         >
-          <div className="console-sidebar-heading">
-            <h3>{t('console.asr.sidebarHeading')}</h3>
-          </div>
           <button
             className="primary console-sidebar-add"
             type="button"

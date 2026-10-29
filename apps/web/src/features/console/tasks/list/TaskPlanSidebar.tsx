@@ -45,10 +45,6 @@ export function TaskPlanSidebar({
   } = controller;
   return (
     <aside className="console-sidebar" aria-label={t('console.plans.listAria')}>
-      <div className="console-sidebar-heading">
-        <h3>{t('console.plans.title')}</h3>
-        <span>{t('console.plans.totalCount', { total: page.total })}</span>
-      </div>
       <button
         className="primary console-sidebar-add"
         disabled={locked || !characters.length || creating}
@@ -56,6 +52,9 @@ export function TaskPlanSidebar({
       >
         {t('console.plans.createButton')}
       </button>
+      <p className="console-sidebar-meta">
+        {t('console.plans.totalCount', { total: page.total })}
+      </p>
       <div className="plans-sidebar-filter">
         <div
           className="plans-state-pills"
