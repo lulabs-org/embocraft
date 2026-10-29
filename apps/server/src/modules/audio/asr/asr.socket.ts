@@ -35,9 +35,13 @@ export function createAsrSocket(
       const { settings, release } = store.acquire(serviceId);
       if (settings.provider !== 'bailian') {
         release();
-        // Local engines decode HTTP snapshots on the server; only Bailian streams over WS.
+        // Only Bailian streams over WS; the others decode HTTP snapshots instead.
         const engine =
-          settings.provider === 'sense-voice' ? 'SenseVoice' : 'Whisper';
+          settings.provider === 'sense-voice'
+            ? 'SenseVoice'
+            : settings.provider === 'openai'
+              ? 'OpenAI 兼容识别接口'
+              : 'Whisper';
         throw new AppError(
           `${engine} 使用服务器音频识别接口，无需实时通道；请选择阿里云实时识别。`,
         );

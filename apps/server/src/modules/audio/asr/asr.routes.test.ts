@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import {
   DEFAULT_BAILIAN_ASR,
+  DEFAULT_OPENAI_ASR,
   DEFAULT_WHISPER_ASR,
   type BailianAsrDraft,
 } from '@voxel/shared';
@@ -295,4 +296,32 @@ it('rejects Whisper profiles on the cloud socket without starting a cloud task',
   });
   expect(bridge).not.toHaveBeenCalled();
   await store.remove(local.id);
+});
+
+it('stores OpenAI-compatible profiles without echoing the key and rejects them on the cloud socket', async () => {
+  const response = await fetch(`${url}/voice/asr/services`, {
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...DEFAULT_OPENAI_ASR,
+      provider: 'openai',
+      name: '兼容接口',
+      apiKey: 'openai-private-key',
+    }),
+  });
+  expect(response.status).toBe(201);
+  const value = await response.json();
+  expect(value).toMatchObject({
+    provider: 'openai',
+    baseUrl: DEFAULT_OPENAI_ASR.baseUrl,
+    hasApiKey: true,
+  });
+  expect(JSON.stringify(value)).not.toContain('openai-private-key');
+  expect(store.get(value.id)).toMatchObject({ apiKey: 'openai-private-key' });
+  expect((await socket(value.id)).message).toMatchObject({
+    type: 'error',
+    message: expect.stringContaining('OpenAI'),
+  });
+  expect(bridge).not.toHaveBeenCalled();
+  await store.remove(value.id);
 });

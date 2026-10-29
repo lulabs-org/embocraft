@@ -1,6 +1,13 @@
-import type { WhisperAsrSettings, SenseVoiceAsrSettings } from '@voxel/shared';
+import type {
+  OpenAiAsrDraft,
+  SenseVoiceAsrSettings,
+  WhisperAsrSettings,
+} from '@voxel/shared';
 
-export type SpeechSettings = WhisperAsrSettings | SenseVoiceAsrSettings;
+export type SpeechSettings =
+  | (WhisperAsrSettings & { provider?: 'whisper' })
+  | (SenseVoiceAsrSettings & { provider?: 'sense-voice' })
+  | (OpenAiAsrDraft & { provider: 'openai' });
 export type SpeechStatus = { available: boolean; reason: string };
 
 /** Everything the HTTP and chat voice routes need from a speech-to-text engine. */

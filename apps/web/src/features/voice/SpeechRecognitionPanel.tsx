@@ -32,13 +32,15 @@ export function SpeechRecognitionPanel({
   const asr = useAsrServices(active);
   const service = asr.id;
   const isBrowser = asr.draft.provider === 'browser';
-  // Server-side engines recognize 16 kHz WAV snapshots over the ordinary HTTP endpoint.
-  const isServerEngine =
+  // Server profiles recognize 16 kHz WAV snapshots over the ordinary HTTP endpoint.
+  const isStatusEngine =
     asr.draft.provider === 'whisper' || asr.draft.provider === 'sense-voice';
+  const isServerEngine = isStatusEngine || asr.draft.provider === 'openai';
   const isLocalEngine = asr.draft.provider === 'sense-voice';
   const serverServiceId =
     asr.selected?.provider === 'whisper' ||
-    asr.selected?.provider === 'sense-voice'
+    asr.selected?.provider === 'sense-voice' ||
+    asr.selected?.provider === 'openai'
       ? service
       : undefined;
   const selectedModel =
@@ -87,7 +89,7 @@ export function SpeechRecognitionPanel({
     };
   }, [active, connection, recorder, live, browser, service, release]);
   useEffect(() => {
-    if (!active || !isServerEngine) return;
+    if (!active || !isStatusEngine) return;
     const abort = new AbortController();
     setChecking(true);
     setCheckError('');
@@ -119,7 +121,7 @@ export function SpeechRecognitionPanel({
       clearTimeout(timeout);
       abort.abort();
     };
-  }, [active, isServerEngine, retry, serverServiceId, selectedModel]);
+  }, [active, isStatusEngine, retry, serverServiceId, selectedModel]);
   const busy = state !== 'idle';
   const ready =
     active &&
@@ -130,11 +132,13 @@ export function SpeechRecognitionPanel({
       ? browser.available
       : asr.loaded &&
         !asr.loading &&
-        (isServerEngine
+        (isStatusEngine
           ? capabilities?.local.available && !checking && !checkError
-          : asr.selected.provider !== 'browser' &&
-            'hasApiKey' in asr.selected &&
-            asr.selected.hasApiKey));
+          : isServerEngine
+            ? true
+            : asr.selected.provider !== 'browser' &&
+              'hasApiKey' in asr.selected &&
+              asr.selected.hasApiKey));
   const chooseService = (id: string) => {
     if (id === service) return;
     stop();
@@ -257,7 +261,9 @@ export function SpeechRecognitionPanel({
                       ? `Whisper · ${value.model === 'default' ? '默认模型' : value.model} · ${value.threads} 线程`
                       : value.provider === 'sense-voice'
                         ? `本地 SenseVoice · ${value.model === 'default' ? '默认模型' : value.model} · ${value.language === 'auto' ? '自动语言' : value.language === 'en' ? '英语' : '中文'}`
-                        : `阿里云百炼 · ${value.model}`,
+                        : value.provider === 'openai'
+                          ? `OpenAI 兼容 · ${value.model}`
+                          : `阿里云百炼 · ${value.model}`,
               }))
               .map((item) => (
                 <button
@@ -301,7 +307,7 @@ export function SpeechRecognitionPanel({
             models={capabilities?.whisperModels}
             senseVoiceModels={capabilities?.senseVoiceModels}
           />
-          {!isBrowser && isServerEngine && (
+          {!isBrowser && isStatusEngine && (
             <section className="console-panel-section">
               <h4>
                 {isLocalEngine
@@ -428,7 +434,7 @@ export function SpeechRecognitionPanel({
             {!isBrowser && !live.canRecord && (
               <p className="agent-hint">
                 当前浏览器无法录音。请使用支持 AudioWorklet 的浏览器并在 HTTPS
-                或 localhost 下打开；Whisper 支持音频文件识别。
+                或 localhost 下打开；服务器识别支持音频文件识别。
               </p>
             )}
             {!isBrowser && isServerEngine && (
@@ -459,7 +465,9 @@ export function SpeechRecognitionPanel({
                   ? '录音经项目服务器实时转发至阿里云识别。'
                   : isLocalEngine
                     ? '录音或文件只在项目服务器本地识别，不会上传音频。'
-                    : '录音或文件会发送到项目服务器识别。'}
+                    : asr.draft.provider === 'openai'
+                      ? '录音或文件经项目服务器转发到远程 OpenAI 兼容接口识别。'
+                      : '录音或文件会发送到项目服务器识别。'}
               每次连续录音最长 5
               分钟；结束录音会等待最后的识别结果，取消会丢弃未确认内容。试用结果不会发送到聊天或触发
               Agent；切换页面或关闭控制台会停止录音和识别。

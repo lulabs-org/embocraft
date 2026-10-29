@@ -7,6 +7,7 @@ import {
   type BailianAsrDraft,
   type AsrServiceDraft,
   type AsrServiceView,
+  type OpenAiAsrDraft,
 } from '@voxel/shared';
 import { validateWhisperSettings } from './whisper-settings';
 import { validateSenseVoiceSettings } from './sense-voice-models';
@@ -49,6 +50,47 @@ export function validateAsrSettings(
   };
 }
 
+const openAiModelName = /^[a-zA-Z0-9][\w.:/-]{0,99}$/;
+
+/** Accept any gateway that speaks the OpenAI multipart transcription contract. */
+export function validateOpenAiSettings(
+  value: Record<string, unknown>,
+  previous?: OpenAiAsrDraft,
+): OpenAiAsrDraft {
+  if (typeof value.baseUrl !== 'string' || !value.baseUrl.trim())
+    throw new AppError('请填写 OpenAI 兼容接口地址。');
+  const baseUrl = value.baseUrl.trim().replace(/\/+$/, '');
+  if (baseUrl.length > 300) throw new AppError('接口地址不能超过 300 字。');
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new AppError('接口地址格式无效，请填写完整的 http(s) 地址。');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:')
+    throw new AppError('接口地址只支持 http 或 https。');
+  if (url.username || url.password || url.search || url.hash)
+    throw new AppError('接口地址不能包含账号、查询参数或锚点。');
+  if (
+    typeof value.model !== 'string' ||
+    !openAiModelName.test(value.model.trim())
+  )
+    throw new AppError('请填写 1–100 字的识别模型名称。');
+  if (
+    typeof value.apiKey !== 'string' ||
+    value.apiKey.length > 4096 ||
+    /[\r\n\0]/.test(value.apiKey)
+  )
+    throw new AppError('API Key 格式无效。');
+  let apiKey = value.apiKey.trim();
+  if (!apiKey && previous?.apiKey) {
+    if (previous.baseUrl !== baseUrl)
+      throw new AppError('更换接口地址时，请重新填写 API Key。');
+    apiKey = previous.apiKey;
+  }
+  return { baseUrl, model: value.model.trim(), apiKey };
+}
+
 export function asrEndpoint(settings: BailianAsrDraft) {
   const host = settings.workspaceId
     ? `${settings.workspaceId}.${settings.region === 'beijing' ? 'cn-beijing' : 'ap-southeast-1'}.maas.aliyuncs.com`
@@ -74,6 +116,12 @@ function previousBailian(
     return undefined;
   return previous as BailianAsrDraft & { id?: string };
 }
+function previousOpenAi(
+  previous?: SavedService,
+): (OpenAiAsrDraft & { id?: string }) | undefined {
+  if (!previous || previous.provider !== 'openai') return undefined;
+  return previous as OpenAiAsrDraft & { id?: string };
+}
 
 function validateService(
   input: unknown,
@@ -86,7 +134,8 @@ function validateService(
   if (
     provider !== 'whisper' &&
     provider !== 'bailian' &&
-    provider !== 'sense-voice'
+    provider !== 'sense-voice' &&
+    provider !== 'openai'
   )
     throw new AppError('请选择支持的识别服务类型。');
   if (previous && provider !== (previous.provider ?? 'bailian'))
@@ -99,10 +148,15 @@ function validateService(
             ...validateSenseVoiceSettings(value),
             provider: 'sense-voice' as const,
           }
-        : {
-            ...validateAsrSettings(input, previousBailian(previous)),
-            provider: 'bailian' as const,
-          };
+        : provider === 'openai'
+          ? {
+              ...validateOpenAiSettings(value, previousOpenAi(previous)),
+              provider: 'openai' as const,
+            }
+          : {
+              ...validateAsrSettings(input, previousBailian(previous)),
+              provider: 'bailian' as const,
+            };
   const name = (input as Record<string, unknown>).name;
   if (
     typeof name !== 'string' ||

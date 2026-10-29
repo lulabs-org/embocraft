@@ -98,7 +98,9 @@ export function installTranscribeRoutes(
         const engine = router.engineFor(profile);
         const settings =
           profile &&
-          (profile.provider === 'whisper' || profile.provider === 'sense-voice')
+          (profile.provider === 'whisper' ||
+            profile.provider === 'sense-voice' ||
+            profile.provider === 'openai')
             ? profile
             : undefined;
         const text = await scheduleSpeech(engine).transcribe(

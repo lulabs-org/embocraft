@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { BailianAsrDraft, SenseVoiceLanguage } from '@voxel/shared';
-import type { AsrProvider } from './browser-asr-services';
+import type {
+  AsrProvider,
+  WebAsrDraft,
+  WebAsrService,
+} from './browser-asr-services';
 import { browserLanguages } from './browser-asr-languages';
 import type { useAsrServices } from './useAsrServices';
 
@@ -9,6 +13,18 @@ const senseVoiceLanguages: [SenseVoiceLanguage, string][] = [
   ['auto', '自动检测'],
   ['en', '英语'],
 ];
+
+/** A saved secret is reusable only while the service behind it stays the same. */
+function secretScope(value: WebAsrDraft | WebAsrService) {
+  if (value.provider === 'openai') return `openai:${value.baseUrl}`;
+  if (
+    value.provider === 'whisper' ||
+    value.provider === 'sense-voice' ||
+    value.provider === 'browser'
+  )
+    return undefined;
+  return `bailian:${value.region}:${value.workspaceId}`;
+}
 
 export function BailianAsrConfig({
   manager,
@@ -33,18 +49,62 @@ export function BailianAsrConfig({
   } = manager;
   const [editingKey, setEditingKey] = useState(false);
   useEffect(() => setEditingKey(false), [saved]);
-  const hasSavedKey =
-    saved?.provider !== 'whisper' &&
-    saved?.provider !== 'sense-voice' &&
-    saved?.provider !== 'browser' &&
-    !!saved?.hasApiKey;
+  const savedScope =
+    saved && 'hasApiKey' in saved && saved.hasApiKey
+      ? secretScope(saved)
+      : undefined;
+  const hasSavedKey = savedScope !== undefined;
   const canKeepKey =
-    hasSavedKey &&
-    draft.provider !== 'whisper' &&
-    draft.provider !== 'sense-voice' &&
-    draft.provider !== 'browser' &&
-    saved?.region === draft.region &&
-    saved?.workspaceId === draft.workspaceId;
+    savedScope !== undefined && savedScope === secretScope(draft);
+  /** Cloud profiles keep one server-side secret per scope; blank keys reuse it. */
+  const apiKeyEditor = (
+    apiKey: string,
+    placeholder: string,
+    hints: { reset: string; initial: string },
+  ) => (
+    <div className="voice-key-field">
+      <span className="voice-key-label">API Key</span>
+      {canKeepKey && !editingKey ? (
+        <div className="voice-key-saved">
+          <span role="status">密钥已配置</span>
+          <button type="button" onClick={() => setEditingKey(true)}>
+            更换密钥
+          </button>
+        </div>
+      ) : (
+        <div className="voice-key-input">
+          <input
+            aria-label="API Key"
+            type="password"
+            autoComplete="new-password"
+            value={apiKey}
+            placeholder={placeholder}
+            onChange={(e) => change({ apiKey: e.target.value })}
+          />
+          {canKeepKey && (
+            <button
+              type="button"
+              onClick={() => {
+                if (apiKey) change({ apiKey: '' });
+                setEditingKey(false);
+              }}
+            >
+              取消更换
+            </button>
+          )}
+        </div>
+      )}
+      <small>
+        {canKeepKey
+          ? editingKey
+            ? '留空保存仍使用已有密钥。'
+            : '密钥已保存在服务端，不回显到浏览器。'
+          : hasSavedKey
+            ? hints.reset
+            : hints.initial}
+      </small>
+    </div>
+  );
   return (
     <form
       onSubmit={(e) => {
@@ -82,6 +142,7 @@ export function BailianAsrConfig({
             <option value="whisper">自托管 Whisper</option>
             <option value="sense-voice">本地 SenseVoice（服务器离线）</option>
             <option value="bailian">阿里云百炼</option>
+            <option value="openai">OpenAI 兼容接口（远程）</option>
             <option value="browser">浏览器语音识别（Web Speech API）</option>
           </select>
         </label>
@@ -205,6 +266,41 @@ export function BailianAsrConfig({
             <small>
               模型须已放在服务器项目目录的 models/
               下。识别在服务器进程内离线完成，不需要 API Key，也不会上传音频。
+            </small>
+          </>
+        ) : draft.provider === 'openai' ? (
+          <>
+            <label>
+              接口地址
+              <input
+                required
+                maxLength={300}
+                placeholder="https://api.openai.com/v1"
+                value={draft.baseUrl}
+                onChange={(e) => change({ baseUrl: e.target.value })}
+              />
+            </label>
+            <label>
+              识别模型
+              <input
+                required
+                maxLength={100}
+                placeholder="whisper-1"
+                value={draft.model}
+                onChange={(e) => change({ model: e.target.value })}
+              />
+            </label>
+            {apiKeyEditor(
+              draft.apiKey,
+              canKeepKey ? '输入新密钥，保存后生效' : '填写服务端 API Key',
+              {
+                reset: '接口地址已更改，请重新填写密钥。',
+                initial: '密钥仅保存在服务端；无需鉴权的自建服务可留空。',
+              },
+            )}
+            <small>
+              服务器把录音转发到该地址的 /audio/transcriptions 接口，兼容 OpenAI
+              或任意同协议网关；音频会离开本项目服务器。
             </small>
           </>
         ) : (
@@ -334,6 +430,12 @@ export function BailianAsrConfig({
           录音与文件在项目服务器本地使用 SenseVoice
           离线识别，不经任何云端。服务器默认识别引擎由 ASR_PROVIDER
           控制，聊天与附近语音会跟随该默认值。
+        </p>
+      ) : draft.provider === 'openai' ? (
+        <p className="agent-hint">
+          录音与文件由项目服务器转发到该 OpenAI
+          兼容接口识别，按服务商规则计费；音频会离开本项目服务器。此处选择用于
+          ASR 试用；聊天和附近语音使用服务器默认识别引擎。
         </p>
       ) : (
         <>

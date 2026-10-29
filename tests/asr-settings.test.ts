@@ -7,7 +7,11 @@ import {
   asrEndpoint,
   validateAsrSettings,
 } from '../apps/server/src/modules/audio/asr/asr-settings';
-import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import {
+  DEFAULT_BAILIAN_ASR,
+  DEFAULT_OPENAI_ASR,
+  DEFAULT_WHISPER_ASR,
+} from '@voxel/shared';
 const dirs: string[] = [];
 afterEach(async () => {
   await Promise.all(
@@ -233,4 +237,56 @@ it('upgrades a full legacy list without losing existing profiles or exceeding it
   expect(store.list()).toHaveLength(20);
   expect(store.get('old-19')).toEqual(services[19]);
   expect(JSON.parse(await readFile(path, 'utf8')).version).toBe(3);
+});
+
+it('persists OpenAI-compatible profiles with a masked key scoped to the interface address', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'asr-openai-'));
+  dirs.push(dir);
+  const store = new AsrSettingsStore(join(dir, 'asr.json'));
+  await store.load();
+  const base = {
+    ...DEFAULT_OPENAI_ASR,
+    provider: 'openai' as const,
+    name: '兼容 A',
+    apiKey: 'openai-key',
+  };
+  const saved = await store.save(base);
+  expect(JSON.stringify(store.list())).not.toContain('openai-key');
+  expect(store.list()[0]).toMatchObject({
+    provider: 'openai',
+    baseUrl: DEFAULT_OPENAI_ASR.baseUrl,
+    hasApiKey: true,
+  });
+  await store.save({ ...base, name: '兼容 A 改名', apiKey: '' }, saved.id);
+  expect(store.get(saved.id)).toMatchObject({
+    apiKey: 'openai-key',
+    name: '兼容 A 改名',
+  });
+  await expect(
+    store.save(
+      { ...base, baseUrl: 'https://other.test/v1', apiKey: '' },
+      saved.id,
+    ),
+  ).rejects.toThrow('重新填写');
+  const trailing = await store.save({
+    ...base,
+    baseUrl: 'https://gateway.test/v1/',
+    name: '斜杠地址',
+  });
+  expect(trailing).toMatchObject({ baseUrl: 'https://gateway.test/v1' });
+  await expect(store.save(draft, saved.id)).rejects.toThrow('类型');
+  for (const patch of [
+    { baseUrl: 'not-a-url' },
+    { baseUrl: 'ftp://gateway.test/v1' },
+    { baseUrl: 'https://user:pass@gateway.test/v1' },
+    { baseUrl: 'https://gateway.test/v1?key=1' },
+    { baseUrl: '' },
+    { model: '' },
+    { apiKey: 'key\nheader' },
+  ]) {
+    await expect(store.save({ ...base, ...patch })).rejects.toThrow();
+  }
+  const restored = new AsrSettingsStore(store.path);
+  await restored.load();
+  expect(restored.list()).toEqual(store.list());
 });

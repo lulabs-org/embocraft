@@ -2,6 +2,7 @@ import { env } from '../../../config/env';
 import type { AsrProviderName } from '../../../config/env';
 import { AppError } from '../../../common/errors';
 import { LocalSpeech } from './local-speech';
+import { OpenAiSpeech } from './openai-speech';
 import { SenseVoiceSpeech } from './sense-voice-speech';
 import { listSenseVoiceModels } from './sense-voice-models';
 import type {
@@ -14,13 +15,16 @@ import type {
 export type SpeechRouterOptions = {
   whisper?: SpeechTranscriber;
   senseVoice?: SpeechTranscriber;
+  openai?: SpeechTranscriber;
   /** Pins the engine for requests without a saved profile, overriding `ASR_PROVIDER`. */
   default?: SpeechTranscriber;
   provider?: AsrProviderName;
   models?: () => { name: string }[] | Promise<{ name: string }[]>;
 };
 
-type Profile = { provider?: 'bailian' | 'whisper' | 'sense-voice' };
+type Profile = {
+  provider?: 'bailian' | 'whisper' | 'sense-voice' | 'openai';
+};
 
 /**
  * Owns the server's speech-to-text engines.
@@ -30,10 +34,12 @@ type Profile = { provider?: 'bailian' | 'whisper' | 'sense-voice' };
 export class SpeechRouter {
   readonly whisper: SpeechTranscriber;
   readonly senseVoice: SenseVoiceSpeech | SpeechTranscriber;
+  readonly openai: SpeechTranscriber;
   readonly default: SpeechTranscriber;
   constructor(options: SpeechRouterOptions = {}) {
     this.whisper = options.whisper ?? new LocalSpeech();
     this.senseVoice = options.senseVoice ?? new SenseVoiceSpeech();
+    this.openai = options.openai ?? new OpenAiSpeech();
     const provider = options.provider ?? env.readSpeech().asrProvider;
     this.default = options.default
       ? options.default
@@ -48,6 +54,7 @@ export class SpeechRouter {
     if (!profile) return this.default;
     if (profile.provider === 'whisper') return this.whisper;
     if (profile.provider === 'sense-voice') return this.senseVoice;
+    if (profile.provider === 'openai') return this.openai;
     throw new AppError('请选择服务器音频识别服务。');
   }
 }
@@ -94,6 +101,7 @@ class AutoSpeech implements SpeechTranscriber {
 const shared: {
   whisper?: LocalSpeech;
   senseVoice?: SenseVoiceSpeech;
+  openai?: OpenAiSpeech;
   router?: SpeechRouter;
 } = {};
 export function whisperSpeech() {
@@ -102,9 +110,13 @@ export function whisperSpeech() {
 export function senseVoiceSpeech() {
   return (shared.senseVoice ??= new SenseVoiceSpeech());
 }
+export function openAiSpeech() {
+  return (shared.openai ??= new OpenAiSpeech());
+}
 export function speechRouter() {
   return (shared.router ??= new SpeechRouter({
     whisper: whisperSpeech(),
     senseVoice: senseVoiceSpeech(),
+    openai: openAiSpeech(),
   }));
 }

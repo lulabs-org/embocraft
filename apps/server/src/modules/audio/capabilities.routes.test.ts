@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import {
+  DEFAULT_BAILIAN_ASR,
+  DEFAULT_OPENAI_ASR,
+  DEFAULT_WHISPER_ASR,
+} from '@voxel/shared';
 import { AsrSettingsStore } from './asr/asr-settings';
 import { LocalSpeech } from './asr/local-speech';
 import { SpeechRouter } from './asr/speech-provider';
@@ -104,5 +108,21 @@ describe('audio capabilities HTTP boundary', () => {
     const response = await fetch(url);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: '无法检查识别服务。' });
+  });
+
+  it('accepts OpenAI-compatible profiles without probing local engines', async () => {
+    const remote = await store.save({
+      ...DEFAULT_OPENAI_ASR,
+      provider: 'openai',
+      name: 'Remote',
+      apiKey: '',
+    });
+    const response = await fetch(`${url}?serviceId=${remote.id}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      local: { available: true },
+      senseVoiceModels: expect.any(Array),
+    });
+    expect(status).not.toHaveBeenCalled();
   });
 });

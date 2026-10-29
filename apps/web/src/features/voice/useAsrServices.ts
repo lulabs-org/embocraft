@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_BAILIAN_ASR,
+  DEFAULT_OPENAI_ASR,
   DEFAULT_SENSE_VOICE_ASR,
   DEFAULT_WHISPER_ASR,
   type AsrServiceView,
@@ -24,7 +25,9 @@ const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
       ? { ...DEFAULT_WHISPER_ASR, provider, name: '' }
       : provider === 'sense-voice'
         ? { ...DEFAULT_SENSE_VOICE_ASR, provider, name: '' }
-        : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+        : provider === 'openai'
+          ? { ...DEFAULT_OPENAI_ASR, provider, name: '' }
+          : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
   draft.provider === 'whisper' ||
   draft.provider === 'sense-voice' ||

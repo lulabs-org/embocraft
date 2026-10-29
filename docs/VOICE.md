@@ -54,7 +54,7 @@ Agent 使用浏览器服务时，服务器沿用私聊接收者、距离和收�
 
 ## 语音识别（ASR）
 
-左侧 **识别服务** 列表包含 **自托管 Whisper** 与各份已保存的 Whisper、本地 SenseVoice、阿里云服务；点击 **添加识别服务** 可创建命名配置，同一服务商可同时保存不同模型、地域和密钥。右侧可编辑、删除所选配置，下方提供录音试用与识别结果。此选择作用于控制台试用；聊天录音与附近语音按 `ASR_PROVIDER` 选择默认服务器引擎（默认 `auto`：有本地模型时优先 SenseVoice，否则回退 Whisper），不受试用服务删除影响。
+左侧 **识别服务** 列表包含 **自托管 Whisper** 与各份已保存的 Whisper、本地 SenseVoice、阿里云服务及 OpenAI 兼容接口；点击 **添加识别服务** 可创建命名配置，同一服务商可同时保存不同模型、地域和密钥。右侧可编辑、删除所选配置，下方提供录音试用与识别结果。此选择作用于控制台试用；聊天录音与附近语音按 `ASR_PROVIDER` 选择默认服务器引擎（默认 `auto`：有本地模型时优先 SenseVoice，否则回退 Whisper），不受试用服务删除影响。
 
 ### 本地 SenseVoice（离线，推荐）
 
@@ -96,6 +96,16 @@ Docker 部署时 `Dockerfile.server` 会在构建阶段把 `models/sherpa-onnx-s
 接口：`GET/POST /voice/asr/services` 读取脱敏列表／新建配置，`PUT/DELETE /voice/asr/services/:id` 编辑／删除指定服务；`WS /voice/asr/realtime?serviceId=<id>&language=zh|en` 连接所选服务。服务 ID 必填，缺失或已删除时不会回退到其他配置。浏览器收到 `ready` 后发送二进制 PCM；发送 `{ "type": "finish" }` 请求结束；服务端返回 `partial`、`final`、`finished` 或 `error` 事件。
 
 协议依据：[实时语音识别指南](https://help.aliyun.com/zh/model-studio/real-time-speech-recognition-user-guide)、[Fun-ASR WebSocket 接入](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)、[客户端事件](https://help.aliyun.com/zh/model-studio/fun-asr-client-events)、[服务端事件](https://help.aliyun.com/zh/model-studio/fun-asr-server-events)。自动化测试使用固定响应验证协议、生命周期和权限；真实云端识别效果与账户权限需使用有效 Key 录音验证。
+
+### OpenAI 兼容接口（远程）
+
+点击 **添加识别服务**，**服务类型** 选择 **OpenAI 兼容接口（远程）**，可对接 OpenAI、Groq、硅基流动或自建的 faster-whisper、LocalAI 网关，只要实现 `POST /audio/transcriptions` 的 multipart 契约即可。
+
+- **接口地址**：完整的 http(s) 基地址，例如 `https://api.openai.com/v1`；请求发往 `<接口地址>/audio/transcriptions`，不能包含账号、查询参数或锚点。
+- **识别模型**：服务端模型名，例如 `whisper-1`、`whisper-large-v3` 或自建网关暴露的模型 ID。
+- **API Key**：可选。OpenAI 等云端服务必须填写，无需鉴权的自建网关可留空；密钥只保存在服务端，不返回浏览器。
+
+录音与文件由项目服务器转发到该地址识别，音频会离开本项目服务器，按供应商规则计费。保存只校验地址与参数格式，不探测网络，实际可用性以录音结果为准。编辑时接口地址不变可留空密钥沿用原值，更换地址须重新填写。该配置只用于控制台试用，聊天与附近语音仍按 `ASR_PROVIDER` 使用默认服务器引擎。
 
 ### 自托管 Whisper
 

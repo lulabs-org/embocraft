@@ -15,7 +15,9 @@ import type { AsrServiceDraft } from '@voxel/shared';
 /** Only server-side engines accept transcription settings. */
 function settingsFor(view?: AsrServiceDraft) {
   return view &&
-    (view.provider === 'whisper' || view.provider === 'sense-voice')
+    (view.provider === 'whisper' ||
+      view.provider === 'sense-voice' ||
+      view.provider === 'openai')
     ? view
     : undefined;
 }
