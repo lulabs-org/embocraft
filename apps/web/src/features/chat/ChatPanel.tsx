@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../../i18n';
 import type { Connection } from '../../network/connection';
-import { mentionQuery } from './chat-mentions';
 import { ChatMessages } from './components/ChatMessages';
-import { MentionPicker } from './components/MentionPicker';
-import { VoiceDraft } from './components/VoiceDraft';
+import { ChatComposer } from './components/ChatComposer';
 import { useChatController } from './hooks/useChatController';
 export function ChatPanel({
   connection,
@@ -24,43 +22,16 @@ export function ChatPanel({
     collapsed,
     setCollapsedAt,
     unread,
-    text,
-    setText,
     scope,
     setScope,
     recipients,
     setRecipients,
     picker,
     setPicker,
-    setChoice,
     panel,
-    caret,
-    status,
-    setStatus,
-    error,
-    setError,
-    mode,
-    setMode,
-    partial,
-    overflow,
-    setOverflow,
-    clipDuration,
-    clip,
-    setClip,
-    preview,
     input,
-    upload,
-    finishDictation,
-    recorder,
-    connected,
     busy,
-    candidates,
-    activeChoice,
-    cancel,
     openPicker,
-    onKey,
-    record,
-    send,
   } = controller;
   const entry = useRef<HTMLButtonElement>(null);
   const wasExpanded = useRef(expanded);
@@ -95,7 +66,7 @@ export function ChatPanel({
           input.current?.focus();
         } else close();
       }}
-      className={`chat enhanced-chat${collapsed ? ' is-collapsed' : ''}${picker ? ' is-picking' : ''}${picker?.source === 'button' ? ' picker-manual' : ''}`}
+      className={`chat enhanced-chat${collapsed ? ' is-collapsed' : ''}`}
       aria-label={t('chat.ariaLabel')}
     >
       <div className="chat-peek" hidden={!collapsed}>
@@ -165,7 +136,6 @@ export function ChatPanel({
               title={t('chat.privateDesc')}
               onClick={() => {
                 setScope('private');
-                if (!recipients.length) openPicker();
               }}
             >
               {t('chat.private')}
@@ -217,196 +187,7 @@ export function ChatPanel({
             </button>
           </div>
         )}
-        {preview && (
-          <VoiceDraft
-            key={preview}
-            src={preview}
-            durationMs={clipDuration}
-            busy={busy}
-            onDiscard={() => {
-              setClip(undefined);
-              setStatus('');
-              setError('');
-            }}
-          />
-        )}
-        {picker && <MentionPicker {...controller} />}
-        <form
-          className={clip ? 'chat-audio-send-row' : undefined}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-        >
-          {clip ? (
-            <span className="chat-audio-caption">
-              {t('chat.previewAudioCaption')}
-            </span>
-          ) : (
-            <div className="chat-input-wrap">
-              <input
-                ref={input}
-                aria-label={t('chat.inputAria')}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={picker?.source === 'input'}
-                aria-activedescendant={
-                  picker?.source === 'input' && candidates.length
-                    ? `mention-${candidates[activeChoice].id}`
-                    : undefined
-                }
-                aria-controls="chat-mentions"
-                placeholder={
-                  scope === 'private'
-                    ? recipients.length
-                      ? t('chat.placeholderPrivate')
-                      : t('chat.placeholderPickFirst')
-                    : t('chat.placeholderPublic')
-                }
-                disabled={busy || !!clip}
-                value={text}
-                maxLength={240}
-                onKeyDown={onKey}
-                onChange={(e) => {
-                  setText(e.target.value);
-                  const pos = e.target.selectionStart ?? 0;
-                  caret.current = pos;
-                  setPicker(mentionQuery(e.target.value, pos));
-                  setChoice(0);
-                }}
-                onSelect={(e) => {
-                  caret.current = e.currentTarget.selectionStart ?? 0;
-                  if (picker?.source !== 'button')
-                    setPicker(
-                      mentionQuery(e.currentTarget.value, caret.current),
-                    );
-                }}
-              />
-            </div>
-          )}
-          <button
-            className={`chat-send${clip ? ' chat-send-audio' : ''}`}
-            disabled={
-              !connected ||
-              busy ||
-              (!clip && !text.trim()) ||
-              (scope === 'private' && !recipients.length)
-            }
-            aria-label={clip ? t('chat.sendAudio') : t('chat.send')}
-            title={clip ? t('chat.sendAudio') : t('chat.send')}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path d="m21 3-6.5 18-4-7.5L3 9.5 21 3Z" />
-              <path d="m10.5 13.5 5-5" />
-            </svg>
-            {clip && (
-              <span>
-                {mode === 'sending' ? t('chat.sending') : t('chat.sendAudio')}
-              </span>
-            )}
-          </button>
-        </form>
-        <div className="chat-tools">
-          {mode === 'dictating' || mode === 'recording' ? (
-            <button
-              onClick={() => {
-                if (mode === 'dictating') {
-                  setMode('transcribing');
-                  finishDictation();
-                } else recorder.finish();
-              }}
-            >
-              {t('chat.endRecording')}
-            </button>
-          ) : (
-            !clip && (
-              <>
-                <button
-                  disabled={!connected || busy || !!clip}
-                  onClick={() => record('text')}
-                >
-                  {t('chat.voiceToText')}
-                </button>
-                <button
-                  disabled={!connected || busy || !!clip}
-                  onClick={() => record('audio')}
-                >
-                  {t('chat.recordVoice')}
-                </button>
-              </>
-            )
-          )}
-          {busy && mode !== 'sending' && (
-            <button onClick={cancel}>{t('common.cancel')}</button>
-          )}
-          {busy && mode === 'sending' && clip && (
-            <button onClick={() => upload.current?.abort()}>
-              {t('chat.cancelSending')}
-            </button>
-          )}
-          {!busy && (
-            <button
-              aria-label={t('chat.pickMentionAria')}
-              aria-expanded={picker !== null}
-              aria-controls="chat-mentions"
-              onClick={openPicker}
-            >
-              {t('chat.pickMention')}
-            </button>
-          )}
-        </div>
-        <small className="chat-help chat-scope-help">
-          {scope === 'private'
-            ? t('chat.helpPrivate')
-            : recipients.length
-              ? t('chat.helpPublicMention')
-              : t('chat.helpPublic')}
-        </small>
-        {partial && (
-          <p className="speech-interim" role="status">
-            {t('chat.interimCaption', { text: partial })}
-          </p>
-        )}
-        {overflow && (
-          <div className="speech-interim">
-            <label>
-              {t('chat.pendingConfirmedSentence')}
-              <textarea readOnly value={overflow} rows={2} />
-            </label>
-            <button
-              disabled={busy || !!text.trim()}
-              onClick={() => {
-                setText(overflow);
-                setOverflow('');
-                setError('');
-                setStatus(t('chat.fillNotice'));
-              }}
-            >
-              {t('chat.fillBlankInput')}
-            </button>
-          </div>
-        )}
-        {status && (
-          <p role="status" className="chat-help">
-            {status}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="chat-error">
-            {error}
-          </p>
-        )}
+        <ChatComposer controller={controller} />
       </div>
     </section>
   );

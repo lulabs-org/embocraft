@@ -250,9 +250,23 @@
   max-height: min(180px, 25dvh);
   margin-top: 8px;
 }
-.in-game .enhanced-chat .chat-send {
-  padding: 6px;
-  font-size: 12px;
+.in-game .chat-composer .chat-composer-icon,
+.in-game .chat-composer .chat-send,
+.in-game .chat-composer .audio-play {
+  padding: 0;
+  border-radius: 50%;
+}
+.in-game .chat-composer .chat-composer-icon {
+  background: transparent;
+  color: #657c6b;
+}
+.in-game .chat-composer .chat-send:not(:disabled) {
+  background: var(--color-hud-ink);
+  color: #f8faf3;
+}
+.in-game .chat-composer .chat-composer-input:focus-visible {
+  /* The capsule provides the focus ring for its text input. */
+  outline: none;
 }
 .chat-peek {
   display: grid;
@@ -535,9 +549,6 @@
 }
 .in-game.hud-short-chat .chat-expanded .messages {
   max-height: 60px;
-}
-.in-game.hud-short-chat .chat-scope-help {
-  display: none;
 }
 .in-game.hud-short-chat
   .game-communication:has(.spatial-live-caption, .spatial-error-summary)

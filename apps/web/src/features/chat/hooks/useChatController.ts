@@ -18,6 +18,12 @@ import { useAsrSelection } from '../../voice';
 import type { Connection } from '../../../network/connection';
 import { chatApi } from '../api';
 import { consumeMention, mentionQuery } from '../chat-mentions';
+type CaptureRun = {
+  finishing: boolean;
+  send: boolean;
+  fail: (message: string) => void;
+};
+
 export function useChatController(connection: Connection, expanded = true) {
   const collapsed = !expanded;
   const [collapsedAt, setCollapsedAt] = useState(0);
@@ -51,11 +57,15 @@ export function useChatController(connection: Connection, expanded = true) {
       | 'dictating'
       | 'transcribing'
       | 'recording'
+      | 'finalizing'
       | 'sending'
     >('idle');
   const [partial, setPartial] = useState('');
   const [overflow, setOverflow] = useState('');
   const dictated = useRef('');
+  const dictationRun = useRef<CaptureRun | null>(null);
+  const clipRun = useRef<CaptureRun | null>(null);
+  const [dictationSending, setDictationSending] = useState(false);
   const activeDictation = useRef<'browser' | 'server'>('server');
   const [clipDuration, setClipDuration] = useState(0);
   const [clip, setClip] = useState<Blob>(),
@@ -83,23 +93,6 @@ export function useChatController(connection: Connection, expanded = true) {
     .sort((a, b) => Number(b.kind !== 'human') - Number(a.kind !== 'human'));
   const activeChoice = candidates.length ? choice % candidates.length : 0;
   useEffect(() => {
-    if (picker?.source === 'button') search.current?.focus();
-  }, [picker?.source]);
-  const pickerQuery = picker?.query;
-  useEffect(() => {
-    if (pickerQuery === undefined) return;
-    panel.current
-      ?.querySelector('[role=option][aria-selected=true]')
-      ?.scrollIntoView({ block: 'nearest' });
-  }, [choice, pickerQuery]);
-  useEffect(() => {
-    const outside = (event: PointerEvent) => {
-      if (!panel.current?.contains(event.target as Node)) setPicker(null);
-    };
-    document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
-  }, []);
-  useEffect(() => {
     if (!clip) {
       setPreview('');
       return;
@@ -109,10 +102,14 @@ export function useChatController(connection: Connection, expanded = true) {
     return () => URL.revokeObjectURL(url);
   }, [clip]);
   const cancel = useCallback(() => {
+    dictationRun.current = null;
+    clipRun.current = null;
+    setDictationSending(false);
     dictation.cancel();
     browserDictation.cancel();
     recorder.cancel();
     upload.current?.abort();
+    upload.current = undefined;
     connection.chatRecording = false;
     setMode('idle');
     setPartial('');
@@ -123,10 +120,13 @@ export function useChatController(connection: Connection, expanded = true) {
   }, [connected, cancel]);
   useEffect(
     () => () => {
+      dictationRun.current = null;
+      clipRun.current = null;
       dictation.cancel();
       browserDictation.cancel();
       recorder.cancel();
       upload.current?.abort();
+      upload.current = undefined;
       connection.chatRecording = false;
     },
     [connection, dictation, browserDictation, recorder],
@@ -187,8 +187,16 @@ export function useChatController(connection: Connection, expanded = true) {
     }
   };
   const record = (kind: 'text' | 'audio') => {
+    if (
+      busy ||
+      clip ||
+      dictationRun.current ||
+      clipRun.current ||
+      upload.current
+    )
+      return;
     if (kind === 'text' && overflow) {
-      setError('请先处理下方保留的已确认句子，再继续听写。');
+      setError('请先处理保留的已确认句子，再继续听写。');
       return;
     }
     dictated.current = text;
@@ -216,52 +224,92 @@ export function useChatController(connection: Connection, expanded = true) {
       activeDictation.current =
         service.provider === 'browser' ? 'browser' : 'server';
       const language = service.language ?? 'zh-CN';
+      // A run owns its callbacks and send intent, even if old results arrive late.
+      const run: CaptureRun = {
+        finishing: false,
+        send: false,
+        fail: (message) => {
+          if (dictationRun.current !== run) return;
+          dictationRun.current = null;
+          dictation.cancel();
+          browserDictation.cancel();
+          setDictationSending(false);
+          setPartial('');
+          fail(
+            run.send
+              ? `${message} 未发送，已确认文字已保留，请检查后重试。`
+              : message,
+          );
+        },
+      };
+      dictationRun.current = run;
+      const worldSession = connection.room?.sessionId;
+      const current = () => {
+        if (dictationRun.current !== run) return false;
+        if (
+          connection.status !== 'connected' ||
+          connection.room?.sessionId !== worldSession
+        ) {
+          run.fail('世界连接已变化，听写已停止。');
+          return false;
+        }
+        return true;
+      };
       const callbacks = {
         onState: (state: 'listening' | 'thinking') => {
+          if (!current()) return;
+          if (run.finishing) return;
           setMode(state === 'listening' ? 'dictating' : 'transcribing');
           setStatus(
             state === 'listening'
-              ? '听写中，停顿后确认整句；结束后可编辑再发送。'
-              : '正在服务器识别…',
+              ? '听写中，可直接发送；也可先停止检查文字。'
+              : '正在识别…',
           );
         },
-        onPartial: setPartial,
-        onStatus: setStatus,
+        onPartial: (value: string) => {
+          if (current()) setPartial(value);
+        },
+        onStatus: (value: string) => {
+          if (current() && !run.finishing) setStatus(value);
+        },
         onFinal: (value: string) => {
+          if (!current()) return;
           const next = (dictated.current + ' ' + value).trim();
           if (next.length > 240) {
-            dictation.cancel();
-            browserDictation.cancel();
-            setPartial('');
             setOverflow(value);
-            fail('输入框最多 240 字，听写已停止。本句保留在下方，请分开发送。');
+            run.fail(
+              '输入框最多 240 字，听写已停止。超出的句子已保留，请分开发送。',
+            );
             return;
           }
           dictated.current = next;
           setText(next);
-          setStatus('整句已确认，可以继续讲话；结束后确认发送。');
+          if (!run.finishing) setStatus('');
         },
         onEnd: () => {
+          if (!current()) return;
+          dictationRun.current = null;
           connection.chatRecording = false;
           setPartial('');
           setMode('idle');
-          setStatus('已转为文字，请确认后发送。');
+          setDictationSending(false);
+          if (run.send) {
+            // onFinal updates this ref synchronously; React state may still be batched.
+            if (!dictated.current.trim()) {
+              setStatus('');
+              setError('没有识别到可发送的文字，请重新听写或输入消息。');
+            } else void send(dictated.current);
+          } else setStatus('');
         },
-        onError: fail,
+        onError: run.fail,
       };
       if (service.provider === 'browser') {
         setMode('dictating');
-        browserDictation.start(language, {
-          ...callbacks,
-          onStatus: setStatus,
-        });
+        browserDictation.start(language, callbacks);
       } else {
         void dictation.start(
           language,
-          {
-            ...callbacks,
-            onStatus: setStatus,
-          },
+          callbacks,
           undefined,
           undefined,
           service.provider === 'bailian'
@@ -273,25 +321,101 @@ export function useChatController(connection: Connection, expanded = true) {
                 ),
         );
       }
-    } else
+    } else {
+      const run: CaptureRun = {
+        finishing: false,
+        send: false,
+        fail: (message) => {
+          if (clipRun.current !== run) return;
+          clipRun.current = null;
+          recorder.cancel();
+          fail(run.send ? `${message} 语音未发送，请重新录制。` : message);
+        },
+      };
+      clipRun.current = run;
+      const worldSession = connection.room?.sessionId;
+      const current = () => {
+        if (clipRun.current !== run) return false;
+        if (
+          connection.status !== 'connected' ||
+          connection.room?.sessionId !== worldSession
+        ) {
+          run.fail('世界连接已变化，录音已停止。');
+          return false;
+        }
+        return true;
+      };
       void recorder.start(
         (blob, durationMs) => {
+          if (!current()) return;
+          if (!blob.size) {
+            run.fail('录音为空，请重试。');
+            return;
+          }
+          clipRun.current = null;
           connection.chatRecording = false;
           setClipDuration(durationMs);
           setClip(blob);
           setMode('idle');
           setStatus('');
+          // MediaRecorder's final dataavailable has already joined this blob.
+          // Use the callback value directly, before React commits the draft state.
+          if (run.send) void send(text, blob);
         },
-        fail,
+        run.fail,
         () => {
+          if (!current() || run.finishing) return;
           setMode('recording');
           setStatus('录制语音消息中，最长 20 秒。');
         },
       );
+    }
   };
-  const send = async () => {
+  const finishRecording = (sendAfter = false) => {
+    const run = clipRun.current;
+    if (!run || run.finishing) return;
+    run.send = sendAfter;
+    run.finishing = true;
+    setMode('finalizing');
+    setStatus(sendAfter ? '正在完成录音，完成后自动发送…' : '正在完成录音…');
+    try {
+      recorder.finish();
+    } catch {
+      run.fail('无法结束录音，请重试。');
+    }
+  };
+  const finishDictation = (sendAfter = false) => {
+    const run = dictationRun.current;
+    if (!run) return;
+    run.send ||= sendAfter;
+    setDictationSending(run.send);
+    setMode('transcribing');
+    setStatus(
+      run.send ? '正在确认最后一句，完成后自动发送…' : '正在确认最后一句…',
+    );
+    if (run.finishing) return;
+    run.finishing = true;
+    try {
+      if (activeDictation.current === 'browser') browserDictation.finish();
+      else
+        void dictation.finish().catch(() => run.fail('无法结束听写，请重试。'));
+    } catch {
+      run.fail('无法结束听写，请重试。');
+    }
+  };
+  const send = async (messageText = text, audioClip = clip) => {
+    if (upload.current || dictationRun.current || clipRun.current) return;
     setError('');
-    if (clip && !clipAsr.selected.id) {
+    setStatus('');
+    if (connection.status !== 'connected') {
+      setError(
+        audioClip
+          ? '世界连接已断开，未发送；录音已保留，请连接后重试。'
+          : '世界连接已断开，未发送；文字已保留，请连接后重试。',
+      );
+      return;
+    }
+    if (audioClip && !clipAsr.selected.id) {
       setError('请先在控制台为“聊天录语音转文字”选择识别服务。');
       return;
     }
@@ -308,29 +432,27 @@ export function useChatController(connection: Connection, expanded = true) {
       setError('接收对象已离线，请移除或重新选择。');
       return;
     }
-    if (!clip && !text.trim()) return;
+    if (!audioClip && !messageText.trim()) return;
     setPicker(null);
     setMode('sending');
     const abort = new AbortController();
     upload.current = abort;
     try {
-      if (clip) {
-        setStatus('正在上传语音并由服务器转写…');
+      if (audioClip) {
+        setStatus('正在发送语音…');
         const timer = setTimeout(() => abort.abort(), 125000);
         try {
-          const data = await chatApi.uploadAudio(
-            clip,
+          await chatApi.uploadAudio(
+            audioClip,
             scope,
             ids,
             connection.chatToken,
             abort.signal,
             clipAsr.selected.id,
           );
-          setStatus(
-            data.transcriptAvailable
-              ? '语音已发送，Agent 可读取转写。'
-              : '语音已发送，暂未生成文字转写，Agent 无法理解此段录音。',
-          );
+          if (upload.current !== abort) return;
+          if (abort.signal.aborted) throw new Error('发送已取消。');
+          setStatus('');
         } finally {
           clearTimeout(timer);
         }
@@ -338,20 +460,31 @@ export function useChatController(connection: Connection, expanded = true) {
         setText('');
       } else {
         await connection.requestAction('chat', {
-          text,
+          text: messageText,
           scope,
           recipients: ids,
         });
+        if (upload.current !== abort || abort.signal.aborted) return;
         setText('');
-        setStatus('已发送。');
+        setStatus('');
       }
       if (scope === 'public') setRecipients([]);
       input.current?.focus();
     } catch (e) {
-      if (!abort.signal.aborted) setError((e as Error).message);
+      if (upload.current !== abort) return;
+      setStatus('');
+      if (!abort.signal.aborted)
+        setError(
+          audioClip
+            ? `${(e as Error).message} 录音已保留，请确认消息记录后重试。`
+            : `${(e as Error).message} 文字已保留，请确认消息记录后重试。`,
+        );
       else setError('发送已取消或超时，请确认消息记录后再重试。');
     } finally {
-      setMode('idle');
+      if (upload.current === abort) {
+        upload.current = undefined;
+        setMode('idle');
+      }
     }
   };
 
@@ -395,10 +528,9 @@ export function useChatController(connection: Connection, expanded = true) {
     candidates,
     activeChoice,
     cancel,
-    finishDictation: () => {
-      if (activeDictation.current === 'browser') browserDictation.finish();
-      else void dictation.finish();
-    },
+    finishDictation,
+    finishRecording,
+    dictationSending,
     openPicker,
     select,
     onKey,
