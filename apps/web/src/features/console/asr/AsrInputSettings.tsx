@@ -95,9 +95,6 @@ export function AsrInputSettings({ active }: { active: boolean }) {
         className="console-sidebar"
         aria-label={t('console.asrInput.sidebarHeading')}
       >
-        <div className="console-sidebar-heading">
-          <h3>{t('console.asrInput.sidebarHeading')}</h3>
-        </div>
         <div className="console-sidebar-items">
           {(['spatial', 'chat', 'clip'] as const).map((item) => (
             <button

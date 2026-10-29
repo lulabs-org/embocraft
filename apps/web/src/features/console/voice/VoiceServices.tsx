@@ -139,9 +139,6 @@ export function VoiceServices({
         className="console-sidebar"
         aria-label={t('console.voice.listAria')}
       >
-        <div className="console-sidebar-heading">
-          <h3>{t('console.tabs.voice')}</h3>
-        </div>
         <button
           className="primary console-sidebar-add"
           disabled={busy}

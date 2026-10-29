@@ -50,9 +50,6 @@ export function ProviderEditor({
         className="console-sidebar"
         aria-label={t('console.providers.listAria')}
       >
-        <div className="console-sidebar-heading">
-          <h3>{t('console.providers.title')}</h3>
-        </div>
         <button
           className="primary console-sidebar-add"
           onClick={() => editProvider()}

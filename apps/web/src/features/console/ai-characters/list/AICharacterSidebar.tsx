@@ -43,14 +43,6 @@ export function AICharacterSidebar({
       className="console-sidebar"
       aria-label={t('console.characters.listAria')}
     >
-      <div className="console-sidebar-heading">
-        <h3>{t('console.characters.title')}</h3>
-        <span>
-          {loadingJobs
-            ? t('console.characters.syncing')
-            : t('console.characters.onlineCount', { online: onlineCount })}
-        </span>
-      </div>
       <button
         className="primary console-sidebar-add"
         disabled={disabled}
@@ -58,6 +50,11 @@ export function AICharacterSidebar({
       >
         ＋ {t('console.characters.create')}
       </button>
+      <p className="console-sidebar-meta">
+        {loadingJobs
+          ? t('console.characters.syncing')
+          : t('console.characters.onlineCount', { online: onlineCount })}
+      </p>
       <div
         className="agents-filters"
         role="group"
