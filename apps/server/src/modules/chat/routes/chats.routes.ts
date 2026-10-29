@@ -1,14 +1,41 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import { env } from '../../../core/config/env';
-import { asyncRoute } from '../../../core/http/middleware/async-route';
-import { errorHandler } from '../../../core/http/middleware/error-handler';
-import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
+import {
+  asyncAbortableRoute,
+  createOriginGuard,
+  errorHandler,
+} from '../../../core/http/middleware';
 import { type WorldChat } from '../services/chat.service';
 
 import { AppError } from '../../../core/errors/app-error';
 import { AsrSettingsStore, LocalSpeech, type AgentSpeech } from '../../audio';
 import { ChatSpeechService } from '../services/speech.service';
+
+type ChatLocals = {
+  chat: WorldChat;
+  actor: string;
+  token: string;
+};
+
+const rawAudio = express.raw({ type: () => true, limit: '1mb' });
+
+function parseAudioBytes(body: unknown): Buffer {
+  return Buffer.isBuffer(body) ? body : Buffer.alloc(0);
+}
+
+function parseServiceId(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function parseChatRoute(query: express.Request['query']) {
+  return {
+    scope: query.scope,
+    recipients:
+      typeof query.to === 'string' && query.to ? query.to.split(',') : [],
+  };
+}
+
 export function installChatRoutes(
   app: Express,
   getChat: () => WorldChat | undefined,
@@ -38,10 +65,10 @@ export function installChatRoutes(
       try {
         const chat = getChat();
         if (!chat) throw new AppError('世界服务尚未就绪。', 503);
+        const token = (req.headers.authorization ?? '').replace(/^Bearer /, '');
         res.locals.chat = chat;
-        res.locals.actor = chat.authenticate(
-          (req.headers.authorization ?? '').replace(/^Bearer /, ''),
-        );
+        res.locals.token = token;
+        res.locals.actor = chat.authenticate(token);
         next();
       } catch (e) {
         next(e);
@@ -91,43 +118,21 @@ export function installChatRoutes(
    */
   app.post(
     '/chat/audio',
-    express.raw({ type: () => true, limit: '1mb' }),
-    asyncRoute(async (req, res, next) => {
-      const chat = res.locals.chat as WorldChat,
-        actor = res.locals.actor as string;
-      const route = {
-        scope: req.query.scope,
-        recipients:
-          typeof req.query.to === 'string' && req.query.to
-            ? req.query.to.split(',')
-            : [],
-      };
-      const abort = new AbortController();
-      const cancel = () => {
-        if (!res.writableEnded) abort.abort();
-      };
-      res.on('close', cancel);
-      try {
-        const data = await speechService.publishAudio({
-          chat,
-          actor,
-          route,
-          bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-          contentType: req.headers['content-type'] ?? '',
-          language: req.query.language === 'en' ? 'en' : 'zh',
-          serviceId:
-            typeof req.query.serviceId === 'string'
-              ? req.query.serviceId
-              : undefined,
-          token: (req.headers.authorization ?? '').replace(/^Bearer /, ''),
-          signal: abort.signal,
-        });
-        res.status(201).json(data);
-      } catch (e) {
-        if (!abort.signal.aborted) next(e);
-      } finally {
-        res.off('close', cancel);
-      }
+    rawAudio,
+    asyncAbortableRoute(async (req, res, signal) => {
+      const { chat, actor, token } = res.locals as ChatLocals;
+      const data = await speechService.publishAudio({
+        chat,
+        actor,
+        token,
+        signal,
+        route: parseChatRoute(req.query),
+        bytes: parseAudioBytes(req.body),
+        contentType: req.headers['content-type'] ?? '',
+        language: req.query.language === 'en' ? 'en' : 'zh',
+        serviceId: parseServiceId(req.query.serviceId),
+      });
+      res.status(201).json(data);
     }),
   );
 
@@ -327,39 +332,22 @@ export function installChatRoutes(
    */
   app.post(
     ['/chat/spatial/:id', '/chat/spatial/:id/preview'],
-    express.raw({ type: () => true, limit: '1mb' }),
-    asyncRoute(async (req, res, next) => {
-      const chat = res.locals.chat as WorldChat,
-        actor = res.locals.actor as string,
-        id = String(req.params.id);
+    rawAudio,
+    asyncAbortableRoute(async (req, res, signal) => {
+      const { chat, actor, token } = res.locals as ChatLocals;
       const partial = req.path.endsWith('/preview');
-      const abort = new AbortController();
-      const cancel = () => {
-        if (!res.writableEnded) abort.abort();
-      };
-      res.on('close', cancel);
-      try {
-        res.json(
-          await speechService.transcribeSpatial({
-            chat,
-            actor,
-            id,
-            bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-            contentType: req.headers['content-type'] ?? '',
-            partial,
-            token: (req.headers.authorization ?? '').replace(/^Bearer /, ''),
-            serviceId:
-              typeof req.query.serviceId === 'string'
-                ? req.query.serviceId
-                : undefined,
-            signal: abort.signal,
-          }),
-        );
-      } catch (e) {
-        if (!abort.signal.aborted) next(e);
-      } finally {
-        res.off('close', cancel);
-      }
+      const data = await speechService.transcribeSpatial({
+        chat,
+        actor,
+        token,
+        signal,
+        id: String(req.params.id),
+        partial,
+        bytes: parseAudioBytes(req.body),
+        contentType: req.headers['content-type'] ?? '',
+        serviceId: parseServiceId(req.query.serviceId),
+      });
+      res.json(data);
     }),
   );
 
@@ -444,9 +432,9 @@ export function installChatRoutes(
         e instanceof AppError
           ? e.status
           : e &&
-              typeof e === 'object' &&
-              'type' in e &&
-              e.type === 'entity.too.large'
+            typeof e === 'object' &&
+            'type' in e &&
+            e.type === 'entity.too.large'
             ? 413
             : 400,
       body: {

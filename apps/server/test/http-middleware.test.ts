@@ -2,7 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import express, { type Response } from 'express';
 import { createServer, type Server } from 'node:http';
 import { AppError } from '../src/core/errors/app-error';
-import { asyncRoute } from '../src/core/http/middleware/async-route';
+import {
+  asyncAbortableRoute,
+  asyncRoute,
+} from '../src/core/http/middleware/async-route';
 import { errorHandler } from '../src/core/http/middleware/error-handler';
 import {
   managementBody,
@@ -49,6 +52,21 @@ beforeEach(async () => {
     '/default/unavailable',
     asyncRoute(() => {
       throw new AppError('服务暂不可用', 503);
+    }),
+  );
+  app.get(
+    '/abortable/success',
+    asyncAbortableRoute(async (_req, res, signal) => {
+      res.json({ aborted: signal.aborted });
+    }),
+  );
+  app.get(
+    '/abortable/timeout',
+    asyncAbortableRoute(async (_req, _res, signal) => {
+      await new Promise<void>((resolve) => {
+        signal.addEventListener('abort', () => resolve());
+      });
+      throw new Error('should-be-suppressed-on-abort');
     }),
   );
   app.use(errorHandler());
@@ -188,3 +206,24 @@ it('delegates errors after headers without formatting or writing another respons
   expect(res.json).not.toHaveBeenCalled();
   expect(log).not.toHaveBeenCalled();
 });
+
+it('supports asyncAbortableRoute and provides active signal', async () => {
+  const response = await fetch(`${url}/abortable/success`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ aborted: false });
+});
+
+it('aborts signal on client disconnect and suppresses post-abort errors', async () => {
+  const controller = new AbortController();
+  const request = fetch(`${url}/abortable/timeout`, {
+    signal: controller.signal,
+  });
+  // Wait briefly for request to reach server, then abort client side
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  controller.abort();
+  await expect(request).rejects.toThrow();
+  // Allow time for server promise to complete and ensure error was not logged
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(log).not.toHaveBeenCalled();
+});
+
