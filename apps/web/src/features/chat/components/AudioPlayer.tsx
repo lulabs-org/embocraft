@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { audioDuration, audioProgress } from '../../../audio';
+import { Play, Pause, LoaderCircle } from 'lucide-react';
 import { useI18n } from '../../../i18n/context';
 
 const clock = (seconds: number) => {
@@ -17,6 +18,8 @@ export function AudioPlayer({
   playLabel: customPlayLabel,
   pauseLabel: customPauseLabel,
   compact = false,
+  inline = false,
+  onErrorChange,
 }: {
   src?: string;
   loadSource?: () => Promise<string>;
@@ -27,6 +30,8 @@ export function AudioPlayer({
   playLabel?: string;
   pauseLabel?: string;
   compact?: boolean;
+  inline?: boolean;
+  onErrorChange?: (message: string) => void;
 }) {
   const { t } = useI18n();
   const label = customLabel ?? t('chat.voiceMessageDefault');
@@ -45,6 +50,10 @@ export function AudioPlayer({
   );
   const [ended, setEnded] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    onErrorChange?.(error);
+  }, [error, onErrorChange]);
+  useEffect(() => () => onErrorChange?.(''), [onErrorChange]);
   useEffect(() => {
     if (busy) {
       operation.current++;
@@ -160,7 +169,9 @@ export function AudioPlayer({
             <path className="wave-outer" d="M14 5a10 10 0 0 1 0 14" />
           </svg>
           <span>
-            {loading ? t('chat.loadingShort') : `${Math.max(1, Math.ceil(duration))}″`}
+            {loading
+              ? t('chat.loadingShort')
+              : `${Math.max(1, Math.ceil(duration))}″`}
           </span>
         </button>
       ) : (
@@ -169,26 +180,50 @@ export function AudioPlayer({
             type="button"
             className="audio-play"
             aria-label={
-              loading ? t('chat.loadingVoice') : playing ? pauseLabel : playLabel
+              loading
+                ? t('chat.loadingVoice')
+                : playing
+                  ? pauseLabel
+                  : playLabel
             }
             disabled={busy || loading}
             onClick={() => void toggle()}
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              {loading ? (
-                <circle cx="12" cy="12" r="3" />
+            {inline ? (
+              loading ? (
+                <LoaderCircle size={17} strokeWidth={1.7} aria-hidden="true" />
               ) : playing ? (
-                <path d="M7 5h4v14H7zm6 0h4v14h-4z" />
+                <Pause
+                  size={17}
+                  strokeWidth={1.5}
+                  fill="currentColor"
+                  aria-hidden="true"
+                />
               ) : (
-                <path d="m9 5 11 7-11 7z" />
-              )}
-            </svg>
+                <Play
+                  size={17}
+                  strokeWidth={1.5}
+                  fill="currentColor"
+                  aria-hidden="true"
+                />
+              )
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                {loading ? (
+                  <circle cx="12" cy="12" r="3" />
+                ) : playing ? (
+                  <path d="M7 5h4v14H7zm6 0h4v14h-4z" />
+                ) : (
+                  <path d="m9 5 11 7-11 7z" />
+                )}
+              </svg>
+            )}
           </button>
           <div className="audio-track">
             <input
@@ -211,23 +246,33 @@ export function AudioPlayer({
               }}
             />
             <div className="audio-time">
-              <span>
-                {clock(displayedTime)} / {clock(duration)}
-              </span>
-              <span>
-                {loading
-                  ? t('chat.loadingVoice')
-                  : playing
-                    ? t('chat.playingStatus')
-                    : ended
-                      ? t('chat.playEnded')
-                      : idleLabel}
-              </span>
+              {inline ? (
+                <span className="audio-inline-time">
+                  <span>{clock(displayedTime)}</span>
+                  <span className="audio-time-divider"> / </span>
+                  <span className="audio-time-total">{clock(duration)}</span>
+                </span>
+              ) : (
+                <span>
+                  {clock(displayedTime)} / {clock(duration)}
+                </span>
+              )}
+              {!inline && (
+                <span>
+                  {loading
+                    ? t('chat.loadingVoice')
+                    : playing
+                      ? t('chat.playingStatus')
+                      : ended
+                        ? t('chat.playEnded')
+                        : idleLabel}
+                </span>
+              )}
             </div>
           </div>
         </div>
       )}
-      {error && (
+      {error && !onErrorChange && (
         <p className="chat-error" role="alert">
           {error}
         </p>
