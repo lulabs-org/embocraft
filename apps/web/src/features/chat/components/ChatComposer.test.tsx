@@ -62,7 +62,7 @@ it('opens secondary actions, returns focus on Escape, and keeps recipient select
   await vi.waitFor(() =>
     expect(document.activeElement).toBe(button('更多聊天操作')),
   );
-  expect(document.body.textContent).not.toContain('录语音');
+  expect(document.body.textContent).not.toContain('发语音');
   await click('更多聊天操作');
   await click('选人');
   expect(controller.picker?.source).toBe('button');
@@ -256,7 +256,7 @@ it('starts voice recording from the floating action without leaking the click to
     .mockImplementation(async (_done, _fail, ready) => ready());
   await click('更多聊天操作');
   clicked.mockClear();
-  await click('录语音');
+  await click('发语音');
   expect(start).toHaveBeenCalledOnce();
   expect(controller.mode).toBe('recording');
   expect(document.querySelector('.chat-more-actions')).toBeNull();

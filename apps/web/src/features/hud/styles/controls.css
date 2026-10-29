@@ -23,33 +23,66 @@
   color: var(--color-hud-ink);
   font-size: 20px;
 }
-.controls-help dl {
-  display: grid;
-  gap: 12px;
-  margin: 16px 0;
+.controls-help-group {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #d9e1d3;
 }
-.controls-help dl > div {
+.controls-help-group h3 {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--color-hud-ink);
+}
+.controls-help dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.controls-help dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: start;
   gap: 12px;
+  line-height: 1.6;
+}
+.controls-help dt,
+.controls-help dd {
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .controls-help dd {
   margin: 0;
   color: #668076;
 }
 .controls-help kbd {
+  display: inline-block;
   font: inherit;
-  padding: 3px 6px;
+  padding: 1px 6px;
   border-radius: 3px;
   background: #e7ecdf;
 }
-.controls-help p {
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid #d9e1d3;
+.controls-help-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.controls-help .controls-help-note {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-control);
   font-size: 11px;
+  line-height: 1.6;
   color: #668076;
+}
+.controls-help-note p {
+  margin: 0;
+}
+.controls-help-note p + p {
+  margin-top: 6px;
 }
 .controls-help button:focus-visible {
   outline: 2px solid var(--color-focus);

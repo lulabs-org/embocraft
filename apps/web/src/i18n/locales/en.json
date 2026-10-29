@@ -51,6 +51,10 @@
     "controlsHelp": "Controls Help",
     "closeHelp": "Close Controls Help",
     "controls": {
+      "movementGroup": "Movement & view",
+      "buildingGroup": "Building",
+      "communicationGroup": "Chat & voice",
+
       "move": "Move",
       "jump": "Jump",
       "lockPointer": "Lock Cursor / Look",
@@ -157,7 +161,7 @@
     "sending": "Sending…",
     "endRecording": "End Recording",
     "voiceToText": "Speech to Text",
-    "recordVoice": "Record Voice",
+    "recordVoice": "Send Voice",
     "cancelSending": "Cancel Send",
     "pickMention": "Select people",
     "pickMentionAria": "Select player or agent to mention",

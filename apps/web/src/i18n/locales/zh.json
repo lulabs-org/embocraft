@@ -51,6 +51,10 @@
     "controlsHelp": "操作帮助",
     "closeHelp": "关闭操作帮助",
     "controls": {
+      "movementGroup": "移动与视角",
+      "buildingGroup": "方块搭建",
+      "communicationGroup": "聊天与语音",
+
       "move": "移动",
       "jump": "跳跃",
       "lockPointer": "锁定鼠标视角",
@@ -157,7 +161,7 @@
     "sending": "发送中…",
     "endRecording": "结束录音",
     "voiceToText": "语音转文字",
-    "recordVoice": "录语音",
+    "recordVoice": "发语音",
     "cancelSending": "取消发送",
     "pickMention": "选人",
     "pickMentionAria": "选择要 @ 的玩家或 Agent",
@@ -252,7 +256,7 @@
       "spatial": "附近麦克风",
       "spatialHelp": "开启附近麦克风时使用；确认的文字会发送给附近听者。",
       "clip": "聊天录语音转文字",
-      "clipHelp": "发送聊天框中的“录语音”消息后，服务器会尝试转写供 AI 角色理解。",
+      "clipHelp": "通过聊天框中的“发语音”发送消息后，服务器会尝试转写供 AI 角色理解。",
       "missing": "原服务已不存在，请重新选择。"
     },
     "gateway": {
