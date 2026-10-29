@@ -50,11 +50,6 @@ export function AICharacterSidebar({
       >
         ＋ {t('console.characters.create')}
       </button>
-      <p className="console-sidebar-meta">
-        {loadingJobs
-          ? t('console.characters.syncing')
-          : t('console.characters.onlineCount', { online: onlineCount })}
-      </p>
       <div
         className="agents-filters"
         role="group"

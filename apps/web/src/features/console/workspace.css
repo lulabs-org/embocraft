@@ -10,13 +10,6 @@
   top: 0;
   min-width: 0;
 }
-.console-sidebar-meta {
-  margin: 0 0 12px;
-  color: #66796e;
-  font-size: 10px;
-  line-height: 20px;
-  font-variant-numeric: tabular-nums;
-}
 .agent-dialog button.console-sidebar-add {
   display: flex;
   align-items: center;

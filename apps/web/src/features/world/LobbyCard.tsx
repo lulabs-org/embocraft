@@ -1,4 +1,5 @@
 import { useI18n } from '../../i18n';
+import { randomPlayerName } from './random-player-name';
 
 interface LobbyCardProps {
   name: string;
@@ -15,7 +16,7 @@ export function LobbyCard({
   onJoin,
   onCreateAgent,
 }: LobbyCardProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   return (
     <div className="join">
@@ -37,15 +38,26 @@ export function LobbyCard({
         }}
       >
         <label htmlFor="name">{t('lobby.playerName')}</label>
-        <input
-          id="name"
-          value={name}
-          maxLength={24}
-          aria-invalid={!!error}
-          aria-describedby={error ? 'name-error' : undefined}
-          onChange={(e) => onNameChange(e.target.value)}
-          required
-        />
+        <div className="player-name-field">
+          <input
+            id="name"
+            value={name}
+            maxLength={24}
+            placeholder={t('lobby.playerNamePlaceholder')}
+            pattern={'.*\\S.*'}
+            aria-invalid={!!error}
+            aria-describedby={error ? 'name-error' : undefined}
+            onChange={(e) => onNameChange(e.target.value)}
+            required
+          />
+          <button
+            className="random-player-name"
+            type="button"
+            onClick={() => onNameChange(randomPlayerName(language, name))}
+          >
+            {t('lobby.randomName')}
+          </button>
+        </div>
         {error && (
           <p id="name-error" className="agent-error" role="alert">
             {error}
@@ -60,4 +72,3 @@ export function LobbyCard({
     </div>
   );
 }
-
