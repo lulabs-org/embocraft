@@ -114,7 +114,18 @@
   cursor: pointer;
 }
 .game-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
+}
+.game-menu .language-switcher-menu-label {
+  gap: 8px;
+}
+.game-menu svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 .game-menu button:hover,
 .game-menu label:hover {
@@ -123,6 +134,10 @@
 .in-game .world-panel h1 {
   font-size: 20px;
   margin: 12px 0;
+}
+.in-game .controls-help {
+  width: min(380px, calc(100% - 32px));
+  padding: 16px;
 }
 .in-game .controls-help .chat-title button {
   margin: 0;

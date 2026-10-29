@@ -1,3 +1,4 @@
+import { CircleHelp, Crosshair, LogOut } from 'lucide-react';
 import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
 import { useI18n } from '../../i18n';
 import { ControlsHelp } from './ControlsHelp';
@@ -28,9 +29,11 @@ export function GameMenu({
           data-hud
         >
           <button onClick={() => togglePanel('help')}>
+            <CircleHelp size={16} aria-hidden="true" />
             {t('hud.controlsHelp')}
           </button>
           <label>
+            <Crosshair size={16} aria-hidden="true" />
             {t('hud.showCoordinates')}
             <input
               type="checkbox"
@@ -39,7 +42,10 @@ export function GameMenu({
             />
           </label>
           <LanguageSwitcher variant="menu" />
-          <button onClick={leaveWorld}>{t('hud.exitGame')}</button>
+          <button onClick={leaveWorld}>
+            <LogOut size={16} aria-hidden="true" />
+            {t('hud.exitGame')}
+          </button>
         </section>
       )}
       {activePanel === 'help' && (
