@@ -30,10 +30,30 @@ export function installAsrRoutes(
       methods: 'GET, POST, PUT, DELETE, OPTIONS',
     }),
   );
+  const assignmentRead = [
+    createOriginGuard({ origin, required: false, crossSite: true }),
+    cors({ origin: true, methods: 'GET' }),
+  ];
+  /**
+   * @openapi
+   * /voice/asr/assignments:
+   *   get:
+   *     summary: 获取游戏使用的识别服务分配（仅 ID、名称、类型）
+   *     tags: [ASR]
+   *     responses:
+   *       200:
+   *         description: 附近语音、语音输入和语音消息转文字的服务分配
+   */
+  app.get('/voice/asr/assignments', ...assignmentRead, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(store.assignments());
+  });
   app.use('/voice/asr', (req, res, next) => {
     if (
       authenticatedManagement &&
-      (req.path === '/services' || req.path.startsWith('/services/'))
+      (req.path === '/services' ||
+        req.path.startsWith('/services/') ||
+        req.path.startsWith('/assignments/'))
     )
       next();
     else pageAccess(req, res, next);
@@ -68,6 +88,41 @@ export function installAsrRoutes(
    *                 type: object
    */
   app.get('/voice/asr/services', (_req, res) => res.json(store.list()));
+  /**
+   * @openapi
+   * /voice/asr/assignments/{use}:
+   *   put:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 保存全局识别服务分配
+   *     tags: [ASR]
+   *     parameters:
+   *       - in: path
+   *         name: use
+   *         required: true
+   *         schema:
+   *           type: string
+   *           enum: [chat, spatial, clip]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [serviceId]
+   *             properties:
+   *               serviceId:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: 更新后的三个功能的服务分配
+   */
+  app.put(
+    '/voice/asr/assignments/:use',
+    route(async (req, res) => {
+      res.json(await store.assign(req.params.use, req.body?.serviceId));
+    }),
+  );
 
   /**
    * @openapi

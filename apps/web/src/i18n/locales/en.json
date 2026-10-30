@@ -54,7 +54,6 @@
       "movementGroup": "Movement & view",
       "buildingGroup": "Building",
       "communicationGroup": "Chat & voice",
-
       "move": "Move",
       "jump": "Jump",
       "lockPointer": "Lock Cursor / Look",
@@ -257,7 +256,9 @@
       "spatialHelp": "Used when speaking through the microphone in the world; confirmed text is shared with nearby listeners.",
       "clip": "Voice message transcription",
       "clipHelp": "Transcribes voice messages sent with Send Voice in chat so AI characters can understand them.",
-      "missing": "The previous service is gone. Please choose another."
+      "missing": "The previous service is gone. Please choose another.",
+      "serverScope": "Saved on the server and used by all browsers.",
+      "browserScope": "Built-in browser recognition is assigned only in this browser."
     },
     "gateway": {
       "title": "Console Access Authorization",

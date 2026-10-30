@@ -23,6 +23,8 @@ export function SpatialVoicePanel({
   const asr = useAsrSelection('spatial');
   const selectedAsr = useRef(asr.selected);
   selectedAsr.current = asr.selected;
+  const selectionStatus = useRef(asr);
+  selectionStatus.current = asr;
   const [state, setState] = useState<SpatialStatus>({
     sending: false,
     listening: false,
@@ -50,7 +52,10 @@ export function SpatialVoicePanel({
         else
           setTranscript((previous) => ({
             ...previous,
-            error: '请先在控制台为“附近语音”选择识别服务；语音通话仍可使用。',
+            error: selectionStatus.current.loading
+              ? '正在读取识别服务分配；语音通话仍可使用。'
+              : selectionStatus.current.error ||
+                '服务器尚未配置附近语音的识别服务；语音通话仍可使用。',
           }));
       } else transcriber.stop();
     };

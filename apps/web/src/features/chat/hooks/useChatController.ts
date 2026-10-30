@@ -205,7 +205,12 @@ export function useChatController(connection: Connection, expanded = true) {
       return;
     }
     if (!(kind === 'text' ? asr.selected.id : clipAsr.selected.id)) {
-      setError('请先在控制台的“识别服务分配”中为此功能指定识别服务。');
+      const selection = kind === 'text' ? asr : clipAsr;
+      setError(
+        selection.loading
+          ? '正在读取识别服务分配，请稍后重试。'
+          : selection.error || '服务器尚未配置此功能的识别服务，请联系管理员。',
+      );
       return;
     }
     connection.stopSpatialInput();

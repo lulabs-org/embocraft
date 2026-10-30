@@ -22,6 +22,16 @@ const other = {
 beforeEach(() => {
   localStorage.clear();
   chooseAsrService('spatial', whisper);
+  vi.spyOn(voiceApi, 'asrAssignments').mockResolvedValue({
+    chat: whisper,
+    spatial: whisper,
+    clip: whisper,
+  });
+  vi.spyOn(voiceApi, 'assignAsrService').mockResolvedValue({
+    chat: whisper,
+    spatial: other,
+    clip: whisper,
+  });
   vi.spyOn(voiceApi, 'listAsrServices').mockResolvedValue([
     whisper,
     other,
@@ -51,6 +61,11 @@ it('keeps a changed service pending until saved, then updates only that use', as
   ).toBe(whisper.name);
 
   await act(async () => save.click());
+  expect(voiceApi.assignAsrService).toHaveBeenCalledWith(
+    'spatial',
+    other.id,
+    expect.any(AbortSignal),
+  );
   const saved = JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!);
   expect(saved.spatial.id).toBe(other.id);
   expect(saved.chat.id).toBe(whisper.id);
@@ -59,4 +74,24 @@ it('keeps a changed service pending until saved, then updates only that use', as
   expect(
     mount.host.querySelector('.console-sidebar-item small')!.textContent,
   ).toBe(other.name);
+});
+
+it('keeps the old assignment and pending draft when the server rejects saving', async () => {
+  vi.mocked(voiceApi.assignAsrService).mockRejectedValue(new Error('无法保存'));
+  await mount.render(<AsrInputSettings active />);
+  const select = mount.host.querySelector<HTMLSelectElement>('select')!;
+  const save = mount.host.querySelector<HTMLButtonElement>(
+    '.asr-input-controls > button',
+  )!;
+  await act(async () => {
+    select.value = other.id;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () => save.click());
+  expect(select.value).toBe(other.id);
+  expect(save.disabled).toBe(false);
+  expect(mount.host.textContent).toContain('无法保存');
+  expect(
+    JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!).spatial.id,
+  ).toBe(whisper.id);
 });

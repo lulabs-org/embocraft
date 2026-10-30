@@ -1,5 +1,10 @@
 import { adminHeaders } from '../../network/gateway';
-import type { AsrServiceDraft, AsrServiceView } from '@voxel/shared';
+import type {
+  AsrAssignments,
+  AsrUse,
+  AsrServiceDraft,
+  AsrServiceView,
+} from '@voxel/shared';
 import type { SpeechCapabilities } from '../../audio';
 import { serverHttpUrl } from '../../network/endpoints';
 
@@ -25,6 +30,31 @@ async function asrRequest<T>(
 }
 
 export const voiceApi = {
+  async asrAssignments(signal: AbortSignal): Promise<AsrAssignments> {
+    const response = await fetch(`${serverHttpUrl()}/voice/asr/assignments`, {
+      signal,
+    });
+    if (!response.ok) throw Error('无法读取识别服务分配，请检查连接后重试。');
+    return response.json();
+  },
+  async assignAsrService(
+    use: AsrUse,
+    serviceId: string,
+    signal: AbortSignal,
+  ): Promise<AsrAssignments> {
+    const response = await fetch(
+      `${serverHttpUrl()}/voice/asr/assignments/${use}`,
+      {
+        method: 'PUT',
+        signal,
+        headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId }),
+      },
+    );
+    const value = await response.json();
+    if (!response.ok) throw Error(value.error || '无法保存识别服务分配。');
+    return value;
+  },
   listAsrServices: (signal: AbortSignal) =>
     asrRequest<AsrServiceView[]>('', 'GET', signal),
   saveAsrService: (draft: AsrServiceDraft, signal: AbortSignal, id?: string) =>

@@ -20,6 +20,10 @@ export type AudioRouteDependencies = {
 /** Audio HTTP composition; stores and cross-domain operations belong to the caller. */
 export function installAudioRoutes(app: Express, deps: AudioRouteDependencies) {
   app.use('/voice/asr/services', deps.authenticateManagement);
+  app.use('/voice/asr/assignments', (req, res, next) => {
+    if (req.method === 'GET') next();
+    else deps.authenticateManagement(req, res, next);
+  });
 
   installCapabilitiesRoutes(app, deps.speech, deps.asrSettings, deps.origin);
   installTranscribeRoutes(app, deps.speech, deps.asrSettings, deps.origin);

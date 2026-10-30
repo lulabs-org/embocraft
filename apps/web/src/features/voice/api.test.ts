@@ -55,3 +55,25 @@ it('preserves readiness and cancellation at the request boundary', async () => {
     { signal },
   );
 });
+
+it('reads public assignments without management credentials and sends only an ID when saving', async () => {
+  const request = vi.fn(
+    async () =>
+      new Response(JSON.stringify({ chat: null, spatial: null, clip: null })),
+  );
+  vi.stubGlobal('fetch', request);
+  const signal = new AbortController().signal;
+  await voiceApi.asrAssignments(signal);
+  expect(request).toHaveBeenLastCalledWith(
+    expect.stringContaining('/voice/asr/assignments'),
+    { signal },
+  );
+  await voiceApi.assignAsrService('chat', 'a-service', signal);
+  expect(request).toHaveBeenLastCalledWith(
+    expect.stringContaining('/voice/asr/assignments/chat'),
+    expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ serviceId: 'a-service' }),
+    }),
+  );
+});

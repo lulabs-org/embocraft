@@ -5,11 +5,7 @@ import {
   type AsrServiceView,
 } from '@voxel/shared';
 import { voiceApi } from './api';
-import {
-  initializeAsrSelections,
-  syncAsrChoice,
-  toAsrChoice,
-} from './asr-selection';
+import { refreshAsrSelections, syncAsrChoice } from './asr-selection';
 import {
   deleteBrowserAsrService,
   migrateBrowserAsrServices,
@@ -98,7 +94,7 @@ export function useAsrServices(active: boolean) {
       .then((values) => {
         if (abort.signal.aborted) return;
         setRemoteServices(values);
-        initializeAsrSelections(values.map(toAsrChoice));
+        void refreshAsrSelections();
         setLoaded(true);
         setForm((previous) => {
           // A delayed list response must not overwrite a new/edited/local draft.
@@ -157,6 +153,7 @@ export function useAsrServices(active: boolean) {
             deleteBrowserAsrService(window.localStorage, form.id),
           );
           syncAsrChoice(form.id);
+          void refreshAsrSelections(true);
           setForm({ id: 'new', draft: fresh('browser'), dirty: true });
           setNotice('浏览器识别服务已删除。');
         } else {
@@ -188,11 +185,7 @@ export function useAsrServices(active: boolean) {
         if (abort.signal.aborted) return;
         setRemoteServices((values) => values.filter((v) => v.id !== form.id));
         syncAsrChoice(form.id);
-        initializeAsrSelections(
-          remoteServices
-            .filter((service) => service.id !== form.id)
-            .map(toAsrChoice),
-        );
+        void refreshAsrSelections(true);
         setForm({ id: 'new', draft: fresh(form.draft.provider), dirty: true });
         setNotice('识别服务已删除。');
       } else {
@@ -208,7 +201,7 @@ export function useAsrServices(active: boolean) {
             : [...values, saved],
         );
         syncAsrChoice(saved.id, saved);
-        initializeAsrSelections([toAsrChoice(saved)]);
+        void refreshAsrSelections(true);
         setForm(formFor(saved.id, saved));
         setNotice(
           '识别服务已保存。可从左侧添加更多服务，或开始录音试用当前服务。',

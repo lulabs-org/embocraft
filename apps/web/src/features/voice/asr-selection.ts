@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { AsrAssignments, AsrUse } from '@voxel/shared';
+import { voiceApi } from './api';
 import type { AsrChoice } from '../../audio/services/asr-choice';
 
-export type AsrUse = 'chat' | 'spatial' | 'clip';
+export type { AsrUse } from '@voxel/shared';
 const key = 'voxel.asr-selection.v2';
 const event = 'voxel-asr-selection';
 const unselectedAsrChoice: AsrChoice = {
@@ -39,7 +41,14 @@ const forUse = (use: AsrUse, value: unknown) => {
     : choice;
 };
 
+let volatileSelections: Record<AsrUse, AsrChoice> | undefined;
+let loadError = '';
+let loading = false;
+let revision = 0;
+let pending: Promise<void> | undefined;
+
 function readSelections(): Record<AsrUse, AsrChoice> {
+  if (volatileSelections) return volatileSelections;
   try {
     const value = JSON.parse(localStorage.getItem(key) || '{}');
     return {
@@ -57,7 +66,13 @@ function readSelections(): Record<AsrUse, AsrChoice> {
 }
 
 function writeSelections(value: Record<AsrUse, AsrChoice>) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    volatileSelections = undefined;
+  } catch {
+    // Server assignments must work even when browser storage is unavailable.
+    volatileSelections = value;
+  }
   window.dispatchEvent(new Event(event));
 }
 
@@ -65,31 +80,59 @@ export function chooseAsrService(use: AsrUse, choice: AsrChoice) {
   writeSelections({ ...readSelections(), [use]: forUse(use, choice) });
 }
 
-/** Fill only unset uses after the saved service list reveals its actual ID. */
-export function initializeAsrSelections(services: readonly AsrChoice[]) {
-  const whisper = services.find(
-    (service) =>
-      service.id &&
-      service.provider === 'whisper' &&
-      service.name === '自托管 Whisper',
-  );
-  if (!whisper) return;
+function applyAssignments(assignments: AsrAssignments, replaceUse?: AsrUse) {
   const current = readSelections();
-  if (current.chat.id && current.spatial.id && current.clip.id) return;
-  const selected = toAsrChoice(whisper);
-  try {
-    writeSelections({
-      chat: current.chat.id ? current.chat : selected,
-      spatial: current.spatial.id ? current.spatial : selected,
-      clip: current.clip.id ? current.clip : selected,
-    });
-  } catch {
-    // Browsers that block preference storage can still use explicit choices.
+  for (const use of ['chat', 'spatial', 'clip'] as const) {
+    if (use === replaceUse || current[use].provider !== 'browser')
+      current[use] = forUse(use, assignments[use]);
   }
+  writeSelections(current);
+}
+
+/** Load public routing metadata without entering or authenticating to the console. */
+export function refreshAsrSelections(afterMutation = false): Promise<void> {
+  if (pending)
+    return afterMutation ? pending.then(() => refreshAsrSelections()) : pending;
+  const started = revision;
+  loading = true;
+  loadError = '';
+  window.dispatchEvent(new Event(event));
+  pending = voiceApi
+    .asrAssignments(AbortSignal.timeout(10000))
+    .then((assignments) => {
+      if (started === revision) applyAssignments(assignments);
+    })
+    .catch((error: unknown) => {
+      if (started === revision)
+        loadError =
+          error instanceof Error ? error.message : '无法读取识别服务分配。';
+    })
+    .finally(() => {
+      loading = false;
+      pending = undefined;
+      window.dispatchEvent(new Event(event));
+    });
+  return pending;
+}
+
+export function useAsrSelectionSync() {
+  useEffect(() => {
+    const refresh = () => {
+      void refreshAsrSelections();
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, []);
 }
 
 export function syncAsrChoice(id: string, saved?: unknown) {
   if (!id) return;
+  revision++;
   const choices = readSelections();
   const next = saved ? toAsrChoice(saved) : unselectedAsrChoice;
   if (
@@ -101,18 +144,20 @@ export function syncAsrChoice(id: string, saved?: unknown) {
   if (choices.chat.id === id) choices.chat = next;
   if (choices.spatial.id === id) choices.spatial = next;
   if (choices.clip.id === id) choices.clip = forUse('clip', next);
-  try {
-    writeSelections(choices);
-  } catch {
-    // A blocked preference store must not turn a successful service edit into a failure.
-  }
+  writeSelections(choices);
 }
 
 export function useAsrSelection(use: AsrUse) {
   const [selected, setSelected] = useState(() => readSelections()[use]);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [remote, setRemote] = useState({ error: loadError, loading });
   useEffect(() => {
-    const sync = () => setSelected(readSelections()[use]);
+    const sync = () => {
+      setSelected(readSelections()[use]);
+      setRemote({ error: loadError, loading });
+    };
+    sync();
     window.addEventListener(event, sync);
     window.addEventListener('storage', sync);
     return () => {
@@ -122,15 +167,35 @@ export function useAsrSelection(use: AsrUse) {
   }, [use]);
   return {
     selected,
-    error,
-    choose: (choice: AsrChoice) => {
+    error: error || remote.error,
+    loading: remote.loading,
+    saving,
+    choose: async (choice: AsrChoice) => {
+      setSaving(true);
       try {
-        chooseAsrService(use, choice);
+        if (choice.provider === 'browser') {
+          chooseAsrService(use, choice);
+        } else {
+          // Invalidate reads started before this write, including while it is in flight.
+          revision++;
+          const assignments = await voiceApi.assignAsrService(
+            use,
+            choice.id,
+            AbortSignal.timeout(10000),
+          );
+          revision++;
+          loadError = '';
+          applyAssignments(assignments, use);
+        }
         setError('');
         return true;
-      } catch {
-        setError('无法保存识别服务分配，请检查浏览器存储设置。');
+      } catch (error) {
+        setError(
+          error instanceof Error ? error.message : '无法保存识别服务分配。',
+        );
         return false;
+      } finally {
+        setSaving(false);
       }
     },
   };
