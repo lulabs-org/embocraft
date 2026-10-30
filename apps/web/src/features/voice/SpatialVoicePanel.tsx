@@ -50,7 +50,7 @@ export function SpatialVoicePanel({
         else
           setTranscript((previous) => ({
             ...previous,
-            error: '请先在控制台为附近麦克风选择识别服务；语音通话仍可使用。',
+            error: '请先在控制台为“附近语音”选择识别服务；语音通话仍可使用。',
           }));
       } else transcriber.stop();
     };

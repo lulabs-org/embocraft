@@ -416,7 +416,7 @@ export function useChatController(connection: Connection, expanded = true) {
       return;
     }
     if (audioClip && !clipAsr.selected.id) {
-      setError('请先在控制台为“聊天录语音转文字”选择识别服务。');
+      setError('请先在控制台为“语音消息转文字”选择识别服务。');
       return;
     }
     const ids = recipients.map((p) => p.id);

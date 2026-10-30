@@ -79,6 +79,6 @@ it('requires an explicit service for dictation and recorded voice', async () => 
   expect(recorder).not.toHaveBeenCalled();
   await act(async () => controller.setClip(new Blob(['audio'])));
   await act(async () => controller.send());
-  expect(controller.error).toContain('聊天录语音转文字');
+  expect(controller.error).toContain('语音消息转文字');
   expect(controller.clip).toBeDefined();
 });
