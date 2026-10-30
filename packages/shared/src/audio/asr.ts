@@ -30,3 +30,12 @@ export type AsrEvent =
   | { type: 'ready' | 'finished' }
   | { type: 'partial' | 'final'; text: string }
   | { type: 'error'; message: string };
+
+/** Public routing metadata; provider credentials and model parameters stay private. */
+export type AsrUse = 'chat' | 'spatial' | 'clip';
+export type AsrAssignment = {
+  id: string;
+  name: string;
+  provider: 'whisper' | 'bailian';
+};
+export type AsrAssignments = Record<AsrUse, AsrAssignment | null>;

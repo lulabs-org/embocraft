@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
-import { beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   chooseAsrService,
-  initializeAsrSelections,
+  refreshAsrSelections,
   syncAsrChoice,
   toAsrChoice,
 } from './asr-selection';
 
+import { voiceApi } from './api';
+
 beforeEach(() => localStorage.clear());
+afterEach(() => vi.restoreAllMocks());
 
 it('keeps chat, nearby and recorded voice choices independent and stores no provider secret', () => {
   const provider = {
@@ -72,35 +75,40 @@ const builtInWhisper = {
   provider: 'whisper' as const,
 };
 
-it('selects the saved self-hosted Whisper profile for all three unset uses', () => {
-  initializeAsrSelections([
-    { id: 'ali-id', name: '阿里云识别', provider: 'bailian' },
-    builtInWhisper,
-  ]);
-  expect(JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!)).toEqual({
+it('loads server assignments in a fresh browser and replaces stale remote cache', async () => {
+  const assignments = {
+    chat: builtInWhisper,
+    spatial: builtInWhisper,
+    clip: builtInWhisper,
+  };
+  vi.spyOn(voiceApi, 'asrAssignments').mockResolvedValue(assignments);
+  await refreshAsrSelections();
+  expect(JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!)).toEqual(
+    assignments,
+  );
+  chooseAsrService('chat', { id: 'deleted', name: 'Old', provider: 'bailian' });
+  await refreshAsrSelections();
+  expect(
+    JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!).chat,
+  ).toEqual(builtInWhisper);
+});
+
+it('preserves a personal browser engine override while syncing server assignments', async () => {
+  const local = {
+    id: 'browser-id',
+    name: '浏览器中文',
+    provider: 'browser' as const,
+  };
+  chooseAsrService('chat', local);
+  vi.spyOn(voiceApi, 'asrAssignments').mockResolvedValue({
     chat: builtInWhisper,
     spatial: builtInWhisper,
     clip: builtInWhisper,
   });
-});
-
-it('preserves explicit choices and fills only missing uses', () => {
-  const selected = {
-    id: 'browser-id',
-    name: '浏览器中文识别',
-    provider: 'browser' as const,
-  };
-  chooseAsrService('chat', selected);
-  initializeAsrSelections([builtInWhisper]);
+  await refreshAsrSelections();
   expect(JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!)).toEqual({
-    chat: selected,
+    chat: local,
     spatial: builtInWhisper,
     clip: builtInWhisper,
   });
-  initializeAsrSelections([
-    { id: 'other', name: '另一个 Whisper', provider: 'whisper' },
-  ]);
-  expect(
-    JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!).chat,
-  ).toEqual(selected);
 });

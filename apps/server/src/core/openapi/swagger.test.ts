@@ -183,6 +183,7 @@ it('documents resource ownership, management and chat credentials, with no globa
     ['/voice/tts/services', 'TTS'],
     ['/voice/tts/piper', 'TTS'],
     ['/voice/asr/services', 'ASR'],
+    ['/voice/asr/assignments/{use}', 'ASR'],
   ];
   for (const { path, operation } of operations) {
     const domain = management.find(

@@ -54,7 +54,6 @@
       "movementGroup": "移动与视角",
       "buildingGroup": "方块搭建",
       "communicationGroup": "聊天与语音",
-
       "move": "移动",
       "jump": "跳跃",
       "lockPointer": "锁定鼠标视角",
@@ -257,7 +256,9 @@
       "spatialHelp": "在世界里打开麦克风说话时使用；确认后的文字会发送给附近听者。",
       "clip": "语音消息转文字",
       "clipHelp": "通过聊天框中的“发语音”发送语音消息后，将语音识别为文字，供 AI 角色理解。",
-      "missing": "原服务已不存在，请重新选择。"
+      "missing": "原服务已不存在，请重新选择。",
+      "serverScope": "保存到服务器，对所有浏览器生效。",
+      "browserScope": "浏览器自带识别的分配仅对当前浏览器生效。"
     },
     "gateway": {
       "title": "控制台访问授权",

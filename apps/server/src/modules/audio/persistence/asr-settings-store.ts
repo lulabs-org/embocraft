@@ -1,4 +1,6 @@
 import {
+  type AsrAssignments,
+  type AsrUse,
   type AsrServiceDraft,
   type AsrServiceView,
   type BailianAsrDraft,
@@ -53,12 +55,17 @@ export function asrEndpoint(settings: BailianAsrDraft) {
   return `wss://${host}/api-ws/v1/inference`;
 }
 
-export type SavedService = AsrServiceDraft & { id: string };
+// Assignments live alongside the service in its existing database JSON record.
+export type SavedService = AsrServiceDraft & { id: string; uses?: AsrUse[] };
+const uses: AsrUse[] = ['chat', 'spatial', 'clip'];
 export interface AsrServicePersistence {
   load(): Promise<SavedService[]>;
   save(values: SavedService[]): Promise<void>;
 }
-const publicView = (value: SavedService): AsrServiceView => {
+const publicView = ({
+  uses: _uses,
+  ...value
+}: SavedService): AsrServiceView => {
   if (value.provider === 'whisper') return { ...value };
   const { apiKey, ...settings } = value;
   return { ...settings, hasApiKey: !!apiKey };
@@ -119,10 +126,70 @@ export class AsrSettingsStore {
     this.values = saved.map((service) => ({
       ...validateService(service),
       id: service.id,
+      ...(service.uses ? { uses: service.uses } : {}),
     }));
+    if (
+      this.values.some(
+        (service) =>
+          service.uses &&
+          (!Array.isArray(service.uses) ||
+            service.uses.some((use) => !uses.includes(use)) ||
+            (service.provider !== 'whisper' && service.uses.includes('clip'))),
+      )
+    )
+      throw new AppError('ASR 服务分配格式无效。', 500);
+    for (const use of uses) {
+      if (
+        this.values.filter((service) => service.uses?.includes(use)).length > 1
+      )
+        throw new AppError('ASR 服务分配重复。', 500);
+    }
   }
   list() {
     return this.values.map(publicView);
+  }
+  assignments(): AsrAssignments {
+    // Older databases need no console visit or name-based client initialization.
+    const whisper = this.values.find(
+      (service) => service.provider === 'whisper',
+    );
+    const choice = (use: AsrUse) => {
+      const selected =
+        this.values.find((service) => service.uses?.includes(use)) ??
+        whisper ??
+        (use === 'clip' ? undefined : this.values[0]);
+      return selected
+        ? {
+            id: selected.id,
+            name: selected.name,
+            provider: selected.provider ?? 'bailian',
+          }
+        : null;
+    };
+    return {
+      chat: choice('chat'),
+      spatial: choice('spatial'),
+      clip: choice('clip'),
+    };
+  }
+  assign(use: unknown, id: unknown) {
+    return this.mutate(async () => {
+      if (!uses.includes(use as AsrUse) || typeof id !== 'string')
+        throw new AppError('识别服务分配无效。');
+      const selected = this.get(id);
+      if (use === 'clip' && selected.provider !== 'whisper')
+        throw new AppError('语音消息转文字需要 Whisper 服务。');
+      const next = this.values.map((service) => ({
+        ...service,
+        uses: [
+          ...(service.uses ?? []).filter((item) => item !== use),
+          ...(service.id === id ? [use as AsrUse] : []),
+        ],
+      }));
+      await this.persist(next);
+      this.values = next;
+      return this.assignments();
+    });
   }
   get(id: string) {
     const value = this.values.find((value) => value.id === id);
@@ -157,7 +224,9 @@ export class AsrSettingsStore {
     return this.mutate(async () => {
       if (!id && this.values.length >= 20)
         throw new AppError('最多保存 20 个识别服务。');
-      const entry = validateService(input, id ? this.get(id) : undefined);
+      const previous = id ? this.get(id) : undefined;
+      const entry = validateService(input, previous);
+      if (previous?.uses) entry.uses = previous.uses;
       const next = id
         ? this.values.map((v) => (v.id === id ? entry : v))
         : [...this.values, entry];

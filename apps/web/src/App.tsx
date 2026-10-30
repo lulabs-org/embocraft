@@ -12,7 +12,7 @@ import {
 } from './features/hud';
 import { useI18n } from './i18n';
 
-import { SpatialVoicePanel } from './features/voice';
+import { SpatialVoicePanel, useAsrSelectionSync } from './features/voice';
 import {
   LobbyCard,
   useWorldScene,
@@ -46,6 +46,7 @@ function ConsoleLoading() {
 }
 
 export function App({ connection }: { connection: Connection }) {
+  useAsrSelectionSync();
   const { t } = useI18n();
   const [consoleEntry, setConsoleEntry] = useState<{
     initialTab?: 'characters';

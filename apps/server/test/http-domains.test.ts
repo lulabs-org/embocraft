@@ -579,3 +579,62 @@ it('shares command receipts across management domains without adding receipts to
     await server.close();
   }
 });
+
+it('lets new browsers read safe ASR assignments while only administrators can change them', async () => {
+  const server = await createTestServer({ origin });
+  const endpoint = server.httpUrl + '/voice/asr/assignments';
+  try {
+    const created = await fetch(server.httpUrl + '/voice/asr/services', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        provider: 'bailian',
+        region: 'beijing',
+        workspaceId: '',
+        model: 'fun-asr-realtime',
+        name: 'Cloud',
+        apiKey: 'test-private-key',
+      }),
+    });
+    const service = await created.json();
+    const body = JSON.stringify({ serviceId: service.id });
+    expect(
+      (
+        await fetch(endpoint + '/chat', {
+          method: 'PUT',
+          headers: { Origin: origin, 'Content-Type': 'application/json' },
+          body,
+        })
+      ).status,
+    ).toBe(401);
+    const saved = await fetch(endpoint + '/chat', {
+      method: 'PUT',
+      headers,
+      body,
+    });
+    expect(saved.status).toBe(200);
+    for (const clientHeaders of [
+      new Headers(),
+      new Headers({ Origin: origin }),
+    ]) {
+      const read = await fetch(endpoint, { headers: clientHeaders });
+      expect(read.status).toBe(200);
+      expect(read.headers.get('cache-control')).toBe('no-store');
+      expect((await read.json()).chat).toEqual({
+        id: service.id,
+        name: 'Cloud',
+        provider: 'bailian',
+      });
+    }
+    expect(
+      (await fetch(endpoint, { headers: { Origin: 'https://evil.test' } }))
+        .status,
+    ).toBe(403);
+    expect(
+      (await fetch(endpoint + '/clip', { method: 'PUT', headers, body }))
+        .status,
+    ).toBe(400);
+  } finally {
+    await server.close();
+  }
+});

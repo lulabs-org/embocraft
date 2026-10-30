@@ -77,9 +77,9 @@ export function AsrInputSettings({ active }: { active: boolean }) {
   const draftId = drafts[use] ?? selection.selected.id;
   const draftIsAvailable = services.some((service) => service.id === draftId);
   const canSave = draftId !== selection.selected.id && draftIsAvailable;
-  const save = () => {
+  const save = async () => {
     const service = services.find((item) => item.id === draftId);
-    if (!service || !selection.choose(service)) return;
+    if (!service || !(await selection.choose(service))) return;
     setDrafts((current) => {
       const next = { ...current };
       delete next[use];
@@ -120,6 +120,14 @@ export function AsrInputSettings({ active }: { active: boolean }) {
         <div className="console-panel-heading">
           <h3>{t(`console.asrInput.${use}`)}</h3>
           <p>{t(`console.asrInput.${use}Help`)}</p>
+          <small>
+            {t(
+              services.find((service) => service.id === draftId)?.provider ===
+                'browser'
+                ? 'console.asrInput.browserScope'
+                : 'console.asrInput.serverScope',
+            )}
+          </small>
         </div>
         {manager.error && (
           <p role="alert" className="agent-error">
@@ -140,8 +148,8 @@ export function AsrInputSettings({ active }: { active: boolean }) {
           <button
             type="button"
             className="primary"
-            disabled={!canSave}
-            onClick={save}
+            disabled={!canSave || selection.saving || selection.loading}
+            onClick={() => void save()}
           >
             {draftIsAvailable && draftId === selection.selected.id
               ? t('console.asrInput.saved')

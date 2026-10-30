@@ -164,3 +164,52 @@ it('drops unused local engine fields and normalizes an existing default model wi
   expect(restored.get(saved.id)).not.toHaveProperty('threads');
   expect(restored.get(saved.id)).not.toHaveProperty('beamSize');
 });
+
+it('persists independent global assignments across edits and restart, without exposing credentials', async () => {
+  const store = new AsrSettingsStore();
+  const whisper = await store.save({
+    ...DEFAULT_WHISPER_ASR,
+    provider: 'whisper',
+    name: '任意名称',
+  });
+  const ali = await store.save(draft);
+  expect(store.assignments().clip?.id).toBe(whisper.id);
+  await Promise.all([
+    store.assign('chat', ali.id),
+    store.assign('spatial', ali.id),
+  ]);
+  await store.save({ ...draft, name: '改名', apiKey: '' }, ali.id);
+  const restored = new AsrSettingsStore(store.persistence);
+  await restored.load();
+  expect(restored.assignments()).toEqual({
+    chat: { id: ali.id, name: '改名', provider: 'bailian' },
+    spatial: { id: ali.id, name: '改名', provider: 'bailian' },
+    clip: { id: whisper.id, name: '任意名称', provider: 'whisper' },
+  });
+  expect(JSON.stringify(restored.assignments())).not.toContain('apiKey');
+  await restored.remove(ali.id);
+  expect(restored.assignments().chat?.id).toBe(whisper.id);
+  await restored.remove(whisper.id);
+  expect(restored.assignments()).toEqual({
+    chat: null,
+    spatial: null,
+    clip: null,
+  });
+});
+
+it('rejects invalid assignments and does not publish failed writes or client-injected uses', async () => {
+  const store = new AsrSettingsStore();
+  const whisper = await store.save({
+    ...DEFAULT_WHISPER_ASR,
+    provider: 'whisper',
+    name: 'Whisper',
+  });
+  const ali = await store.save({ ...draft, uses: ['chat'] });
+  expect(store.assignments().chat?.id).toBe(whisper.id);
+  await expect(store.assign('clip', ali.id)).rejects.toThrow('Whisper');
+  await expect(store.assign('other', whisper.id)).rejects.toThrow('无效');
+  await expect(store.assign('chat', 'missing')).rejects.toThrow('不存在');
+  store.persistence.saveError = new Error('disk');
+  await expect(store.assign('chat', ali.id)).rejects.toThrow('disk');
+  expect(store.assignments().chat?.id).toBe(whisper.id);
+});
