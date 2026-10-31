@@ -1,37 +1,27 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
-import type { TaskPlan } from '@voxel/shared';
+import {
+  captureCharacter,
+  restoreCharacter,
+  saveCharacter,
+  type SavedCharacter,
+} from './character-storage';
+import { stableJson } from './stable-json';
 
 type SavedRow = {
   id: string;
   position: number;
   serialized: string;
-  providerId?: string;
 };
 type SavedSnapshot = {
-  characters: Map<string, SavedRow>;
+  characters: Map<string, SavedCharacter>;
   plans: Map<string, SavedRow>;
   runs: Map<string, SavedRow>;
   requests: Map<string, string>;
 };
 
-function stableJson(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) =>
-    item && typeof item === 'object' && !Array.isArray(item)
-      ? Object.fromEntries(
-          Object.entries(item).sort(([left], [right]) =>
-            left.localeCompare(right),
-          ),
-        )
-      : item,
-  );
-}
-
-function rows<T extends { id: string }>(
-  values: T[],
-  providerId?: (value: T) => string,
-): Map<string, SavedRow> {
+function rows<T extends { id: string }>(values: T[]): Map<string, SavedRow> {
   return new Map(
     values.map((value, position) => [
       value.id,
@@ -39,15 +29,22 @@ function rows<T extends { id: string }>(
         id: value.id,
         position,
         serialized: stableJson(value),
-        ...(providerId ? { providerId: providerId(value) } : {}),
       },
     ]),
   );
 }
 
-function snapshot(archive: ManagementArchive): SavedSnapshot {
+function snapshot(
+  archive: ManagementArchive,
+  previous?: SavedSnapshot,
+): SavedSnapshot {
   return {
-    characters: rows(archive.characters, (character) => character.providerId),
+    characters: new Map(
+      archive.characters.map((record, position) => [
+        record.id,
+        captureCharacter(record, position, previous?.characters.get(record.id)),
+      ]),
+    ),
     plans: rows(archive.plans),
     runs: rows(archive.runs),
     requests: new Map(Object.entries(archive.requests)),
@@ -58,8 +55,7 @@ function changed(current: SavedRow, previous?: SavedRow): boolean {
   return (
     !previous ||
     current.position !== previous.position ||
-    current.serialized !== previous.serialized ||
-    current.providerId !== previous.providerId
+    current.serialized !== previous.serialized
   );
 }
 
@@ -82,23 +78,31 @@ export class DatabaseManagementArchive implements ArchivePort {
   async load(): Promise<ManagementArchive | undefined> {
     try {
       const [characters, plans, runs, requests] = await Promise.all([
-        this.db.agentCharacter.findMany({ orderBy: { position: 'asc' } }),
+        this.db.agentCharacter.findMany({
+          orderBy: { position: 'asc' },
+          include: { state: true, logs: { orderBy: { sequence: 'asc' } } },
+        }),
         this.db.agentPlan.findMany({ orderBy: { position: 'asc' } }),
         this.db.agentRun.findMany({ orderBy: { position: 'asc' } }),
         this.db.agentRequest.findMany(),
       ]);
       const archive: ManagementArchive = {
         version: 3,
-        characters: characters.map(
-          (row) => row.data as ManagementArchive['characters'][number],
+        characters: characters.map(restoreCharacter),
+        plans: plans.map(
+          (row) => row.data as ManagementArchive['plans'][number],
         ),
-        plans: plans.map((row) => row.data as TaskPlan),
         runs: runs.map((row) => row.data as ManagementArchive['runs'][number]),
         requests: Object.fromEntries(
           requests.map((row) => [row.key, row.planId]),
         ),
       };
       this.committed = snapshot(archive);
+      for (const row of characters) {
+        this.committed.characters.get(row.id)!.logs = row.logs.map(
+          ({ sequence, time, text }) => ({ sequence, time, text }),
+        );
+      }
       return characters.length || plans.length || runs.length || requests.length
         ? archive
         : undefined;
@@ -108,7 +112,7 @@ export class DatabaseManagementArchive implements ArchivePort {
   }
 
   async save(archive: ManagementArchive): Promise<void> {
-    const next = snapshot(archive);
+    const next = snapshot(archive, this.committed);
     const before = this.committed;
     try {
       await this.db.$transaction(
@@ -125,22 +129,8 @@ export class DatabaseManagementArchive implements ArchivePort {
             if (!next.characters.has(id))
               await tx.agentCharacter.delete({ where: { id } });
 
-          for (const row of next.characters.values()) {
-            if (!changed(row, before.characters.get(row.id))) continue;
-            await tx.agentCharacter.upsert({
-              where: { id: row.id },
-              create: {
-                id: row.id,
-                providerId: row.providerId!,
-                position: row.position,
-                data: json(row),
-              },
-              update: {
-                providerId: row.providerId!,
-                position: row.position,
-                data: json(row),
-              },
-            });
+          for (const [id, character] of next.characters) {
+            await saveCharacter(tx, character, before.characters.get(id));
           }
           for (const row of next.plans.values()) {
             if (!changed(row, before.plans.get(row.id))) continue;

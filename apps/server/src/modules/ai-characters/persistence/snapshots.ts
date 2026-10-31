@@ -2,7 +2,7 @@ import { runtimeView } from '@voxel/agent-runtime';
 
 import type { AICharacterView } from '@voxel/shared';
 import type { AICharacterRegistry } from '../services/job';
-import type { CharacterRecord } from './record';
+import { characterSettings, type CharacterRecord } from './record';
 
 /** Character snapshots and failure handling; no file writes or task-ledger ownership. */
 export class CharacterSnapshots {
@@ -38,9 +38,11 @@ export class CharacterSnapshots {
   ) {
     const views = list();
     const records = [...views].reverse().map((view) => ({
-      ...view,
+      ...characterSettings(view),
+      id: view.id,
+      createdAt: view.createdAt,
+      logEntries: view.logEntries,
       status: shutdownPresence.get(view.id) ?? view.status,
-      sessionId: undefined,
       runtime: jobs.get(view.id)?.runtime.snapshot(),
       currentRunId: jobs.get(view.id)?.currentRunId,
     }));

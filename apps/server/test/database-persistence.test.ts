@@ -35,6 +35,86 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   });
   afterAll(async () => db?.$disconnect());
 
+  it('updates state and appends or trims logs without rewriting configuration or retained logs', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.load();
+    const record = {
+      id: 'split',
+      name: 'Split',
+      providerId: 'deepseek',
+      status: 'stopped',
+      runtime: { version: 4 },
+      logEntries: [
+        { time: null, text: 'first' },
+        { time: 100, text: 'second' },
+      ],
+    };
+    const snapshot = {
+      version: 3,
+      characters: [record],
+      plans: [],
+      runs: [],
+      requests: {},
+    } as unknown as ManagementArchive;
+    await archive.save(snapshot);
+    const revisions = () => db!.$queryRaw<
+      Array<{ kind: string; revision: string }>
+    >`
+      SELECT 'config' AS kind, xmin::text AS revision FROM "AgentCharacter" WHERE id = 'split'
+      UNION ALL SELECT 'state', xmin::text FROM "AgentCharacterState" WHERE "characterId" = 'split'
+      UNION ALL SELECT 'retained-log', xmin::text FROM "AgentCharacterLog" WHERE "characterId" = 'split' AND sequence = 2
+      ORDER BY kind
+    `;
+    const before = await revisions();
+    record.logEntries.push({ time: 101, text: 'third' });
+    await archive.save(snapshot);
+    expect(await revisions()).toEqual(before);
+    record.logEntries.shift();
+    await archive.save(snapshot);
+    expect(await revisions()).toEqual(before);
+    expect(
+      await db!.agentCharacterLog.findMany({ orderBy: { sequence: 'asc' } }),
+    ).toEqual([
+      { characterId: 'split', sequence: 2, time: 100, text: 'second' },
+      { characterId: 'split', sequence: 3, time: 101, text: 'third' },
+    ]);
+    const restored = new DatabaseManagementArchive(db!);
+    const loaded = (await restored.load())!;
+    expect(loaded).toEqual(snapshot);
+    await restored.save(loaded);
+    expect(await revisions()).toEqual(before);
+    loaded.characters[0].status = 'idle';
+    await restored.save(loaded);
+    const after = await revisions();
+    expect(after.filter((r) => r.kind !== 'state')).toEqual(
+      before.filter((r) => r.kind !== 'state'),
+    );
+    expect(after.find((r) => r.kind === 'state')).not.toEqual(
+      before.find((r) => r.kind === 'state'),
+    );
+    // A later FK failure must roll back all three earlier character writes.
+    const invalid = structuredClone(loaded);
+    invalid.characters[0].name = 'Uncommitted';
+    invalid.characters[0].status = 'failed';
+    invalid.characters[0].logEntries.push({ time: 102, text: 'uncommitted' });
+    invalid.characters.push({
+      ...invalid.characters[0],
+      id: 'invalid',
+      providerId: 'missing',
+    });
+    await expect(restored.save(invalid)).rejects.toThrow(
+      '无法保存 Agent 数据库记录',
+    );
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(loaded);
+    await restored.save(loaded);
+    expect(await revisions()).toEqual(after);
+    loaded.characters = [];
+    await restored.save(loaded);
+    expect(await db!.agentCharacterState.count()).toBe(0);
+    expect(await db!.agentCharacterLog.count()).toBe(0);
+  });
+
   it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
     await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
     const store = new VoiceServiceStore(
@@ -211,6 +291,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
           name: 'Agent',
           providerId: 'deepseek',
           status: 'stopped',
+          logEntries: [],
           runtime: { task: { current: { goal: 'work' } } },
         },
       ],
@@ -277,7 +358,9 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await archive.load();
     const original = {
       version: 3,
-      characters: [{ id: 'a', name: 'Before', providerId: 'deepseek' }],
+      characters: [
+        { id: 'a', name: 'Before', providerId: 'deepseek', logEntries: [] },
+      ],
       plans: [],
       runs: [],
       requests: {},

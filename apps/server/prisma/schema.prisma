@@ -35,8 +35,49 @@ model AgentCharacter {
  id String @id
  providerId String
  position Int
- data Json
+ name String?
+ model String?
+ goal String?
+ roleDescription String?
+ taskLimitsEnabled Boolean?
+ maxTurns Int?
+ maxStalledTurns Int?
+ tokenBudget Int?
+ taskTimeoutMs Int?
+ intervalMode String?
+ intervalMinMs Int?
+ intervalMaxMs Int?
+ intervalMs Int?
+ timeoutMs Int?
+ maxTokens Int?
+ permissions Json?
+ skills Json?
+ voiceReplies Boolean?
+ voiceServiceId String?
+ thinking String?
+ reasoningEffort String?
+ createdAt Float?
+ state AgentCharacterState?
+ logs AgentCharacterLog[]
  provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+}
+
+// Runtime v4 stays intact in this first split; execution ownership is unchanged.
+model AgentCharacterState {
+ characterId String @id
+ status String?
+ currentRunId String?
+ runtime Json?
+ character AgentCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model AgentCharacterLog {
+ characterId String
+ sequence Int
+ time Float?
+ text String
+ character AgentCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+ @@id([characterId, sequence])
 }
 
 model AgentPlan {
