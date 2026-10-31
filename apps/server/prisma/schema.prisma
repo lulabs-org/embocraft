@@ -60,7 +60,7 @@ model AgentRequest {
  planId String
 }
 
-model TtsService {
+model TtsProvider {
   id            String  @id
   position      Int
   name          String
@@ -74,11 +74,11 @@ model TtsService {
 }
 
 // Preserves an intentionally empty TTS catalog across restarts.
-model TtsCatalogState {
- id Int @id
+model TtsProviderState {
+  id Int @id
 }
 
-model AsrService {
+model AsrProvider {
   id          String   @id
   position    Int
   name        String

@@ -9,7 +9,7 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
 
   async load(): Promise<SavedService[]> {
     try {
-      const rows = await this.db.asrService.findMany({
+      const rows = await this.db.asrProvider.findMany({
         orderBy: { position: 'asc' },
       });
       return rows.map((row): SavedService => {
@@ -47,10 +47,10 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
     try {
       await this.db.$transaction(async (tx) => {
         const ids = new Set(values.map((value) => value.id));
-        const existing = await tx.asrService.findMany({ select: { id: true } });
+        const existing = await tx.asrProvider.findMany({ select: { id: true } });
         for (const row of existing)
           if (!ids.has(row.id))
-            await tx.asrService.delete({ where: { id: row.id } });
+            await tx.asrProvider.delete({ where: { id: row.id } });
         for (const [position, value] of values.entries()) {
           const isWhisper = value.provider === 'whisper';
           const payload = {
@@ -66,7 +66,7 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
             temperature: isWhisper ? (value.temperature ?? 0) : null,
             prompt: isWhisper ? (value.prompt ?? '') : null,
           };
-          await tx.asrService.upsert({
+          await tx.asrProvider.upsert({
             where: { id: value.id },
             create: { id: value.id, ...payload },
             update: payload,

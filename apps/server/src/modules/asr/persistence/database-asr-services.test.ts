@@ -4,9 +4,9 @@ import { DatabaseAsrServicePersistence } from './database-asr-services';
 import type { SavedService } from './asr-settings-store';
 
 describe('DatabaseAsrServicePersistence', () => {
-  it('returns empty array if asrService table is empty', async () => {
+  it('returns empty array if asrProvider table is empty', async () => {
     const db = {
-      asrService: { findMany: vi.fn().mockResolvedValue([]) },
+      asrProvider: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     const persistence = new DatabaseAsrServicePersistence(db);
@@ -15,7 +15,7 @@ describe('DatabaseAsrServicePersistence', () => {
 
   it('loads unpacked fields into SavedService for both Bailian and Whisper providers', async () => {
     const db = {
-      asrService: {
+      asrProvider: {
         findMany: vi.fn().mockResolvedValue([
           {
             id: 'bailian-1',
@@ -83,7 +83,7 @@ describe('DatabaseAsrServicePersistence', () => {
     const upsertService = vi.fn().mockResolvedValue({});
 
     const tx = {
-      asrService: {
+      asrProvider: {
         findMany: findManyServices,
         delete: deleteService,
         upsert: upsertService,
@@ -189,7 +189,7 @@ describe('DatabaseAsrServicePersistence', () => {
 
   it('throws AppError on database load/save failure', async () => {
     const db = {
-      asrService: {
+      asrProvider: {
         findMany: vi.fn().mockRejectedValue(new Error('db connection error')),
       },
       $transaction: vi.fn().mockRejectedValue(new Error('transaction aborted')),

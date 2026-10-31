@@ -14,8 +14,8 @@ export class DatabaseVoiceServicePersistence
   async load(): Promise<SavedVoice[] | undefined> {
     try {
       const [state, rows] = await Promise.all([
-        this.db.ttsCatalogState.findUnique({ where: { id: 1 } }),
-        this.db.ttsService.findMany({ orderBy: { position: 'asc' } }),
+        this.db.ttsProviderState.findUnique({ where: { id: 1 } }),
+        this.db.ttsProvider.findMany({ orderBy: { position: 'asc' } }),
       ]);
       if (!state && rows.length === 0) return undefined;
       return rows.map((row) => ({
@@ -37,16 +37,16 @@ export class DatabaseVoiceServicePersistence
   async save(values: SavedVoice[]): Promise<void> {
     try {
       await this.db.$transaction(async (tx) => {
-        await tx.ttsCatalogState.upsert({
+        await tx.ttsProviderState.upsert({
           where: { id: 1 },
           create: { id: 1 },
           update: {},
         });
         const ids = new Set(values.map((value) => value.id));
-        const existing = await tx.ttsService.findMany({ select: { id: true } });
+        const existing = await tx.ttsProvider.findMany({ select: { id: true } });
         for (const row of existing)
           if (!ids.has(row.id))
-            await tx.ttsService.delete({ where: { id: row.id } });
+            await tx.ttsProvider.delete({ where: { id: row.id } });
         for (const [position, value] of values.entries()) {
           const payload = {
             position,
@@ -59,7 +59,7 @@ export class DatabaseVoiceServicePersistence
             speed: value.speed,
             voiceLanguage: value.voiceLanguage ?? null,
           };
-          await tx.ttsService.upsert({
+          await tx.ttsProvider.upsert({
             where: { id: value.id },
             create: { id: value.id, ...payload },
             update: payload,

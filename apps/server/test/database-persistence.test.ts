@@ -22,9 +22,9 @@ const db = url ? createDatabaseClient(url) : undefined;
 
 describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   beforeEach(async () => {
-    await db!.ttsService.deleteMany();
-    await db!.ttsCatalogState.deleteMany();
-    await db!.asrService.deleteMany();
+    await db!.ttsProvider.deleteMany();
+    await db!.ttsProviderState.deleteMany();
+    await db!.asrProvider.deleteMany();
     await db!.agentRequest.deleteMany();
     await db!.agentRun.deleteMany();
     await db!.agentPlan.deleteMany();
@@ -372,7 +372,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await server.characters.flush(revision);
       await server.close();
       // An old or deleted voice ID must not stop character restoration.
-      await db!.ttsService.deleteMany();
+      await db!.ttsProvider.deleteMany();
       server = await createServer({ config });
       await server.listen();
       expect(server.providers.list()).toHaveLength(2);

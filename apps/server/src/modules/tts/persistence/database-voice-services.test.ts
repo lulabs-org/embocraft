@@ -6,8 +6,8 @@ import type { SavedVoice } from './voice-service-store';
 describe('DatabaseVoiceServicePersistence', () => {
   it('returns undefined if catalog state is absent and table is empty', async () => {
     const db = {
-      ttsCatalogState: { findUnique: vi.fn().mockResolvedValue(null) },
-      ttsService: { findMany: vi.fn().mockResolvedValue([]) },
+      ttsProviderState: { findUnique: vi.fn().mockResolvedValue(null) },
+      ttsProvider: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     const persistence = new DatabaseVoiceServicePersistence(db);
@@ -16,8 +16,8 @@ describe('DatabaseVoiceServicePersistence', () => {
 
   it('loads unpacked fields into SavedVoice models with optional voiceLanguage', async () => {
     const db = {
-      ttsCatalogState: { findUnique: vi.fn().mockResolvedValue({ id: 1 }) },
-      ttsService: {
+      ttsProviderState: { findUnique: vi.fn().mockResolvedValue({ id: 1 }) },
+      ttsProvider: {
         findMany: vi.fn().mockResolvedValue([
           {
             id: 'speaches-1',
@@ -82,8 +82,8 @@ describe('DatabaseVoiceServicePersistence', () => {
     const upsertService = vi.fn().mockResolvedValue({});
 
     const tx = {
-      ttsCatalogState: { upsert: upsertCatalogState },
-      ttsService: {
+      ttsProviderState: { upsert: upsertCatalogState },
+      ttsProvider: {
         findMany: findManyServices,
         delete: deleteService,
         upsert: upsertService,
@@ -143,7 +143,7 @@ describe('DatabaseVoiceServicePersistence', () => {
 
   it('throws AppError on database load/save failure', async () => {
     const db = {
-      ttsCatalogState: {
+      ttsProviderState: {
         findUnique: vi.fn().mockRejectedValue(new Error('connection timeout')),
       },
       $transaction: vi.fn().mockRejectedValue(new Error('transaction aborted')),
