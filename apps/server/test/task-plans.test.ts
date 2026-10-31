@@ -15,8 +15,10 @@ import {
 } from '../../../tests/support/model-fixture';
 import { toolResponse } from '../../../tests/support/pi-response';
 import { AICharacterManager } from '../src/modules/ai-characters';
-import { bootstrapProviders } from '../src/modules/providers';
-import { MemoryProviderRepository } from './helpers/memory-storage';
+import {
+  bootstrapProviders,
+  MemoryProviderRepository,
+} from './helpers/memory-storage';
 let store: MemoryProviderRepository, manager: AICharacterManager;
 
 let now: number;

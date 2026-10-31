@@ -13,11 +13,9 @@ export class DatabaseVoiceServicePersistence
 
   async load(): Promise<SavedVoice[] | undefined> {
     try {
-      const [state, rows] = await Promise.all([
-        this.db.ttsProviderState.findUnique({ where: { id: 1 } }),
-        this.db.ttsProvider.findMany({ orderBy: { position: 'asc' } }),
-      ]);
-      if (!state && rows.length === 0) return undefined;
+      const rows = await this.db.ttsProvider.findMany({
+        orderBy: { position: 'asc' },
+      });
       return rows.map((row) => ({
         id: row.id,
         name: row.name,
@@ -37,11 +35,6 @@ export class DatabaseVoiceServicePersistence
   async save(values: SavedVoice[]): Promise<void> {
     try {
       await this.db.$transaction(async (tx) => {
-        await tx.ttsProviderState.upsert({
-          where: { id: 1 },
-          create: { id: 1 },
-          update: {},
-        });
         const ids = new Set(values.map((value) => value.id));
         const existing = await tx.ttsProvider.findMany({ select: { id: true } });
         for (const row of existing)

@@ -4,7 +4,7 @@ import {
   type SavedProvider,
 } from '../../src/modules/providers/domain/model';
 import { validateProvider } from '../../src/modules/providers/domain/validation';
-import type { ProviderRepository } from '../../src/modules/providers/persistence/repository.port';
+import type { ProviderRepository } from '../../src/modules/providers';
 
 import {
   AsrSettingsStore,
@@ -50,7 +50,7 @@ export class MemoryArchive implements ArchivePort {
   }
 }
 
-/** Isolated provider fixture; production uses DatabaseProviderRepository. */
+/** Isolated provider fixture; production uses ProviderRepository. */
 export class MemoryProviderRepository implements ProviderRepository {
   private values: SavedProvider[] = [];
   private queue: Promise<unknown> = Promise.resolve();
@@ -66,10 +66,9 @@ export class MemoryProviderRepository implements ProviderRepository {
    * Load saved providers from the shared fixture backing.
    * Returns false until the catalog has first been seeded.
    */
-  async load(): Promise<boolean> {
+  async load(): Promise<void> {
     const saved = await this.storage.load();
     this.values = (saved ?? []).map((item) => validateProvider(item));
-    return saved !== undefined;
   }
 
   /** Seed initial providers in the shared fixture backing. */
@@ -148,3 +147,6 @@ export class TestAsrSettingsStore extends AsrSettingsStore {
     super(persistence);
   }
 }
+
+export { bootstrapProviders, createDefaultProviders } from './provider-seed';
+

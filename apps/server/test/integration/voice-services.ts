@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { bootstrapProviders } from '../../src/modules/providers';
 import {
+  bootstrapProviders,
   MemoryProviderRepository,
   TestVoiceServiceStore as VoiceServiceStore,
 } from '../helpers/memory-storage';

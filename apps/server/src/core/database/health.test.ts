@@ -6,13 +6,11 @@ const db = vi.hoisted(() => ({
   $disconnect: vi.fn(),
   world: { findFirst: vi.fn() },
   agentProvider: { findFirst: vi.fn() },
-  agentProviderState: { findFirst: vi.fn() },
   agentCharacter: { findFirst: vi.fn() },
   agentPlan: { findFirst: vi.fn() },
   agentRun: { findFirst: vi.fn() },
   agentRequest: { findFirst: vi.fn() },
   ttsProvider: { findFirst: vi.fn() },
-  ttsProviderState: { findFirst: vi.fn() },
   asrProvider: { findFirst: vi.fn() },
 }));
 const createClient = vi.hoisted(() => vi.fn());
@@ -30,13 +28,11 @@ describe('database startup diagnostics', () => {
     db.world.findFirst.mockResolvedValue(null);
     for (const table of [
       db.agentProvider,
-      db.agentProviderState,
       db.agentCharacter,
       db.agentPlan,
       db.agentRun,
       db.agentRequest,
       db.ttsProvider,
-      db.ttsProviderState,
       db.asrProvider,
     ])
       table.findFirst.mockResolvedValue(null);
@@ -53,12 +49,10 @@ describe('database startup diagnostics', () => {
     expect(db.world.findFirst).toHaveBeenCalledWith({ select: { id: true } });
     for (const table of [
       db.agentProvider,
-      db.agentProviderState,
       db.agentCharacter,
       db.agentPlan,
       db.agentRun,
       db.ttsProvider,
-      db.ttsProviderState,
       db.asrProvider,
     ])
       expect(table.findFirst).toHaveBeenCalledWith({ select: { id: true } });

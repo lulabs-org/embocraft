@@ -111,9 +111,10 @@ it.each(['browser', 'whisper', 'bailian'] as const)(
   'keeps %s stop as review-only without a completion notice, including synchronous final callbacks',
   async (provider) => {
     const { finish, send } = await start(provider);
-    finish.mockImplementation(async () => {
+    finish.mockImplementation(() => {
       events.onFinal('最终文字');
       events.onEnd();
+      return Promise.resolve();
     });
     await act(async () => button('结束录音').click());
     expect(send).not.toHaveBeenCalled();

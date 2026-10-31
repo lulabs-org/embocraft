@@ -2,9 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { env } from '../../src/core/config';
-import { bootstrapProviders } from '../../src/modules/providers';
 import { createServer, type ServerOptions } from '../../src/server';
 import {
+  bootstrapProviders,
   TestAsrSettingsStore as AsrSettingsStore,
   MemoryArchive,
   MemoryProviderRepository,

@@ -1,5 +1,6 @@
 import { toolResponse } from '../../../../tests/support/pi-response';
 import {
+  bootstrapProviders,
   MemoryProviderRepository,
   TestVoiceServiceStore as VoiceServiceStore,
 } from '../helpers/memory-storage';
@@ -11,7 +12,6 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { bootstrapProviders } from '../../src/modules/providers';
 
 process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5189';

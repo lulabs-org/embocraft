@@ -1,7 +1,6 @@
 export type { ProviderType } from '@voxel/shared';
 export { ProviderHealthChecker } from './adapters/health-checker';
 export { ModelCatalog } from './adapters/model-catalog';
-export { bootstrapProviders, createDefaultProviders } from './bootstrap';
 export {
   resolveInferenceDefaults,
   validateInferenceSettings,
@@ -12,13 +11,7 @@ export { toProviderView } from './domain/model';
 export type { SavedProvider } from './domain/model';
 export { validateProvider } from './domain/validation';
 export { DatabaseProviderRepository } from './persistence/database-repository';
-export type { ProviderRepository } from './persistence/repository.port';
-export type {
-  ProviderCommandPort,
-  ProviderPort,
-  ProviderQueryPort,
-  ProviderRuntimePort,
-} from './ports';
+export type { ProviderRepository, ProviderRuntimePort } from './ports';
 export {
   installProviderRoutes,
   type ProviderRouteDependencies,

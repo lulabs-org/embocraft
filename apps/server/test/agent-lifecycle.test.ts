@@ -7,8 +7,8 @@ import {
   type ModelResponder,
 } from '../../../tests/support/model-fixture';
 import { AICharacterManager } from '../src/modules/ai-characters';
-import { bootstrapProviders } from '../src/modules/providers';
 import {
+  bootstrapProviders,
   MemoryProviderRepository,
   TestVoiceServiceStore as VoiceServiceStore,
 } from './helpers/memory-storage';

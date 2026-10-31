@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { validateAICharacter } from '../src/modules/ai-characters';
 import {
-  bootstrapProviders,
   ModelCatalog,
   validateProvider,
 } from '../src/modules/providers';
-import { MemoryProviderRepository } from './helpers/memory-storage';
+import {
+  bootstrapProviders,
+  MemoryProviderRepository,
+} from './helpers/memory-storage';
 
 const provider = () =>
   validateProvider({

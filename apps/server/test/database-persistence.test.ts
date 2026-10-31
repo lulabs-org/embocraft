@@ -11,8 +11,8 @@ import { AsrSettingsStore } from '../src/modules/asr/persistence/asr-settings-st
 import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/database-asr-services';
 import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/database-voice-services';
 import { VoiceServiceStore } from '../src/modules/tts/persistence/voice-service-store';
-import { bootstrapProviders } from '../src/modules/providers/bootstrap';
-import { DatabaseProviderRepository } from '../src/modules/providers/persistence/database-repository';
+import { bootstrapProviders } from './helpers/provider-seed';
+import { DatabaseProviderRepository } from '../src/modules/providers';
 import type { ManagementArchive } from '../src/persistence/archive';
 import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { createServer } from '../src/server';
@@ -23,14 +23,12 @@ const db = url ? createDatabaseClient(url) : undefined;
 describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   beforeEach(async () => {
     await db!.ttsProvider.deleteMany();
-    await db!.ttsProviderState.deleteMany();
     await db!.asrProvider.deleteMany();
     await db!.agentRequest.deleteMany();
     await db!.agentRun.deleteMany();
     await db!.agentPlan.deleteMany();
     await db!.agentCharacter.deleteMany();
     await db!.agentProvider.deleteMany();
-    await db!.agentProviderState.deleteMany();
     await db!.blockEdit.deleteMany();
     await db!.world.deleteMany();
   });
@@ -161,7 +159,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(asr.list()).toEqual([]);
   });
 
-  it('seeds once, persists secrets privately, and does not reseed an intentionally empty catalog', async () => {
+  it('seeds once, persists secrets privately, and preserves an intentionally empty catalog', async () => {
     const providers = new DatabaseProviderRepository(db!);
     await bootstrapProviders(providers);
     await providers.save(
@@ -181,11 +179,11 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     ).toBe('database-only-key');
 
     const reloaded = new DatabaseProviderRepository(db!);
-    expect(await reloaded.load()).toBe(true);
+    await reloaded.load();
     expect(reloaded.getRuntime('deepseek').apiKey).toBe('database-only-key');
     await reloaded.remove('deepseek');
     await reloaded.save({ id: 'custom', name: 'Custom', type: 'ollama' });
-    expect(await new DatabaseProviderRepository(db!).load()).toBe(true);
+    await new DatabaseProviderRepository(db!).load();
     expect(
       (await db!.agentProvider.findMany({ orderBy: { position: 'asc' } })).map(
         (row) => row.id,
@@ -194,7 +192,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await reloaded.remove('ollama');
     await reloaded.remove('custom');
     const empty = new DatabaseProviderRepository(db!);
-    await bootstrapProviders(empty);
+    await empty.load();
     expect(empty.list()).toEqual([]);
   });
 
