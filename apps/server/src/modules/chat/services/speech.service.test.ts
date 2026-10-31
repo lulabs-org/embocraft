@@ -114,6 +114,7 @@ describe('chat speech coordination', () => {
     const release = vi.fn();
     const settings = {
       ...DEFAULT_WHISPER_ASR,
+      temperature: 1,
       id: 'selected',
       name: 'Selected Whisper',
       provider: 'whisper' as const,
@@ -138,10 +139,11 @@ describe('chat speech coordination', () => {
     expect(transcribe).toHaveBeenCalledWith(
       bytes,
       'audio/wav',
-      'zh',
+      'auto',
       expect.any(AbortSignal),
-      settings,
+      { ...settings, temperature: 0 },
     );
+    expect(settings.temperature).toBe(1);
     expect(release).toHaveBeenCalledOnce();
   });
 

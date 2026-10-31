@@ -266,7 +266,7 @@ describe('live speech confirmation boundary', () => {
     expect((request.mock.calls as unknown[][]).map((call) => call[0])).toEqual([
       expect.stringContaining('/chat/spatial/start'),
       expect.stringContaining('/chat/spatial/ticket/preview'),
-      expect.stringMatching(/\/chat\/spatial\/ticket$/),
+      expect.stringContaining('/chat/spatial/ticket?language=zh'),
     ]);
     expect(
       (request.mock.calls as unknown as [string, RequestInit][])[1][1].headers,
@@ -333,6 +333,6 @@ it('passes the selected Whisper profile through nearby authenticated recognition
   const id = await transport.begin(signal);
   await transport.recognize(id, new Blob(['audio']), false, signal);
   expect(request.mock.calls[1][0]).toContain(
-    '/chat/spatial/ticket?serviceId=whisper%2FA',
+    '/chat/spatial/ticket?language=zh&serviceId=whisper%2FA',
   );
 });

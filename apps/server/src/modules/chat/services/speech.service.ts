@@ -1,6 +1,7 @@
 import { AppError } from '../../../core/errors/app-error';
 import { AsrSettingsStore, LocalSpeech, scheduleSpeech } from '../../audio';
 import type { WorldChat } from './chat.service';
+import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 
 type AudioInput = {
   chat: WorldChat;
@@ -18,6 +19,7 @@ type SpatialInput = Omit<AudioInput, 'route' | 'language'> & {
   id: string;
   partial: boolean;
   serviceId?: string;
+  language?: string;
 };
 
 /** Coordinates ASR with chat authorization and ticket lifetimes. */
@@ -91,6 +93,7 @@ export class ChatSpeechService {
     contentType,
     partial,
     serviceId,
+    language = 'auto',
     token,
     signal: requestSignal,
   }: SpatialInput) {
@@ -107,12 +110,16 @@ export class ChatSpeechService {
       const text = await scheduleSpeech(this.speech).transcribe(
         bytes,
         contentType,
-        'zh',
+        language,
         signal,
         partial,
-        selected?.settings.provider === 'whisper'
-          ? selected.settings
-          : undefined,
+        {
+          ...(selected?.settings.provider === 'whisper'
+            ? selected.settings
+            : DEFAULT_WHISPER_ASR),
+          // Nearby transcripts are published automatically, without a review step.
+          temperature: 0,
+        },
       );
       signal.throwIfAborted();
       chat.authenticate(token);

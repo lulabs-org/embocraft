@@ -1,18 +1,13 @@
 import { AppError } from '../../../../core/errors/app-error';
 import { speechEndpoint } from '../../speech-endpoint';
 import { DEFAULT_WHISPER_ASR, type WhisperAsrSettings } from '@voxel/shared';
+import { readWhisperTranscript } from './transcript';
 import {
   audioFormats,
   MAX_AUDIO_BYTES,
   normalizeRecording,
 } from '../processing/normalize';
 
-function whisperPrompt(language: string, settings?: WhisperAsrSettings) {
-  return (
-    settings?.prompt.trim() ||
-    (language === 'zh' ? '以下是简体中文的语音转写。' : '')
-  );
-}
 export class LocalSpeech {
   private busy = false;
   constructor(
@@ -74,8 +69,8 @@ export class LocalSpeech {
       );
     if (!audio.length || audio.length > MAX_AUDIO_BYTES)
       throw new AppError('音频不能为空且不能超过 5 MiB。', 413);
-    if (!['zh', 'en'].includes(language))
-      throw new AppError('只支持中文或英文识别。');
+    if (!['auto', 'zh', 'en'].includes(language))
+      throw new AppError('只支持自动检测、中文或英文识别。');
     if (this.busy)
       throw new AppError('服务器正在识别另一段录音，请稍后重试。', 429);
     this.busy = true;
@@ -131,8 +126,11 @@ export class LocalSpeech {
         ? settings.model
         : DEFAULT_WHISPER_ASR.model,
     );
-    form.append('language', language);
-    const prompt = whisperPrompt(language, settings);
+    if (language !== 'auto') form.append('language', language);
+    form.append('vad_filter', 'true');
+    form.append('response_format', 'verbose_json');
+    // Prompts are transcription context, so only send explicitly configured text.
+    const prompt = settings?.prompt.trim();
     if (prompt) form.append('prompt', prompt);
     if (settings?.temperature !== undefined)
       form.append('temperature', String(settings.temperature));
@@ -175,12 +173,6 @@ export class LocalSpeech {
         502,
       );
     }
-    const data = (await response.json()) as { text?: string };
-    const text = (data.text ?? '').replace(/\s+/g, ' ').trim();
-    if (!text || /^\[.*\]$/.test(text))
-      throw new AppError('没有识别到文字，请重试。', 400, 'no-speech');
-    if (text.length > 240)
-      throw new AppError('识别超过 240 字，请分成更短的句子。');
-    return text;
+    return readWhisperTranscript(await response.json());
   }
 }

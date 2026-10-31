@@ -37,11 +37,19 @@ export class SpatialTranscriber {
     this.stop();
     const generation = this.generation;
     this.report({ text: '', partial: '', error: '' });
-    const language = choice?.language ?? 'zh-CN';
+    const language =
+      choice?.language ??
+      (choice?.provider === 'browser' || choice?.provider === 'bailian'
+        ? 'zh-CN'
+        : 'auto');
     const external =
       choice?.provider === 'bailian' || choice?.provider === 'browser';
     const confirmed = (text: string) => {
       if (generation !== this.generation) return;
+      if (!text) {
+        this.report({ text: '', partial: '', error: '' });
+        return;
+      }
       if (external) {
         this.publishQueue = this.publishQueue.then(async () => {
           try {
@@ -72,7 +80,7 @@ export class SpatialTranscriber {
       onState: (_state: 'listening' | 'thinking', status: string) =>
         this.report({ status }),
       onStatus: (status: string) => this.report({ status }),
-      onPartial: (partial: string) => this.report({ partial }),
+      onPartial: (partial: string) => this.report({ partial, text: '' }),
       onFinal: confirmed,
       onError: (error: string) =>
         this.report({

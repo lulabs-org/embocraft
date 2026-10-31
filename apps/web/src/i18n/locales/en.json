@@ -790,6 +790,7 @@
       "recognitionModel": "Recognition Model",
       "whisperModelNote": "Enter a model ID supported by the speech service, such as Systran/faster-whisper-base.",
       "temperatureLabel": "Temperature",
+      "whisperRecognitionNote": "Nearby speech detects the language automatically and always uses temperature 0. Voice activity detection is enabled; no message is sent when speech is not detected.",
       "promptLabel": "Prompt (Optional)",
       "promptPlaceholder": "E.g. names, technical terms, or desired style",
       "regionLabel": "Service Region",

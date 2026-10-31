@@ -116,6 +116,7 @@ export function BailianAsrConfig({
                 }
               />
             </label>
+            <small>{t('console.asr.whisperRecognitionNote')}</small>
             <label>
               {t('console.asr.promptLabel')}
               <textarea

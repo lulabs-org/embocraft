@@ -787,6 +787,7 @@
       "recognitionModel": "识别模型",
       "whisperModelNote": "填写独立语音服务支持的模型 ID，例如 Systran/faster-whisper-base。",
       "temperatureLabel": "采样温度",
+      "whisperRecognitionNote": "附近语音会自动检测语言，并固定使用温度 0。已启用人声检测；没有检测到讲话时不发送消息。",
       "promptLabel": "提示词（可选）",
       "promptPlaceholder": "例如：人名、专业术语或预期文字风格",
       "regionLabel": "服务地域",

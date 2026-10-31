@@ -32,7 +32,11 @@ function setup() {
           : JSON.stringify(
               url.endsWith('/start')
                 ? { id: String(++n) }
-                : { text: url.endsWith('/preview') ? '未确认' : '识别文字' },
+                : {
+                    text: new URL(url).pathname.endsWith('/preview')
+                      ? '未确认'
+                      : '识别文字',
+                  },
             ),
         { status: options.method === 'DELETE' ? 204 : 200 },
       ),
@@ -69,7 +73,8 @@ it('uses the existing microphone, previews locally and only publishes final sent
   );
   expect(
     t.request.mock.calls.some(
-      ([url, init]) => url.endsWith('/1') && init.method === 'POST',
+      ([url, init]) =>
+        new URL(url).pathname.endsWith('/1') && init.method === 'POST',
     ),
   ).toBe(false);
   t.feed(9, false);
