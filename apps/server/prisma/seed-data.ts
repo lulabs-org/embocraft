@@ -26,8 +26,8 @@ export const DEFAULT_TTS_PROVIDER = {
   type: 'speaches',
   baseUrl: '',
   apiKey: '',
-  model: 'zh_CN-huayan-medium',
-  voice: '',
+  model: 'speaches-ai/piper-zh_CN-huayan-medium',
+  voice: 'huayan',
   speed: 1.0,
   voiceLanguage: null,
 } as const;
