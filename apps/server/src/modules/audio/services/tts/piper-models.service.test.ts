@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
-import { PiperModels, piperModel } from './piper-models.service';
+import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
+import { PiperModels } from './piper-models.service';
 
 it('reports readiness from installed models without starting downloads', async () => {
   const request = vi
@@ -43,9 +43,4 @@ it.each([
     available: false,
     reason: '无法连接语音服务，请检查 speech 容器和接口地址。',
   });
-});
-
-it('accepts only models in the configured Piper catalog', () => {
-  for (const model of PIPER_MODELS) expect(piperModel(model.id)).toBe(model);
-  expect(() => piperModel('unknown')).toThrow('请选择支持的 Piper 模型。');
 });

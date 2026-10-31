@@ -1,7 +1,11 @@
 import type { Express } from 'express';
 import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { AppError } from '../../../core/errors/app-error';
-import { asyncRoute as route } from '../../../core/http/middleware/async-route';
+import { speechEndpoint } from '../speech-endpoint';
+import {
+  asyncAbortableRoute,
+  asyncRoute as route,
+} from '../../../core/http/middleware/async-route';
 export function installVoiceServiceRoutes(
   app: Express,
   getVoices: () => VoiceServiceStore | undefined,
@@ -12,6 +16,70 @@ export function installVoiceServiceRoutes(
     if (!value) throw new AppError('语音服务未就绪。', 503);
     return value;
   };
+
+  /**
+   * @openapi
+   * /voice/tts/defaults:
+   *   get:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 获取当前部署的 Speaches 默认接口地址
+   *     tags:
+   *       - TTS
+   *     responses:
+   *       200:
+   *         description: Speaches 默认连接配置
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 baseUrl:
+   *                   type: string
+   */
+  app.get(
+    '/voice/tts/defaults',
+    route((_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ baseUrl: speechEndpoint() });
+    }),
+  );
+
+  /**
+   * @openapi
+   * /voice/tts/models:
+   *   post:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 查询当前 Speaches 连接中的已安装模型与音色，不保存配置
+   *     tags:
+   *       - TTS
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               baseUrl:
+   *                 type: string
+   *               apiKey:
+   *                 type: string
+   *               serviceId:
+   *                 type: string
+   *                 description: 连接地址未变化时，可复用已保存的密钥
+   *     responses:
+   *       200:
+   *         description: 当前服务的 TTS 模型及音色列表
+   */
+  app.post(
+    '/voice/tts/models',
+    asyncAbortableRoute(async (req, res, signal) => {
+      res.setHeader('Cache-Control', 'no-store');
+      const models = await voices().models(req.body, signal);
+      if (!signal.aborted) res.json({ models });
+    }),
+  );
 
   /**
    * @openapi

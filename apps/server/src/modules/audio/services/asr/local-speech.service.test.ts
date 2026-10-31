@@ -21,6 +21,46 @@ function wav(seconds = 1, amplitude = 1000) {
 }
 
 describe('Whisper transcription service', () => {
+  it('uses the selected authenticated endpoint for readiness and transcription', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('', { status: 404 }))
+      .mockResolvedValueOnce(Response.json({ data: [] }))
+      .mockResolvedValueOnce(Response.json({ text: 'hello' }));
+    const speech = new LocalSpeech('http://default:8000/v1', request);
+    const settings = {
+      baseUrl: 'http://selected:8000/v1/',
+      apiKey: 'private-key',
+      model: 'vendor/custom-asr',
+      temperature: 0.2,
+      prompt: 'context',
+    };
+    expect(
+      await speech.transcribe(
+        Buffer.from('audio'),
+        'audio/wav',
+        'en',
+        new AbortController().signal,
+        settings,
+      ),
+    ).toBe('hello');
+    expect(request.mock.calls.map(([url]) => url)).toEqual([
+      'http://selected:8000/health',
+      'http://selected:8000/v1/models',
+      'http://selected:8000/v1/audio/transcriptions',
+    ]);
+    for (const [, init] of request.mock.calls) {
+      expect(init).toMatchObject({
+        headers: { Authorization: 'Bearer private-key' },
+        redirect: 'error',
+      });
+    }
+    const form = request.mock.calls[2][1]?.body as FormData;
+    expect(form.get('model')).toBe(settings.model);
+    expect(form.get('temperature')).toBe('0.2');
+    expect(form.get('prompt')).toBe('context');
+  });
+
   it('rejects silence, malformed, too short and too long audio', () => {
     expect(() => validatePcmWav(wav(1, 0))).toThrow('清晰声音');
     expect(() => validatePcmWav(Buffer.from('invalid'))).toThrow();
@@ -128,7 +168,7 @@ describe('Whisper transcription service', () => {
 
     const status = await speech.status();
     expect(status.available).toBe(true);
-    expect(status.reason).toContain('独立 Whisper');
+    expect(status.reason).toContain('Speaches');
 
     const result = await speech.transcribe(
       Buffer.from('test-audio'),

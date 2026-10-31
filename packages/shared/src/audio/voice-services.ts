@@ -1,4 +1,9 @@
-export type VoiceServiceType = 'piper' | 'browser' | 'bailian' | 'compatible';
+export type VoiceServiceType =
+  | 'speaches'
+  | 'browser'
+  | 'bailian'
+  | 'compatible';
+/** Legacy profile migration and unmanaged default voice; never a discovery catalog. */
 export const PIPER_MODELS = [
   {
     id: 'speaches-ai/piper-zh_CN-huayan-medium',
@@ -35,3 +40,15 @@ export type VoiceServiceView = VoiceServiceSettings & {
   hasApiKey: boolean;
 };
 export type VoiceServiceDraft = VoiceServiceSettings & { apiKey: string };
+
+export type SpeachesConnectionDraft = {
+  baseUrl: string;
+  apiKey: string;
+  serviceId?: string;
+};
+export type SpeachesVoice = { id: string; name: string; language?: string };
+export type SpeachesModel = {
+  id: string;
+  languages: string[];
+  voices: SpeachesVoice[];
+};

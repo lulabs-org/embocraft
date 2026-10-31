@@ -70,7 +70,9 @@ export function installCapabilitiesRoutes(
         if (selected && selected.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
         res.json({
-          local: await speech.status(),
+          local: await speech.status(
+            selected?.provider === 'whisper' ? selected : undefined,
+          ),
           agentSpeech: await new PiperModels().status(),
         });
       } catch (error) {

@@ -1,10 +1,26 @@
 import { adminHeaders } from '../../../network/gateway';
-import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
+import type {
+  SpeachesConnectionDraft,
+  SpeachesModel,
+  VoiceServiceDraft,
+  VoiceServiceView,
+} from '@voxel/shared';
 import { serverHttpUrl } from '../../../network/endpoints';
 import { readAgentResponse } from '../agent-response';
 import { consoleFetch } from '../request';
 
 export const voiceApi = {
+  speachesDefaults: (signal?: AbortSignal) =>
+    consoleFetch<{ baseUrl: string }>('/voice/tts/defaults', { signal }),
+  listSpeachesModels: (
+    connection: SpeachesConnectionDraft,
+    signal?: AbortSignal,
+  ) =>
+    consoleFetch<{ models: SpeachesModel[] }>('/voice/tts/models', {
+      method: 'POST',
+      body: connection,
+      signal,
+    }),
   listVoiceServices: (signal?: AbortSignal) =>
     consoleFetch<VoiceServiceView[]>('/voice/tts/services', { signal }),
   saveVoiceService: (draft: VoiceServiceDraft, id?: string) =>

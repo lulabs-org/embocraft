@@ -1,4 +1,4 @@
-import type { WhisperAsrSettings } from '@voxel/shared';
+import type { WhisperAsrDraft } from '@voxel/shared';
 import { LocalSpeech } from './local-speech.service';
 import { AppError } from '../../../../core/errors/app-error';
 
@@ -14,7 +14,7 @@ export class SpeechScheduler {
     language: string,
     signal: AbortSignal,
     partial = false,
-    settings?: WhisperAsrSettings,
+    settings?: WhisperAsrDraft,
   ): Promise<string> {
     if (signal.aborted) return Promise.reject(signal.reason);
     if ((partial && this.running) || this.queue.length >= 4)

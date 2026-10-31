@@ -4,15 +4,14 @@ import type {
   VoiceServiceType,
   VoiceServiceView,
 } from '@voxel/shared';
-import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { voiceApi } from './api';
 import { BrowserVoiceSelect } from './BrowserVoiceSelect';
-import { PiperModelSelect } from './PiperModelSelect';
+import { SpeachesModelSelect } from '../../../components/audio/SpeachesModelSelect';
 import { VoicePreview } from './VoicePreview';
 
-const fresh = (type: VoiceServiceType = 'piper'): VoiceServiceDraft => ({
+const fresh = (type: VoiceServiceType = 'speaches'): VoiceServiceDraft => ({
   name: '',
   type,
   apiKey: '',
@@ -28,9 +27,7 @@ const fresh = (type: VoiceServiceType = 'piper'): VoiceServiceDraft => ({
       ? 'qwen3-tts-flash'
       : type === 'compatible'
         ? 'tts-1'
-        : type === 'piper'
-          ? DEFAULT_PIPER_MODEL
-          : '',
+        : '',
   voice: type === 'bailian' ? 'Cherry' : type === 'compatible' ? 'alloy' : '',
 });
 
@@ -46,16 +43,15 @@ export function VoiceServices({
   const { t } = useI18n();
 
   const labels: Record<VoiceServiceType, string> = {
-    piper: t('console.voice.typePiper'),
+    speaches: t('console.voice.typeSpeaches'),
     browser: t('console.voice.typeBrowser'),
     bailian: t('console.voice.typeBailian'),
     compatible: t('console.voice.typeCompatible'),
   };
 
   const voiceLabel = (service: VoiceServiceView) =>
-    service.type === 'piper'
-      ? PIPER_MODELS.find((model) => model.id === service.model)?.name ||
-        service.model
+    service.type === 'speaches'
+      ? [service.model, service.voice].filter(Boolean).join(' · ')
       : service.voice || t('console.voice.autoSelectVoice');
 
   const [selected, setSelected] = useState<string | null | undefined>();
@@ -65,12 +61,30 @@ export function VoiceServices({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [defaultBaseUrl, setDefaultBaseUrl] = useState('');
+  const [defaultsFailed, setDefaultsFailed] = useState(false);
+  useEffect(() => {
+    if (!active || draft.type !== 'speaches') return;
+    const abort = new AbortController();
+    setDefaultBaseUrl('');
+    setDefaultsFailed(false);
+    void voiceApi.speachesDefaults(abort.signal).then(
+      ({ baseUrl }) => {
+        if (!abort.signal.aborted) setDefaultBaseUrl(baseUrl);
+      },
+      () => {
+        if (!abort.signal.aborted) setDefaultsFailed(true);
+      },
+    );
+    return () => abort.abort();
+  }, [active, draft.type]);
   const saved = services.find((s) => s.id === selected);
   const canKeepKey = (() => {
     if (!saved?.hasApiKey || saved.type !== draft.type) return false;
+    if (!draft.baseUrl.trim()) return saved.baseUrl === '';
     try {
       return (
-        new URL(draft.baseUrl.trim()).href.replace(/\/$/, '') === saved.baseUrl
+        new URL(draft.baseUrl.trim()).href.replace(/\/+$/, '') === saved.baseUrl
       );
     } catch {
       return false;
@@ -216,7 +230,7 @@ export function VoiceServices({
                 ))}
               </select>
             </label>
-            {draft.type !== 'piper' && draft.type !== 'browser' && (
+            {draft.type !== 'browser' && (
               <>
                 <label>
                   API Base URL
@@ -235,14 +249,39 @@ export function VoiceServices({
                   ) : (
                     <input
                       type="url"
-                      required
+                      required={draft.type !== 'speaches'}
+                      placeholder={
+                        draft.type === 'speaches'
+                          ? defaultBaseUrl ||
+                            t('console.voice.speachesDefaultAddress')
+                          : undefined
+                      }
                       value={draft.baseUrl}
                       onChange={(e) => change({ baseUrl: e.target.value })}
                     />
                   )}
                 </label>
+                {draft.type === 'speaches' && (
+                  <p className="agent-hint">
+                    {defaultBaseUrl
+                      ? t('console.voice.speachesCurrentDefault', {
+                          address: defaultBaseUrl,
+                        })
+                      : t(
+                          defaultsFailed
+                            ? 'console.voice.speachesDefaultsFailed'
+                            : 'console.voice.speachesDefaultsLoading',
+                        )}
+                    <br />
+                    {t('console.voice.speachesAddressHint')}
+                  </p>
+                )}
                 <div className="voice-key-field">
-                  <span className="voice-key-label">API Key</span>
+                  <span className="voice-key-label">
+                    {draft.type === 'speaches'
+                      ? t('console.voice.optionalApiKey')
+                      : 'API Key'}
+                  </span>
                   {canKeepKey && !editingKey ? (
                     <div className="voice-key-saved">
                       <span role="status">
@@ -289,15 +328,17 @@ export function VoiceServices({
                         : t('console.voice.keyServerOnly')}
                   </small>
                 </div>
-                <label>
-                  {t('console.voice.voiceModel')}
-                  <input
-                    required
-                    maxLength={128}
-                    value={draft.model}
-                    onChange={(e) => change({ model: e.target.value })}
-                  />
-                </label>
+                {draft.type !== 'speaches' && (
+                  <label>
+                    {t('console.voice.voiceModel')}
+                    <input
+                      required
+                      maxLength={128}
+                      value={draft.model}
+                      onChange={(e) => change({ model: e.target.value })}
+                    />
+                  </label>
+                )}
               </>
             )}
             {draft.type === 'browser' ? (
@@ -309,10 +350,16 @@ export function VoiceServices({
                 }
                 active={active}
               />
-            ) : draft.type === 'piper' ? (
-              <PiperModelSelect
-                value={draft.model}
-                onChange={(model) => change({ model })}
+            ) : draft.type === 'speaches' ? (
+              <SpeachesModelSelect
+                loadModels={voiceApi.listSpeachesModels}
+                baseUrl={draft.baseUrl}
+                apiKey={draft.apiKey}
+                serviceId={saved?.type === 'speaches' ? saved.id : undefined}
+                model={draft.model}
+                voice={draft.voice}
+                active={active}
+                onChange={change}
               />
             ) : (
               <label>
@@ -343,14 +390,20 @@ export function VoiceServices({
             {draft.type === 'browser' && (
               <p className="agent-hint">{t('console.voice.hintBrowser')}</p>
             )}
-            {draft.type === 'piper' && (
-              <p className="agent-hint">{t('console.voice.hintPiper')}</p>
+            {draft.type === 'speaches' && (
+              <p className="agent-hint">{t('console.voice.hintSpeaches')}</p>
             )}
             {draft.type === 'bailian' && (
               <p className="agent-hint">{t('console.voice.hintBailian')}</p>
             )}
             <div className="voice-service-actions console-form-actions">
-              <button className="primary" disabled={!dirty}>
+              <button
+                className="primary"
+                disabled={
+                  !dirty ||
+                  (draft.type === 'speaches' && (!draft.model || !draft.voice))
+                }
+              >
                 {busy
                   ? t('console.voice.saving')
                   : t('console.voice.saveService')}

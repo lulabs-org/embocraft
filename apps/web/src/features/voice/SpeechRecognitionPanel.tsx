@@ -116,7 +116,15 @@ export function SpeechRecognitionPanel({
       clearTimeout(timeout);
       abort.abort();
     };
-  }, [active, isWhisper, retry, whisperServiceId, selectedModel, t]);
+  }, [
+    active,
+    isWhisper,
+    retry,
+    whisperServiceId,
+    selectedModel,
+    asr.selected,
+    t,
+  ]);
   const busy = state !== 'idle';
   const ready =
     active &&
@@ -253,7 +261,7 @@ export function SpeechRecognitionPanel({
                   value.provider === 'browser'
                     ? `${t('console.asr.typeBrowser')} · ${browserLanguages.find(([code]) => code === value.language)?.[1] ?? value.language}`
                     : value.provider === 'whisper'
-                      ? `Whisper · ${value.model}`
+                      ? `Speaches · ${value.model}`
                       : `${t('console.asr.typeBailian')} · ${value.model}`,
               }))
               .map((item) => (

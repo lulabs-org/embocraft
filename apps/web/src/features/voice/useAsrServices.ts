@@ -20,16 +20,21 @@ const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }
     : provider === 'whisper'
-      ? { ...DEFAULT_WHISPER_ASR, provider, name: '' }
+      ? {
+          ...DEFAULT_WHISPER_ASR,
+          provider,
+          name: '',
+          baseUrl: '',
+          apiKey: '',
+          model: '',
+        }
       : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
-  draft.provider === 'whisper' || draft.provider === 'browser'
-    ? draft
-    : { ...draft, apiKey: '' };
+  draft.provider === 'browser' ? draft : { ...draft, apiKey: '' };
 const formFor = (id: string, saved?: WebAsrService) => ({
   id,
   draft: saved
-    ? saved.provider === 'whisper' || saved.provider === 'browser'
+    ? saved.provider === 'browser'
       ? { ...saved }
       : { ...saved, apiKey: '' }
     : fresh(),
@@ -215,6 +220,7 @@ export function useAsrServices(active: boolean) {
     }
   };
   return {
+    active,
     services,
     ...form,
     selected: services.find((v) => v.id === form.id),

@@ -1,6 +1,6 @@
 import { AppError } from '../../../../core/errors/app-error';
 import { speechEndpoint } from '../../speech-endpoint';
-import { DEFAULT_WHISPER_ASR, type WhisperAsrSettings } from '@voxel/shared';
+import { DEFAULT_WHISPER_ASR, type WhisperAsrDraft } from '@voxel/shared';
 import { readWhisperTranscript } from './transcript';
 import {
   audioFormats,
@@ -14,40 +14,56 @@ export class LocalSpeech {
     private apiUrl = speechEndpoint(),
     private fetcher: typeof fetch = fetch,
   ) {}
-  async status() {
+  private connection(settings?: WhisperAsrDraft) {
+    return {
+      baseUrl: (settings?.baseUrl?.trim() || this.apiUrl).replace(/\/+$/, ''),
+      headers: settings?.apiKey
+        ? { Authorization: `Bearer ${settings.apiKey}` }
+        : undefined,
+    };
+  }
+  async status(settings?: WhisperAsrDraft, signal?: AbortSignal) {
     try {
-      const base = this.apiUrl.replace(/\/v1\/?$/, '');
-      const res = await this.fetcher(`${base}/health`, {
-        signal: AbortSignal.timeout(3000),
-      }).catch(() => null);
+      const connection = this.connection(settings);
+      const base = connection.baseUrl.replace(/\/v1$/, '');
+      const options = {
+        headers: connection.headers,
+        redirect: 'error' as const,
+        signal: AbortSignal.any([
+          AbortSignal.timeout(3000),
+          ...(signal ? [signal] : []),
+        ]),
+      };
+      options.signal.throwIfAborted();
+      const res = await this.fetcher(`${base}/health`, options).catch(
+        () => null,
+      );
       if (res && (res.ok || res.status === 200)) {
         return {
           available: true,
           reason:
-            '独立 Whisper 服务可连接。首次识别可能需要下载或加载模型，请稍候。',
+            'Speaches 识别服务可连接。首次识别可能需要下载或加载模型，请稍候。',
         };
       }
       const modelsRes = await this.fetcher(
-        `${this.apiUrl.replace(/\/+$/, '')}/models`,
-        {
-          signal: AbortSignal.timeout(3000),
-        },
+        `${connection.baseUrl}/models`,
+        options,
       ).catch(() => null);
       if (modelsRes && modelsRes.ok) {
         return {
           available: true,
           reason:
-            '独立 Whisper 服务可连接。首次识别可能需要下载或加载模型，请稍候。',
+            'Speaches 识别服务可连接。首次识别可能需要下载或加载模型，请稍候。',
         };
       }
       return {
         available: false,
-        reason: '无法连接独立 Whisper 语音服务，请确认服务已启动。',
+        reason: '无法连接 Speaches 识别服务，请检查服务地址和 API Key。',
       };
     } catch {
       return {
         available: false,
-        reason: '无法连接独立 Whisper 语音服务，请确认服务已启动。',
+        reason: '无法连接 Speaches 识别服务，请检查服务地址和 API Key。',
       };
     }
   }
@@ -59,7 +75,7 @@ export class LocalSpeech {
     contentType: string,
     language: string,
     signal: AbortSignal,
-    settings?: WhisperAsrSettings,
+    settings?: WhisperAsrDraft,
   ) {
     const format = audioFormats[contentType.split(';')[0].trim().toLowerCase()];
     if (!format)
@@ -75,9 +91,10 @@ export class LocalSpeech {
       throw new AppError('服务器正在识别另一段录音，请稍后重试。', 429);
     this.busy = true;
     try {
-      const status = await this.status();
-      if (!status.available) throw new AppError(status.reason, 503);
       signal.throwIfAborted();
+      const status = await this.status(settings, signal);
+      signal.throwIfAborted();
+      if (!status.available) throw new AppError(status.reason, 503);
       return await this.transcribeRemote(
         audio,
         format,
@@ -87,7 +104,7 @@ export class LocalSpeech {
       );
     } catch (error) {
       if (error instanceof AppError || signal.aborted) throw error;
-      throw new AppError('请求 Whisper 独立服务失败或超时。', 502);
+      throw new AppError('请求 Speaches 识别服务失败或超时。', 502);
     } finally {
       this.busy = false;
     }
@@ -97,7 +114,7 @@ export class LocalSpeech {
     format: string,
     language: string,
     signal: AbortSignal,
-    settings?: WhisperAsrSettings,
+    settings?: WhisperAsrDraft,
   ) {
     const ext =
       format === 'wav'
@@ -135,14 +152,20 @@ export class LocalSpeech {
     if (settings?.temperature !== undefined)
       form.append('temperature', String(settings.temperature));
 
-    const endpoint = `${this.apiUrl.replace(/\/+$/, '')}/audio/transcriptions`;
+    const connection = this.connection(settings);
+    const endpoint = `${connection.baseUrl}/audio/transcriptions`;
+    const options = {
+      signal,
+      headers: connection.headers,
+      redirect: 'error' as const,
+    };
     let response = await this.fetcher(endpoint, {
       method: 'POST',
       body: form,
-      signal,
+      ...options,
     }).catch((err) => {
       if (signal.aborted) throw err;
-      throw new AppError('请求 Whisper 独立服务失败或超时。', 502);
+      throw new AppError('请求 Speaches 识别服务失败或超时。', 502);
     });
 
     if (response.status === 404) {
@@ -151,25 +174,25 @@ export class LocalSpeech {
           ? settings.model
           : DEFAULT_WHISPER_ASR.model,
       );
-      const downloadEndpoint = `${this.apiUrl.replace(/\/+$/, '')}/models/${modelId}`;
+      const downloadEndpoint = `${connection.baseUrl}/models/${modelId}`;
       await this.fetcher(downloadEndpoint, {
         method: 'POST',
-        signal,
+        ...options,
       }).catch(() => null);
 
       response = await this.fetcher(endpoint, {
         method: 'POST',
         body: form,
-        signal,
+        ...options,
       }).catch((err) => {
         if (signal.aborted) throw err;
-        throw new AppError('请求 Whisper 独立服务失败或超时。', 502);
+        throw new AppError('请求 Speaches 识别服务失败或超时。', 502);
       });
     }
 
     if (!response.ok) {
       throw new AppError(
-        `Whisper 服务返回错误 (HTTP ${response.status})。`,
+        `Speaches 识别服务返回错误 (HTTP ${response.status})。`,
         502,
       );
     }

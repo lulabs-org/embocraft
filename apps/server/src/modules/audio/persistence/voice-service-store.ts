@@ -1,8 +1,9 @@
 import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
-import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
+import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
-import { piperModel } from '../services/tts/piper-models.service';
+import { validateVoiceConnection } from '../domain/voice-service-connection';
+import { SpeachesModels } from '../services/speaches-models.service';
 import { PiperTts } from '../services/tts/piper.service';
 import { RemoteTts } from '../services/tts/remote.service';
 import type { SpeechSynthesizer } from '../services/tts/speech-synthesizer';
@@ -30,9 +31,10 @@ export function validateVoiceService(
       throw new AppError(`${key} 格式无效。`);
     return v.trim();
   };
-  const type = input.type;
+  // Existing catalogs and older clients used the engine name for this service.
+  const type = input.type === 'piper' ? 'speaches' : input.type;
   if (
-    type !== 'piper' &&
+    type !== 'speaches' &&
     type !== 'browser' &&
     type !== 'bailian' &&
     type !== 'compatible'
@@ -40,19 +42,34 @@ export function validateVoiceService(
     throw new AppError('请选择支持的语音服务类型。');
   const name = str('name', 50);
   if (!name) throw new AppError('请填写语音服务名称。');
-  let baseUrl = '',
-    apiKey = '',
-    model = '';
+  const { baseUrl, apiKey } = validateVoiceConnection(input, type, previous);
+  const model =
+    type === 'browser'
+      ? ''
+      : str('model', 200, type === 'speaches' ? DEFAULT_PIPER_MODEL : '');
+  if (
+    type !== 'browser' &&
+    (!model || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]*$/.test(model))
+  )
+    throw new AppError('请填写有效的语音模型 ID。');
+  // Old Piper profiles had no voice field; retain their exact existing voice.
   const voice =
-    type === 'piper' ? '' : str('voice', type === 'browser' ? 200 : 100);
-  if (type === 'piper')
-    model = piperModel(input.model ?? DEFAULT_PIPER_MODEL).id;
+    str('voice', type === 'browser' || type === 'speaches' ? 200 : 100) ||
+    (type === 'speaches'
+      ? (PIPER_MODELS.find((item) => item.id === model)?.voice ?? '')
+      : '');
+  if (type !== 'browser' && !voice) throw new AppError('请选择或填写音色。');
   const voiceLanguage =
     type === 'browser' ? str('voiceLanguage', 40) : undefined;
   if (voiceLanguage && !/^[a-zA-Z0-9-]+$/.test(voiceLanguage))
     throw new AppError('音色语言格式无效。');
   const voicePattern = /^[\p{L}\p{N}_. ()-]+$/u;
-  if (type !== 'browser' && voice && !voicePattern.test(voice))
+  if (
+    type !== 'browser' &&
+    type !== 'speaches' &&
+    voice &&
+    !voicePattern.test(voice)
+  )
     throw new AppError('音色名称格式无效。');
   const speed = input.speed ?? 1;
   if (
@@ -62,45 +79,6 @@ export function validateVoiceService(
     speed > 2
   )
     throw new AppError('语速须为 0.5–2。');
-  if (type !== 'piper' && type !== 'browser') {
-    let url: URL;
-    try {
-      url = new URL(str('baseUrl', 500));
-    } catch {
-      throw new AppError('请填写有效的语音接口地址。');
-    }
-    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-    if (
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      (url.protocol !== 'https:' && !(local && url.protocol === 'http:'))
-    )
-      throw new AppError(
-        '语音接口须为 HTTPS 或本机 HTTP 地址，不能包含凭据或查询参数。',
-      );
-    baseUrl = url.href.replace(/\/$/, '');
-    if (
-      type === 'bailian' &&
-      ![
-        'https://dashscope.aliyuncs.com/api/v1',
-        'https://dashscope-intl.aliyuncs.com/api/v1',
-      ].includes(baseUrl)
-    )
-      throw new AppError('百炼请选择北京或新加坡官方接口。');
-    apiKey = str('apiKey', 4096);
-    if (!apiKey && previous?.apiKey) {
-      if (previous.type !== type || previous.baseUrl !== baseUrl)
-        throw new AppError('更换类型或地址时，请重新填写密钥。');
-      apiKey = previous.apiKey;
-    }
-    if (!apiKey && !local) throw new AppError('请填写语音服务 API Key。');
-    model = str('model', 128);
-    if (!model || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]*$/.test(model))
-      throw new AppError('请填写有效的语音模型 ID。');
-    if (!voice) throw new AppError('请填写音色。');
-  }
   return {
     id: previous?.id ?? randomUUID(),
     name,
@@ -124,15 +102,15 @@ export class VoiceServiceStore {
   constructor(
     private readonly storage: VoiceServicePersistence,
     private factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
-      value.type === 'piper' ? new PiperTts(value) : new RemoteTts(value),
+      value.type === 'speaches' ? new PiperTts(value) : new RemoteTts(value),
   ) {}
   async load() {
     const saved = await this.storage.load();
     if (saved === undefined) {
       const defaultVoice: SavedVoice = {
         ...validateVoiceService({
-          name: 'Piper 本地语音',
-          type: 'piper',
+          name: 'Speaches 语音服务',
+          type: 'speaches',
           voice: '',
           speed: 1,
         }),
@@ -157,6 +135,21 @@ export class VoiceServiceStore {
         id: voice.id,
       }));
     }
+  }
+  async models(value: unknown, signal?: AbortSignal) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      throw new AppError('语音服务连接配置无效。');
+    const input = value as Record<string, unknown>;
+    if (input.serviceId !== undefined && typeof input.serviceId !== 'string')
+      throw new AppError('语音服务 ID 无效。');
+    const previous =
+      input.serviceId === undefined
+        ? undefined
+        : this.get(input.serviceId as string);
+    if (previous && previous.type !== 'speaches')
+      throw new AppError('请选择 Speaches 服务。');
+    const connection = validateVoiceConnection(input, 'speaches', previous);
+    return new SpeachesModels(connection).list(signal);
   }
   list() {
     return this.values.map(publicView);
