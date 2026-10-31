@@ -349,11 +349,14 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     });
     let server: Awaited<ReturnType<typeof createServer>> | undefined;
     try {
+      await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
       server = await createServer({ config });
       await server.listen();
       expect(server.characters.publicList()).toEqual([]);
       expect(server.providers.list()).toHaveLength(0);
-      expect(server.voiceServices.list()).toEqual([]);
+      expect(server.voiceServices.list().map((service) => service.id)).toEqual([
+        'local-default',
+      ]);
       expect(server.asrSettings.list()).toEqual([]);
       await server.providers.save(
         { name: 'Ollama', type: 'ollama', defaultModel: 'qwen2.5:3b' },
