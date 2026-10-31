@@ -13,7 +13,7 @@ import {
 } from './modules/ai-characters';
 import {
   installProviderRoutes,
-  type ProviderRouteDependencies,
+  type ProviderService,
 } from './modules/providers';
 import {
   taskCommandBody,
@@ -32,7 +32,7 @@ export type AppDependencies = {
   management: {
     authenticate: RequestHandler;
     characters: AICharacterRoutePort;
-    providers: ProviderRouteDependencies;
+    providers: ProviderService;
     tasks: TaskPort;
   };
   asr: Omit<AsrRouteDependencies, 'origin'>;

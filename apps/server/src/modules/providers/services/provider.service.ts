@@ -2,7 +2,15 @@ import { AppError } from '../../../core/errors/app-error';
 import type { ModelCatalog } from '../adapters/model-catalog';
 import type { ProviderHealthChecker } from '../adapters/health-checker';
 import type { ProviderRepository } from '../ports';
-import { PROVIDERS_CHANGED, type ProviderEventPublisher } from './events';
+
+export const PROVIDERS_CHANGED = 'providers.changed' as const;
+
+export type ProviderChangedEvent = {
+  type: typeof PROVIDERS_CHANGED;
+  providerId: string;
+};
+
+export type ProviderEventPublisher = (event: ProviderChangedEvent) => void;
 
 /** Coordinates provider writes and their cross-module reference rule. */
 export class ProviderService {

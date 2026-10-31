@@ -12,10 +12,10 @@ export type { SavedProvider } from './domain/model';
 export { validateProvider } from './domain/validation';
 export { DatabaseProviderRepository } from './persistence/database-repository';
 export type { ProviderRepository, ProviderRuntimePort } from './ports';
+export { installProviderRoutes } from './routes/providers.routes';
 export {
-  installProviderRoutes,
-  type ProviderRouteDependencies,
-} from './routes/providers.routes';
-export { PROVIDERS_CHANGED } from './services/events';
-export type { ProviderChangedEvent } from './services/events';
-export { ProviderService } from './services/provider.service';
+  PROVIDERS_CHANGED,
+  type ProviderChangedEvent,
+  type ProviderEventPublisher,
+  ProviderService,
+} from './services/provider.service';

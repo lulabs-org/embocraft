@@ -1,7 +1,20 @@
 import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort } from '../ports';
-import { PROVIDER_SPECS } from '../domain/specs';
-import { ProviderHttpClient } from './client';
+import { PROVIDER_SPECS, type SavedProvider } from '../domain/model';
+
+/** Shared upstream HTTP policy for provider probes. */
+export function fetchProviderModels(
+  provider: SavedProvider,
+): Promise<Response> {
+  return fetch(`${provider.baseUrl.replace(/\/+$/, '')}/models`, {
+    headers:
+      provider.type === 'gemini'
+        ? { 'x-goog-api-key': provider.apiKey }
+        : { Authorization: `Bearer ${provider.apiKey || 'ollama'}` },
+    redirect: 'error',
+    signal: AbortSignal.timeout(10000),
+  });
+}
 
 /** Model discovery belongs to providers and does not require a character session. */
 export class ModelCatalog {
@@ -9,7 +22,7 @@ export class ModelCatalog {
 
   constructor(
     private readonly providers: ProviderRuntimePort,
-    private readonly client = new ProviderHttpClient(),
+    private readonly client: (provider: SavedProvider) => Promise<Response> = fetchProviderModels,
   ) {}
 
   async models(id: string) {
@@ -22,7 +35,7 @@ export class ModelCatalog {
     this.probing.add(id);
 
     try {
-      const res = await this.client.getModels(provider);
+      const res = await this.client(provider);
       if (!res.ok) throw 0;
       const { data = [], models = [] } = (await res.json()) as {
         data?: { id?: unknown }[];
