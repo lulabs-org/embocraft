@@ -86,7 +86,13 @@ export class DatabaseProviderRepository implements ProviderRepository {
       this.getRuntime(id);
       try {
         await this.db.agentProvider.delete({ where: { id } });
-      } catch {
+      } catch (error) {
+        if ((error as { code?: string }).code === 'P2003') {
+          throw new AppError(
+            '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
+            409,
+          );
+        }
         throw new AppError('无法从数据库删除模型服务。', 500);
       }
       this.values = this.values.filter((p) => p.id !== id);

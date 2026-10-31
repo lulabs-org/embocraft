@@ -13,6 +13,7 @@ import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/
 import { VoiceServiceStore } from '../src/modules/tts/persistence/voice-service-store';
 import { bootstrapProviders } from './helpers/provider-seed';
 import { DatabaseProviderRepository } from '../src/modules/providers';
+import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
 import type { ManagementArchive } from '../src/persistence/archive';
 import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { createServer } from '../src/server';
@@ -35,6 +36,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   afterAll(async () => db?.$disconnect());
 
   it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
+    await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
     const store = new VoiceServiceStore(
       new DatabaseVoiceServicePersistence(db!),
     );
@@ -350,10 +352,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       server = await createServer({ config });
       await server.listen();
       expect(server.characters.publicList()).toEqual([]);
-      expect(server.providers.list()).toHaveLength(2);
-      expect(server.voiceServices.list().map((service) => service.id)).toEqual([
-        'local-default',
-      ]);
+      expect(server.providers.list()).toHaveLength(0);
+      expect(server.voiceServices.list()).toEqual([]);
       expect(server.asrSettings.list()).toEqual([]);
       await server.providers.save(
         { name: 'Ollama', type: 'ollama', defaultModel: 'qwen2.5:3b' },
@@ -373,7 +373,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await db!.ttsProvider.deleteMany();
       server = await createServer({ config });
       await server.listen();
-      expect(server.providers.list()).toHaveLength(2);
+      expect(server.providers.list()).toHaveLength(1);
       expect(server.voiceServices.list()).toEqual([]);
       expect(server.asrSettings.list()).toEqual([]);
       expect(server.characters.publicList()).toEqual([
