@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { TestVoiceServiceStore as VoiceServiceStore } from './helpers/memory-storage';
 
-import { AgentSpeech } from '../src/modules/audio/services/tts/agent-speech.service';
+import { AgentSpeech } from '../src/modules/world/services/agent-speech.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS, type Player } from '@voxel/shared';
 

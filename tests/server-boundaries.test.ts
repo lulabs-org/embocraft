@@ -206,7 +206,8 @@ it('keeps infrastructure independent of business modules and modules independent
         }
       }
       if (
-        name.startsWith('modules/audio/') ||
+        name.startsWith('modules/asr/') ||
+        name.startsWith('modules/tts/') ||
         name.startsWith('modules/providers/') ||
         name.startsWith('modules/tasks/')
       )
@@ -214,8 +215,14 @@ it('keeps infrastructure independent of business modules and modules independent
           target.startsWith('modules/ai-characters/'),
           `${name} -> ${target}`,
         ).toBe(false);
-      if (name.startsWith('modules/audio/'))
-        expect(target.startsWith('modules/chat/'), `${name} -> ${target}`).toBe(
+      if (name.startsWith('modules/asr/') || name.startsWith('modules/tts/'))
+        expect(
+          target.startsWith('modules/chat/') ||
+            target.startsWith('modules/world/'),
+          `${name} -> ${target}`,
+        ).toBe(false);
+      if (name.startsWith('modules/tts/'))
+        expect(target.startsWith('modules/asr/'), `${name} -> ${target}`).toBe(
           false,
         );
       if (

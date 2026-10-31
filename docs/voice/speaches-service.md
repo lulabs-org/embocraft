@@ -112,7 +112,7 @@ services:
 后端服务源码中主要通过两个模块发起 HTTP 通信：
 
 ### (1) 端点解析 (`speechEndpoint`)
-位于 `apps/server/src/modules/audio/speech-endpoint.ts`：
+位于 `apps/server/src/core/audio/speech-endpoint.ts`：
 ```typescript
 export function speechEndpoint() {
   const c = env.readSpeech();
@@ -125,7 +125,7 @@ export function speechEndpoint() {
 保存的地址与密钥同时用于试听和绑定角色的语音回复；密钥只保存在后端，并通过 Bearer 认证发送。修改地址时不会自动复用旧密钥。现有 `type: 'piper'` 配置读取后会转换为 `type: 'speaches'`，保留服务 ID、自定义名称、模型及角色绑定。模型和音色列表从当前连接的 `GET /v1/models?task=text-to-speech` 动态读取，只展示服务已安装的 TTS 模型；不会触发模型下载。后台管理接口 `POST /voice/tts/models` 支持未保存的地址、密钥，以及用于复用已保存密钥的 `serviceId`。前端在连接变化后重新加载，并支持手动刷新；加载失败、列表为空或原模型不再可用时保留原选择并显示提示，不回退到固定模型列表。模型提供多个音色时可以选择；未提供音色元数据时可填写服务支持的音色 ID。合成请求直接使用保存的模型和音色 ID，原三种 Piper 音色映射仅用于兼容旧配置。
 
 ### (2) 语音合成调用 (`PiperTts`)
-位于 `apps/server/src/modules/audio/services/tts/piper.service.ts`：
+位于 `apps/server/src/modules/tts/services/piper.service.ts`：
 ```typescript
 const response = await fetch(`${this.endpoint}/audio/speech`, {
   method: 'POST',
@@ -142,7 +142,7 @@ const response = await fetch(`${this.endpoint}/audio/speech`, {
 ```
 
 ### (3) 语音识别调用 (`LocalSpeechService`)
-位于 `apps/server/src/modules/audio/services/asr/local-speech.service.ts`：
+位于 `apps/server/src/modules/asr/services/local-speech.service.ts`：
 控制台「语音识别（ASR）」中的 **Speaches 识别服务** 支持独立的 `API Base URL` 和可选 `API Key`。留空使用部署默认地址，界面会通过管理接口 `GET /voice/asr/defaults` 显示实际默认值。模型列表通过 `POST /voice/asr/models` 从当前连接的 `GET /v1/models?task=automatic-speech-recognition` 获取，支持未保存的连接和手动刷新，不使用固定模型列表，也不会因查询触发下载。
 
 保存的连接同时用于服务状态检查、录音试用、聊天语音和附近语音的识别请求。构建 `FormData` 上传录音至所选服务的 `/audio/transcriptions`，使用保存的模型、温度和提示词。密钥仅保存在服务端，修改地址须重新填写密钥；旧配置的服务 ID、用途分配及模型保持兼容，未配置地址时继续使用部署默认值。

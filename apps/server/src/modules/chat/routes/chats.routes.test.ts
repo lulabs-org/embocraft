@@ -7,7 +7,7 @@ import {
   TestAsrSettingsStore,
 } from '../../../../test/helpers/memory-storage';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
-import type { LocalSpeech } from '../../audio';
+import type { LocalSpeech } from '../../asr';
 import { WorldChat } from '../services/chat.service';
 import { installChatRoutes } from './chats.routes';
 

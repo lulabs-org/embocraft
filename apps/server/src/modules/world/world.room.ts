@@ -1,10 +1,7 @@
 import { WorldChat, visibleEvent } from '../chat';
-import {
-  AgentSpeech,
-  PiperTts,
-  createSpatialSignaling,
-  type VoiceServiceStore,
-} from '../audio';
+import { PiperTts, type VoiceServiceStore } from '../tts';
+import { AgentSpeech } from './services/agent-speech.service';
+import { createSpatialSignaling } from './services/spatial-signaling.service';
 import { WorldStore } from './persistence/store';
 import { Room, Client, ServerError } from '@colyseus/core';
 import { Avatar, WorldState } from './world.schema';

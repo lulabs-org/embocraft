@@ -5,7 +5,7 @@ import {
   TestAsrSettingsStore as AsrSettingsStore,
   TestAsrSettingsStore,
 } from '../../../../test/helpers/memory-storage';
-import type { LocalSpeech } from '../../audio';
+import type { LocalSpeech } from '../../asr';
 import { WorldChat } from './chat.service';
 import { ChatSpeechService } from './speech.service';
 

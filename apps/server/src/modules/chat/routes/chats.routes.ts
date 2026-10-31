@@ -9,8 +9,11 @@ import {
 import { type WorldChat } from '../services/chat.service';
 
 import { AppError } from '../../../core/errors/app-error';
-import { AsrSettingsStore, LocalSpeech, type AgentSpeech } from '../../audio';
+import { AsrSettingsStore, LocalSpeech } from '../../asr';
 import { ChatSpeechService } from '../services/speech.service';
+
+/** Read-only access to synthesized Agent speech clips owned by the world room. */
+export type AgentSpeechClips = { audio(id: string, viewer: string): Buffer };
 
 type ChatLocals = {
   chat: WorldChat;
@@ -40,7 +43,7 @@ export function installChatRoutes(
   app: Express,
   getChat: () => WorldChat | undefined,
   speech = new LocalSpeech(),
-  getAgentSpeech: () => AgentSpeech | undefined = () => undefined,
+  getAgentSpeech: () => AgentSpeechClips | undefined = () => undefined,
   origin = env.webOrigin(),
   asrSettings: AsrSettingsStore,
 ) {

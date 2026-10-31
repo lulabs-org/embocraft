@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
-import { LocalSpeech } from '../src/modules/audio/services/asr/local-speech.service';
+import { LocalSpeech } from '../src/modules/asr/services/local-speech.service';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
 import { installChatRoutes } from '../src/modules/chat/routes/chats.routes';
 import { TestAsrSettingsStore } from './helpers/memory-storage';

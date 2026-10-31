@@ -1,0 +1,100 @@
+import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import express from 'express';
+import { createServer, type Server } from 'node:http';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+
+import { LocalSpeech } from '../services/local-speech.service';
+import { PiperModels } from '../../tts/services/piper-models.service';
+import { installCapabilitiesRoutes } from './capabilities.routes';
+
+describe('audio capabilities HTTP boundary', () => {
+  let server: Server, url: string, store: AsrSettingsStore;
+  const status = vi.fn();
+  const origin = 'http://127.0.0.1:5187';
+  beforeEach(async () => {
+    vi.spyOn(PiperModels.prototype, 'status').mockResolvedValue({
+      available: false,
+      reason: '请安装 Piper 模型。',
+    });
+    status.mockReset().mockResolvedValue({ available: true, reason: 'ready' });
+    const speech = new LocalSpeech();
+    vi.spyOn(speech, 'status').mockImplementation(status);
+    store = new AsrSettingsStore();
+    await store.load();
+    const app = express();
+    installCapabilitiesRoutes(app, speech, store, origin);
+    server = createServer(app);
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    url = `http://127.0.0.1:${(server.address() as { port: number }).port}/voice/capabilities`;
+  });
+  afterEach(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('advertises ASR and TTS readiness without requiring an admin token', async () => {
+    const response = await fetch(url);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      local: { available: true },
+      agentSpeech: { available: false },
+    });
+  });
+
+  it('retains preflight, origin and cross-site policies after separation', async () => {
+    const allowed = await fetch(url, {
+      method: 'OPTIONS',
+      headers: { Origin: origin },
+    });
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get('access-control-allow-origin')).toBe(origin);
+    expect(allowed.headers.get('cache-control')).toBe('no-store');
+    const rejectedHeaders: Record<string, string>[] = [
+      { Origin: 'https://foreign.test' },
+      { Origin: origin, 'Sec-Fetch-Site': 'cross-site' },
+    ];
+    for (const headers of rejectedHeaders) {
+      expect((await fetch(url, { headers })).status).toBe(403);
+    }
+    expect(status).not.toHaveBeenCalled();
+  });
+
+  it('uses the selected Whisper profile and rejects wrong or deleted services', async () => {
+    const whisper = await store.save({
+      ...DEFAULT_WHISPER_ASR,
+      provider: 'whisper',
+      name: 'Whisper',
+      model: 'Systran/faster-whisper-small',
+      baseUrl: 'http://selected:8000/v1',
+      apiKey: 'private-key',
+    });
+    const cloud = await store.save({
+      ...DEFAULT_BAILIAN_ASR,
+      name: 'Cloud',
+      apiKey: 'fixture',
+    });
+    expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(200);
+    expect(status).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: 'http://selected:8000/v1',
+        apiKey: 'private-key',
+      }),
+    );
+    expect((await fetch(`${url}?serviceId=${cloud.id}`)).status).toBe(400);
+    await store.remove(whisper.id);
+    expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(404);
+    expect(status).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps unexpected capability failures private', async () => {
+    status.mockRejectedValueOnce(new Error('private upstream error'));
+    const response = await fetch(url);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: '无法检查识别服务。' });
+  });
+});

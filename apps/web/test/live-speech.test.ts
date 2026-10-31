@@ -5,7 +5,7 @@ import {
   speechTransport,
   type SpeechTransport,
 } from '../src/audio/services/live-speech';
-import { validatePcmWav } from '../../server/src/modules/audio/domain/pcm-wav';
+import { validatePcmWav } from '../../server/src/core/audio/pcm-wav';
 const flush = async () => {
   for (let i = 0; i < 12; i++) await Promise.resolve();
 };

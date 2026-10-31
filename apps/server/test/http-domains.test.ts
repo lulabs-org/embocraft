@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { LocalSpeech } from '../src/modules/audio/services/asr/local-speech.service';
-import { PiperModels } from '../src/modules/audio/services/tts/piper-models.service';
+import { LocalSpeech } from '../src/modules/asr/services/local-speech.service';
+import { PiperModels } from '../src/modules/tts/services/piper-models.service';
 import { MemoryArchive } from './helpers/memory-storage';
 import { createTestServer } from './helpers/test-server';
 

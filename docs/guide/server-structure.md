@@ -19,7 +19,7 @@
 
 以下列出已落地的主要目录与文件，不是完整文件清单；部分测试和辅助文件省略。服务端使用仓库根部的 `tsconfig.json`。本轮目录与命名整理已完成，后续职责拆分应单独评估。
 
-数据库基础设施位于 `core/database/`，跨模块联合存档位于 `src/persistence/`，九个业务模块按职责组织领域规则、服务、存储和协议适配。`audio` 已完成 HTTP、Socket、领域类型、音频处理、会话、ASR/TTS 服务及配置存储的归位；`speech-endpoint.ts` 作为 ASR/TTS 共用配置辅助文件保留在模块根部。模块之间通过各自的 `index.ts` 引用。具体兼容约定见仓库内的 `apps/server/README.md`。
+数据库基础设施位于 `core/database/`，跨模块联合存档位于 `src/persistence/`，九个业务模块按职责组织领域规则、服务、存储和协议适配。原 `audio` 模块已拆分：ASR 归 `modules/asr`，TTS 与音色服务归 `modules/tts`，Agent 发声与空间信令归 `modules/world/services/`，两者共用的无状态音频基础设施归 `core/audio/`。模块之间通过各自的 `index.ts` 引用。具体兼容约定见仓库内的 `apps/server/README.md`。
 
 ```text
 apps/server/
@@ -60,9 +60,19 @@ apps/server/
     │   │   ├── swagger.test.ts          # 【静态门禁】基于 AST 验证 100% 路由覆盖率
     │   │   ├── openapi-schemas.ts       # 通用 DTO Schema 声明
     │   │   └── docs.routes.ts           # /api-docs 与 /api-docs.json UI 文档路由
-    │   └── transport/                   # 网络传输复合多路复用底座
-    │       ├── socket-routes.ts         # Socket 路由契约（SocketHandler, SocketRoutes）
-    │       └── websocket.transport.ts   # RoutedWebSocketTransport（拦截升级，共享端口与心跳）
+    │   ├── transport/                   # 网络传输复合多路复用底座
+    │   │   ├── socket-routes.ts         # Socket 路由契约（SocketHandler, SocketRoutes）
+    │   │   └── websocket.transport.ts   # RoutedWebSocketTransport（拦截升级，共享端口与心跳）
+    │   └── audio/                       # ASR/TTS 共用的无业务状态音频基础设施
+    │       ├── pcm-wav.ts               # PCM WAV 格式、时长与音量校验（无 I/O）
+    │       ├── normalize.ts             # 录音/合成音频 FFmpeg 规整与临时文件生命周期
+    │       ├── normalize.test.ts
+    │       ├── command.ts               # 子进程执行与可执行文件查找
+    │       ├── speech-endpoint.ts       # 部署默认的语音服务地址
+    │       ├── speech-endpoint.test.ts
+    │       ├── speaches-models.ts       # Speaches 模型与音色发现
+    │       ├── speaches-models.test.ts
+    │       └── voice-service-connection.ts # ASR/TTS 共用连接参数校验
     │
     ├── persistence/                     # ════════【全局数据快照与持久化底座】════════
     │   ├── archive.ts                   # 跨模块快照契约（ArchivePort, ManagementArchive）
@@ -95,58 +105,38 @@ apps/server/
         │   │   └── ai-characters.routes.ts
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
-        ├── audio/                       # ── 2. 全双工音频管线与语音引擎 ──
-        │   ├── domain/                  # 无 I/O 的音频校验规则
-        │   │   └── pcm-wav.ts           # PCM WAV 格式、时长与音量校验（复用 AppError）
-        │   ├── services/                # 具体的音频服务调度与引擎实现
-        │   │   ├── processing/          # FFmpeg 转码与临时文件生命周期（有 I/O）
-        │   │   │   ├── command.ts       # 子进程执行与可执行文件查找
-        │   │   │   ├── normalize.ts     # 录音/合成音频规整，复用 domain 的 WAV 校验
-        │   │   │   └── normalize.test.ts
-        │   │   ├── asr/                 # 语音识别引擎（Whisper 本地识别、百炼云端流式 ASR）
-        │   │   │   ├── local-speech.service.ts # LocalSpeech：Whisper CLI/API 识别
-        │   │   │   ├── local-speech.service.test.ts
-        │   │   │   ├── bailian.service.ts # 百炼 WebSocket 协议桥接
-        │   │   │   ├── bailian.service.test.ts
-        │   │   │   ├── speech-scheduler.service.ts # 识别队列、超时与取消
-        │   │   │   ├── speech-scheduler.service.test.ts
-        │   │   │   └── whisper-settings.ts # 模型目录读取、路径与配置校验
-        │   │   ├── tts/                 # 语音合成、模型安装与世界内语音投递
-        │   │   │   ├── piper.service.ts  # PiperTts 合成
-        │   │   │   ├── piper.service.test.ts
-        │   │   │   ├── remote.service.ts # RemoteTts 远程合成
-        │   │   │   ├── remote.service.test.ts
-        │   │   │   ├── agent-speech.service.ts # 队列、听众筛选与音频缓存
-        │   │   │   ├── agent-speech.service.test.ts
-        │   │   │   ├── piper-models.service.ts # Piper 模型查询与安装调度
-        │   │   │   ├── piper-models.service.test.ts
-        │   │   │   └── speech-synthesizer.ts # 合成接口与结果类型
-        │   │   └── spatial/             # 空间音频信令中继服务
-        │   │       ├── signaling.service.ts
-        │   │       └── signaling.service.test.ts
-        │   ├── persistence/             # ASR/音色配置存储及数据库适配
+        ├── asr/                         # ── 2. 语音识别（ASR） ──
+        │   ├── services/                # 识别引擎与调度
+        │   │   ├── local-speech.service.ts # LocalSpeech：Whisper API 识别
+        │   │   ├── bailian.service.ts   # 百炼 WebSocket 协议桥接
+        │   │   ├── speech-scheduler.service.ts # 识别队列、超时与取消
+        │   │   ├── transcript.ts        # Whisper 转写结果解析
+        │   │   └── whisper-settings.ts  # Whisper 配置校验
+        │   ├── persistence/             # ASR 配置存储及数据库适配
         │   │   ├── asr-settings-store.ts # AsrSettingsStore：配置与识别占用
-        │   │   ├── asr-settings-store.test.ts
-        │   │   ├── voice-service-store.ts # VoiceServiceStore：配置、绑定与合成协调
-        │   │   ├── voice-service-store.test.ts
-        │   │   ├── database-asr-services.ts
-        │   │   └── database-voice-services.ts
-        │   ├── routes/                  # HTTP 装配、接口与就近测试
-        │   │   ├── audio.http.ts        # installAudioRoutes：保留鉴权与路由安装顺序
-        │   │   ├── asr.routes.ts        # /voice/asr/services 识别服务管理
-        │   │   ├── asr.routes.test.ts   # ASR HTTP 与 Socket 行为测试
+        │   │   └── database-asr-services.ts
+        │   ├── routes/
+        │   │   ├── asr.http.ts          # installAsrHttp：保留鉴权与路由安装顺序
+        │   │   ├── asr.routes.ts        # /voice/asr/* 识别服务管理
         │   │   ├── transcribe.routes.ts # /voice/transcribe 音频转写
-        │   │   ├── transcribe.routes.test.ts
-        │   │   ├── piper.routes.ts      # /voice/tts/piper 模型查询与安装
-        │   │   ├── piper.routes.test.ts
-        │   │   ├── voice-services.routes.ts # /voice/tts/services 管理与试听
-        │   │   ├── capabilities.routes.ts # /voice/capabilities 运行时能力探针
-        │   │   └── capabilities.routes.test.ts
-        │   ├── sockets/                 # 独立 WebSocket 端点
+        │   │   └── capabilities.routes.ts # /voice/capabilities 运行时能力探针
+        │   ├── sockets/
         │   │   └── asr.socket.ts        # /voice/asr/realtime 实时流式识别
-        │   ├── speech-endpoint.ts       # ASR/TTS 共用的内部服务地址配置
-        │   ├── speech-endpoint.test.ts
-        │   └── index.ts                 # 保留 installAudioRoutes、installAsrSocket 等公开导出
+        │   └── index.ts                 # installAsrHttp、installAsrSocket、LocalSpeech 等
+        │
+        ├── tts/                         # ── 2b. 语音合成（TTS）与音色服务 ──
+        │   ├── services/
+        │   │   ├── piper.service.ts     # PiperTts 合成
+        │   │   ├── remote.service.ts    # RemoteTts 远程合成
+        │   │   ├── piper-models.service.ts # Piper 模型就绪查询
+        │   │   └── speech-synthesizer.ts # 合成接口与结果类型
+        │   ├── persistence/
+        │   │   ├── voice-service-store.ts # VoiceServiceStore：配置、绑定与合成协调
+        │   │   └── database-voice-services.ts
+        │   ├── routes/
+        │   │   ├── tts.http.ts          # installTtsHttp：经 management 管线挂载 /voice/tts
+        │   │   └── voice-services.routes.ts # /voice/tts/services 管理与试听
+        │   └── index.ts                 # installTtsHttp、VoiceServiceStore、PiperTts 等
         │
         ├── chat/                        # ── 3. 世界聊天与空间语音中继 ──
         │   ├── domain/
@@ -244,7 +234,7 @@ apps/server/
 - **`services/`（业务流程与调度引擎）**：核心业务调度、状态机协调、外部厂商引擎适配（如 Whisper/Piper/百炼）。
 - **`persistence/`（可选，状态持久化）**：若模块持有独立持久化数据，其数据库访问严格内聚于此（如 `store.ts` 与 `database-repository.ts`）；测试替身位于 `test/helpers/`。
 - **`routes/`（HTTP API 路由）**：模块对外的所有 REST 接口声明，统一命名为 `*.routes.ts`，由 `src/app.ts` 集中挂载。
-- **`sockets/`（可选，WebSocket 端点）**：若模块提供对外实时流式通信（如 `audio`, `gateway`），统一放入 `sockets/` 目录或按规范命名为 `*.socket.ts`。
+- **`sockets/`（可选，WebSocket 端点）**：若模块提供对外实时流式通信（如 `asr`, `gateway`），统一放入 `sockets/` 目录或按规范命名为 `*.socket.ts`。
 - **`ports.ts`（可选，依赖端口抽象）**：外部依赖契约反转接口，实现 Clean Architecture 解耦。
 - **`index.ts`（必须，唯一门面导出）**：模块对外的唯一公开出口，严禁外部做跨模块深层相对路径导入。
 
@@ -281,7 +271,7 @@ export function installWorldRoutes(app: Express, getRoomId: () => string) {
 
 ### 2.4 统一的 WebSocket 安装契约
 
-包含独立 WebSocket 终端的模块（如 `gateway`, `audio`），统一提供安装函数，由 `src/server.ts` 注册到传输层路由表中：
+包含独立 WebSocket 终端的模块（如 `gateway`, `asr`），统一提供安装函数，由 `src/server.ts` 注册到传输层路由表中：
 
 ```typescript
 // apps/server/src/modules/gateway/gateway.socket.ts
@@ -317,7 +307,8 @@ import { installManagementHttp } from './modules/management';
 import { installAICharacterRoutes } from './modules/ai-characters';
 import { installProviderRoutes } from './modules/providers';
 import { installTaskRoutes, taskCommandBody } from './modules/tasks';
-import { installAudioRoutes } from './modules/audio';
+import { installAsrHttp } from './modules/asr';
+import { installTtsHttp } from './modules/tts';
 import { installWorldRoutes, installPresenceRoutes } from './modules/world';
 import { installChatRoutes } from './modules/chat';
 
@@ -339,7 +330,8 @@ export function createApp(deps: AppDependencies) {
       installTaskRoutes(app, deps.management.tasks, commands);
     },
   });
-  installAudioRoutes(app, { ...deps.audio, origin: deps.origin });
+  installAsrHttp(app, { ...deps.asr, origin: deps.origin });
+  installTtsHttp(app, deps.tts);
   installWorldRoutes(app, deps.world.roomId);
   installChatRoutes(
     app,
@@ -347,7 +339,7 @@ export function createApp(deps: AppDependencies) {
     deps.chat.speech,
     deps.chat.getAgentSpeech,
     deps.origin,
-    deps.audio.asrSettings,
+    deps.asr.asrSettings,
   );
   installPresenceRoutes(app, deps.world.presence, deps.origin);
 
@@ -373,11 +365,8 @@ import { AICharacterManager } from './modules/ai-characters';
 import { ProviderService, bootstrapProviders } from './modules/providers';
 import { WorldRoom, WorldStore } from './modules/world';
 import { installGatewaySocket, GatewayAuth } from './modules/gateway';
-import {
-  installAsrSocket,
-  AsrSettingsStore,
-  LocalSpeech,
-} from './modules/audio';
+import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/asr';
+import { VoiceServiceStore } from './modules/tts';
 ```
 
 ---
@@ -463,24 +452,19 @@ graph LR
 
 ## 7. 全双工音频管线与会话协议（Audio Pipeline & Spatial Signaling）
 
-音频模块实现了实时多模态交互全双工闭环，遵循标准分层架构：
+音频能力按职责拆分为共享基础设施、ASR、TTS 与世界内语音协作四部分，依赖方向为 `world/chat → asr/tts → core/audio`，`tts` 不依赖 `asr`：
 
-- **领域音频规则（`domain/`）**：
-  `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；它不负责 WAV 封包，也不执行 I/O。
-- **音频处理（`services/processing/`）**：
-  `normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行与可执行文件查找，已有测试随源码共置。录音与合成音频各自的参数、时长限制、超时、取消传播和清理行为保持不变。
-- **ASR 服务（`services/asr/`）**：
-  `local-speech.service.ts` 保留 `LocalSpeech` 的 Whisper CLI/API 识别流程，`bailian.service.ts` 保留 `bridgeBailianAsr` 的流式协议，`speech-scheduler.service.ts` 保留 `SpeechScheduler` 与 `scheduleSpeech` 的队列管理。已有测试与源码共置。`whisper-settings.ts` 包含模型目录读取及配置校验，属于服务辅助文件，原有模型目录不变。`persistence/asr-settings-store.ts`、其测试与 `persistence/database-asr-services.ts` 负责配置存储；ASR/TTS 共用的 `speech-endpoint.ts` 保留在模块根部。识别、排队、取消、超时、错误与资源清理行为保持不变，模块门面继续导出 `LocalSpeech` 和 `scheduleSpeech`。
-- **TTS 服务（`services/tts/`）**：
-  `piper.service.ts` 和 `remote.service.ts` 保留 `PiperTts`、`RemoteTts` 的合成流程；`agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存；`piper-models.service.ts` 保留 `PiperModels` 的模型校验及就绪查询。`speech-synthesizer.ts` 保存 `SpeechSynthesizer` 与 `SynthesizedSpeech` 契约，已有测试与服务共置。模块门面继续导出 `AgentSpeech` 和 `PiperTts`，合成参数、队列、权限校验、取消和缓存行为保持不变。`persistence/voice-service-store.ts`、其测试与 `persistence/database-voice-services.ts` 负责音色配置存储，共用 `speech-endpoint.ts` 保留原位。
-- **配置存储与数据库适配（`persistence/`）**：
-  `asr-settings-store.ts` 与 `voice-service-store.ts` 保留 `AsrSettingsStore`、`VoiceServiceStore` 及持久化契约，已有存储测试与源码共置。两个 Store 仍包含原有校验与运行时协调职责，本次不拆分实现。`database-asr-services.ts` 和 `database-voice-services.ts` 保留数据库适配类名，模块门面保持全部公开导出。持久化适配器由调用方显式注入，旧配置文件读写、迁移和备份已移除；默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `apps/server/test/`。
-- **空间信令（`services/spatial/`）**：
-  `services/spatial/signaling.service.ts` 提供 WebRTC 信令校验与转发，已有测试随实现共置；audio 根部门面导出 `createSpatialSignaling`。
-- **统一接口暴露（`routes/` & `sockets/`）**：
-  HTTP 装配位于 `routes/audio.http.ts`，ASR 服务管理、音频转写、Piper 模型、TTS 服务及能力探针保留独立路由文件与现有测试。`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`，模块门面保留 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket`、`AsrBridge` 等全部公开导出。鉴权、Origin 策略、JSON/原始音频限制、装配顺序及连接生命周期保持不变。
+- **共享音频基础设施（`core/audio/`）**：
+  `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；`normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行；`speech-endpoint.ts`、`speaches-models.ts` 与 `voice-service-connection.ts` 提供 ASR/TTS 共用的服务地址、Speaches 模型发现和连接参数校验。该目录只依赖 `core`。
+- **ASR 模块（`modules/asr/`）**：
+  `services/` 保留 `LocalSpeech` 的 Whisper 识别、`bridgeBailianAsr` 的百炼流式协议与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责 `AsrSettingsStore` 与数据库适配；`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权和 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
+- **TTS 模块（`modules/tts/`）**：
+  `services/` 保留 `PiperTts`、`RemoteTts`、`PiperModels` 与 `SpeechSynthesizer` 契约；`persistence/` 负责 `VoiceServiceStore` 与数据库适配；`routes/tts.http.ts` 的 `installTtsHttp` 经 management 管线挂载 `/voice/tts`，删除音色时通过注入回调检查 Agent 绑定。
+- **世界内语音协作（`modules/world/services/`）**：
+  `agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存，由 `WorldRoom` 装配；聊天路由只依赖本地声明的 `AgentSpeechClips` 读取契约，避免 `chat → world` 循环依赖。`spatial-signaling.service.ts` 提供 WebRTC 信令校验与转发。
+- 两个 Store 仍包含原有校验与运行时协调职责；鉴权、Origin 策略、JSON/原始音频限制、装配顺序、识别占用、音色绑定、删除保护及连接生命周期保持不变。
 - **空间音频信令与听觉可见性解耦**：
-  `services/spatial/signaling.service.ts` 的 `createSpatialSignaling` 由 `WorldRoom` 调用，通过世界房间消息转发 WebRTC 协商数据，不注册独立的 `spatial.socket.ts` 端点。空间信令负责 WebRTC Peer 媒体协商；声音的距离衰减、朝向增益与声像由 `@voxel/shared` 的 `spatialMix` 计算，`chat/services/spatial-speech.service.ts` 据此筛选听众并管理语音票据。`chat/domain/visibility.ts` 只按消息范围、发送者与接收者判断消息是否对玩家可见，不执行距离衰减计算。
+  `world/services/spatial-signaling.service.ts` 的 `createSpatialSignaling` 由 `WorldRoom` 调用，通过世界房间消息转发 WebRTC 协商数据，不注册独立的 `spatial.socket.ts` 端点。空间信令负责 WebRTC Peer 媒体协商；声音的距离衰减、朝向增益与声像由 `@voxel/shared` 的 `spatialMix` 计算，`chat/services/spatial-speech.service.ts` 据此筛选听众并管理语音票据。`chat/domain/visibility.ts` 只按消息范围、发送者与接收者判断消息是否对玩家可见，不执行距离衰减计算。
 
 ---
 

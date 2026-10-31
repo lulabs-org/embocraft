@@ -20,7 +20,7 @@ import {
 } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 
-import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
+import { validatePcmWav } from '../../src/core/audio/pcm-wav';
 
 process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5191';
