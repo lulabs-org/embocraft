@@ -15,6 +15,7 @@ export default defineConfig(
       '.pnpm-store/**',
       'docs/.vitepress/cache/**',
       'docs/.vitepress/dist/**',
+      'docs/.vitepress/.temp/**',
     ],
   },
   {

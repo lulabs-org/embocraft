@@ -76,19 +76,17 @@ export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
     // Read-only check before Colyseus creates a room and logs initialization errors.
     await db.world.findFirst({ select: { id: true } });
     await db.agentProvider.findFirst({ select: { id: true } });
-    await db.agentProviderState.findFirst({ select: { id: true } });
     await db.agentCharacter.findFirst({ select: { id: true } });
     await db.agentPlan.findFirst({ select: { id: true } });
     await db.agentRun.findFirst({ select: { id: true } });
     await db.agentRequest.findFirst({ select: { key: true } });
     await db.ttsProvider.findFirst({ select: { id: true } });
-    await db.ttsProviderState.findFirst({ select: { id: true } });
     await db.asrProvider.findFirst({ select: { id: true } });
   } catch (error) {
     // Raw database errors can contain credentials; expose only the sanitized message.
     // eslint-disable-next-line preserve-caught-error
     throw new Error(databaseStartupMessage(error, databaseUrl));
   } finally {
-    await db?.$disconnect().catch(() => {});
+    await db?.$disconnect().catch(() => { });
   }
 }

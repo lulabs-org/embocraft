@@ -4,19 +4,17 @@ import { DatabaseVoiceServicePersistence } from './database-voice-services';
 import type { SavedVoice } from './voice-service-store';
 
 describe('DatabaseVoiceServicePersistence', () => {
-  it('returns undefined if catalog state is absent and table is empty', async () => {
+  it('returns empty array when table is empty', async () => {
     const db = {
-      ttsProviderState: { findUnique: vi.fn().mockResolvedValue(null) },
       ttsProvider: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
 
     const persistence = new DatabaseVoiceServicePersistence(db);
-    expect(await persistence.load()).toBeUndefined();
+    expect(await persistence.load()).toEqual([]);
   });
 
   it('loads unpacked fields into SavedVoice models with optional voiceLanguage', async () => {
     const db = {
-      ttsProviderState: { findUnique: vi.fn().mockResolvedValue({ id: 1 }) },
       ttsProvider: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -76,13 +74,11 @@ describe('DatabaseVoiceServicePersistence', () => {
   });
 
   it('saves unpacked fields and deletes missing entries in a transaction', async () => {
-    const upsertCatalogState = vi.fn().mockResolvedValue({});
     const findManyServices = vi.fn().mockResolvedValue([{ id: 'old-service' }]);
     const deleteService = vi.fn().mockResolvedValue({});
     const upsertService = vi.fn().mockResolvedValue({});
 
     const tx = {
-      ttsProviderState: { upsert: upsertCatalogState },
       ttsProvider: {
         findMany: findManyServices,
         delete: deleteService,
@@ -143,8 +139,8 @@ describe('DatabaseVoiceServicePersistence', () => {
 
   it('throws AppError on database load/save failure', async () => {
     const db = {
-      ttsProviderState: {
-        findUnique: vi.fn().mockRejectedValue(new Error('connection timeout')),
+      ttsProvider: {
+        findMany: vi.fn().mockRejectedValue(new Error('connection timeout')),
       },
       $transaction: vi.fn().mockRejectedValue(new Error('transaction aborted')),
     } as unknown as PrismaClient;
@@ -154,4 +150,3 @@ describe('DatabaseVoiceServicePersistence', () => {
     await expect(persistence.save([])).rejects.toThrow('无法保存语音服务数据库配置。');
   });
 });
-

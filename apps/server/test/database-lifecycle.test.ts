@@ -101,7 +101,7 @@ it('waits for all catalog loads before disconnecting and preserves the first fai
   const dependencies = options();
   const firstError = new Error('voice catalog unavailable');
   let failProviders!: () => void;
-  const providerLoad = new Promise<boolean>((_, reject) => {
+  const providerLoad = new Promise<void>((_, reject) => {
     failProviders = () => reject(new Error('provider catalog unavailable'));
   });
   let finishAsr!: () => void;

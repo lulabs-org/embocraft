@@ -5,8 +5,10 @@ import assert from 'node:assert/strict';
 import { controlRun, startTask } from '../../../../tests/support/managed-tasks';
 import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { bootstrapProviders } from '../../src/modules/providers';
-import { MemoryProviderRepository } from '../helpers/memory-storage';
+import {
+  bootstrapProviders,
+  MemoryProviderRepository,
+} from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 
 const origin = 'http://127.0.0.1:5188';

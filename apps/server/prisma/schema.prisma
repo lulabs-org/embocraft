@@ -30,10 +30,6 @@ model AgentProvider {
  characters AgentCharacter[]
 }
 
-// Distinguishes an intentionally empty provider catalog from a fresh database.
-model AgentProviderState {
- id Int @id
-}
 
 model AgentCharacter {
  id String @id
@@ -73,10 +69,6 @@ model TtsProvider {
   voiceLanguage String?
 }
 
-// Preserves an intentionally empty TTS catalog across restarts.
-model TtsProviderState {
-  id Int @id
-}
 
 model AsrProvider {
   id          String   @id

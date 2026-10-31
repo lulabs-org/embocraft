@@ -1,7 +1,7 @@
 import { AppError } from '../../../core/errors/app-error';
 import type { ModelCatalog } from '../adapters/model-catalog';
 import type { ProviderHealthChecker } from '../adapters/health-checker';
-import type { ProviderRepository } from '../persistence/repository.port';
+import type { ProviderRepository } from '../ports';
 import { PROVIDERS_CHANGED, type ProviderEventPublisher } from './events';
 
 /** Coordinates provider writes and their cross-module reference rule. */

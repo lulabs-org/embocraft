@@ -7,8 +7,10 @@ import { join } from 'node:path';
 
 import { toolResponse } from '../../../../tests/support/pi-response';
 import { AICharacterManager } from '../../src/modules/ai-characters';
-import { bootstrapProviders } from '../../src/modules/providers';
-import { MemoryProviderRepository } from '../helpers/memory-storage';
+import {
+  bootstrapProviders,
+  MemoryProviderRepository,
+} from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 
 import type { AICharacterView } from '@voxel/shared';

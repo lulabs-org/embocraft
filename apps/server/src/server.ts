@@ -36,7 +36,6 @@ import {
 import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 
 import {
-  bootstrapProviders,
   DatabaseProviderRepository,
   ModelCatalog,
   ProviderHealthChecker,
@@ -86,7 +85,7 @@ async function loadStores(
     new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
   const loads = [
     GatewayAuth.load(config.gateway),
-    bootstrapProviders(providers),
+    providers.load(),
     voiceServices.load(),
     asrSettings.load(),
   ] as const;
