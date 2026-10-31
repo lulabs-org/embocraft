@@ -61,9 +61,16 @@ model AgentRequest {
 }
 
 model TtsService {
- id String @id
- position Int
- data Json
+  id            String  @id
+  position      Int
+  name          String
+  type          String
+  baseUrl       String  @default("")
+  apiKey        String  @default("")
+  model         String  @default("")
+  voice         String  @default("")
+  speed         Float   @default(1.0)
+  voiceLanguage String?
 }
 
 // Preserves an intentionally empty TTS catalog across restarts.
@@ -72,7 +79,16 @@ model TtsCatalogState {
 }
 
 model AsrService {
- id String @id
- position Int
- data Json
+  id          String   @id
+  position    Int
+  name        String
+  provider    String   @default("bailian")
+  model       String
+  apiKey      String   @default("")
+  uses        String[] @default([])
+  region      String?
+  workspaceId String?
+  baseUrl     String?
+  temperature Float?
+  prompt      String?
 }

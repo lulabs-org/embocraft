@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import type { AsrUse, BailianAsrSettings } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import type { AsrServicePersistence, SavedService } from './asr-settings-store';
 
@@ -11,7 +12,32 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
       const rows = await this.db.asrService.findMany({
         orderBy: { position: 'asc' },
       });
-      return rows.map((row) => row.data as unknown as SavedService);
+      return rows.map((row): SavedService => {
+        const uses = row.uses?.length ? (row.uses as AsrUse[]) : undefined;
+        if (row.provider === 'whisper') {
+          return {
+            id: row.id,
+            name: row.name,
+            provider: 'whisper',
+            model: row.model,
+            baseUrl: row.baseUrl ?? '',
+            temperature: row.temperature ?? 0,
+            prompt: row.prompt ?? '',
+            apiKey: row.apiKey,
+            ...(uses ? { uses } : {}),
+          };
+        }
+        return {
+          id: row.id,
+          name: row.name,
+          provider: 'bailian',
+          model: (row.model || 'fun-asr-realtime') as BailianAsrSettings['model'],
+          region: (row.region || 'beijing') as BailianAsrSettings['region'],
+          workspaceId: row.workspaceId ?? '',
+          apiKey: row.apiKey,
+          ...(uses ? { uses } : {}),
+        };
+      });
     } catch {
       throw new AppError('无法读取 ASR 数据库配置。', 500);
     }
@@ -26,13 +52,24 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
           if (!ids.has(row.id))
             await tx.asrService.delete({ where: { id: row.id } });
         for (const [position, value] of values.entries()) {
-          const data = JSON.parse(
-            JSON.stringify(value),
-          ) as Prisma.InputJsonValue;
+          const isWhisper = value.provider === 'whisper';
+          const payload = {
+            position,
+            name: value.name,
+            provider: isWhisper ? 'whisper' : 'bailian',
+            model: value.model,
+            apiKey: value.apiKey ?? '',
+            uses: value.uses ?? [],
+            region: !isWhisper ? value.region : null,
+            workspaceId: !isWhisper ? value.workspaceId : null,
+            baseUrl: isWhisper ? (value.baseUrl ?? '') : null,
+            temperature: isWhisper ? (value.temperature ?? 0) : null,
+            prompt: isWhisper ? (value.prompt ?? '') : null,
+          };
           await tx.asrService.upsert({
             where: { id: value.id },
-            create: { id: value.id, position, data },
-            update: { position, data },
+            create: { id: value.id, ...payload },
+            update: payload,
           });
         }
       });
