@@ -44,6 +44,83 @@ vi.mock('../src/world/nav/controller', async (original) => ({
   },
 }));
 describe('Pi world tool runtime', () => {
+  it('replays Gemini tool results and thought signatures across the full decision loop', async () => {
+    const f = fixture([]);
+    const calls = [move, complete()];
+    const request = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => {
+        const call = calls.shift()!;
+        return new Response(
+          `data: ${JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  role: 'model',
+                  parts: [
+                    {
+                      functionCall: { name: call.name, args: call.arguments },
+                      thoughtSignature: 'Zml4dHVyZS1zaWduYXR1cmU=',
+                    },
+                  ],
+                },
+                finishReason: 'STOP',
+              },
+            ],
+            usageMetadata: {
+              promptTokenCount: 60,
+              candidatesTokenCount: 40,
+              totalTokenCount: 100,
+            },
+          })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        );
+      });
+    try {
+      await new AgentRunner({
+        type: 'gemini',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      }).run({
+        session: {
+          ...f.session,
+          request: f.session.request as AgentSession['request'],
+        },
+        config: { ...f.config, model: 'gemini-flash-lite-latest' },
+        signal: f.abort.signal,
+        memory: f.memory,
+      });
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(f.memory.execution.task.current).toMatchObject({
+        status: 'completed',
+        calls: 2,
+        tokens: 200,
+      });
+      const body = JSON.parse(request.mock.calls[1][1]!.body as string);
+      expect(body.contents).toContainEqual(
+        expect.objectContaining({
+          role: 'model',
+          parts: expect.arrayContaining([
+            expect.objectContaining({
+              thoughtSignature: 'Zml4dHVyZS1zaWduYXR1cmU=',
+              functionCall: expect.objectContaining({ name: 'goto' }),
+            }),
+          ]),
+        }),
+      );
+      expect(body.contents).toContainEqual(
+        expect.objectContaining({
+          role: 'user',
+          parts: expect.arrayContaining([
+            expect.objectContaining({
+              functionResponse: expect.objectContaining({ name: 'goto' }),
+            }),
+          ]),
+        }),
+      );
+    } finally {
+      request.mockRestore();
+    }
+  });
   it('runs more than three actual model requests within one wake and confirms completion', async () => {
     const f = fixture([[move], [move], [move], [move], [chat(), complete()]]);
     await f.run();

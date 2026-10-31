@@ -7,6 +7,10 @@ export interface ProviderSpec {
 
 /** Provider-specific defaults and configuration metadata. */
 export const PROVIDER_SPECS: Record<ProviderType, ProviderSpec> = {
+  gemini: {
+    defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    requiresApiKey: true,
+  },
   deepseek: {
     defaultUrl: 'https://api.deepseek.com',
     requiresApiKey: true,

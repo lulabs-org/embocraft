@@ -9,7 +9,7 @@
 
 ## 架构与核心依赖
 
-CLI 进程与服务端托管 Agent 共用 `@voxel/agent-runtime` 统一运行时中的 Pi 执行器。模型通过 `@earendil-works/pi-ai` 的 OpenAI-compatible 流式工具接口接入；`pi-agent-core` 负责“推理 → 工具 → 结果 → 再推理”的决策循环，项目系统层负责权限边界、任务调度、预算控制与世界物理校验。
+CLI 进程与服务端托管 Agent 共用 `@voxel/agent-runtime` 统一运行时中的 Pi 执行器。模型通过 `@earendil-works/pi-ai` 的 OpenAI-compatible 或 Gemini 原生流式工具接口接入；`pi-agent-core` 负责“推理 → 工具 → 结果 → 再推理”的决策循环，项目系统层负责权限边界、任务调度、预算控制与世界物理校验。
 
 ### 模块职责划分
 
@@ -32,13 +32,21 @@ CLI 进程与服务端托管 Agent 共用 `@voxel/agent-runtime` 统一运行时
 ### 1. 快速创建 AI 角色
 
 1. **进入控制台**：在大厅中央点击 **创建 Agent 玩家**，或在右上角点击 **控制台**。
-2. **选择或配置模型**：在 **创建 Agent** 表单内可直接选择已有服务商，或并行配置 DeepSeek、Ollama（本机/局域网）或 OpenAI 兼容服务（密钥仅保存在服务端）。
+2. **选择或配置模型**：在 **创建 Agent** 表单内可直接选择已有服务商，或并行配置 DeepSeek、Gemini、Ollama（本机/局域网）或 OpenAI 兼容服务（密钥仅保存在服务端）。
 3. **设置角色信息**：填写自定义昵称与可选的 **角色设定**（最多 2000 字）。
 4. **配置技能与动作权限**：
    - 勾选内置技能（建筑规划、探索勘察、导览讲解）；
    - 动作权限中，“移动与跳跃”和“发送聊天”默认开启，“放置方块”和“拆除方块”按需开启。
 5. **配置任务额度限制**：可通过独立开关开启或关闭执行约束；开启后可设定最大轮次、Token 预算及执行超时时间。
 6. **创建与上线**：默认勾选“加入世界待命”。保存后屏幕顶部居中将弹出 Toast 浮动提示，并保持在当前配置页。
+
+### Gemini 模型服务
+
+在「模型服务」中新增服务并选择 **Gemini**，填写 Google AI Studio API Key；官方地址固定为 `https://generativelanguage.googleapis.com/v1beta`，默认模型为 `gemini-flash-lite-latest`。保存后点击「测试连接」读取可用于生成内容的模型列表，也可手动填写模型 ID。
+
+角色运行使用 Gemini 原生 `streamGenerateContent`，保留工具调用的 thought signature 以支持多轮执行。对不能关闭思考的新模型，关闭思考会使用低强度；`max` 推理强度映射为 `high`。请求仍受任务预算和超时限制，不自动重试。模型列表可读取不代表该模型有可用的推理额度，实际可用性取决于密钥所属项目。
+
+参考：[Google Gemini API](https://ai.google.dev/gemini-api/docs/text-generation)。
 
 ### 2. 角色设定与权限规范
 

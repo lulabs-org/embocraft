@@ -3,7 +3,7 @@ import { stream } from '@earendil-works/pi-ai/api/openai-completions';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { createModel, resolveMaxTokensField } from './pi';
-import { providerOptions } from './stream';
+import { googleOptions, providerOptions, streamModel } from './stream';
 
 /** Explicit inputs; independent of CLI defaults and the developer's environment. */
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -162,6 +162,7 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
     const cfg = config({ thinking: 'enabled', reasoningEffort: 'high' });
     const ep = endpoint('deepseek');
     const model = createModel(cfg, ep);
+    if (model.api !== 'openai-completions') throw new Error('Unexpected API');
     const options = providerOptions(cfg, ep, request, () => {});
     const s = stream(
       model,
@@ -188,6 +189,7 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
     const cfg = config({ thinking: 'disabled', reasoningEffort: 'high' });
     const ep = endpoint('deepseek');
     const model = createModel(cfg, ep);
+    if (model.api !== 'openai-completions') throw new Error('Unexpected API');
     const options = providerOptions(cfg, ep, request, () => {});
     const s = stream(
       model,
@@ -203,5 +205,171 @@ describe('end-to-end thinking payload via pi-ai stream', () => {
       thinking: { type: 'disabled' },
     });
     expect(capturedBody?.reasoning_effort).toBeUndefined();
+  });
+});
+
+describe('native Gemini transport', () => {
+  const ep: ModelEndpoint = {
+    type: 'gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+  };
+  const cfg = () => config({ model: 'gemini-flash-lite-latest' });
+  const context = () =>
+    normalizeContext({
+      messages: [{ role: 'user', content: 'Finish the task', timestamp: 1 }],
+      tools: [
+        {
+          name: 'complete_task',
+          description: 'Finish',
+          parameters: {
+            type: 'object',
+            properties: { summary: { type: 'string' } },
+            required: ['summary'],
+          },
+        },
+      ],
+    });
+  const budget = () => ({
+    usage: { calls: 0, tokens: 0, estimated: false },
+    remainingMs: 30000,
+    begin: vi.fn(() => 512),
+    finish: vi.fn(),
+    check: vi.fn(),
+  });
+
+  it('streams native function calls, retains thought signatures and charges reported usage', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        `data: ${JSON.stringify({
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [
+                  {
+                    functionCall: {
+                      name: 'complete_task',
+                      args: { summary: 'Done' },
+                    },
+                    thoughtSignature: 'Zml4dHVyZS1zaWduYXR1cmU=',
+                  },
+                ],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 12,
+            candidatesTokenCount: 8,
+            totalTokenCount: 20,
+          },
+        })}\n\n`,
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    );
+    try {
+      const accounting = budget();
+      const result = await streamModel(
+        {
+          config: cfg(),
+          endpoint: ep,
+          budget: accounting,
+          signal: new AbortController().signal,
+        },
+        context(),
+      ).result();
+      expect(result.stopReason).toBe('toolUse');
+      expect(result.content).toContainEqual(
+        expect.objectContaining({
+          type: 'toolCall',
+          name: 'complete_task',
+          arguments: { summary: 'Done' },
+          thoughtSignature: 'Zml4dHVyZS1zaWduYXR1cmU=',
+        }),
+      );
+      expect(accounting.begin).toHaveBeenCalledTimes(1);
+      expect(accounting.finish).toHaveBeenCalledWith(20, false);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(String(url)).toBe(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent?alt=sse',
+      );
+      expect(new Headers(init?.headers).get('x-goog-api-key')).toBe('fixture');
+      const body = JSON.parse(init!.body as string);
+      expect(body).toMatchObject({
+        generationConfig: {
+          maxOutputTokens: 512,
+          thinkingConfig: { thinkingLevel: 'LOW' },
+        },
+        toolConfig: { functionCallingConfig: { mode: 'ANY' } },
+      });
+      expect(body.tools[0].functionDeclarations[0].name).toBe('complete_task');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('does not retry upstream failures or expose credentials in errors', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () =>
+        Response.json(
+          {
+            error: {
+              code: 503,
+              message: 'fixture private upstream response',
+              status: 'UNAVAILABLE',
+            },
+          },
+          { status: 503 },
+        ),
+      );
+    try {
+      const accounting = budget();
+      const result = await streamModel(
+        {
+          config: cfg(),
+          endpoint: ep,
+          budget: accounting,
+          signal: new AbortController().signal,
+        },
+        context(),
+      ).result();
+      expect(result.stopReason).toBe('error');
+      expect(result.errorMessage).not.toContain('fixture');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(accounting.finish).toHaveBeenCalledWith(expect.any(Number), true);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('does not dispatch an already cancelled turn', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      const signal = AbortSignal.abort();
+      await streamModel(
+        { config: cfg(), endpoint: ep, budget: budget(), signal },
+        context(),
+      ).result();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('uses model capabilities and maps max effort to supported Gemini settings', () => {
+    const settings = config({
+      model: 'gemini-4-argon',
+      thinking: 'enabled',
+      reasoningEffort: 'max',
+    });
+    const model = createModel(settings, ep);
+    expect(model.api).toBe('google-generative-ai');
+    if (model.api !== 'google-generative-ai') throw new Error('Unexpected API');
+    expect(googleOptions(settings, model)).toMatchObject({
+      maxRetries: 0,
+      toolChoice: 'any',
+      thinking: { enabled: true, level: 'HIGH' },
+    });
   });
 });

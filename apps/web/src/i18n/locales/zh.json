@@ -679,6 +679,8 @@
       "headingDesc": "配置模型连接，供角色执行任务和回复消息。",
       "namePlaceholder": "请输入服务名称",
       "providerTypeLabel": "模型服务商",
+      "geminiHint": "Gemini 使用 Google 官方接口，地址固定。请填写 Google AI Studio 的 API Key。",
+      "geminiApiHint": "支持 Gemini 原生流式响应与工具调用。保存配置不会启动推理；新建或继续运行 Agent 时使用最新配置。",
       "deepseekHint": "DeepSeek 使用官方地址（固定为 https://api.deepseek.com）。第三方网关请选择 OpenAI 兼容服务。",
       "ollamaHint": "支持可从游戏服务器访问的 HTTP 或 HTTPS 地址，例如 http://192.168.31.1:11434/v1。模型须已安装在目标 Ollama 服务上。",
       "keyPlaceholderSaved": "已配置，留空保持现有密钥",

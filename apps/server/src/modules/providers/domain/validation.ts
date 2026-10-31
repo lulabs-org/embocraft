@@ -5,7 +5,7 @@ import type { ProviderType } from '@voxel/shared';
 import { PROVIDER_SPECS } from './specs';
 import type { SavedProvider } from './model';
 
-const SUPPORTED_TYPES = ['deepseek', 'ollama', 'compatible'] as const;
+const SUPPORTED_TYPES = ['deepseek', 'ollama', 'compatible', 'gemini'] as const;
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 // ============================================================================
@@ -44,7 +44,13 @@ function validateProviderBaseUrl(type: ProviderType, rawUrl: unknown): string {
     );
   }
 
-  return url.href.replace(/\/$/, '');
+  const normalized = url.href.replace(/\/$/, '');
+  if (type === 'gemini' && normalized !== PROVIDER_SPECS.gemini.defaultUrl) {
+    throw new AppError(
+      'Gemini 使用官方地址 https://generativelanguage.googleapis.com/v1beta。',
+    );
+  }
+  return normalized;
 }
 
 /** 校验并组装模型服务实体（支持新建分配 UUID、更新继承旧 ID/密钥、及显式指定 ID） */

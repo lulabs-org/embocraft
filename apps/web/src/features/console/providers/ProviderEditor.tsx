@@ -2,7 +2,7 @@ import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRela
 import type { ProviderType } from '@voxel/shared';
 import { useI18n } from '../../../i18n/context';
 import type { ConsoleController } from '../useConsoleController';
-import { freshProvider } from './model';
+import { freshProvider, presets } from './model';
 
 type Props = Pick<
   ConsoleController,
@@ -116,6 +116,7 @@ export function ProviderEditor({
               }
             >
               <option value="deepseek">DeepSeek</option>
+              <option value="gemini">Gemini</option>
               <option value="ollama">Ollama</option>
               <option value="compatible">OpenAI</option>
             </select>
@@ -124,9 +125,13 @@ export function ProviderEditor({
             API Base URL
             <input
               type="url"
-              value={draft.type === 'deepseek' ? 'https://api.deepseek.com' : draft.baseUrl}
+              value={
+                draft.type === 'deepseek' || draft.type === 'gemini'
+                  ? presets[draft.type].baseUrl
+                  : draft.baseUrl
+              }
               required
-              disabled={draft.type === 'deepseek'}
+              disabled={draft.type === 'deepseek' || draft.type === 'gemini'}
               placeholder="https://api.example.com/v1"
               onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
             />
@@ -136,6 +141,9 @@ export function ProviderEditor({
           )}
           {draft.type === 'ollama' && (
             <p className="agent-hint">{t('console.providers.ollamaHint')}</p>
+          )}
+          {draft.type === 'gemini' && (
+            <p className="agent-hint">{t('console.providers.geminiHint')}</p>
           )}
           {draft.type !== 'ollama' && (
             <label>
@@ -192,7 +200,11 @@ export function ProviderEditor({
           )}
 
           <p className="agent-hint">
-            {t('console.providers.openaiCompatibleHint')}
+            {t(
+              draft.type === 'gemini'
+                ? 'console.providers.geminiApiHint'
+                : 'console.providers.openaiCompatibleHint',
+            )}
           </p>
           <div className="agent-actions console-form-actions">
             <button className="primary">

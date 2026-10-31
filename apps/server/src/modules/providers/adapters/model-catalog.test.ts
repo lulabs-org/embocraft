@@ -10,6 +10,42 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('reads native Gemini models with header authentication and excludes embedding models', async () => {
+  const saved = provider('gemini', 'fixture-secret');
+  const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    Response.json({
+      models: [
+        {
+          name: 'models/gemini-flash-lite-latest',
+          supportedGenerationMethods: ['generateContent'],
+        },
+        {
+          name: 'models/gemini-4-argon',
+          supportedGenerationMethods: ['generateContent', 'countTokens'],
+        },
+        {
+          name: 'models/embedding',
+          supportedGenerationMethods: ['embedContent'],
+        },
+        {
+          name: 'models/gemini-4-argon',
+          supportedGenerationMethods: ['generateContent'],
+        },
+      ],
+    }),
+  );
+  await expect(
+    new ModelCatalog({ getRuntime: () => saved }).models(saved.id),
+  ).resolves.toEqual(['gemini-4-argon', 'gemini-flash-lite-latest']);
+  expect(fetchSpy).toHaveBeenCalledWith(
+    'https://generativelanguage.googleapis.com/v1beta/models',
+    expect.objectContaining({
+      headers: { 'x-goog-api-key': 'fixture-secret' },
+      redirect: 'error',
+    }),
+  );
+});
+
 it('requires credentials only for remote providers and preserves missing-provider errors', async () => {
   const fetchSpy = vi
     .spyOn(globalThis, 'fetch')
