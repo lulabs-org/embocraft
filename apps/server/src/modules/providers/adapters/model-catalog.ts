@@ -24,12 +24,23 @@ export class ModelCatalog {
     try {
       const res = await this.client.getModels(provider);
       if (!res.ok) throw 0;
-      const { data = [] } = (await res.json()) as {
+      const { data = [], models = [] } = (await res.json()) as {
         data?: { id?: unknown }[];
+        models?: { name?: unknown; supportedGenerationMethods?: string[] }[];
       };
-      const ids = data
-        .map((m) => m.id)
-        .filter((item): item is string => typeof item === 'string');
+      const ids = (
+        provider.type === 'gemini'
+          ? models
+              .filter((m) =>
+                m.supportedGenerationMethods?.includes('generateContent'),
+              )
+              .map((m) =>
+                typeof m.name === 'string'
+                  ? m.name.replace(/^models\//, '')
+                  : undefined,
+              )
+          : data.map((m) => m.id)
+      ).filter((item): item is string => typeof item === 'string');
       return [...new Set(ids)].slice(0, 200).sort();
     } catch {
       throw new AppError(

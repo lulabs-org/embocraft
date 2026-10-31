@@ -1,5 +1,5 @@
 /** Supported LLM service provider types. */
-export type ProviderType = 'deepseek' | 'ollama' | 'compatible';
+export type ProviderType = 'deepseek' | 'ollama' | 'compatible' | 'gemini';
 
 /** Base provider configuration attributes common to both drafts and views. */
 export type ProviderSettings = {

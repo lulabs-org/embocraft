@@ -1,4 +1,5 @@
 import type { Model } from '@earendil-works/pi-ai';
+import { GOOGLE_MODELS } from '@earendil-works/pi-ai/providers/google.models';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 
 export const defaultEndpoint: ModelEndpoint = {
@@ -31,7 +32,23 @@ export function resolveMaxTokensField(
 export function createModel(
   config: AgentConfig,
   endpoint: ModelEndpoint,
-): Model<'openai-completions'> {
+): Model<'openai-completions'> | Model<'google-generative-ai'> {
+  if (endpoint.type === 'gemini') {
+    const known = Object.values(GOOGLE_MODELS).find(
+      (model) => model.id === config.model,
+    );
+    return {
+      ...MODEL_DEFAULTS,
+      ...known,
+      api: 'google-generative-ai',
+      id: config.model,
+      name: config.model,
+      provider: 'google',
+      baseUrl: endpoint.baseUrl,
+      reasoning: known?.reasoning ?? true,
+      maxTokens: config.maxTokens,
+    };
+  }
   return {
     ...MODEL_DEFAULTS,
     id: config.model,

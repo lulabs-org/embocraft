@@ -2,6 +2,28 @@ import { expect, it } from 'vitest';
 import { toProviderView } from './model';
 import { validateProvider } from './validation';
 
+it('accepts Gemini at its official endpoint and preserves its saved key', () => {
+  const saved = validateProvider({
+    name: 'Gemini',
+    type: 'gemini',
+    apiKey: 'fixture-key',
+    defaultModel: 'gemini-flash-lite-latest',
+  });
+  expect(saved.baseUrl).toBe(
+    'https://generativelanguage.googleapis.com/v1beta',
+  );
+  expect(validateProvider({ ...saved, apiKey: '' }, saved).apiKey).toBe(
+    'fixture-key',
+  );
+  for (const baseUrl of [
+    'https://example.com/v1beta',
+    'https://generativelanguage.googleapis.com/v1beta/openai',
+    'http://generativelanguage.googleapis.com/v1beta',
+  ]) {
+    expect(() => validateProvider({ ...saved, baseUrl })).toThrow();
+  }
+});
+
 it('applies provider defaults and validates fields', () => {
   const provider = validateProvider({ name: ' DeepSeek ', type: 'deepseek' });
   expect(provider).toMatchObject({

@@ -6,6 +6,11 @@ import {
   type OpenAICompletionsOptions,
 } from '@earendil-works/pi-ai';
 import { stream } from '@earendil-works/pi-ai/api/openai-completions';
+import {
+  stream as streamGoogle,
+  type GoogleOptions,
+} from '@earendil-works/pi-ai/api/google-generative-ai';
+import { usesGoogleThinkingLevel } from '@earendil-works/pi-ai/api/google-shared';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AgentConfig, ModelEndpoint } from '../../contracts/config';
 import { mergeSignals, withDeadline } from '../../kernel/abort';
@@ -24,7 +29,7 @@ export type ModelStreamOptions = {
   budget: RequestAccounting;
   /** Turn-level stop signal, composed with the loop signal and a deadline. */
   signal: AbortSignal;
-  /** Injected transport for tests; real runs use the global fetch. */
+  /** Injected OpenAI-compatible transport; the Google SDK uses global fetch. */
   request?: typeof fetch;
   /**
    * Persists request admission before dispatch. Called after the call is charged
@@ -83,16 +88,23 @@ async function relay(request: RelayRequest) {
     const maxTokens = charge.begin();
     await request.persistAdmission?.();
     combined.throwIfAborted();
-    const source = stream(model, request.context, {
-      ...providerOptions(
-        config,
-        endpoint,
-        request.request ?? fetch,
-        (next) => (status = next),
-      ),
-      signal: combined,
-      maxTokens,
-    });
+    const source =
+      model.api === 'google-generative-ai'
+        ? streamGoogle(model, request.context, {
+            ...googleOptions(config, model),
+            signal: combined,
+            maxTokens,
+          })
+        : stream(model, request.context, {
+            ...providerOptions(
+              config,
+              endpoint,
+              request.request ?? fetch,
+              (next) => (status = next),
+            ),
+            signal: combined,
+            maxTokens,
+          });
     for await (const event of source) {
       if (event.type === 'done' || event.type === 'error') {
         charge.settleUsage(
@@ -130,7 +142,7 @@ const EMPTY_USAGE: AssistantMessage['usage'] = {
 
 /** Terminal error message carrying model identity and failure details. */
 function errorMessage(
-  model: Model<'openai-completions'>,
+  model: Model<'openai-completions'> | Model<'google-generative-ai'>,
   failure: StreamFailure,
 ): AssistantMessage {
   return {
@@ -143,6 +155,41 @@ function errorMessage(
     stopReason: failure.stopReason,
     errorMessage: failure.message,
     timestamp: Date.now(),
+  };
+}
+
+/** Keep native Gemini calls within the same admission, deadline and retry policy. */
+export function googleOptions(
+  config: AgentConfig,
+  model: Model<'google-generative-ai'>,
+): GoogleOptions {
+  const enabled =
+    config.thinking === 'enabled' && config.reasoningEffort !== 'none';
+  return {
+    apiKey: config.apiKey,
+    maxRetries: 0,
+    toolChoice: 'any',
+    thinking: usesGoogleThinkingLevel(model)
+      ? {
+          enabled: true,
+          level: enabled && config.reasoningEffort !== 'low' ? 'HIGH' : 'LOW',
+        }
+      : {
+          enabled,
+          budgetTokens: enabled
+            ? config.reasoningEffort === 'low'
+              ? 1024
+              : 8192
+            : 0,
+        },
+    onPayload: (payload) => {
+      const params = payload as { config: Record<string, unknown> };
+      // Pi's retry setting does not configure the SDK's own HTTP retries.
+      params.config.httpOptions = {
+        timeout: config.timeoutMs,
+        retryOptions: { attempts: 1 },
+      };
+    },
   };
 }
 
