@@ -381,7 +381,7 @@ import { VoiceServiceStore } from './modules/tts';
   统一由 `createDatabaseClient` 使用 `@prisma/adapter-pg` 创建连接池与 PrismaClient，不使用进程级单例。`createServer` 拥有一个运行时客户端，并注入默认的 World、Provider、联合存档与 TTS/ASR 存储；在 Agent、房间和网络连接停止后统一断开。业务模块不得直接构造 PrismaClient 或 Pg 连接池。
   `WorldStore(url)` 保留独立连接的创建和关闭行为，`WorldStore('')` 保留显式内存模式；`WorldStore(url, db)` 借用注入的客户端，房间调用其 `close()` 时不会断开共享连接，释放责任属于注入方。
 - **启动前全量探活与阻断门禁（`core/database/health.ts`）**：
-  在系统分配网络端口与 Colyseus 房间创建前，必须执行只读查询（依次检查 `world`、`agentProvider`、`agentCharacter`、`ttsService` 等关键表）进行探活；若数据库未准备好或未完成迁移，立即阻断启动，防止 Colyseus 抛出二次崩溃。
+  在系统分配网络端口与 Colyseus 房间创建前，必须执行只读查询（依次检查 `world`、`agentProvider`、`agentCharacter`、`ttsProvider`、`asrProvider` 等关键表）进行探活；若数据库未准备好或未完成迁移，立即阻断启动，防止 Colyseus 抛出二次崩溃。
   探活通过统一工厂创建独立短连接，并在成功或失败后释放；运行时客户端在探活与语音配置校验通过后创建。目录加载失败会释放运行时客户端，监听或房间启动失败走服务器的统一关闭流程。
 - **连接异常安全脱敏**：
   数据库异常信息必须通过 `databaseStartupMessage` 进行过滤清洗，**绝不允许将带有数据库用户名、密码凭据的原始连接串输出到终端或网络响应中**；对于本地开发场景（`127.0.0.1:55432`），输出友好的修复提示（如 `node scripts/database.mjs`）。

@@ -18,12 +18,14 @@ export const DEFAULT_WHISPER_ASR: WhisperAsrSettings = {
   temperature: 0,
   prompt: '',
 };
-export type AsrServiceDraft =
+export type AsrProviderDraft =
   | (BailianAsrDraft & { provider?: 'bailian'; name: string })
   | (WhisperAsrDraft & { provider: 'whisper'; name: string });
-export type AsrServiceView =
+export type AsrProviderView =
   | (BailianAsrView & { provider?: 'bailian'; id: string; name: string })
   | (WhisperAsrView & { provider: 'whisper'; id: string; name: string });
+export type AsrServiceDraft = AsrProviderDraft;
+export type AsrServiceView = AsrProviderView;
 export const DEFAULT_BAILIAN_ASR: BailianAsrSettings = {
   region: 'beijing',
   workspaceId: '',

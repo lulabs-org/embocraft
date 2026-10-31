@@ -94,7 +94,7 @@ export function validateAICharacter(
     intervalMs: integer(input.intervalMs, '轮次间隔', 3000, 1000, 60000),
     voiceReplies: boolean(input.voiceReplies, false),
     voiceServiceId: text(
-      input.voiceServiceId,
+      input.voiceProviderId ?? input.voiceServiceId,
       '语音服务',
       80,
       input.voiceReplies ? 'local-default' : '',

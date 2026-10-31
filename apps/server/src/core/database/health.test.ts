@@ -11,9 +11,9 @@ const db = vi.hoisted(() => ({
   agentPlan: { findFirst: vi.fn() },
   agentRun: { findFirst: vi.fn() },
   agentRequest: { findFirst: vi.fn() },
-  ttsService: { findFirst: vi.fn() },
-  ttsCatalogState: { findFirst: vi.fn() },
-  asrService: { findFirst: vi.fn() },
+  ttsProvider: { findFirst: vi.fn() },
+  ttsProviderState: { findFirst: vi.fn() },
+  asrProvider: { findFirst: vi.fn() },
 }));
 const createClient = vi.hoisted(() => vi.fn());
 vi.mock('@prisma/client', () => ({ PrismaClient: createClient }));
@@ -35,9 +35,9 @@ describe('database startup diagnostics', () => {
       db.agentPlan,
       db.agentRun,
       db.agentRequest,
-      db.ttsService,
-      db.ttsCatalogState,
-      db.asrService,
+      db.ttsProvider,
+      db.ttsProviderState,
+      db.asrProvider,
     ])
       table.findFirst.mockResolvedValue(null);
     vi.stubEnv('DATABASE_URL', localUrl);
@@ -57,9 +57,9 @@ describe('database startup diagnostics', () => {
       db.agentCharacter,
       db.agentPlan,
       db.agentRun,
-      db.ttsService,
-      db.ttsCatalogState,
-      db.asrService,
+      db.ttsProvider,
+      db.ttsProviderState,
+      db.asrProvider,
     ])
       expect(table.findFirst).toHaveBeenCalledWith({ select: { id: true } });
     expect(db.agentRequest.findFirst).toHaveBeenCalledWith({
