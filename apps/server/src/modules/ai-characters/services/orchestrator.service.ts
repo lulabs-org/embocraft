@@ -75,7 +75,18 @@ export class AICharacterOrchestrator {
     const tasks = new TaskSnapshots();
     this.persistence = new ManagementPersistence(
       this.archive,
-      (snapshot) => this.events.commit(snapshot.characters, snapshot),
+      (snapshot, views) => {
+        // Notifications still observe both durable runtime and derived public fields.
+        const publicViews = new Map(views.map((view) => [view.id, view]));
+        this.events.commit(
+          snapshot.characters.map((record) => ({
+            ...publicViews.get(record.id),
+            ...record,
+            sessionId: undefined,
+          })),
+          snapshot,
+        );
+      },
       {
         characters,
         tasks,

@@ -129,7 +129,7 @@ it('serializes joint snapshots and exposes both domains before publishing commit
     name: 'a',
     status: 'idle',
   });
-  expect(pending[0].snapshot.characters[0].sessionId).toBeUndefined();
+  expect(pending[0].snapshot.characters[0]).not.toHaveProperty('sessionId');
   expect(pending[0].snapshot.requests).toEqual({ 'a:request': plan.id });
   pending[0].resolve();
   await first;
@@ -148,6 +148,44 @@ it('serializes joint snapshots and exposes both domains before publishing commit
     f.persistence.characters.publicList().find((c) => c.id === 'a')?.name,
   ).toBe('changed');
   expect(f.committed.plans[0].goal).toBe('new goal');
+});
+
+it('persists an explicit character record while retaining derived fields in the committed public view', async () => {
+  const save = vi.fn(async (_snapshot: ManagementArchive) => {});
+  const f = fixture(save);
+  Object.assign(f.jobs.get('a')!.view, {
+    providerName: 'Provider',
+    voiceServiceName: 'Voice',
+    queuedTasks: [
+      { id: 'queued', goal: 'later', scheduledAt: 100, coalescedTriggers: 0 },
+    ],
+    taskExecution: { runId: 'run', limits: DEFAULT_TASK_LIMITS },
+    lastResponse: 'Derived reply',
+    usage: { calls: 1, tokens: 5, estimated: false },
+  });
+  await f.persist();
+  const stored = save.mock.calls[0][0].characters.find(
+    (record) => record.id === 'a',
+  )!;
+  for (const key of [
+    'providerName',
+    'voiceServiceName',
+    'queuedTasks',
+    'taskExecution',
+    'lastResponse',
+    'usage',
+    'sessionId',
+  ]) {
+    expect(stored).not.toHaveProperty(key);
+  }
+  expect(stored.runtime).toBeDefined();
+  expect(
+    f.persistence.characters.publicList().find((view) => view.id === 'a'),
+  ).toMatchObject({
+    providerName: 'Provider',
+    voiceServiceName: 'Voice',
+    lastResponse: 'Derived reply',
+  });
 });
 
 it('flush waits for queued saves without capturing another snapshot or advancing the failure revision', async () => {

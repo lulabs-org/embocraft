@@ -1,5 +1,10 @@
 import type { RuntimeState } from '@voxel/agent-runtime';
-import type { AICharacterView, TaskPlan, TaskRun } from '@voxel/shared';
+import type {
+  AICharacterSettings,
+  AICharacterView,
+  TaskPlan,
+  TaskRun,
+} from '@voxel/shared';
 
 type StoredRun = TaskRun & {
   runtime?: RuntimeState;
@@ -9,10 +14,11 @@ type StoredRun = TaskRun & {
 };
 
 /** Archive wire shape. The owning modules use structurally matching runtime types. */
-export type CharacterRecord = AICharacterView & {
-  runtime?: RuntimeState;
-  currentRunId?: string;
-};
+export type CharacterRecord = AICharacterSettings &
+  Pick<AICharacterView, 'id' | 'createdAt' | 'status' | 'logEntries'> & {
+    runtime?: RuntimeState;
+    currentRunId?: string;
+  };
 
 export type ManagementArchive = {
   version: 3;

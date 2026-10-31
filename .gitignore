@@ -13,5 +13,6 @@ output/
 .vscode/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+docs/.vitepress/.temp/
 __pycache__/
 *.py[cod]

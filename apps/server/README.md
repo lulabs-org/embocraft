@@ -78,6 +78,16 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；旧 JSON 存储后备路径已移除，网关令牌及本地语音模型文件保留原配置位置。现有数据库存档恢复与运行时迁移继续保留。
 
+角色存储在当前 schema 中分成三张表：
+
+- `AgentCharacter` 保存明确的配置列和排序，不再保存整个 `AICharacterView`。可空配置列保留旧存档中“字段缺失”的语义，加载时仍由领域校验补默认值；权限和技能作为小型结构化 JSON 保留。
+- `AgentCharacterState` 保存恢复用的状态、当前 Run ID 和完整的版本化 runtime。此阶段不改变 runtime 内角色记忆与执行 checkpoint 的恢复语义，也未调整 `AgentPlan`、`AgentRun` 的结构。
+- `AgentCharacterLog` 按角色和递增序号保存日志。追加和截断只写入新增、删除过期条目，不重写配置和保留的日志；时间允许为空，继续遵循原有最多 500 条的行为。
+
+三张表和任务表仍在同一事务中提交，失败时不推进内存中的已提交状态。角色删除会级联删除状态和日志。公开接口继续组装派生字段和日志分页；本轮日志查询仍使用已加载的内存视图，尚未改为直接 SQL 分页。
+
+本次拆分不提供旧数据搬迁 SQL，以 `prisma/schema.prisma` 为准，运行 `pnpm db:generate` 生成客户端。该命令不会创建或修改数据库表，已有迁移历史也不包含此次拆分结构。空测试库通过 `pnpm --filter @voxel/server exec prisma db push` 同步 schema；此命令与客户端生成分开执行。本地数据库测试应使用独立的 `TEST_DATABASE_URL`，测试会清空该测试库中的业务表。
+
 `test/helpers/test-server.ts` 使用生产 `createServer`，通过 `test/helpers/memory-storage.ts` 注入内存模型服务、角色存档与语音配置；默认配置临时令牌目录、内存世界、随机 loopback 端口与 mock 语音。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
 
 ```sh
