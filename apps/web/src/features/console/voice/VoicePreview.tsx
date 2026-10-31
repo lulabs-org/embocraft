@@ -148,8 +148,8 @@ export function VoicePreview({
       <small className="tts-preview-hint">
         {service?.type === 'browser'
           ? t('console.voice.previewHintBrowser')
-          : service?.type === 'piper'
-            ? t('console.voice.previewHintPiper')
+          : service?.type === 'speaches'
+            ? t('console.voice.previewHintSpeaches')
             : t('console.voice.previewHintCloud')}
       </small>
       {status && (

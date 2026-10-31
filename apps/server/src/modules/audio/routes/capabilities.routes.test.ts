@@ -70,6 +70,8 @@ describe('audio capabilities HTTP boundary', () => {
       provider: 'whisper',
       name: 'Whisper',
       model: 'Systran/faster-whisper-small',
+      baseUrl: 'http://selected:8000/v1',
+      apiKey: 'private-key',
     });
     const cloud = await store.save({
       ...DEFAULT_BAILIAN_ASR,
@@ -77,7 +79,12 @@ describe('audio capabilities HTTP boundary', () => {
       apiKey: 'fixture',
     });
     expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(200);
-    expect(status).toHaveBeenCalledWith();
+    expect(status).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: 'http://selected:8000/v1',
+        apiKey: 'private-key',
+      }),
+    );
     expect((await fetch(`${url}?serviceId=${cloud.id}`)).status).toBe(400);
     await store.remove(whisper.id);
     expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(404);

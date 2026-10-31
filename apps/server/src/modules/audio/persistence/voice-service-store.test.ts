@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { TestVoiceServiceStore as VoiceServiceStore } from '../../../../test/helpers/memory-storage';
 
 import { validateVoiceService } from './voice-service-store';
@@ -9,10 +9,131 @@ import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 
 const local = (name = 'Local', voice = '') => ({
   name,
-  type: 'piper',
+  type: 'speaches',
   model: voice === 'Samantha' ? PIPER_MODELS[1].id : DEFAULT_PIPER_MODEL,
   voice: '',
   speed: 1,
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+it('loads legacy Piper profiles as Speaches without changing IDs, names or models', async () => {
+  const store = new VoiceServiceStore();
+  store.persistence.value = JSON.parse(
+    JSON.stringify([
+      {
+        ...local('My Piper voice', 'Samantha'),
+        type: 'piper',
+        id: 'existing-voice',
+        baseUrl: '',
+        apiKey: '',
+      },
+    ]),
+  );
+  await store.load();
+  expect(store.list()[0]).toMatchObject({
+    id: 'existing-voice',
+    name: 'My Piper voice',
+    type: 'speaches',
+    model: PIPER_MODELS[1].id,
+    baseUrl: '',
+  });
+  store.bind('existing-agent', 'existing-voice');
+  await store.save({ ...store.list()[0], speed: 0.8 }, 'existing-voice');
+  const restored = new VoiceServiceStore(store.persistence);
+  await restored.load();
+  expect(restored.get('existing-voice')).toMatchObject({
+    type: 'speaches',
+    speed: 0.8,
+  });
+});
+
+it('accepts private Speaches endpoints and optional credentials while rejecting unsafe URL forms', () => {
+  for (const baseUrl of [
+    '',
+    'http://speech:8000/v1/',
+    'http://192.168.1.20:8000/v1',
+    'https://speech.example/v1',
+  ]) {
+    expect(validateVoiceService({ ...local(), baseUrl })).toMatchObject({
+      baseUrl: baseUrl.replace(/\/+$/, ''),
+      apiKey: '',
+    });
+  }
+  for (const baseUrl of [
+    'file:///tmp/a',
+    'ftp://speech/v1',
+    'http://user:key@speech/v1',
+    'http://speech/v1?key=x',
+    'http://speech/v1#fragment',
+  ]) {
+    expect(() => validateVoiceService({ ...local(), baseUrl })).toThrow();
+  }
+  const saved = validateVoiceService({ ...local(), apiKey: 'test-key' });
+  expect(validateVoiceService(local(), saved).apiKey).toBe('test-key');
+  expect(() =>
+    validateVoiceService(
+      { ...local(), baseUrl: 'http://other:8000/v1' },
+      saved,
+    ),
+  ).toThrow('重新填写');
+});
+
+it('persists the Speaches endpoint and uses it for both previews and bound actors', async () => {
+  vi.stubEnv('SPEECH_API_URL', 'http://default-speech:8000/v1');
+  const request = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async () => new Response(wav()));
+  vi.stubGlobal('fetch', request);
+  const store = new VoiceServiceStore();
+  await store.load();
+  const selected = await store.save({
+    ...local(),
+    model: 'vendor/new-tts',
+    voice: 'speaker:2',
+    baseUrl: 'http://custom-speech:8000/v1///',
+    apiKey: 'speaches-test-key',
+  });
+  expect(selected.baseUrl).toBe('http://custom-speech:8000/v1');
+  expect(JSON.stringify(selected)).not.toContain('speaches-test-key');
+  const restored = new VoiceServiceStore(store.persistence);
+  await restored.load();
+  await restored.save({ ...selected, apiKey: '' }, selected.id);
+  restored.bind('agent', selected.id);
+  await restored.synthesize(
+    selected.id,
+    'Preview',
+    new AbortController().signal,
+  );
+  await restored
+    .forActor('agent')
+    .synthesize('Agent', new AbortController().signal);
+  expect(request).toHaveBeenCalledTimes(2);
+  for (const [url, init] of request.mock.calls) {
+    expect(url).toBe('http://custom-speech:8000/v1/audio/speech');
+    expect(init).toMatchObject({
+      redirect: 'error',
+      headers: { Authorization: 'Bearer speaches-test-key' },
+    });
+    expect(JSON.parse(init!.body as string)).toMatchObject({
+      model: 'vendor/new-tts',
+      voice: 'speaker:2',
+    });
+  }
+  await restored.synthesize(
+    'local-default',
+    'Default',
+    new AbortController().signal,
+  );
+  expect(request.mock.lastCall?.[0]).toBe(
+    'http://default-speech:8000/v1/audio/speech',
+  );
+  expect(request.mock.lastCall?.[1]?.headers).not.toHaveProperty(
+    'Authorization',
+  );
 });
 
 const remote = {

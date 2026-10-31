@@ -7,6 +7,43 @@ const draft = {
   name: '模型 A',
   apiKey: 'secret-for-test',
 };
+it('persists private Speaches connections and preserves assignments without leaking or moving keys', async () => {
+  const store = new AsrSettingsStore();
+  await store.load();
+  const config = {
+    ...DEFAULT_WHISPER_ASR,
+    provider: 'whisper',
+    name: 'Speaches',
+    baseUrl: 'http://selected:8000/v1/',
+    apiKey: 'private-speaches-key',
+    model: 'vendor/custom-asr',
+  };
+  const saved = await store.save(config);
+  expect(saved).toMatchObject({
+    baseUrl: 'http://selected:8000/v1',
+    hasApiKey: true,
+  });
+  expect(saved).not.toHaveProperty('apiKey');
+  await store.assign('spatial', saved.id);
+  await store.save({ ...config, apiKey: '' }, saved.id);
+  const restored = new AsrSettingsStore(store.persistence);
+  await restored.load();
+  expect(restored.get(saved.id)).toMatchObject({
+    apiKey: config.apiKey,
+    model: config.model,
+  });
+  expect(restored.assignments().spatial?.id).toBe(saved.id);
+  expect(JSON.stringify(restored.list())).not.toContain(config.apiKey);
+  await expect(
+    restored.save(
+      { ...config, apiKey: '', baseUrl: 'http://other:8000/v1' },
+      saved.id,
+    ),
+  ).rejects.toThrow('重新填写');
+  await expect(
+    restored.save({ ...config, baseUrl: 'file:///tmp/speech' }),
+  ).rejects.toThrow();
+});
 it('persists a private key server-side, masks it, reloads, and preserves blank keys', async () => {
   const store = new AsrSettingsStore();
   await store.load();

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { BailianAsrDraft } from '@voxel/shared';
 import { useI18n } from '../../i18n/context';
 import type { AsrProvider } from './browser-asr-services';
+import { SpeachesAsrConfig } from './SpeachesAsrConfig';
 import { browserLanguages } from './browser-asr-languages';
 import type { useAsrServices } from './useAsrServices';
 
@@ -91,17 +92,12 @@ export function BailianAsrConfig({
           </>
         ) : draft.provider === 'whisper' ? (
           <>
-            <label>
-              {t('console.asr.recognitionModel')}
-              <input
-                required
-                maxLength={200}
-                value={draft.model}
-                placeholder="Systran/faster-whisper-base"
-                onChange={(e) => change({ model: e.target.value })}
-              />
-            </label>
-            <small>{t('console.asr.whisperModelNote')}</small>
+            <SpeachesAsrConfig
+              draft={draft}
+              saved={saved?.provider === 'whisper' ? saved : undefined}
+              active={manager.active}
+              onChange={change}
+            />
             <label>
               {t('console.asr.temperatureLabel')}
               <input
@@ -225,7 +221,11 @@ export function BailianAsrConfig({
           <button
             className="primary"
             type="submit"
-            disabled={!dirty || manager.loading}
+            disabled={
+              !dirty ||
+              manager.loading ||
+              (draft.provider === 'whisper' && !draft.model)
+            }
           >
             {busy ? t('common.loading') : t('console.asr.saveServiceButton')}
           </button>

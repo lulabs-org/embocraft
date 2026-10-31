@@ -6,10 +6,13 @@ export type BailianAsrSettings = {
 export type BailianAsrDraft = BailianAsrSettings & { apiKey: string };
 export type BailianAsrView = BailianAsrSettings & { hasApiKey: boolean };
 export type WhisperAsrSettings = {
+  baseUrl?: string;
   model: string;
   temperature: number;
   prompt: string;
 };
+export type WhisperAsrDraft = WhisperAsrSettings & { apiKey?: string };
+export type WhisperAsrView = WhisperAsrSettings & { hasApiKey?: boolean };
 export const DEFAULT_WHISPER_ASR: WhisperAsrSettings = {
   model: 'Systran/faster-whisper-base',
   temperature: 0,
@@ -17,10 +20,10 @@ export const DEFAULT_WHISPER_ASR: WhisperAsrSettings = {
 };
 export type AsrServiceDraft =
   | (BailianAsrDraft & { provider?: 'bailian'; name: string })
-  | (WhisperAsrSettings & { provider: 'whisper'; name: string });
+  | (WhisperAsrDraft & { provider: 'whisper'; name: string });
 export type AsrServiceView =
   | (BailianAsrView & { provider?: 'bailian'; id: string; name: string })
-  | (WhisperAsrSettings & { provider: 'whisper'; id: string; name: string });
+  | (WhisperAsrView & { provider: 'whisper'; id: string; name: string });
 export const DEFAULT_BAILIAN_ASR: BailianAsrSettings = {
   region: 'beijing',
   workspaceId: '',

@@ -46,6 +46,28 @@ it('requests the model voice, speed and 16k PCM WAV and validates the returned d
   expect(request.mock.calls[0][0]).toBe('http://speech/v1/audio/speech');
 });
 
+it('synthesizes an arbitrary discovered model using its selected voice ID', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(wav()));
+  await new PiperTts(
+    { model: 'vendor/new-tts', voice: 'speaker:2', speed: 1.2 },
+    'http://speech/v1',
+    request,
+  ).synthesize('Hello', new AbortController().signal);
+  expect(JSON.parse(request.mock.calls[0][1]!.body as string)).toMatchObject({
+    model: 'vendor/new-tts',
+    voice: 'speaker:2',
+    speed: 1.2,
+  });
+  await expect(
+    new PiperTts(
+      { model: 'vendor/new-tts' },
+      'http://speech/v1',
+      request,
+    ).synthesize('Hello', new AbortController().signal),
+  ).rejects.toThrow('音色');
+  expect(request).toHaveBeenCalledOnce();
+});
+
 it.each(PIPER_MODELS)(
   'synthesizes the selected $name without falling back to another voice',
   async (model) => {

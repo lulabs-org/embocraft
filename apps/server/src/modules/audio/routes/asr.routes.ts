@@ -1,12 +1,16 @@
 import cors from 'cors';
 import { env } from '../../../core/config/env';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { asyncRoute } from '../../../core/http/middleware/async-route';
+import {
+  asyncAbortableRoute,
+  asyncRoute,
+} from '../../../core/http/middleware/async-route';
 import { assertJsonRequest } from '../../../core/http/middleware/require-json';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express, type Request, type Response } from 'express';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { AppError } from '../../../core/errors/app-error';
+import { speechEndpoint } from '../speech-endpoint';
 
 export function installAsrRoutes(
   app: Express,
@@ -52,6 +56,8 @@ export function installAsrRoutes(
     if (
       authenticatedManagement &&
       (req.path === '/services' ||
+        req.path === '/defaults' ||
+        req.path === '/models' ||
         req.path.startsWith('/services/') ||
         req.path.startsWith('/assignments/'))
     )
@@ -68,6 +74,57 @@ export function installAsrRoutes(
       }
       return fn(req, res);
     });
+  /**
+   * @openapi
+   * /voice/asr/defaults:
+   *   get:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 获取当前部署的 Speaches 默认识别接口地址
+   *     tags: [ASR]
+   *     responses:
+   *       200:
+   *         description: 默认识别服务连接配置
+   */
+  app.get('/voice/asr/defaults', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ baseUrl: speechEndpoint() });
+  });
+  /**
+   * @openapi
+   * /voice/asr/models:
+   *   post:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 查询当前 Speaches 连接中的已安装识别模型，不保存配置
+   *     tags: [ASR]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               baseUrl:
+   *                 type: string
+   *               apiKey:
+   *                 type: string
+   *               serviceId:
+   *                 type: string
+   *                 description: 地址未变化时用于复用已保存的密钥
+   *     responses:
+   *       200:
+   *         description: 已安装的 ASR 模型列表
+   */
+  app.post(
+    '/voice/asr/models',
+    asyncAbortableRoute(async (req, res, signal) => {
+      assertJsonRequest(req);
+      res.setHeader('Cache-Control', 'no-store');
+      const models = await store.models(req.body, signal);
+      if (!signal.aborted) res.json({ models });
+    }),
+  );
   /**
    * @openapi
    * /voice/asr/services:

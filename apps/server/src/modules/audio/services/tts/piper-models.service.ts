@@ -1,12 +1,6 @@
-import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
+import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
 import { AppError } from '../../../../core/errors/app-error';
 import { speechEndpoint } from '../../speech-endpoint';
-
-export function piperModel(id: unknown) {
-  const model = PIPER_MODELS.find((value) => value.id === id);
-  if (!model) throw new AppError('请选择支持的 Piper 模型。');
-  return model;
-}
 
 /** Read-only readiness checks; Docker startup owns model installation. */
 export class PiperModels {

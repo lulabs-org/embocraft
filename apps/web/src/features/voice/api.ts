@@ -1,12 +1,15 @@
-import { adminHeaders } from '../../network/gateway';
+import { adminHeaders, getGatewayToken } from '../../network/gateway';
 import type {
   AsrAssignments,
   AsrUse,
   AsrServiceDraft,
   AsrServiceView,
+  SpeachesConnectionDraft,
+  SpeachesModel,
 } from '@voxel/shared';
 import type { SpeechCapabilities } from '../../audio';
 import { serverHttpUrl } from '../../network/endpoints';
+import { managementRequest } from '@voxel/shared/management';
 
 async function asrRequest<T>(
   path: string,
@@ -30,6 +33,24 @@ async function asrRequest<T>(
 }
 
 export const voiceApi = {
+  speachesDefaults: (signal?: AbortSignal) =>
+    managementRequest<{ baseUrl: string }>(
+      `${serverHttpUrl()}/voice/asr/defaults`,
+      { token: getGatewayToken(), signal },
+    ),
+  listSpeachesModels: (
+    connection: SpeachesConnectionDraft,
+    signal?: AbortSignal,
+  ) =>
+    managementRequest<{ models: SpeachesModel[] }>(
+      `${serverHttpUrl()}/voice/asr/models`,
+      {
+        token: getGatewayToken(),
+        method: 'POST',
+        body: connection,
+        signal,
+      },
+    ),
   async asrAssignments(signal: AbortSignal): Promise<AsrAssignments> {
     const response = await fetch(`${serverHttpUrl()}/voice/asr/assignments`, {
       signal,

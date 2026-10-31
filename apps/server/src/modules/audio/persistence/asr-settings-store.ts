@@ -7,7 +7,11 @@ import {
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
-import { validateWhisperSettings } from '../services/asr/whisper-settings';
+import {
+  validateWhisperConnection,
+  validateWhisperSettings,
+} from '../services/asr/whisper-settings';
+import { SpeachesModels } from '../services/speaches-models.service';
 
 export function validateAsrSettings(
   value: unknown,
@@ -66,7 +70,6 @@ const publicView = ({
   uses: _uses,
   ...value
 }: SavedService): AsrServiceView => {
-  if (value.provider === 'whisper') return { ...value };
   const { apiKey, ...settings } = value;
   return { ...settings, hasApiKey: !!apiKey };
 };
@@ -84,7 +87,13 @@ function validateService(
     throw new AppError('已有服务不能更改类型，请添加新的服务。');
   const settings =
     provider === 'whisper'
-      ? { ...validateWhisperSettings(value), provider: 'whisper' as const }
+      ? {
+          ...validateWhisperSettings(
+            value,
+            previous?.provider === 'whisper' ? previous : undefined,
+          ),
+          provider: 'whisper' as const,
+        }
       : {
           ...validateAsrSettings(
             input,
@@ -147,6 +156,27 @@ export class AsrSettingsStore {
   }
   list() {
     return this.values.map(publicView);
+  }
+  async models(value: unknown, signal?: AbortSignal) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      throw new AppError('识别服务连接配置无效。');
+    const input = value as Record<string, unknown>;
+    if (input.serviceId !== undefined && typeof input.serviceId !== 'string')
+      throw new AppError('识别服务 ID 无效。');
+    const previous =
+      input.serviceId === undefined
+        ? undefined
+        : this.get(input.serviceId as string);
+    if (previous && previous.provider !== 'whisper')
+      throw new AppError('请选择 Speaches 识别服务。');
+    const connection = validateWhisperConnection(
+      input,
+      previous?.provider === 'whisper' ? previous : undefined,
+    );
+    return new SpeachesModels(connection).list(
+      signal,
+      'automatic-speech-recognition',
+    );
   }
   assignments(): AsrAssignments {
     // Older databases need no console visit or name-based client initialization.

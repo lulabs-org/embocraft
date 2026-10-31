@@ -180,9 +180,10 @@ it('documents resource ownership, management and chat credentials, with no globa
     ['/providers', 'Providers'],
     ['/tasks', 'Tasks'],
     ['/task-runs', 'Tasks'],
-    ['/voice/tts/services', 'TTS'],
-    ['/voice/tts/piper', 'TTS'],
+    ['/voice/tts', 'TTS'],
     ['/voice/asr/services', 'ASR'],
+    ['/voice/asr/defaults', 'ASR'],
+    ['/voice/asr/models', 'ASR'],
     ['/voice/asr/assignments/{use}', 'ASR'],
   ];
   for (const { path, operation } of operations) {
