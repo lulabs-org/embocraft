@@ -184,18 +184,30 @@ describe('Whisper transcription service', () => {
   });
 
   it.each([
-    ['zh', undefined, '以下是简体中文的语音转写。'],
-    ['zh', '   ', '以下是简体中文的语音转写。'],
+    ['zh', undefined, null],
+    ['zh', '', null],
+    ['zh', '   ', null],
     ['zh', '体素世界，建造房子。', '体素世界，建造房子。'],
+    ['zh', '  体素世界  ', '体素世界'],
+    ['auto', undefined, null],
     ['en', undefined, null],
+    ['en', '', null],
+    ['en', '   ', null],
     ['en', 'Voxel world.', 'Voxel world.'],
   ])(
-    'API mode chooses the prompt for %s with custom hint %s',
+    'API mode sends only explicit prompt context for %s with custom hint %s',
     async (language, prompt, expected) => {
       const fetcher = vi.fn(
         async (_url: string | URL | Request, init?: RequestInit) => {
           if (init?.method === 'POST') {
             expect((init.body as FormData).get('prompt')).toBe(expected);
+            expect((init.body as FormData).get('language')).toBe(
+              language === 'auto' ? null : language,
+            );
+            expect((init.body as FormData).get('vad_filter')).toBe('true');
+            expect((init.body as FormData).get('response_format')).toBe(
+              'verbose_json',
+            );
             return new Response(JSON.stringify({ text: '原樣輸出' }));
           }
           return new Response('{}');

@@ -343,6 +343,10 @@ export function installChatRoutes(
         signal,
         id: String(req.params.id),
         partial,
+        language:
+          req.query.language === undefined
+            ? 'auto'
+            : String(req.query.language),
         bytes: parseAudioBytes(req.body),
         contentType: req.headers['content-type'] ?? '',
         serviceId: parseServiceId(req.query.serviceId),
@@ -432,9 +436,9 @@ export function installChatRoutes(
         e instanceof AppError
           ? e.status
           : e &&
-            typeof e === 'object' &&
-            'type' in e &&
-            e.type === 'entity.too.large'
+              typeof e === 'object' &&
+              'type' in e &&
+              e.type === 'entity.too.large'
             ? 413
             : 400,
       body: {
