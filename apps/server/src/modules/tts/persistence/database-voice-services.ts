@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import { AppError } from '../../../core/errors/app-error';
 import type {
   SavedVoice,
@@ -18,7 +18,17 @@ export class DatabaseVoiceServicePersistence
         this.db.ttsService.findMany({ orderBy: { position: 'asc' } }),
       ]);
       if (!state && rows.length === 0) return undefined;
-      return rows.map((row) => row.data as unknown as SavedVoice);
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        type: row.type as SavedVoice['type'],
+        baseUrl: row.baseUrl,
+        apiKey: row.apiKey,
+        model: row.model,
+        voice: row.voice,
+        speed: row.speed,
+        ...(row.voiceLanguage ? { voiceLanguage: row.voiceLanguage } : {}),
+      }));
     } catch {
       throw new AppError('无法读取语音服务数据库配置。', 500);
     }
@@ -38,13 +48,21 @@ export class DatabaseVoiceServicePersistence
           if (!ids.has(row.id))
             await tx.ttsService.delete({ where: { id: row.id } });
         for (const [position, value] of values.entries()) {
-          const data = JSON.parse(
-            JSON.stringify(value),
-          ) as Prisma.InputJsonValue;
+          const payload = {
+            position,
+            name: value.name,
+            type: value.type,
+            baseUrl: value.baseUrl,
+            apiKey: value.apiKey,
+            model: value.model,
+            voice: value.voice,
+            speed: value.speed,
+            voiceLanguage: value.voiceLanguage ?? null,
+          };
           await tx.ttsService.upsert({
             where: { id: value.id },
-            create: { id: value.id, position, data },
-            update: { position, data },
+            create: { id: value.id, ...payload },
+            update: payload,
           });
         }
       });
