@@ -23,12 +23,15 @@ import {
 import {
   AsrSettingsStore,
   DatabaseAsrServicePersistence,
-  DatabaseVoiceServicePersistence,
   installAsrSocket,
   LocalSpeech,
-  VoiceServiceStore,
   type AsrBridge,
-} from './modules/audio';
+} from './modules/asr';
+
+import {
+  DatabaseVoiceServicePersistence,
+  VoiceServiceStore,
+} from './modules/tts';
 
 import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 
@@ -139,10 +142,13 @@ export async function createServer(options: ServerOptions = {}) {
       tasks: characters.tasks,
       providers: providerService,
     },
-    audio: {
+    asr: {
       authenticateManagement: gatewayAuth.middleware,
       speech,
       asrSettings,
+    },
+    tts: {
+      authenticateManagement: gatewayAuth.middleware,
       voiceServices,
       removeVoiceService: (id) => characters.removeVoiceService(id),
     },

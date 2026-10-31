@@ -1,7 +1,7 @@
 import { delay, Session, until } from '@voxel/agent-runtime';
 import type { ChatData } from '@voxel/shared';
 import assert from 'node:assert/strict';
-import { LocalSpeech } from '../../src/modules/audio/services/asr/local-speech.service';
+import { LocalSpeech } from '../../src/modules/asr/services/local-speech.service';
 import { createTestServer } from '../helpers/test-server';
 
 process.env.DATABASE_URL = '';

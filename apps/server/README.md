@@ -4,7 +4,7 @@
 
 ## 装配与生命周期
 
-- `createApp` 接收按用途分组的 HTTP 依赖（health、management、audio、world、chat），仅装配 Express 中间件及路由，不创建数据库连接或网络监听器。世界房间 ID、presence 和聊天能力通过延迟访问函数注入。
+- `createApp` 接收按用途分组的 HTTP 依赖（health、management、asr、tts、world、chat），仅装配 Express 中间件及路由，不创建数据库连接或网络监听器。世界房间 ID、presence 和聊天能力通过延迟访问函数注入。
 - `createServer` 检查数据库配置、加载本地服务配置并装配 Agent、世界、HTTP 和 WebSocket。`listen()` 绑定端口、创建世界，然后恢复 Agent；端口为 0 时，内部 Agent 连接使用实际分配的端口。
 - `close()` 可重复调用。先关闭 Agent 与 Colyseus 房间，再终止 ASR WebSocket、HTTP/SSE 连接并释放存储；启动失败也走同一清理路径。
 - 仍为单进程单世界模型。Colyseus 的 matchMaker 与房间占用状态属于进程；不要在同一进程同时创建多个服务器。测试中的多个世界应顺序关闭后再创建，或放在独立进程中。
@@ -16,29 +16,28 @@
 
 `core` 不引用业务领域或全局持久化层；`modules` 不反向引用 `app.ts`、`server.ts`、入口、传输实现或顶层 HTTP 装配。管理 HTTP 管线与请求策略归入 `modules/management/routes/`，业务路由通过 management 门面复用该策略。management 的 HTTP 层不导入其他业务模块，由 `app.ts` 注入路由安装回调与命令指纹的请求体规整函数，避免模块循环依赖。`core/transport/socket-routes.ts` 只定义 Socket 路由类型；模块的 Socket 适配文件可通过 `import type` 使用该契约，不得引用 `websocket.transport.ts`。装配入口和业务模块跨域引用统一经过各模块根部的 `index.ts`。
 
-| 目录                             | 责任                                                 |
-| -------------------------------- | ---------------------------------------------------- |
-| `core/config`                    | 类型化配置、部署变量校验、`.env` 加载与数据路径      |
-| `core/database`                  | 数据库客户端与连接池创建、启动探活和异常脱敏         |
-| `core/errors`                    | 通用 `AppError`                                      |
-| `core/concurrency`               | 命令队列                                             |
-| `core/http`                      | HTTP 中间件、输入校验、Origin 判断与 health 路由     |
-| `core/openapi`                   | OpenAPI schema、Swagger 文档生成与 docs 路由         |
-| `core/transport`                 | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭 |
-| `persistence`                    | 角色与任务联合存档、迁移、提交及失败处理             |
-| `modules/management`             | 管理 HTTP 管线、指令路由、幂等回执与状态变更事件     |
-| `modules/ai-characters`          | 生产依赖注入、Agent 生命周期编排与配置文件适配       |
-| `modules/providers`              | 模型提供商持久化存储与模型列表服务                   |
-| `modules/tasks`                  | 任务计划、运行历史与执行控制领域服务                 |
-| `modules/gateway`                | 管理令牌与 WebSocket 状态通知                        |
-| `modules/audio/persistence`      | ASR/音色配置存储、文件持久化与数据库适配             |
-| `modules/audio/services/asr`     | Whisper、百炼识别、识别调度与模型配置辅助            |
-| `modules/audio/services/tts`     | Piper/远程合成、模型安装、语音队列与世界内语音投递   |
-| `modules/audio/services/spatial` | 空间语音信令校验与转发                               |
-| `modules/chat`                   | 消息、附件、音频票据及私聊权限                       |
-| `modules/world`                  | 权威物理房间、Schema、世界持久化与在线状态 SSE       |
+| 目录                    | 责任                                                 |
+| ----------------------- | ---------------------------------------------------- |
+| `core/config`           | 类型化配置、部署变量校验、`.env` 加载与数据路径      |
+| `core/database`         | 数据库客户端与连接池创建、启动探活和异常脱敏         |
+| `core/errors`           | 通用 `AppError`                                      |
+| `core/concurrency`      | 命令队列                                             |
+| `core/http`             | HTTP 中间件、输入校验、Origin 判断与 health 路由     |
+| `core/openapi`          | OpenAPI schema、Swagger 文档生成与 docs 路由         |
+| `core/transport`        | Socket 路由类型、Gateway/ASR/Colyseus 路径分发和关闭 |
+| `core/audio`            | PCM 校验、FFmpeg 规整、Speaches 端点与模型发现       |
+| `persistence`           | 角色与任务联合存档、迁移、提交及失败处理             |
+| `modules/management`    | 管理 HTTP 管线、指令路由、幂等回执与状态变更事件     |
+| `modules/ai-characters` | 生产依赖注入、Agent 生命周期编排与配置文件适配       |
+| `modules/providers`     | 模型提供商持久化存储与模型列表服务                   |
+| `modules/tasks`         | 任务计划、运行历史与执行控制领域服务                 |
+| `modules/gateway`       | 管理令牌与 WebSocket 状态通知                        |
+| `modules/asr`           | ASR 配置存储、Whisper/百炼识别、调度、转写与能力路由 |
+| `modules/tts`           | 音色服务存储、Piper/远程合成、模型状态与管理路由     |
+| `modules/chat`          | 消息、附件、音频票据及私聊权限                       |
+| `modules/world`         | 权威物理房间、Schema、持久化、SSE、Agent 语音与信令  |
 
-`services/asr/local-speech.service.ts` 负责通过独立语音服务 API 进行 Whisper 识别。Piper 模型和声音服务的管理路由归 `audio`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
+`asr/services/local-speech.service.ts` 负责通过独立语音服务 API 进行 Whisper 识别。Piper 模型和声音服务的管理路由归 `tts`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character.manager.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ManagementEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
 
 全局 `persistence/` 直接提供存档契约、数据库驱动、结构规整和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`。它不依赖角色运行时、任务模块、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
 
@@ -62,21 +61,18 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `world` 的地形、玩家名称和输入/编辑校验规则归入 `domain/`，数据库存储与就近测试归入 `persistence/`，HTTP/SSE 路由与测试归入 `routes/worlds.routes.ts` 及同名测试文件。`world.room.ts` 与 `world.schema.ts` 留在模块根部，分别负责 Colyseus 房间生命周期与同步状态 Schema；Schema 依赖框架，不属于纯领域规则。模块门面保留 `WorldRoom`、`WorldStore`、`installWorldRoutes` 和 `installPresenceRoutes` 四个公开导出。Schema 字段与注册顺序、物理模拟、持久化、房间生命周期及 `/world`、`/world/presence` 行为保持不变。跨共享物理实现的世界规则测试与服务器生命周期测试保留在 `test/`。
 
-`audio/routes/` 集中 HTTP 装配器 `audio.http.ts`，以及 `asr`、`transcribe`、`piper`、`voice-services`、`capabilities` 路由与已有测试；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。模块门面保留全部公开导出，包括 `installAudioRoutes`、`AudioRouteDependencies`、`installAsrSocket` 与 `AsrBridge`。原有鉴权、Origin 策略、请求体限制、安装顺序、ASR 并发限制与连接清理行为保持不变。空间信令仍由 `services/spatial/signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。
+音频能力按职责拆为 `core/audio`、`modules/asr`、`modules/tts` 三部分，空间语音与 Agent 发声归入 `modules/world`：
 
-`audio/domain/pcm-wav.ts` 只执行无 I/O 的 PCM WAV 格式、时长与音量校验，复用通用 `AppError`，不负责 WAV 封包。`services/processing/` 集中 `normalize.ts`、`command.ts` 及已有测试，负责 FFmpeg、子进程与临时文件处理；转换参数、时长限制、超时、取消、错误语义及清理行为保持不变。`services/spatial/signaling.service.ts` 负责空间信令校验与转发，测试与源码共置，模块门面导出 `createSpatialSignaling`。
+- `core/audio/` 只放无业务状态的共享基础设施：`pcm-wav.ts`（无 I/O 的 PCM WAV 格式、时长与音量校验）、`normalize.ts`/`command.ts`（FFmpeg、子进程与临时文件处理）、`speech-endpoint.ts`（部署默认的语音服务地址）、`speaches-models.ts`（Speaches 模型与音色发现）以及 `voice-service-connection.ts`（ASR/TTS 共用的连接参数校验）。该目录只依赖 `core`。
+- `modules/asr/` 按 `persistence/`、`services/`、`routes/`、`sockets/` 分层。`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权与 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。门面导出 `installAsrHttp`、`AsrSettingsStore`、`DatabaseAsrServicePersistence`、`installAsrSocket`、`AsrBridge`、`LocalSpeech` 与 `scheduleSpeech`。`/voice/capabilities` 同时报告 Whisper 与 Piper 状态，经 `tts` 门面读取 `PiperModels`。
+- `modules/tts/` 按 `persistence/`、`services/`、`routes/` 分层，合成契约位于 `services/speech-synthesizer.ts`。`routes/tts.http.ts` 的 `installTtsHttp` 通过 management 管线注册 `/voice/tts`。门面导出 `installTtsHttp`、`VoiceServiceStore`、`DatabaseVoiceServicePersistence`、`PiperTts`、`PiperModels` 与 `SpeechSynthesizer`。`tts` 不依赖 `asr`、`chat` 或 `world`。
+- 两个 Store 仍包含原有校验与运行时协调职责，显式接收持久化适配器；生产使用 PostgreSQL，测试使用内存实现。默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。
 
-`audio/services/asr/` 集中 `local-speech.service.ts`、`bailian.service.ts`、`speech-scheduler.service.ts` 及其已有测试，保留 `LocalSpeech`、`bridgeBailianAsr`、`SpeechScheduler` 与 `scheduleSpeech` 的实现和名称。`whisper-settings.ts` 包含模型目录读取、路径与配置校验，随服务迁移；模型目录、识别参数、队列限额、取消、超时、错误和清理行为保持不变，模块门面保留全部公开导出。ASR 配置存储及数据库适配位于 `persistence/`，共用的 `speech-endpoint.ts` 仍在模块根部。
-
-`audio/services/tts/` 集中 `piper.service.ts`、`remote.service.ts`、`agent-speech.service.ts`、`piper-models.service.ts` 及已有测试，合成契约位于同目录的 `speech-synthesizer.ts`。`PiperTts`、`RemoteTts`、`AgentSpeech`、`PiperModels` 及合成接口保持原名，模块门面保留全部公开导出；合成参数、模型就绪查询、队列、听众筛选、取消、错误与缓存行为保持不变。音色配置存储、数据库适配及存储测试位于 `persistence/`，共用语音端点配置保留原位。
-
-`audio/persistence/` 集中 `asr-settings-store.ts`、`voice-service-store.ts` 及其同名测试，以及 `database-asr-services.ts` 和 `database-voice-services.ts`。保留 `AsrSettingsStore`、`VoiceServiceStore`、持久化契约及数据库适配类名，模块门面保持全部公开导出。两个 Store 仍包含原有校验与运行时协调职责，显式接收持久化适配器；生产使用 PostgreSQL，测试使用内存实现。旧 JSON 文件读写、语音格式迁移与自动备份已移除；默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。跨模块数据库与生命周期测试保留在 `test/`，共用 `speech-endpoint.ts` 及其测试仍在模块根部。
-
-`AgentSpeech` 位于 `modules/audio/services/tts/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理；聊天路由直接引用音频模块读取音频。Agent 核心调度不依赖该服务，`modules/ai-characters` 不重导出它。
+`AgentSpeech` 位于 `modules/world/services/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理。聊天路由只依赖本地声明的 `AgentSpeechClips` 读取契约，由 `server.ts` 注入 `world.agentSpeech`，避免 `chat → world` 的循环依赖。空间信令由 `modules/world/services/spatial-signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。Agent 核心调度不依赖这些服务。
 
 ## 结构验收
 
-本轮目录与命名整理已完成。架构测试位于 `tests/server-boundaries.test.ts`，检查跨模块门面、依赖方向、Socket 契约、循环依赖及再导出形成的间接 HTTP 依赖。`core/openapi/swagger.test.ts` 扫描全部服务端非测试 TypeScript 文件中的显式 `app.get/post/put/patch/delete` 注册；动态路径、Router 别名和 `app.use` 不在当前覆盖范围。测试反例验证再导出和非路由文件中的新增路由不能绕过已有检查。audio Store 的校验、运行时协调和持久化职责保持现状，进一步拆分需单独评估。
+本轮目录与命名整理已完成。架构测试位于 `tests/server-boundaries.test.ts`，检查跨模块门面、依赖方向、Socket 契约、循环依赖及再导出形成的间接 HTTP 依赖。`core/openapi/swagger.test.ts` 扫描全部服务端非测试 TypeScript 文件中的显式 `app.get/post/put/patch/delete` 注册；动态路径、Router 别名和 `app.use` 不在当前覆盖范围。测试反例验证再导出和非路由文件中的新增路由不能绕过已有检查。ASR/TTS Store 的校验、运行时协调和持久化职责保持现状，进一步拆分需单独评估。
 
 ## 状态与测试
 

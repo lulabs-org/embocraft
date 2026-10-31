@@ -62,7 +62,8 @@ graph TD
         Domains --> WorldMod[world: 权威房间与物理状态]
         Domains --> AgentMod[ai-characters: 角色状态机与模型调用]
         Domains --> TaskMod[tasks: 计划编排与执行实例]
-        Domains --> AudioMod[audio: TTS 合成与 ASR 识别]
+        Domains --> AsrMod[asr: ASR 语音识别]
+        Domains --> TtsMod[tts: TTS 合成与音色服务]
         Domains --> ChatMod[chat: 消息路由与空间音频]
     end
 
@@ -72,14 +73,15 @@ graph TD
 
 ### 核心领域模块清单
 
-| 模块目录                    | 领域职责与关键抽象                                                                     |
-| :-------------------------- | :------------------------------------------------------------------------------------- |
-| **`modules/world`**         | 维护 Colyseus 房间状态、方块修改队列、乐观版本锁（CAS）与世界全量快照生成。            |
-| **`modules/ai-characters`** | 统一管理游戏内 AI 角色配置、模型供应商绑定、上线待命及自主发声状态。                   |
-| **`modules/tasks`**         | 实现任务计划（Plan）与运行实例（Run）的分层管理，提供取消、暂停、恢复与检查点追踪。    |
-| **`modules/audio`**         | 统一抽象 Piper 本地引擎、阿里云百炼 TTS、OpenAI-Compatible 接口与 Whisper 语音流处理。 |
-| **`modules/chat`**          | 管理公开群聊广播、私信 ACL 过滤、WebRTC 空间信令代理与附近语音流式转写。               |
-| **`modules/gateway`**       | 提供管理员 Bearer 鉴权、CORS 校验与全双工管理通知 WebSocket。                          |
+| 模块目录                    | 领域职责与关键抽象                                                                  |
+| :-------------------------- | :---------------------------------------------------------------------------------- |
+| **`modules/world`**         | 维护 Colyseus 房间状态、方块修改队列、乐观版本锁（CAS）与世界全量快照生成。         |
+| **`modules/ai-characters`** | 统一管理游戏内 AI 角色配置、模型供应商绑定、上线待命及自主发声状态。                |
+| **`modules/tasks`**         | 实现任务计划（Plan）与运行实例（Run）的分层管理，提供取消、暂停、恢复与检查点追踪。 |
+| **`modules/asr`**           | Whisper 与阿里云百炼语音识别、识别调度、转写接口与实时 ASR WebSocket。              |
+| **`modules/tts`**           | Piper 本地引擎、OpenAI-Compatible/远程 TTS 合成与音色服务管理。                     |
+| **`modules/chat`**          | 管理公开群聊广播、私信 ACL 过滤、WebRTC 空间信令代理与附近语音流式转写。            |
+| **`modules/gateway`**       | 提供管理员 Bearer 鉴权、CORS 校验与全双工管理通知 WebSocket。                       |
 
 ### 服务端生命周期管理
 

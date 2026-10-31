@@ -1,8 +1,8 @@
 import { delay, Session, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
-import { validatePcmWav } from '../../src/modules/audio/domain/pcm-wav';
-import { AgentSpeech } from '../../src/modules/audio/services/tts/agent-speech.service';
-import { PiperTts } from '../../src/modules/audio/services/tts/piper.service';
+import { validatePcmWav } from '../../src/core/audio/pcm-wav';
+import { AgentSpeech } from '../../src/modules/world/services/agent-speech.service';
+import { PiperTts } from '../../src/modules/tts/services/piper.service';
 import { createTestServer } from '../helpers/test-server';
 
 import type { AgentSpeechEvent } from '@voxel/shared';

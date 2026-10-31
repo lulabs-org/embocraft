@@ -21,10 +21,8 @@ import {
   type TaskPort,
 } from './modules/tasks';
 import { errorHandler } from './core/http/middleware/error-handler';
-import {
-  installAudioRoutes,
-  type AudioRouteDependencies,
-} from './modules/audio';
+import { installAsrHttp, type AsrRouteDependencies } from './modules/asr';
+import { installTtsHttp, type TtsRouteDependencies } from './modules/tts';
 import { installChatRoutes } from './modules/chat';
 import { installWorldRoutes, installPresenceRoutes } from './modules/world';
 
@@ -37,14 +35,15 @@ export type AppDependencies = {
     providers: ProviderRouteDependencies;
     tasks: TaskPort;
   };
-  audio: Omit<AudioRouteDependencies, 'origin'>;
+  asr: Omit<AsrRouteDependencies, 'origin'>;
+  tts: TtsRouteDependencies;
   world: {
     roomId: () => string;
     presence: () => WorldPresence | undefined;
   };
   chat: {
     getChat: Parameters<typeof installChatRoutes>[1];
-    speech: AudioRouteDependencies['speech'];
+    speech: AsrRouteDependencies['speech'];
     getAgentSpeech: NonNullable<Parameters<typeof installChatRoutes>[3]>;
   };
 };
@@ -64,7 +63,8 @@ export function createApp(deps: AppDependencies) {
       installTaskRoutes(app, deps.management.tasks, commands);
     },
   });
-  installAudioRoutes(app, { ...deps.audio, origin: deps.origin });
+  installAsrHttp(app, { ...deps.asr, origin: deps.origin });
+  installTtsHttp(app, deps.tts);
   installWorldRoutes(app, deps.world.roomId);
   installChatRoutes(
     app,
@@ -72,7 +72,7 @@ export function createApp(deps: AppDependencies) {
     deps.chat.speech,
     deps.chat.getAgentSpeech,
     deps.origin,
-    deps.audio.asrSettings,
+    deps.asr.asrSettings,
   );
   installPresenceRoutes(app, deps.world.presence, deps.origin);
   app.use(errorHandler());

@@ -9,11 +9,11 @@ import type { ProviderRepository } from '../../src/modules/providers/persistence
 import {
   AsrSettingsStore,
   type SavedService,
-} from '../../src/modules/audio/persistence/asr-settings-store';
+} from '../../src/modules/asr/persistence/asr-settings-store';
 import {
   VoiceServiceStore,
   type SavedVoice,
-} from '../../src/modules/audio/persistence/voice-service-store';
+} from '../../src/modules/tts/persistence/voice-service-store';
 import type {
   ArchivePort,
   ManagementArchive,

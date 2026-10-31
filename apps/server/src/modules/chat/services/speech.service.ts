@@ -1,5 +1,5 @@
 import { AppError } from '../../../core/errors/app-error';
-import { AsrSettingsStore, LocalSpeech, scheduleSpeech } from '../../audio';
+import { AsrSettingsStore, LocalSpeech, scheduleSpeech } from '../../asr';
 import type { WorldChat } from './chat.service';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 
