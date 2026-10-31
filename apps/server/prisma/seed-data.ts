@@ -26,7 +26,7 @@ export const DEFAULT_TTS_PROVIDER = {
   type: 'speaches',
   baseUrl: '',
   apiKey: '',
-  model: '',
+  model: 'zh_CN-huayan-medium',
   voice: '',
   speed: 1.0,
   voiceLanguage: null,

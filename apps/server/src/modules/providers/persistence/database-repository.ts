@@ -49,8 +49,12 @@ export class DatabaseProviderRepository implements ProviderRepository {
 
   save(value: unknown, id?: string) {
     return this.mutate(async () => {
-      const existing = id ? this.getRuntime(id) : undefined;
-      const provider = validateProvider(value, existing);
+      const existing = id ? this.values.find((p) => p.id === id) : undefined;
+      const raw =
+        id && !existing && typeof value === 'object' && value !== null
+          ? { ...(value as Record<string, unknown>), id }
+          : value;
+      const provider = validateProvider(raw, existing);
       if (
         !existing &&
         (this.values.length >= MAX_PROVIDERS || this.nextPosition >= MAX_PROVIDERS)
