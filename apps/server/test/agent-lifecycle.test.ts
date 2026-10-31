@@ -131,6 +131,52 @@ const settings = {
   goal: 'Wait',
   maxTurns: 1,
 };
+it('rebuilds display fields from a legacy profile and persists only durable character data', async () => {
+  const m = setup(fakeSession());
+  const created = m.create({
+    providerId: 'deepseek',
+    name: 'Stored profile',
+    joinWorld: false,
+  });
+  await m.flush();
+  await m.close();
+  const legacy = JSON.parse(JSON.stringify(await store.archive.load()));
+  Object.assign(legacy.characters[0], {
+    providerName: 'Obsolete provider name',
+    voiceServiceName: 'Obsolete voice name',
+    sessionId: 'expired-session',
+    taskExecution: { runId: 'expired-run' },
+    queuedTasks: [{ id: 'expired-queue-entry' }],
+    usage: { calls: 99, tokens: 9999, estimated: false },
+    lastResponse: 'Obsolete display response',
+    taskRequiresReassignment: true,
+    futureDisplayField: 'do not persist',
+  });
+  store.archive.json = JSON.stringify(legacy);
+  const restored = setup(fakeSession());
+  await restored.load();
+  const view = restored.publicList().find((item) => item.id === created.id)!;
+  expect(view.name).toBe('Stored profile');
+  expect(view.providerName).toBe('DeepSeek');
+  expect(view.sessionId).toBeUndefined();
+  expect(view.queuedTasks).toEqual([]);
+  expect(view.usage?.tokens ?? 0).toBe(0);
+  const saved = JSON.parse(store.archive.json!).characters[0];
+  for (const field of [
+    'providerName',
+    'voiceServiceName',
+    'sessionId',
+    'task',
+    'taskExecution',
+    'queuedTasks',
+    'usage',
+    'lastResponse',
+    'taskRequiresReassignment',
+    'futureDisplayField',
+  ])
+    expect(saved).not.toHaveProperty(field);
+});
+
 it('saves task heartbeat independently without resetting or resuming progress', async () => {
   const decide = vi.fn<ModelResponder>(async () => [
     { name: 'request_input', arguments: { question: '地基已完成' } },

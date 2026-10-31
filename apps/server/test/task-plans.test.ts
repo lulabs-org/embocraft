@@ -134,8 +134,18 @@ it('persists immediate runs, deduplicates create and manual requests, and preser
   expect(decide).toHaveBeenCalledTimes(2);
   expect(manager.tasks.taskRuns(id, p.id).items).toHaveLength(2);
   const disk = JSON.parse(store.archive.json!);
-  expect(disk.version).toBe(3);
+  expect(disk.version).toBe(4);
   expect(disk.runs).toHaveLength(2);
+  const current = disk.runs.find(
+    (run: { id: string }) => run.id === disk.characters[0].currentRunId,
+  );
+  const historical = disk.runs.find(
+    (run: { id: string }) => run.id !== current.id,
+  );
+  expect(current.runtime).toBeUndefined();
+  expect(current.runtimeRef).toEqual({ version: 1, characterId: id });
+  expect(historical.runtime).toBeDefined();
+  expect(historical.runtimeRef).toBeUndefined();
 });
 it('reserves durably before inference', async () => {
   const id = await role();
@@ -400,7 +410,8 @@ it('restores unconfirmed action history as unknown and expires private runs with
   const p = await manager.tasks.createTaskPlan(id, draft());
   await idle();
   await manager.close();
-  const archive = JSON.parse(store.archive.json!);
+  // Build a legacy v3 fixture with inline runtimes; both formats must recover identically.
+  const archive = JSON.parse(JSON.stringify(await store.archive.load()));
   const record = archive.runs[0];
   const previous = {
     actions: [{ type: 'edit', x: 1, y: 3, z: 1, material: 'wood' }],
@@ -443,7 +454,7 @@ it('restores unconfirmed action history as unknown and expires private runs with
   await expect(
     manager.tasks.controlTaskRun(id, run.id, 'resume'),
   ).rejects.toThrow('私聊');
-  const restored = JSON.parse(store.archive.json!);
+  const restored = JSON.parse(JSON.stringify(await store.archive.load()));
   expect(
     restored.runs[0].runtime.execution.effects.previous.results[0].status,
   ).toBe('unknown');

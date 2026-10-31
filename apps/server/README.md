@@ -109,7 +109,13 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 `persistence/plan-store.ts` 持有计划与执行历史的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。`domain/command-policy.ts` 的 `taskCommandBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有现有公共导出继续通过模块根部 `index.ts` 提供，目录调整不改变类名、函数签名或存档格式。
 
-Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，嵌入的运行时状态为 version 4，Pi 检查点为 v3。存档恢复前经过结构校验，不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
+Agent 与任务在内存中通过 v3 的 characters/plans/runs/requests 联合快照提交，存储适配器使用 `archive-codec.ts` 编解码 v4 存储格式。PostgreSQL 继续使用现有表及 JSONB 列，无需新增表或执行结构迁移。嵌入的运行时状态仍为 version 4，Pi 检查点仍为 v3。旧 v3 内联快照可读取，并在后续提交时转换；不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。
+
+`CharacterRecord` 独立于 `AICharacterView`，显式保存角色配置、身份、上线恢复状态、日志、当前运行时与 `currentRunId`。服务名称、sessionId、任务摘要、排队列表、用量展示和回复摘要等由配置、运行时及任务账本重建，不进入角色存档。展示视图独立捕获，仍在联合事务成功后更新并参与管理事件差异计算。
+
+角色行的 `runtime` 是当前状态的权威来源，包含累计用量。当前执行的 runtime 与角色快照去掉累计用量后完全相同时，执行行仅保存 `runtimeRef: { version: 1, characterId }`。适配器加载时校验角色归属及 `currentRunId`，还原独立的执行快照，领域层不接触存储引用。历史执行保留原有对话、收件箱和检查点，以保持恢复旧执行的语义；快照不同的当前执行同样保留内联副本。切换执行或删除角色时，原引用对应的历史快照在同一事务内重新内联。数据库加载使用 Repeatable Read，避免引用与角色行来自不同提交。保存失败不推进差异基线，不更新公开视图或发布事件。
+
+删除角色保留计划与执行历史；聊天执行没有 planId。升级前应保留数据库备份；旧版本不理解 `runtimeRef`，回滚需恢复升级前备份，或先使用新版解码器将执行引用展开为 v3 内联快照。部署说明见 [Agent Gateway](../../docs/agent/gateway.md)。
 
 ## HTTP 领域路径
 

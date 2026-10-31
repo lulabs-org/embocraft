@@ -35,7 +35,7 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const tasks = new TaskSnapshots();
   const persistence = new ManagementPersistence(
     { load: async () => undefined, save },
-    (snapshot) => events.commit(snapshot.characters, snapshot),
+    (snapshot, views) => events.commit(views, snapshot),
     {
       characters,
       tasks,
@@ -129,7 +129,7 @@ it('serializes joint snapshots and exposes both domains before publishing commit
     name: 'a',
     status: 'idle',
   });
-  expect(pending[0].snapshot.characters[0].sessionId).toBeUndefined();
+  expect(pending[0].snapshot.characters[0]).not.toHaveProperty('sessionId');
   expect(pending[0].snapshot.requests).toEqual({ 'a:request': plan.id });
   pending[0].resolve();
   await first;
@@ -225,4 +225,59 @@ it('limits character-only failures to changed jobs without marking the task ledg
   expect(f.jobs.get('a')!.abort.signal.aborted).toBe(false);
   expect(f.jobs.get('b')!.abort.signal.aborted).toBe(true);
   expect(f.cancel).toHaveBeenCalledExactlyOnceWith('b');
+});
+
+it('keeps derived views out of storage while publishing their changes only after commit', async () => {
+  const save = vi.fn(async (_snapshot: ManagementArchive) => {});
+  const f = fixture(save);
+  const view = f.jobs.get('a')!.view;
+  Object.assign(view, {
+    providerName: 'Provider display name',
+    voiceServiceName: 'Voice display name',
+    queuedTasks: [
+      { id: 'queued', goal: 'Later', scheduledAt: 100, coalescedTriggers: 0 },
+    ],
+    taskExecution: { runId: 'run', limits: DEFAULT_TASK_LIMITS },
+    usage: { calls: 1, tokens: 10, estimated: false },
+    lastResponse: 'Derived response',
+    taskRequiresReassignment: true,
+    futureDisplayField: 'must not leak',
+  });
+  await f.persist();
+  const saved = save.mock.calls[0][0].characters[0];
+  for (const field of [
+    'providerName',
+    'voiceServiceName',
+    'sessionId',
+    'task',
+    'taskExecution',
+    'queuedTasks',
+    'usage',
+    'lastResponse',
+    'taskRequiresReassignment',
+    'futureDisplayField',
+  ])
+    expect(saved).not.toHaveProperty(field);
+  expect(
+    f.persistence.characters.publicList().find((item) => item.id === 'a'),
+  ).toMatchObject({
+    providerName: 'Provider display name',
+    queuedTasks: [{ id: 'queued' }],
+  });
+
+  const seen = vi.fn();
+  f.events.on(seen);
+  view.voiceServiceName = 'New voice name';
+  save.mockRejectedValueOnce(new Error('storage unavailable'));
+  await expect(f.persist()).rejects.toThrow('storage unavailable');
+  expect(seen).not.toHaveBeenCalled();
+  expect(
+    f.persistence.characters.publicList().find((item) => item.id === 'a')
+      ?.voiceServiceName,
+  ).toBe('Voice display name');
+  await f.persist();
+  expect(save.mock.calls[2][0].characters[0]).toEqual(saved);
+  expect(seen).toHaveBeenCalledWith(
+    expect.objectContaining({ resource: 'characters', characterIds: ['a'] }),
+  );
 });

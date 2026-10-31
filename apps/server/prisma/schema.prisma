@@ -39,6 +39,8 @@ model AgentCharacter {
  id String @id
  providerId String
  position Int
+ // CharacterRecord: durable profile, presence, logs and authoritative current runtime.
+ // Derived API fields are rebuilt by the character module, never stored here.
  data Json
  provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
 }
@@ -52,6 +54,7 @@ model AgentPlan {
 model AgentRun {
  id String @id
  position Int
+ // archive-codec stores identical current runtimes as runtimeRef; history stays inline.
  data Json
 }
 

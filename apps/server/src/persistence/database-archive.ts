@@ -2,6 +2,11 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
 import type { TaskPlan } from '@voxel/shared';
+import {
+  decodeArchive,
+  encodeArchive,
+  type StoredManagementArchive,
+} from './archive-codec';
 
 type SavedRow = {
   id: string;
@@ -45,7 +50,7 @@ function rows<T extends { id: string }>(
   );
 }
 
-function snapshot(archive: ManagementArchive): SavedSnapshot {
+function snapshot(archive: StoredManagementArchive): SavedSnapshot {
   return {
     characters: rows(archive.characters, (character) => character.providerId),
     plans: rows(archive.plans),
@@ -70,7 +75,7 @@ function json(row: SavedRow): Prisma.InputJsonValue {
 /** Commits one character/task snapshot as a transaction of changed rows. */
 export class DatabaseManagementArchive implements ArchivePort {
   private committed: SavedSnapshot = snapshot({
-    version: 3,
+    version: 4,
     characters: [],
     plans: [],
     runs: [],
@@ -81,24 +86,31 @@ export class DatabaseManagementArchive implements ArchivePort {
 
   async load(): Promise<ManagementArchive | undefined> {
     try {
-      const [characters, plans, runs, requests] = await Promise.all([
-        this.db.agentCharacter.findMany({ orderBy: { position: 'asc' } }),
-        this.db.agentPlan.findMany({ orderBy: { position: 'asc' } }),
-        this.db.agentRun.findMany({ orderBy: { position: 'asc' } }),
-        this.db.agentRequest.findMany(),
-      ]);
-      const archive: ManagementArchive = {
-        version: 3,
+      // Runtime references and their character rows must come from one committed snapshot.
+      const [characters, plans, runs, requests] = await this.db.$transaction(
+        [
+          this.db.agentCharacter.findMany({ orderBy: { position: 'asc' } }),
+          this.db.agentPlan.findMany({ orderBy: { position: 'asc' } }),
+          this.db.agentRun.findMany({ orderBy: { position: 'asc' } }),
+          this.db.agentRequest.findMany(),
+        ],
+        { isolationLevel: 'RepeatableRead' },
+      );
+      const stored: StoredManagementArchive = {
+        version: 4,
         characters: characters.map(
           (row) => row.data as ManagementArchive['characters'][number],
         ),
         plans: plans.map((row) => row.data as TaskPlan),
-        runs: runs.map((row) => row.data as ManagementArchive['runs'][number]),
+        runs: runs.map(
+          (row) => row.data as StoredManagementArchive['runs'][number],
+        ),
         requests: Object.fromEntries(
           requests.map((row) => [row.key, row.planId]),
         ),
       };
-      this.committed = snapshot(archive);
+      const archive = decodeArchive(stored);
+      this.committed = snapshot(stored);
       return characters.length || plans.length || runs.length || requests.length
         ? archive
         : undefined;
@@ -108,7 +120,7 @@ export class DatabaseManagementArchive implements ArchivePort {
   }
 
   async save(archive: ManagementArchive): Promise<void> {
-    const next = snapshot(archive);
+    const next = snapshot(encodeArchive(archive));
     const before = this.committed;
     try {
       await this.db.$transaction(

@@ -18,6 +18,10 @@ import type {
   ArchivePort,
   ManagementArchive,
 } from '../../src/persistence/archive';
+import {
+  decodeArchive,
+  encodeArchive,
+} from '../../src/persistence/archive-codec';
 
 /** Clone on both sides of the persistence boundary, including JSON's undefined semantics. */
 export class MemoryPersistence<T> {
@@ -42,11 +46,13 @@ export class MemoryArchive implements ArchivePort {
   json?: string;
   saveError?: Error;
   async load(): ReturnType<ArchivePort['load']> {
-    return this.json === undefined ? undefined : JSON.parse(this.json);
+    return this.json === undefined
+      ? undefined
+      : decodeArchive(JSON.parse(this.json));
   }
   async save(records: ManagementArchive): Promise<void> {
     if (this.saveError) throw this.saveError;
-    this.json = JSON.stringify(records);
+    this.json = JSON.stringify(encodeArchive(records));
   }
 }
 

@@ -75,7 +75,16 @@ export class AICharacterOrchestrator {
     const tasks = new TaskSnapshots();
     this.persistence = new ManagementPersistence(
       this.archive,
-      (snapshot) => this.events.commit(snapshot.characters, snapshot),
+      (snapshot, views) => {
+        const byId = new Map(views.map((view) => [view.id, view]));
+        this.events.commit(
+          snapshot.characters.map((record) => ({
+            ...record,
+            view: byId.get(record.id),
+          })),
+          snapshot,
+        );
+      },
       {
         characters,
         tasks,

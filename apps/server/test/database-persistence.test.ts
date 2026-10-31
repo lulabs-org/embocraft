@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { emptyState, snapshotState } from '@voxel/agent-runtime/testing';
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -303,6 +304,93 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(
       (await new DatabaseManagementArchive(db!).load())?.characters[0].name,
     ).toBe('After');
+  });
+
+  it('commits runtime references atomically and materializes history before switching or deleting a character', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    const runtime = emptyState();
+    runtime.character.usage = { calls: 4, tokens: 900, estimated: false };
+    runtime.character.conversation.exchanges = {
+      public: [{ text: 'first conversation' }],
+    };
+    const original = {
+      version: 3,
+      characters: [
+        { id: 'a', providerId: 'deepseek', currentRunId: 'run-a', runtime },
+      ],
+      plans: [],
+      runs: [
+        {
+          id: 'run-a',
+          characterId: 'a',
+          accountedTokens: 0,
+          runtime: snapshotState(runtime),
+        },
+      ],
+      requests: {},
+    } as unknown as ManagementArchive;
+    await archive.save(original);
+    expect(
+      (await db!.agentRun.findUniqueOrThrow({ where: { id: 'run-a' } })).data,
+    ).toMatchObject({
+      runtimeRef: { version: 1, characterId: 'a' },
+    });
+    expect(
+      (await db!.agentRun.findUniqueOrThrow({ where: { id: 'run-a' } })).data,
+    ).not.toHaveProperty('runtime');
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(original);
+
+    const previousRunVersion = await db!
+      .$queryRaw`SELECT xmin::text FROM "AgentRun" WHERE id = 'run-a'`;
+    runtime.execution.health.lastResponse = 'checkpoint advanced';
+    original.runs[0].runtime = snapshotState(runtime);
+    await archive.save(original);
+    expect(
+      await db!.$queryRaw`SELECT xmin::text FROM "AgentRun" WHERE id = 'run-a'`,
+    ).toEqual(previousRunVersion);
+    expect(
+      (await new DatabaseManagementArchive(db!).load())?.runs[0].runtime,
+    ).toEqual(original.runs[0].runtime);
+
+    const switched = structuredClone(original);
+    switched.characters[0].currentRunId = 'run-b';
+    switched.characters[0].runtime!.character.conversation.exchanges!.public = [
+      { text: 'second conversation' },
+    ];
+    switched.runs.push({
+      ...switched.runs[0],
+      id: 'run-b',
+      runtime: snapshotState(switched.characters[0].runtime!),
+    });
+    await db!
+      .$executeRaw`ALTER TABLE "AgentRun" ADD CONSTRAINT fixture_reject_new_run CHECK (id <> 'run-b')`;
+    try {
+      await expect(archive.save(switched)).rejects.toThrow('无法保存');
+      expect(await new DatabaseManagementArchive(db!).load()).toEqual(original);
+      expect(
+        (await db!.agentRun.findUniqueOrThrow({ where: { id: 'run-a' } })).data,
+      ).not.toHaveProperty('runtime');
+    } finally {
+      await db!
+        .$executeRaw`ALTER TABLE "AgentRun" DROP CONSTRAINT fixture_reject_new_run`;
+    }
+
+    // Retry through the same adapter: a failed transaction must not advance its diff baseline.
+    await archive.save(switched);
+    const history = (
+      await db!.agentRun.findUniqueOrThrow({ where: { id: 'run-a' } })
+    ).data;
+    expect(history).toHaveProperty('runtime', original.runs[0].runtime);
+    expect(history).not.toHaveProperty('runtimeRef');
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(switched);
+    switched.characters = [];
+    await archive.save(switched);
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(switched);
+    for (const row of await db!.agentRun.findMany()) {
+      expect(row.data).toHaveProperty('runtime');
+      expect(row.data).not.toHaveProperty('runtimeRef');
+    }
   });
 
   it('does not publish a character when the database rejects its joint commit', async () => {

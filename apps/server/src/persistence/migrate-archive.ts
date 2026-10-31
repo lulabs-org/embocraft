@@ -1,25 +1,13 @@
 import { AppError } from '../core/errors/app-error';
 import type { ManagementArchive } from './archive';
+import { decodeArchive } from './archive-codec';
 
-/** Validate and normalize a persisted v3 management archive before restoration. */
+/** Decode storage and normalize the hydrated v3 management archive before restoration. */
 export function migrateArchive(saved: unknown): ManagementArchive {
-  const candidate = saved as Partial<ManagementArchive> | null | undefined;
-  if (
-    !candidate ||
-    typeof candidate !== 'object' ||
-    Array.isArray(candidate) ||
-    candidate.version !== 3 ||
-    !Array.isArray(candidate.characters) ||
-    !Array.isArray(candidate.plans) ||
-    !Array.isArray(candidate.runs) ||
-    !candidate.requests ||
-    typeof candidate.requests !== 'object' ||
-    Array.isArray(candidate.requests)
-  )
-    throw new AppError('网关存档格式无效。', 500);
+  const candidate = decodeArchive(saved);
   if (candidate.characters.length > 50)
     throw new AppError('Agent 记录格式无效。', 500);
-  const copy = structuredClone(candidate as ManagementArchive);
+  const copy = candidate;
   // Normalize only persisted v3 profiles; the runtime and public writes use permissions.
   for (const character of copy.characters) {
     const profile = character as typeof character & { allowEdits?: boolean };

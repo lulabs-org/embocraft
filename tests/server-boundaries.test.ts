@@ -1,9 +1,20 @@
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import {
+  dirname,
+  relative as nativeRelative,
+  resolve as nativeResolve,
+} from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
-const root = fileURLToPath(new URL('../apps/server/src/', import.meta.url));
+// Architecture rules use slash-delimited paths on every host OS.
+const relative = (from: string, to: string) =>
+  nativeRelative(from, to).replaceAll('\\', '/');
+const resolve = (...paths: string[]) =>
+  nativeResolve(...paths).replaceAll('\\', '/');
+const root = fileURLToPath(
+  new URL('../apps/server/src/', import.meta.url),
+).replaceAll('\\', '/');
 const sources = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory()

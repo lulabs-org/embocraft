@@ -32,7 +32,10 @@ export class ManagementPersistence<Characters, Tasks> {
 
   constructor(
     private readonly archive: ArchivePort,
-    private readonly onCommitted: (snapshot: ManagementArchive) => void,
+    private readonly onCommitted: (
+      snapshot: ManagementArchive,
+      views: AICharacterView[],
+    ) => void,
     private readonly snapshots: ManagementSnapshotPorts<Characters, Tasks>,
   ) {}
 
@@ -80,7 +83,7 @@ export class ManagementPersistence<Characters, Tasks> {
         }
         this.snapshots.commitCharacters(records, views);
         this.snapshots.restoreTasks(snapshot);
-        this.onCommitted(snapshot);
+        this.onCommitted(snapshot, views);
       });
     void this.saving.catch(() => console.error('无法保存 Agent 记录。'));
     return this.saving;
