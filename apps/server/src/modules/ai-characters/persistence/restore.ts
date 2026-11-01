@@ -5,9 +5,9 @@ import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
 import { PROVIDER_SPECS, type ProviderRuntimePort } from '../../providers';
 import type { CharacterRecord } from './record';
-import { createCharacterJob, type Job } from '../services/job';
+import { createCharacterJob, type Job } from '../services/character-job';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
-import { executionState } from '../services/task-adapter';
+import { executionState } from '../services/task-execution-adapter';
 
 export function restoreAICharacterJob(
   view: CharacterRecord,

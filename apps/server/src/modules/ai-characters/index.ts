@@ -2,7 +2,7 @@ export {
   AICharacterOrchestrator,
   type AICharacterDependencies,
 } from './services/orchestrator.service';
-export { AICharacterManager } from './services/character.manager';
+export { AICharacterManager } from './services/character-manager.service';
 export {
   CharacterQueries,
   type CharacterQueryPort,
@@ -21,10 +21,10 @@ export {
   resident,
   isJobBusy,
   canWakeJob,
-} from './services/job';
+} from './services/character-job';
 export type { VoiceServicePort } from './ports';
 export type { CharacterRecord } from './persistence/record';
-export { taskExecutionState, executionState } from './services/task-adapter';
+export { taskExecutionState, executionState } from './services/task-execution-adapter';
 export { AICharacterWakeScheduler } from './services/wake-scheduler.service';
 export { AICharacterHost } from './services/character-host.service';
 export type { ExecutionContext } from './services/execution-context';

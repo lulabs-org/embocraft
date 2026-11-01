@@ -1,5 +1,5 @@
 import type { TaskExecutionState } from '../../tasks';
-import type { Job } from './job';
+import type { Job } from './character-job';
 
 const states = new WeakMap<Job, TaskExecutionState>();
 

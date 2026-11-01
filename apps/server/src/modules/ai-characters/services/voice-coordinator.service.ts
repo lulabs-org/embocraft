@@ -4,7 +4,7 @@ import {
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import type { VoiceServicePort } from '../ports';
-import type { Job } from './job';
+import type { Job } from './character-job';
 import type { Session } from '@voxel/agent-runtime';
 
 /**

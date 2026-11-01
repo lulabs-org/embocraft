@@ -10,8 +10,8 @@ import {
 } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
 import type { ExecutionContext } from './execution-context';
-import type { Job } from './job';
-import { executionState } from './task-adapter';
+import type { Job } from './character-job';
+import { executionState } from './task-execution-adapter';
 import { handleWorldEvent } from './world-event-handler';
 
 export type { ExecutionContext };

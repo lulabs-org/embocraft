@@ -8,7 +8,7 @@
 2. **持久化职责清晰分层**：单一模块私有数据存储严格内聚于各模块的 `persistence/`；跨模块联合存档归入 `src/persistence/`，数据库客户端、连接池及探活归入 `src/core/database/`。
 3. **业务路由内聚装配**：业务接口由各模块内部自治管理并导出挂载契约，顶层 `app.ts` / `server.ts` 仅负责声明式装配。
 4. **统一模块门面导出**：所有模块对外统一通过根部 `index.ts` 暴露公共接口，严禁跨模块深层相对路径引用（No Deep Import）。
-5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务通常为 `*.service.ts`，保留 `character.manager.ts`、`world.room.ts`、`world.schema.ts` 等职责明确的命名；单元测试与源码同目录就近共置（`*.test.ts`），跨模块集成与架构测试另行集中。
+5. **统一文件命名与就近测试**：路由统一为 `*.routes.ts`，Socket 统一为 `*.socket.ts`，业务服务通常为 `*.service.ts`，保留 `world.room.ts`、`world.schema.ts` 等职责明确的命名；单元测试与源码同目录就近共置（`*.test.ts`），跨模块集成与架构测试另行集中。
 6. **API 静态契约 100% 覆盖**：显式注册的 REST 路由维护对应的 OpenAPI JSDoc 注解；AST 检查当前支持的 `app.get/post/put/patch/delete` 静态路径及数量一致性，检查范围与限制见第 5 节。
 7. **数据持久化安全保障**：PostgreSQL 强校验作为生产核心数据底座，启动前严格探活与脱敏；全局快照使用关系表驱动，离线测试显式注入内存存储。
    :::
@@ -87,7 +87,7 @@ apps/server/
         │   │   ├── validation.ts        # 角色配置合法性纯校验
         │   │   └── activity-log.ts      # 动作日志格式纯函数
         │   ├── services/                # 核心编排服务与 Actor 运行时
-        │   │   ├── character.manager.ts # 智能体总管服务（AICharacterManager）
+        │   │   ├── character-manager.service.ts # 智能体总管服务（AICharacterManager）
         │   │   ├── orchestrator.service.ts # 意图与动作编排服务
         │   │   ├── character-host.service.ts # 单智能体 Actor 宿主与执行上下文
         │   │   ├── wake-scheduler.service.ts # 定时与事件唤醒调度器
