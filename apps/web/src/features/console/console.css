@@ -28,16 +28,6 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-/* Shown by the Suspense boundary while the console chunk is still downloading. */
-.console-loading {
-  width: min(320px, calc(100vw - 32px));
-  height: auto;
-  padding: 28px;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-size: 14px;
-}
 .agent-dialog-backdrop,
 .agent-dialog::backdrop {
   position: fixed;

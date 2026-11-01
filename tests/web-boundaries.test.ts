@@ -66,9 +66,10 @@ it('uses public feature entrypoints across features and in App', () => {
 
 it('keeps the admin console out of the initial chunk', () => {
   const source = readFileSync(resolve(root, 'App.tsx'), 'utf8');
+  const loader = readFileSync(resolve(root, 'load-console.ts'), 'utf8');
   expect(source).toMatch(/lazy\(/);
-  expect(source).toMatch(/import\(['"]\.\/features\/console['"]\)/);
-  expect(source).not.toMatch(
+  expect(loader).toMatch(/import\(['"]\.\/features\/console['"]\)/);
+  expect(source + loader).not.toMatch(
     /import\s+(?:type\s+)?\{[^}]*\bControlConsole\b[^}]*\}\s*from\s*['"]\.\/features\/console['"]/,
   );
 });

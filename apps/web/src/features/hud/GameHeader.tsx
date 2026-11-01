@@ -7,6 +7,7 @@ interface GameHeaderProps {
   isConsoleOpen: boolean;
   isPlayersOpen: boolean;
   onOpenConsole: () => void;
+  onPreloadConsole?: () => void;
   onTogglePlayers: () => void;
   isMenuOpen: boolean;
   onToggleMenu: () => void;
@@ -18,6 +19,7 @@ export function GameHeader({
   isConsoleOpen,
   isPlayersOpen,
   onOpenConsole,
+  onPreloadConsole,
   onTogglePlayers,
   isMenuOpen,
   onToggleMenu,
@@ -59,6 +61,8 @@ export function GameHeader({
             aria-expanded={isConsoleOpen}
             aria-controls="control-console"
             onClick={onOpenConsole}
+            onPointerEnter={onPreloadConsole}
+            onFocus={onPreloadConsole}
           >
             {t('header.console')}
           </button>
@@ -93,6 +97,8 @@ export function GameHeader({
           aria-expanded={isConsoleOpen}
           aria-controls="control-console"
           onClick={onOpenConsole}
+          onPointerEnter={onPreloadConsole}
+          onFocus={onPreloadConsole}
         >
           {t('header.console')}
         </button>

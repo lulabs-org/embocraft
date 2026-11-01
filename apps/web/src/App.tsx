@@ -1,7 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { GameHUDLayout } from './components/layout/GameHUDLayout';
 import { LobbyLayout } from './components/layout/LobbyLayout';
 import { ChatPanel } from './features/chat';
+import { ConsoleLoading } from './components/ui/ConsoleLoading';
+import { loadControlConsole, preloadConsole } from './load-console';
 import {
   GameFooter,
   GameHeader,
@@ -23,27 +25,8 @@ import { releasePointerLock } from './graphics/controls/pointer-lock';
 import { useViewportAdjust } from './hooks/useViewportAdjust';
 import type { Connection } from './network/connection';
 
-// Admin UI lives in its own chunk: the game shell only pays for it once the console opens.
-const ControlConsole = lazy(async () => {
-  const { ControlConsole: Console } = await import('./features/console');
-  return { default: Console };
-});
-
-function ConsoleLoading() {
-  const { t } = useI18n();
-  return (
-    <>
-      <div className="agent-dialog-backdrop" />
-      <div
-        className="agent-dialog console-loading"
-        role="status"
-        aria-live="polite"
-      >
-        {t('common.loading')}
-      </div>
-    </>
-  );
-}
+// Keep the admin UI in its own chunk; warm it on intent or after joining.
+const ControlConsole = lazy(loadControlConsole);
 
 export function App({ connection }: { connection: Connection }) {
   useAsrSelectionSync();
@@ -76,6 +59,11 @@ export function App({ connection }: { connection: Connection }) {
   } = useWorldScene(connection);
   const session = useWorldSession(connection, leaveWorldScene);
   const { name, setName, joined } = session;
+  useEffect(() => {
+    if (!joined) return;
+    const timeout = window.setTimeout(preloadConsole, 2500);
+    return () => window.clearTimeout(timeout);
+  }, [joined]);
   useGameShortcuts(joined, hud, setMaterial);
   const openConsole = (initialTab?: 'characters') => {
     releasePointerLock();
@@ -111,6 +99,7 @@ export function App({ connection }: { connection: Connection }) {
         isConsoleOpen={consoleEntry !== null}
         isPlayersOpen={activePanel === 'players'}
         onOpenConsole={() => openConsole()}
+        onPreloadConsole={preloadConsole}
         onTogglePlayers={() => togglePanel('players')}
         isMenuOpen={activePanel === 'menu'}
         onToggleMenu={() => togglePanel('menu')}
@@ -128,6 +117,7 @@ export function App({ connection }: { connection: Connection }) {
             error={connection.joinError}
             onJoin={() => void joinWorld()}
             onCreateAgent={() => openConsole('characters')}
+            onPreloadConsole={preloadConsole}
           />
         )}
         <WorldPanel
@@ -151,7 +141,14 @@ export function App({ connection }: { connection: Connection }) {
       )}
 
       {consoleMounted && (
-        <Suspense fallback={<ConsoleLoading />}>
+        <Suspense
+          fallback={
+            <ConsoleLoading
+              open={consoleEntry !== null}
+              onClose={() => setConsoleEntry(null)}
+            />
+          }
+        >
           <ControlConsole
             connection={connection}
             open={consoleEntry !== null}
