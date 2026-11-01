@@ -6,14 +6,9 @@ import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 /**
  * 安装 Provider（模型提供商）相关 HTTP REST 路由
  */
-export type ProviderRouteDependencies = Pick<
-  ProviderService,
-  'list' | 'save' | 'remove' | 'models' | 'health'
->;
-
 export function installProviderRoutes(
   app: Express,
-  providers: ProviderRouteDependencies,
+  providers: ProviderService,
   commands: ManagementCommands,
 ) {
   /**

@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
 import { object, text } from '../../../core/http/validation';
 import type { ProviderType } from '@voxel/shared';
-import { PROVIDER_SPECS } from './specs';
-import type { SavedProvider } from './model';
+import { PROVIDER_SPECS, type SavedProvider } from './model';
 
 const SUPPORTED_TYPES = ['deepseek', 'ollama', 'compatible', 'gemini'] as const;
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
