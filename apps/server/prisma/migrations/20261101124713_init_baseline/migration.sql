@@ -91,7 +91,6 @@ CREATE TABLE "AgentCharacter" (
     "position" INTEGER NOT NULL,
     "name" TEXT,
     "model" TEXT,
-    "goal" TEXT,
     "roleDescription" TEXT,
     "taskLimitsEnabled" BOOLEAN,
     "maxTurns" INTEGER,

@@ -15,7 +15,6 @@ export function characterSettings(
     providerId: view.providerId,
     name: view.name,
     model: view.model,
-    goal: view.goal,
     roleDescription: view.roleDescription,
     taskLimitsEnabled: view.taskLimitsEnabled,
     maxTurns: view.maxTurns,

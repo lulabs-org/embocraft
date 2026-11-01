@@ -84,7 +84,6 @@ async function role() {
   const j = manager.create({
     providerId: 'deepseek',
     name: '隔离角色',
-    goal: '',
   });
   await idle();
   return j.id;

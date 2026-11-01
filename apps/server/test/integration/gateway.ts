@@ -147,7 +147,6 @@ try {
   const value = {
     providerId: 'deepseek',
     name: 'Gateway fixture',
-    goal: '',
   };
   const first = await c.request<PublicAICharacterView>(
     'characters.create',

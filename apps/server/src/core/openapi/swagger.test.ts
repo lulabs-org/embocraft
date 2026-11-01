@@ -302,6 +302,7 @@ it('documents profile-only Agent writes and default standby with optional offlin
       expect.arrayContaining([
         { required: ['startTask'] },
         { required: ['taskTimeZone'] },
+        { required: ['goal'] },
       ]),
     );
   }

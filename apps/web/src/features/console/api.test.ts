@@ -91,7 +91,7 @@ it('routes agent operations through HTTP REST endpoints', async () => {
     expect.objectContaining({ method: 'GET', signal: expect.any(AbortSignal) }),
   );
 
-  const { goal: _goal, ...profile } = initialAICharacter;
+  const profile = initialAICharacter;
   const value = { ...profile, name: 'Partner' };
   await aiCharactersApi.saveAgent(value);
   expect(http).toHaveBeenLastCalledWith(

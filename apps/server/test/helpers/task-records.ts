@@ -45,7 +45,7 @@ export function storedRun(
 export function storedCharacter(
   overrides: Partial<CharacterRecord> = {},
 ): CharacterRecord {
-  const { apiKey: _apiKey, ...config } = testAgentConfig();
+  const { apiKey: _apiKey, goal: _goal, ...config } = testAgentConfig();
   return {
     ...config,
     id: 'actor',

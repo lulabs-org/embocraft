@@ -38,7 +38,6 @@ export const DEFAULT_CHARACTER = {
   position: 0,
   name: 'AI 探索者',
   model: 'deepseek-flash',
-  goal: '在世界中探索并与玩家互动交流。',
   roleDescription:
     '你是一名在体素世界中探索的 AI 伙伴。你可以自由移动、观察周围环境，并与玩家友好地交谈。',
   taskLimitsEnabled: true,

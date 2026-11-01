@@ -123,7 +123,7 @@ const profileTaskExclusion = {
   anyOf: [
     { required: ['startTask'] },
     { required: ['taskTimeZone'] },
-    { required: ['goal'], properties: { goal: { not: { enum: [''] } } } },
+    { required: ['goal'] },
   ],
 };
 
@@ -132,7 +132,7 @@ export const apiSchemas = {
     type: 'object',
     required: ['providerId', 'name'],
     description:
-      '只创建角色配置，默认上线待命，不创建计划或执行。joinWorld=false 仅保存离线角色。startTask、taskTimeZone 和非空 goal 返回 400，请使用 Tasks；兼容空 goal。',
+      '只创建角色配置，默认上线待命，不创建计划或执行。joinWorld=false 仅保存离线角色。startTask、taskTimeZone 和 goal 返回 400，请使用 Tasks。',
     not: profileTaskExclusion,
     properties: {
       ...agentProfileProperties,
@@ -142,7 +142,7 @@ export const apiSchemas = {
   AICharacterProfileUpdate: {
     type: 'object',
     description:
-      '只更新角色配置，不创建或替换任务；省略字段沿用原值。startTask、taskTimeZone 和非空 goal 返回 400；空 goal 不会清空已有任务。',
+      '只更新角色配置，不创建或替换任务；省略字段沿用原值。startTask、taskTimeZone 和 goal 返回 400。',
     not: profileTaskExclusion,
     properties: agentProfileProperties,
   },

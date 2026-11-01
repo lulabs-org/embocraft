@@ -23,7 +23,6 @@ export function validateAICharacter(
   const input = object(value);
   const model = validateProviderModel(input.model, provider, options);
   const name = text(input.name, '玩家昵称', 24);
-  const goal = text(input.goal, '任务目标', 2000);
   if (!name) throw new AppError('请填写玩家昵称。');
 
   const inference = validateInferenceSettings(input, model, provider.type);
@@ -62,7 +61,6 @@ export function validateAICharacter(
     providerId: provider.id,
     model,
     name,
-    goal,
     roleDescription: text(
       input.roleDescription,
       '角色设定',
@@ -103,13 +101,13 @@ export function validateAICharacter(
   };
 }
 
-/** Public profile writes cannot create or replace task execution. Empty legacy goals are harmless. */
+/** Public profile writes cannot create or replace task execution. */
 export function aiCharacterProfileInput(value: unknown) {
   const input = object(value);
   if (
     input.startTask !== undefined ||
     input.taskTimeZone !== undefined ||
-    (input.goal !== undefined && input.goal !== '')
+    input.goal !== undefined
   )
     throw new AppError(
       'Agent 配置不接受任务参数，请通过 Tasks 创建或修改任务。',

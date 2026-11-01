@@ -9,7 +9,6 @@ export type AICharacterSettings = {
   providerId: string;
   model: string;
   name: string;
-  goal: string;
   /** Persistent identity, responsibilities and style, independent of a task. */
   roleDescription?: string;
   /** Whether execution limits are enabled for this role. Missing means enabled. */

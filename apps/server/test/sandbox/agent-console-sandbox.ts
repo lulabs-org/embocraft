@@ -87,7 +87,6 @@ try {
     providerId: 'deepseek',
     model: 'fixture-model',
     name: '林间向导',
-    goal: '',
   });
   const b = manager.create({
     providerId: 'deepseek',
