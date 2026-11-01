@@ -1,5 +1,6 @@
 import { createDatabaseClient } from '../src/core/database/client';
 import {
+  DEFAULT_ASR_PROVIDER,
   DEFAULT_CHARACTER,
   DEFAULT_PROVIDERS,
   DEFAULT_TTS_PROVIDER,
@@ -22,6 +23,12 @@ async function main() {
   await prisma.ttsProvider.upsert({
     where: { id: DEFAULT_TTS_PROVIDER.id },
     create: DEFAULT_TTS_PROVIDER,
+    update: {},
+  });
+
+  await prisma.asrProvider.upsert({
+    where: { id: DEFAULT_ASR_PROVIDER.id },
+    create: DEFAULT_ASR_PROVIDER,
     update: {},
   });
 
