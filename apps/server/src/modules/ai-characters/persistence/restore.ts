@@ -3,7 +3,7 @@ import type { PlanService } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
-import type { ProviderRuntimePort } from '../../providers';
+import { PROVIDER_SPECS, type ProviderRuntimePort } from '../../providers';
 import type { CharacterRecord } from './record';
 import { createCharacterJob, type Job } from '../services/job';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
@@ -16,7 +16,9 @@ export function restoreAICharacterJob(
   ledger: PlanService,
 ): { job: Job; voiceWarning?: string; shouldAutoJoin: boolean } {
   const provider = providers.getRuntime(view.providerId);
-  const settings = validateAICharacter(view, provider);
+  const settings = validateAICharacter(view, provider, {
+    allowMissingApiKey: true,
+  });
   let voiceWarning = '';
   try {
     checkVoice(settings);
@@ -27,6 +29,9 @@ export function restoreAICharacterJob(
   }
   if (typeof view.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(view.id))
     throw new AppError('Agent 标识无效。', 500);
+
+  const missingApiKey =
+    PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey;
 
   const job = createCharacterJob(
     {
@@ -47,9 +52,9 @@ export function restoreAICharacterJob(
 
   restoreTaskExecution(executionState(job));
 
-  const shouldAutoJoin = ['idle', 'running', 'joining', 'failed'].includes(
-    view.status,
-  );
+  const shouldAutoJoin =
+    !missingApiKey &&
+    ['idle', 'running', 'joining', 'failed'].includes(view.status);
 
   return { job, voiceWarning: voiceWarning || undefined, shouldAutoJoin };
 }

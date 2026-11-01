@@ -31,3 +31,32 @@ export const DEFAULT_TTS_PROVIDER = {
   speed: 1.0,
   voiceLanguage: null,
 } as const;
+
+export const DEFAULT_CHARACTER = {
+  id: 'default-character',
+  providerId: 'deepseek',
+  position: 0,
+  name: 'AI 探索者',
+  model: 'deepseek-flash',
+  goal: '在世界中探索并与玩家互动交流。',
+  roleDescription:
+    '你是一名在体素世界中探索的 AI 伙伴。你可以自由移动、观察周围环境，并与玩家友好地交谈。',
+  taskLimitsEnabled: true,
+  maxTurns: 100,
+  maxStalledTurns: 3,
+  tokenBudget: 50000,
+  taskTimeoutMs: 900000,
+  intervalMode: 'fixed',
+  intervalMinMs: 4000,
+  intervalMaxMs: 8000,
+  intervalMs: 3000,
+  timeoutMs: 60000,
+  maxTokens: 512,
+  permissions: { move: true, chat: true, place: false, remove: false },
+  skills: [],
+  voiceReplies: true,
+  voiceServiceId: 'local-default',
+  thinking: 'disabled',
+  reasoningEffort: 'high',
+} as const;
+

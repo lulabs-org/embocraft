@@ -7,7 +7,7 @@ export {
   validateProviderModel,
 } from './domain/inference';
 export type { InferenceSettings } from './domain/inference';
-export { toProviderView } from './domain/model';
+export { toProviderView, PROVIDER_SPECS } from './domain/model';
 export type { SavedProvider } from './domain/model';
 export { validateProvider } from './domain/validation';
 export { DatabaseProviderRepository } from './persistence/database-repository';
