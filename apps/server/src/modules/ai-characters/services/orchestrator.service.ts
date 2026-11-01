@@ -44,8 +44,8 @@ import {
   isJobBusy,
   resident,
   type Job,
-} from './job';
-import { executionState } from './task-adapter';
+} from './character-job';
+import { executionState } from './task-execution-adapter';
 import { CharacterVoiceCoordinator } from './voice-coordinator.service';
 
 export class AICharacterOrchestrator {

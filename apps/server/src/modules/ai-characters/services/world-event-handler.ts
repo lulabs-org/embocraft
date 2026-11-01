@@ -1,6 +1,6 @@
 import { aiCharacterPermissions, type WorldEvent } from '@voxel/shared';
 import type { Session } from '@voxel/agent-runtime';
-import type { Job } from './job';
+import type { Job } from './character-job';
 import type { ExecutionContext } from './execution-context';
 
 /** Host lifecycle guards and ledger transaction hooks; intake policy belongs to the runtime. */

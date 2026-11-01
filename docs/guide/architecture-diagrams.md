@@ -168,7 +168,7 @@ graph TB
 ```mermaid
 graph LR
     Routes["routes/ai-characters.routes.ts<br/>REST 管理接口"] --> Orch["services/orchestrator.service.ts<br/>AICharacterOrchestrator"]
-    Manager["services/character.manager.ts<br/>AICharacterManager"] --> Orch
+    Manager["services/character-manager.service.ts<br/>AICharacterManager"] --> Orch
     Orch --> Host["services/character-host.service.ts<br/>单角色生命周期"]
     Orch --> Voice["services/voice-coordinator.service.ts"]
     Orch --> Restore["persistence/restore · snapshots"]
@@ -176,7 +176,7 @@ graph LR
     Orch --> Wake["services/wake-scheduler.service.ts"]
     Host --> WEH["services/world-event-handler.ts"]
     Host --> Log["domain/activity-log"]
-    Host --> TA["services/task-adapter.ts"]
+    Host --> TA["services/task-execution-adapter.ts"]
     Ctx -->|Session / AgentRunner| RTPkg["@voxel/agent-runtime"]
     WEH -->|recordEvent / TaskService| RTPkg
     TA --> TaskMod["modules/tasks"]
