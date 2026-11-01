@@ -51,7 +51,7 @@ function configuration(record: CharacterRecord, position: number) {
     permissions: json(record.permissions),
     skills: json(record.skills),
     voiceReplies: record.voiceReplies ?? null,
-    voiceServiceId: record.voiceServiceId ?? null,
+    voiceServiceId: record.voiceServiceId || null,
     thinking: record.thinking ?? null,
     reasoningEffort: record.reasoningEffort ?? null,
     createdAt:
@@ -160,7 +160,7 @@ export function restoreCharacter(
 }
 
 /** All three tables participate in the caller's joint character/task transaction. */
-export async function saveCharacter(
+export async function saveCharacterConfiguration(
   tx: Prisma.TransactionClient,
   next: SavedCharacter,
   previous?: SavedCharacter,
@@ -178,6 +178,15 @@ export async function saveCharacter(
       update: data,
     });
   }
+}
+
+/** Save recovery state only after referenced Runs and checkpoints exist. */
+export async function saveCharacterState(
+  tx: Prisma.TransactionClient,
+  next: SavedCharacter,
+  previous?: SavedCharacter,
+) {
+  const id = next.config.id;
   if (!previous || stableJson(next.state) !== stableJson(previous.state)) {
     const data = {
       ...next.state,

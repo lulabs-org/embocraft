@@ -4,7 +4,8 @@ import type { ArchivePort, ManagementArchive } from './archive';
 import {
   captureCharacter,
   restoreCharacter,
-  saveCharacter,
+  saveCharacterConfiguration,
+  saveCharacterState,
   type SavedCharacter,
 } from './character-storage';
 import { stableJson } from './stable-json';
@@ -27,6 +28,34 @@ function snapshot(
   archive: ManagementArchive,
   previous?: SavedSnapshot,
 ): SavedSnapshot {
+  const characters = new Set(
+    archive.characters.map((character) => character.id),
+  );
+  const plans = new Set(archive.plans.map((plan) => plan.id));
+  for (const plan of archive.plans)
+    if (plan.characterId && !characters.has(plan.characterId))
+      throw new Error('A plan must reference an existing character.');
+  for (const run of archive.runs)
+    if (run.planId && !plans.has(run.planId))
+      throw new Error('A run must reference an existing plan.');
+  if (previous) {
+    for (const run of archive.runs) {
+      if (
+        run.characterId &&
+        !characters.has(run.characterId) &&
+        previous.runs.get(run.id)?.characterIdSnapshot !== run.characterId
+      )
+        throw new Error(
+          'New run attribution must reference an existing character.',
+        );
+    }
+    for (const [key, planId] of Object.entries(archive.requests)) {
+      if (previous.requests.has(key) && previous.requests.get(key) !== planId)
+        throw new Error(
+          'An idempotency key cannot be reassigned to another plan.',
+        );
+    }
+  }
   const runs = new Map(archive.runs.map((run) => [run.id, run]));
   for (const character of archive.characters) {
     if (
@@ -66,7 +95,10 @@ function snapshot(
       ]),
     ),
     runs: new Map(
-      archive.runs.map((run, position) => [run.id, captureRun(run, position)]),
+      archive.runs.map((run, position) => [
+        run.id,
+        captureRun(run, position, characters),
+      ]),
     ),
     requests: new Map(Object.entries(archive.requests)),
   };
@@ -129,6 +161,19 @@ export class DatabaseManagementArchive implements ArchivePort {
       const next = snapshot(archive, before);
       await this.db.$transaction(
         async (tx) => {
+          // Release changing selections before deleting or replacing their targets.
+          // This intermediate state is never visible outside the transaction.
+          for (const [id, character] of before.characters) {
+            if (
+              character.state.currentRunId &&
+              character.state.currentRunId !==
+                next.characters.get(id)?.state.currentRunId
+            )
+              await tx.agentCharacterState.update({
+                where: { characterId: id },
+                data: { currentRunId: null },
+              });
+          }
           for (const key of before.requests.keys())
             if (!next.requests.has(key))
               await tx.agentRequest.delete({ where: { key } });
@@ -142,7 +187,11 @@ export class DatabaseManagementArchive implements ArchivePort {
               await tx.agentCharacter.delete({ where: { id } });
 
           for (const [id, character] of next.characters) {
-            await saveCharacter(tx, character, before.characters.get(id));
+            await saveCharacterConfiguration(
+              tx,
+              character,
+              before.characters.get(id),
+            );
           }
           for (const [id, plan] of next.plans) {
             await savePlan(tx, plan, before.plans.get(id));
@@ -150,13 +199,16 @@ export class DatabaseManagementArchive implements ArchivePort {
           for (const [id, run] of next.runs) {
             await saveRun(tx, run, before.runs.get(id));
           }
+          for (const [id, character] of next.characters) {
+            await saveCharacterState(tx, character, before.characters.get(id));
+          }
           for (const [key, planId] of next.requests) {
+            if (!next.plans.has(planId))
+              throw new Error(
+                'An idempotency request must reference an existing plan.',
+              );
             if (before.requests.get(key) === planId) continue;
-            await tx.agentRequest.upsert({
-              where: { key },
-              create: { key, planId },
-              update: { planId },
-            });
+            await tx.agentRequest.create({ data: { key, planId } });
           }
         },
         { maxWait: 10000, timeout: 30000 },

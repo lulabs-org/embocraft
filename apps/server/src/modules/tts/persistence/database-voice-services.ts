@@ -36,7 +36,9 @@ export class DatabaseVoiceServicePersistence
     try {
       await this.db.$transaction(async (tx) => {
         const ids = new Set(values.map((value) => value.id));
-        const existing = await tx.ttsProvider.findMany({ select: { id: true } });
+        const existing = await tx.ttsProvider.findMany({
+          select: { id: true },
+        });
         for (const row of existing)
           if (!ids.has(row.id))
             await tx.ttsProvider.delete({ where: { id: row.id } });
@@ -59,7 +61,12 @@ export class DatabaseVoiceServicePersistence
           });
         }
       });
-    } catch {
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2003')
+        throw new AppError(
+          '语音服务仍被 Agent 引用，请先更换或移除引用。',
+          409,
+        );
       throw new AppError('无法保存语音服务数据库配置。', 500);
     }
   }

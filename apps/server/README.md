@@ -145,6 +145,25 @@ TEST_DATABASE_URL="$TASK_TEST_DATABASE_URL" pnpm exec vitest run apps/server/tes
 
 持久化测试会清空该测试库的业务表，请勿指向业务数据库。
 
+## 任务与语音关系约束
+
+`20261101040046_task_voice_relations` 增加以下数据库关系：
+
+| 引用                                                     | 删除规则 / 约束                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `AgentPlan.characterId` → 角色                           | 删除角色解除指派，保留计划                                                      |
+| `AgentRun.characterId` → 角色                            | 删除角色解除有效引用；`characterIdSnapshot` 保留历史角色 ID，API 继续展示原归属 |
+| `AgentRun.planId` → 计划                                 | 有执行历史时禁止删除计划；聊天 Run 可以没有计划                                 |
+| `AgentCharacterState.currentRunId` + `characterId` → Run | 当前执行必须属于该角色，且必须存在对应检查点                                    |
+| `AgentCharacter.voiceServiceId` → TTS                    | 被角色引用时禁止删除；清空配置用 SQL NULL                                       |
+| `AgentRequest.planId` → 计划                             | 计划删除时清理幂等键；同一个键不能被存档写入改派到另一计划                      |
+| `AgentRun(planId, requestId)`                            | 同一计划的手动执行请求唯一，不同计划可以使用相同请求 ID                         |
+| `AsrAssignment.use` → ASR 服务                           | 用途限定为 chat / spatial / clip，每个用途最多一条；删除服务清理显式分配        |
+
+当前执行使用即时检查的外键。联合事务先解除需要切换或删除的当前执行引用，保存角色配置、计划、Run 和检查点后再保存角色恢复状态；中间状态不会对外可见。角色的长期记忆仍独立于 Run 检查点。
+
+ASR 显式分配改用 `AsrAssignment`，服务目录与分配在同一事务中保存。缺少显式分配时继续使用现有的默认选择规则；clip 的 Whisper 能力要求仍由服务层校验。迁移直接删除旧 `uses` 列，不回填既有分配或历史角色快照，适用于空库或已重置的开发库。
+
 ## HTTP 领域路径
 
 共享模型配置使用 `/providers`，全局计划使用 `/tasks`，运行控制使用 `/task-runs`，TTS 配置和试听使用 `/voice/tts/services`，Piper 模型目录与安装使用 `/voice/tts/piper`。它们与 `/ai-characters`、`/voice/asr/services` 都需要管理员 Bearer 令牌。Agent 音色绑定继续为 `/ai-characters/:id/voice`；聊天音频继续使用 `/chat` 下的玩家会话鉴权。

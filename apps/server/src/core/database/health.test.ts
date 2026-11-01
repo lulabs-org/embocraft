@@ -12,6 +12,7 @@ const db = vi.hoisted(() => ({
   agentRequest: { findFirst: vi.fn() },
   ttsProvider: { findFirst: vi.fn() },
   asrProvider: { findFirst: vi.fn() },
+  asrAssignment: { findFirst: vi.fn() },
 }));
 const createClient = vi.hoisted(() => vi.fn());
 vi.mock('@prisma/client', () => ({ PrismaClient: createClient }));
@@ -58,6 +59,9 @@ describe('database startup diagnostics', () => {
       expect(table.findFirst).toHaveBeenCalledWith({ select: { id: true } });
     expect(db.agentRequest.findFirst).toHaveBeenCalledWith({
       select: { key: true },
+    });
+    expect(db.asrAssignment.findFirst).toHaveBeenCalledWith({
+      select: { use: true },
     });
     expect(db.$disconnect).toHaveBeenCalledOnce();
   });

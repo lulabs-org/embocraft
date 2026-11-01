@@ -59,7 +59,12 @@ model AgentCharacter {
  createdAt DateTime? @default(now())
  state AgentCharacterState?
  logs AgentCharacterLog[]
+ plans AgentPlan[]
+ runs AgentRun[]
+ voiceService TtsProvider? @relation(fields: [voiceServiceId], references: [id], onDelete: Restrict)
  provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+ @@index([voiceServiceId])
 }
 
 // Character memory is independent of the selected Run checkpoint.
@@ -67,6 +72,9 @@ model AgentCharacterState {
  characterId String @id
  status String?
  currentRunId String?
+ currentCheckpoint AgentRunCheckpoint? @relation(fields: [currentRunId], references: [runId], onDelete: NoAction, onUpdate: NoAction)
+ // Persist Runs and checkpoints before selecting the current execution.
+ currentRun AgentRun? @relation("CurrentExecution", fields: [currentRunId, characterId], references: [id, characterId], onDelete: NoAction, onUpdate: NoAction)
  runtimeVersion Int?
  memory Json?
  standby Json?
@@ -106,6 +114,10 @@ model AgentPlan {
  createdAt DateTime
  updatedAt DateTime
 
+ character AgentCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+ runs AgentRun[]
+ requests AgentRequest[]
+
  @@index([state, nextRunAt])
  @@index([characterId, createdAt, id])
 }
@@ -117,6 +129,8 @@ model AgentRun {
  planId String?
  planRevision Int?
  characterId String?
+ // Historical domain/API attribution survives character deletion.
+ characterIdSnapshot String?
  characterName String?
  source String
  status String
@@ -137,6 +151,12 @@ model AgentRun {
  lastBatch String?
  requiresReassignment Boolean?
  checkpoint AgentRunCheckpoint?
+ character AgentCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+ plan AgentPlan? @relation(fields: [planId], references: [id], onDelete: Restrict)
+ selectedBy AgentCharacterState[] @relation("CurrentExecution")
+
+ @@unique([id, characterId])
+ @@unique([planId, requestId])
 
  @@index([planId, scheduledAt, id])
  @@index([characterId, status])
@@ -147,12 +167,16 @@ model AgentRunCheckpoint {
  runId String @id
  version Int
  execution Json
+ selectedBy AgentCharacterState[]
  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 }
 
 model AgentRequest {
  key String @id
  planId String
+ plan AgentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+ @@index([planId])
 }
 
 model TtsProvider {
@@ -166,6 +190,7 @@ model TtsProvider {
   voice         String  @default("")
   speed         Float   @default(1.0)
   voiceLanguage String?
+  characters AgentCharacter[]
 }
 
 
@@ -176,10 +201,25 @@ model AsrProvider {
   provider    String   @default("bailian")
   model       String
   apiKey      String   @default("")
-  uses        String[] @default([])
+  assignments AsrAssignment[]
   region      String?
   workspaceId String?
   baseUrl     String?
   temperature Float?
   prompt      String?
+}
+
+
+enum AsrUse {
+  chat
+  spatial
+  clip
+}
+
+model AsrAssignment {
+  use AsrUse @id
+  providerId String
+  provider AsrProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
 }
