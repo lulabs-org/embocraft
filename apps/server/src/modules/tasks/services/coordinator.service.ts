@@ -411,7 +411,7 @@ export class TaskCoordinator {
             { kind: 'operator' },
             { ...state.view, apiKey: '' },
           );
-          run.runtime = runtime.snapshot();
+          run.runtime = runtime.executionSnapshot();
         }
       }
       run.status = 'cancelled';

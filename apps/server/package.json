@@ -13,9 +13,6 @@
     "test:agent:deepseek": "tsx test/integration/deepseek.ts",
     "test": "vitest run --config ../../vitest.config.ts"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@colyseus/core": "^0.16.24",
     "@colyseus/schema": "^3.0.69",

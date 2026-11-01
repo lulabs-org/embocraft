@@ -37,9 +37,9 @@ cp -n .env.example .env
 pnpm install --frozen-lockfile
 
 # 2. 准备数据库并启动迁移
-pnpm db:generate
 node scripts/database.mjs      # 在本地端口 55432 启动独立 PostgreSQL
-pnpm db:migrate    # 执行 Prisma 数据迁移
+pnpm db:migrate    # 创建并应用开发环境迁移
+pnpm db:generate   # 生成 Prisma 客户端
 
 # 3. 启动前端与服务端开发环境
 pnpm dev

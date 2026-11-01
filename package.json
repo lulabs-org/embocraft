@@ -14,6 +14,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @voxel/server exec prisma generate",
     "db:migrate": "pnpm --filter @voxel/server exec prisma migrate dev",
+    "db:reset": "pnpm --filter @voxel/server exec prisma migrate reset",
     "db:deploy": "pnpm --filter @voxel/server exec prisma migrate deploy",
     "db:seed": "pnpm --filter @voxel/server exec prisma db seed",
     "db:studio": "pnpm --filter @voxel/server exec prisma studio"

@@ -78,15 +78,21 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；旧 JSON 存储后备路径已移除，网关令牌及本地语音模型文件保留原配置位置。现有数据库存档恢复与运行时迁移继续保留。
 
-角色存储在当前 schema 中分成三张表：
+角色与执行快照在当前 schema 中按所有权分开保存：
 
 - `AgentCharacter` 保存明确的配置列和排序，不再保存整个 `AICharacterView`。可空配置列保留旧存档中“字段缺失”的语义，加载时仍由领域校验补默认值；权限和技能作为小型结构化 JSON 保留。
-- `AgentCharacterState` 保存恢复用的状态、当前 Run ID 和完整的版本化 runtime。此阶段不改变 runtime 内角色记忆与执行 checkpoint 的恢复语义，也未调整 `AgentPlan`、`AgentRun` 的结构。
+- `AgentCharacterState` 保存恢复用的状态、当前 Run ID、runtime 版本及角色长期 `memory`（对话、收件箱、累计用量）。无当前任务时，`standby` 保留待命回复和诊断状态；有当前 Run 时不保存执行快照。
 - `AgentCharacterLog` 按角色和递增序号保存日志。追加和截断只写入新增、删除过期条目，不重写配置和保留的日志；时间允许为空，继续遵循原有最多 500 条的行为。
 
-三张表和任务表仍在同一事务中提交，失败时不推进内存中的已提交状态。角色删除会级联删除状态和日志。公开接口继续组装派生字段和日志分页；本轮日志查询仍使用已加载的内存视图，尚未改为直接 SQL 分页。
+- `AgentRunCheckpoint` 通过 Run ID 一对一保存版本号和执行分区（任务身份、模型上下文、动作结果、未确认副作用、健康状态）。`AgentRun.data` 只保存执行元数据，不再嵌套 runtime；删除 Run 会级联删除 checkpoint。
 
-本次拆分不提供旧数据搬迁 SQL，以 `prisma/schema.prisma` 为准，运行 `pnpm db:generate` 生成客户端。该命令不会创建或修改数据库表，已有迁移历史也不包含此次拆分结构。空测试库通过 `pnpm --filter @voxel/server exec prisma db push` 同步 schema；此命令与客户端生成分开执行。本地数据库测试应使用独立的 `TEST_DATABASE_URL`，测试会清空该测试库中的业务表。
+角色、日志、Run 元数据、checkpoint 和任务表仍在同一事务中提交，失败时不推进内存中的已提交状态。执行快照单独变化时不重写角色记忆或 Run 元数据。角色删除会级联删除状态和日志。公开接口继续组装派生字段和日志分页；本轮日志查询仍使用已加载的内存视图，尚未改为直接 SQL 分页。
+
+读取数据库时，将角色最新记忆与当前 Run 的 checkpoint 组合成运行时完整快照；缺失、归属错误或不一致的当前执行会拒绝加载或保存。组合后的角色与 Run 对象互不共享可变执行引用。内存运行时和归档端口保留完整快照形状，Run 快照中的角色分区为空；恢复历史执行只替换执行分区，保留最新对话、收件箱、节奏和累计用量。暂停、私聊过期与不重放未知动作的恢复规则保持不变。
+
+数据库结构变更使用 Prisma Migrate：开发时运行 `pnpm db:migrate --name <change>` 创建并应用新迁移，再运行 `pnpm db:generate`；CI 和 Docker 通过 `pnpm db:deploy` 应用已提交的迁移，不运行交互式 `migrate dev`。Prisma 7 不会在迁移后自动生成客户端。已应用的迁移文件不得修改；如果出现校验和冲突，应从版本控制或备份恢复当时的原文件，再追加迁移，不通过 `db push`、修改 `_prisma_migrations` 或自动 reset 绕过。
+
+`20261101013936_split_character_execution_storage` 补齐角色配置、长期记忆、日志和 Run checkpoint 的结构变更。该迁移不搬迁旧存档，会删除 `AgentCharacter.data`，适用于空库或已重置的开发库；需要保留旧数据的环境必须先另行准备数据迁移方案。运行数据库测试时使用独立的 `TEST_DATABASE_URL`，测试会清空该测试库中的业务表。
 
 `test/helpers/test-server.ts` 使用生产 `createServer`，通过 `test/helpers/memory-storage.ts` 注入内存模型服务、角色存档与语音配置；默认配置临时令牌目录、内存世界、随机 loopback 端口与 mock 语音。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
 

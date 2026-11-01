@@ -16,12 +16,14 @@ export function startScheduledTaskState(
   };
 }
 
-/** Resume the archived execution and conversation, retaining current cumulative usage. */
+/** Restore only the historical execution; character memory always remains current. */
 export function resumeTaskState(
   state: RuntimeState,
   archived: RuntimeState,
 ): RuntimeState {
-  const restored = structuredClone(archived);
-  restored.character.usage = state.character.usage;
-  return restored;
+  return structuredClone({
+    version: state.version,
+    character: state.character,
+    execution: archived.execution,
+  });
 }

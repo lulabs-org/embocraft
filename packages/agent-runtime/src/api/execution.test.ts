@@ -54,6 +54,46 @@ describe('host execution boundary', () => {
     expect(runtime.view().usage?.tokens).toBe(1000);
   });
 
+  it('keeps new conversations and pending events when resuming an execution-only checkpoint', () => {
+    const runtime = createAgentRuntime();
+    runtime.startScheduled(plan);
+    runtime.stageControl(
+      { type: 'pause' },
+      { kind: 'operator' },
+      testAgentConfig(),
+    );
+    const archived = runtime.executionSnapshot();
+    expect(archived.character).toEqual({ conversation: {} });
+    const current = runtime.snapshot();
+    current.character.conversation = {
+      exchanges: { public: ['newer conversation'] },
+      lastChatAt: 200,
+    };
+    current.character.usage = { calls: 20, tokens: 2000, estimated: false };
+    current.character.inbox = {
+      version: 1,
+      events: [
+        {
+          id: 'new-plan',
+          kind: 'plan',
+          state: 'pending',
+          at: 200,
+          audience: 'public',
+        },
+      ],
+    };
+    runtime.restore(current);
+    runtime.resumeExecution(archived, testAgentConfig());
+    expect(runtime.snapshot().character).toEqual(current.character);
+    expect(runtime.view().task).toMatchObject({
+      goal: plan.goal,
+      status: 'running',
+    });
+    expect(runtime.executionSnapshot().character).toEqual({ conversation: {} });
+    archived.execution.health.lastResponse = 'mutated caller checkpoint';
+    expect(runtime.view().lastResponse).not.toBe('mutated caller checkpoint');
+  });
+
   it('recovers an interrupted private execution without replaying its effects or stale messages', () => {
     const state = emptyState();
     state.execution.task.current = newTask('private', 'alice', 'alice');

@@ -54,7 +54,7 @@ export function restoreTaskExecution(job: TaskExecutionState) {
       if (['running', 'waiting'].includes(run.status)) {
         run.task = runtime.view().task ?? run.task;
       }
-      run.runtime = runtime.snapshot();
+      run.runtime = runtime.executionSnapshot();
     }
     for (const action of run.actions ?? [])
       if (action.status === 'executing') action.status = 'unknown';

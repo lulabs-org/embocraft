@@ -100,6 +100,14 @@ export class RuntimeExecution {
   snapshot(): RuntimeState {
     return structuredClone(this.memory);
   }
+  /** A ledger checkpoint has no copy of character conversations, inbox or usage. */
+  executionSnapshot(): RuntimeState {
+    return {
+      ...emptyState(),
+      execution: structuredClone(this.memory.execution),
+    };
+  }
+
   archive(): RuntimeState {
     return snapshotState(this.memory);
   }

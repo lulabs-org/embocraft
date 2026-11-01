@@ -1,5 +1,11 @@
+import { createAgentRuntime } from '@voxel/agent-runtime';
+import { testAgentConfig } from '../../../tests/support/agent-config';
 import type { PrismaClient } from '@prisma/client';
-import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import {
+  DEFAULT_BAILIAN_ASR,
+  DEFAULT_WHISPER_ASR,
+  DEFAULT_TASK_LIMITS,
+} from '@voxel/shared';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +23,7 @@ import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
 import type { ManagementArchive } from '../src/persistence/archive';
 import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { createServer } from '../src/server';
+import { newPlan, newRun } from '../src/modules/tasks';
 
 const url = process.env.TEST_DATABASE_URL;
 const db = url ? createDatabaseClient(url) : undefined;
@@ -44,7 +51,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       name: 'Split',
       providerId: 'deepseek',
       status: 'stopped',
-      runtime: { version: 4 },
+      runtime: createAgentRuntime().snapshot(),
       logEntries: [
         { time: null, text: 'first' },
         { time: 100, text: 'second' },
@@ -113,6 +120,259 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await restored.save(loaded);
     expect(await db!.agentCharacterState.count()).toBe(0);
     expect(await db!.agentCharacterLog.count()).toBe(0);
+  });
+
+  it('stores execution checkpoints once and resumes them with the latest character memory', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const runtime = createAgentRuntime();
+    runtime.ensureTask('Keep progress');
+    runtime.stageControl(
+      { type: 'pause' },
+      { kind: 'operator' },
+      testAgentConfig(),
+    );
+    const checkpoint = runtime.executionSnapshot();
+    checkpoint.execution.checkpoint.unknownEffect = {
+      id: 'effect',
+      name: 'edit',
+      state: 'unknown',
+    };
+    const current = structuredClone(checkpoint);
+    current.character = {
+      conversation: {
+        exchanges: { public: ['latest conversation'] },
+        lastChatAt: 500,
+      },
+      usage: { calls: 10, tokens: 1000, estimated: false },
+      inbox: {
+        version: 1,
+        events: [
+          {
+            id: 'new-input',
+            kind: 'plan',
+            state: 'pending',
+            at: 500,
+            audience: 'public',
+          },
+        ],
+      },
+    };
+    const snapshot = {
+      version: 3,
+      characters: [
+        {
+          id: 'actor',
+          providerId: 'deepseek',
+          name: 'Actor',
+          status: 'stopped',
+          currentRunId: 'run',
+          runtime: current,
+          logEntries: [],
+        },
+      ],
+      plans: [],
+      runs: [
+        {
+          id: 'run',
+          characterId: 'actor',
+          status: 'paused',
+          runtime: checkpoint,
+        },
+      ],
+      requests: {},
+    } as unknown as ManagementArchive;
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.load();
+    await archive.save(snapshot);
+    const storedState = await db!.agentCharacterState.findUniqueOrThrow({
+      where: { characterId: 'actor' },
+    });
+    expect(storedState).toMatchObject({
+      runtimeVersion: 4,
+      memory: current.character,
+      standby: null,
+    });
+    expect(storedState).not.toHaveProperty('runtime');
+    expect(
+      (await db!.agentRun.findUniqueOrThrow({ where: { id: 'run' } })).data,
+    ).not.toHaveProperty('runtime');
+    expect(
+      await db!.agentRunCheckpoint.findUniqueOrThrow({
+        where: { runId: 'run' },
+      }),
+    ).toEqual({ runId: 'run', version: 4, execution: checkpoint.execution });
+    const revisions = () => db!.$queryRaw<
+      Array<{ kind: string; revision: string }>
+    >`
+      SELECT 'state' AS kind, xmin::text AS revision FROM "AgentCharacterState" WHERE "characterId" = 'actor'
+      UNION ALL SELECT 'run', xmin::text FROM "AgentRun" WHERE id = 'run'
+      UNION ALL SELECT 'checkpoint', xmin::text FROM "AgentRunCheckpoint" WHERE "runId" = 'run'
+      ORDER BY kind
+    `;
+    const before = await revisions();
+    // A checkpoint-only update must not rewrite character memory or Run metadata.
+    checkpoint.execution.health.lastResponse = 'new execution progress';
+    current.execution = structuredClone(checkpoint.execution);
+    await archive.save(snapshot);
+    const after = await revisions();
+    expect(after.filter((r) => r.kind !== 'checkpoint')).toEqual(
+      before.filter((r) => r.kind !== 'checkpoint'),
+    );
+    expect(after.find((r) => r.kind === 'checkpoint')).not.toEqual(
+      before.find((r) => r.kind === 'checkpoint'),
+    );
+    const restored = new DatabaseManagementArchive(db!);
+    const loaded = (await restored.load())!;
+    expect(loaded).toEqual(snapshot);
+    await restored.save(loaded);
+    expect(await revisions()).toEqual(after);
+    const resumed = createAgentRuntime({ state: loaded.characters[0].runtime });
+    resumed.resumeExecution(loaded.runs[0].runtime!, testAgentConfig());
+    expect(resumed.snapshot().character).toEqual(current.character);
+    expect(resumed.view().task).toMatchObject({
+      goal: 'Keep progress',
+      status: 'running',
+    });
+    expect(resumed.snapshot().execution.checkpoint.unknownEffect).toEqual(
+      checkpoint.execution.checkpoint.unknownEffect,
+    );
+
+    // A request error occurs after both memory and checkpoint writes in the transaction.
+    const failed = structuredClone(loaded);
+    failed.characters[0].runtime!.character.conversation.lastChatAt = 999;
+    failed.runs[0].runtime!.execution.health.lastResponse = 'uncommitted';
+    failed.characters[0].runtime!.execution = structuredClone(
+      failed.runs[0].runtime!.execution,
+    );
+    failed.requests.bad = null as unknown as string;
+    await expect(restored.save(failed)).rejects.toThrow(
+      '无法保存 Agent 数据库记录',
+    );
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(loaded);
+    expect(await revisions()).toEqual(after);
+    await restored.save(loaded);
+    expect(await revisions()).toEqual(after);
+
+    // Incoherent references must fail rather than silently discard current progress.
+    const mismatched = structuredClone(loaded);
+    mismatched.characters[0].runtime!.execution.health.lastResponse =
+      'different';
+    await expect(restored.save(mismatched)).rejects.toThrow(
+      '无法保存 Agent 数据库记录',
+    );
+    await db!.agentRunCheckpoint.delete({ where: { runId: 'run' } });
+    await expect(new DatabaseManagementArchive(db!).load()).rejects.toThrow(
+      '无法读取 Agent 数据库记录',
+    );
+    await db!.agentRunCheckpoint.create({
+      data: {
+        runId: 'run',
+        version: 4,
+        execution: JSON.parse(JSON.stringify(checkpoint.execution)),
+      },
+    });
+    await db!.agentRun.update({
+      where: { id: 'run' },
+      data: { data: { id: 'run', characterId: 'another' } },
+    });
+    await expect(new DatabaseManagementArchive(db!).load()).rejects.toThrow(
+      '无法读取 Agent 数据库记录',
+    );
+    // Restore the test row before exercising cascade deletion through the archive.
+    await db!.agentRun.update({
+      where: { id: 'run' },
+      data: { data: { id: 'run', characterId: 'actor', status: 'paused' } },
+    });
+    loaded.characters = [];
+    loaded.runs = [];
+    await restored.save(loaded);
+    expect(await db!.agentRunCheckpoint.count()).toBe(0);
+  });
+
+  it('restarts a managed character from its Run checkpoint without replaying unknown actions', async () => {
+    const providers = new DatabaseProviderRepository(db!);
+    await bootstrapProviders(providers);
+    const manager = new AICharacterManager(
+      providers,
+      'ws://fixture',
+      new DatabaseManagementArchive(db!),
+    );
+    let id: string;
+    try {
+      await manager.load();
+      id = manager.create({
+        name: 'Restart',
+        providerId: 'ollama',
+        model: 'qwen2.5:3b',
+        joinWorld: false,
+      }).id;
+      await manager.flush();
+    } finally {
+      await manager.close();
+    }
+    const archive = new DatabaseManagementArchive(db!);
+    const saved = (await archive.load())!;
+    const runtime = createAgentRuntime({ state: saved.characters[0].runtime });
+    runtime.ensureTask('Recover progress');
+    const lease = runtime.lease();
+    const state = runtime.snapshot();
+    state.character.conversation.exchanges = { public: ['latest memory'] };
+    state.execution.checkpoint.pi = {
+      version: 3,
+      taskId: lease.id,
+      revision: lease.revision,
+      taskStartedAt: lease.startedAt,
+      audience: 'public',
+      messages: [],
+      inFlight: { id: 'edit', name: 'edit', state: 'executing' },
+    };
+    runtime.restore(state);
+    const plan = newPlan(
+      {
+        name: 'Recovery',
+        goal: 'Recover progress',
+        timing: { kind: 'immediate' },
+        timeZone: 'UTC',
+        limits: DEFAULT_TASK_LIMITS,
+        totalTokenBudget: 500000,
+      },
+      Date.now(),
+    );
+    const run = newRun(plan, Date.now(), 'chat');
+    delete run.planId;
+    run.characterId = id!;
+    run.task = runtime.view().task;
+    run.runtime = runtime.executionSnapshot();
+    saved.runs.push(run);
+    saved.characters[0].currentRunId = run.id;
+    saved.characters[0].runtime = runtime.snapshot();
+    await archive.save(saved);
+    const restarted = new AICharacterManager(
+      providers,
+      'ws://fixture',
+      new DatabaseManagementArchive(db!),
+    );
+    try {
+      await restarted.load();
+      expect(restarted.publicList()[0]).toMatchObject({
+        id: id!,
+        status: 'stopped',
+        task: { goal: 'Recover progress', status: 'paused' },
+      });
+      const restored = (await new DatabaseManagementArchive(db!).load())!;
+      expect(
+        restored.characters[0].runtime!.character.conversation.exchanges,
+      ).toEqual({ public: ['latest memory'] });
+      expect(restored.runs[0].runtime!.character).toEqual({ conversation: {} });
+      expect(
+        restored.runs[0].runtime!.execution.checkpoint.unknownEffect,
+      ).toMatchObject({ id: 'edit', state: 'unknown' });
+      expect(restored.characters[0].runtime!.execution).toEqual(
+        restored.runs[0].runtime!.execution,
+      );
+    } finally {
+      await restarted.close();
+    }
   });
 
   it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
@@ -283,6 +543,10 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await bootstrapProviders(providers);
     const archive = new DatabaseManagementArchive(db!);
     expect(await archive.load()).toBeUndefined();
+    const runtime = createAgentRuntime();
+    runtime.ensureTask('work');
+    const checkpoint = runtime.executionSnapshot();
+    checkpoint.execution.health.lastResponse = 'checkpoint-1';
     const first = {
       version: 3,
       characters: [
@@ -292,7 +556,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
           providerId: 'deepseek',
           status: 'stopped',
           logEntries: [],
-          runtime: { task: { current: { goal: 'work' } } },
+          runtime: structuredClone(checkpoint),
+          currentRunId: 'run-a',
         },
       ],
       plans: [
@@ -311,7 +576,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
           characterId: 'agent-1',
           planId: 'plan-a',
           status: 'running',
-          runtime: { memory: 'checkpoint-1' },
+          runtime: structuredClone(checkpoint),
         },
       ],
       requests: { 'agent-1:request': 'plan-a' },
@@ -323,9 +588,10 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const unchangedHistory = await db!.$queryRaw<Array<{ xmin: string }>>`
       SELECT xmin::text AS xmin FROM "AgentRun" WHERE id = 'run-b'
     `;
-    first.runs[1].runtime = {
-      memory: 'checkpoint-2',
-    } as unknown as (typeof first.runs)[1]['runtime'];
+    first.runs[1].runtime!.execution.health.lastResponse = 'checkpoint-2';
+    first.characters[0].runtime!.execution = structuredClone(
+      first.runs[1].runtime!.execution,
+    );
     await archive.save(first);
     expect(
       await db!.$queryRaw<Array<{ xmin: string }>>`
@@ -334,7 +600,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     ).toEqual(unchangedHistory);
     expect(
       (await new DatabaseManagementArchive(db!).load())?.runs[1].runtime,
-    ).toEqual({ memory: 'checkpoint-2' });
+    ).toEqual(first.runs[1].runtime);
     const restoredArchive = new DatabaseManagementArchive(db!);
     const restored = (await restoredArchive.load())!;
     const checkpointRevision = await db!.$queryRaw<Array<{ xmin: string }>>`

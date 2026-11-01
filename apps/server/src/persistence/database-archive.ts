@@ -8,6 +8,7 @@ import {
   type SavedCharacter,
 } from './character-storage';
 import { stableJson } from './stable-json';
+import { captureRun, restoreRun, saveRun, type SavedRun } from './run-storage';
 
 type SavedRow = {
   id: string;
@@ -17,7 +18,7 @@ type SavedRow = {
 type SavedSnapshot = {
   characters: Map<string, SavedCharacter>;
   plans: Map<string, SavedRow>;
-  runs: Map<string, SavedRow>;
+  runs: Map<string, SavedRun>;
   requests: Map<string, string>;
 };
 
@@ -38,6 +39,31 @@ function snapshot(
   archive: ManagementArchive,
   previous?: SavedSnapshot,
 ): SavedSnapshot {
+  const runs = new Map(archive.runs.map((run) => [run.id, run]));
+  for (const character of archive.characters) {
+    if (
+      character.runtime &&
+      (character.runtime.version !== 4 ||
+        !character.runtime.character ||
+        !character.runtime.execution)
+    )
+      throw new Error('Unsupported character runtime.');
+    if (character.currentRunId) {
+      const run = runs.get(character.currentRunId);
+      if (
+        !character.runtime ||
+        !run?.runtime ||
+        run.characterId !== character.id ||
+        stableJson(run.runtime.execution) !==
+          stableJson(character.runtime.execution)
+      )
+        throw new Error(
+          'Current execution checkpoint is missing, mismatched or belongs to another character.',
+        );
+    } else if (character.runtime?.execution.task.current) {
+      throw new Error('A task execution must belong to a Run.');
+    }
+  }
   return {
     characters: new Map(
       archive.characters.map((record, position) => [
@@ -46,7 +72,9 @@ function snapshot(
       ]),
     ),
     plans: rows(archive.plans),
-    runs: rows(archive.runs),
+    runs: new Map(
+      archive.runs.map((run, position) => [run.id, captureRun(run, position)]),
+    ),
     requests: new Map(Object.entries(archive.requests)),
   };
 }
@@ -83,16 +111,21 @@ export class DatabaseManagementArchive implements ArchivePort {
           include: { state: true, logs: { orderBy: { sequence: 'asc' } } },
         }),
         this.db.agentPlan.findMany({ orderBy: { position: 'asc' } }),
-        this.db.agentRun.findMany({ orderBy: { position: 'asc' } }),
+        this.db.agentRun.findMany({
+          orderBy: { position: 'asc' },
+          include: { checkpoint: true },
+        }),
         this.db.agentRequest.findMany(),
       ]);
+      const restoredRuns = runs.map(restoreRun);
+      const byRunId = new Map(restoredRuns.map((run) => [run.id, run]));
       const archive: ManagementArchive = {
         version: 3,
-        characters: characters.map(restoreCharacter),
+        characters: characters.map((row) => restoreCharacter(row, byRunId)),
         plans: plans.map(
           (row) => row.data as ManagementArchive['plans'][number],
         ),
-        runs: runs.map((row) => row.data as ManagementArchive['runs'][number]),
+        runs: restoredRuns,
         requests: Object.fromEntries(
           requests.map((row) => [row.key, row.planId]),
         ),
@@ -112,9 +145,9 @@ export class DatabaseManagementArchive implements ArchivePort {
   }
 
   async save(archive: ManagementArchive): Promise<void> {
-    const next = snapshot(archive, this.committed);
     const before = this.committed;
     try {
+      const next = snapshot(archive, before);
       await this.db.$transaction(
         async (tx) => {
           for (const key of before.requests.keys())
@@ -140,13 +173,8 @@ export class DatabaseManagementArchive implements ArchivePort {
               update: { position: row.position, data: json(row) },
             });
           }
-          for (const row of next.runs.values()) {
-            if (!changed(row, before.runs.get(row.id))) continue;
-            await tx.agentRun.upsert({
-              where: { id: row.id },
-              create: { id: row.id, position: row.position, data: json(row) },
-              update: { position: row.position, data: json(row) },
-            });
+          for (const [id, run] of next.runs) {
+            await saveRun(tx, run, before.runs.get(id));
           }
           for (const [key, planId] of next.requests) {
             if (before.requests.get(key) === planId) continue;

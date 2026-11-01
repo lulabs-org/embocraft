@@ -36,10 +36,10 @@ Prerequisites: Node.js 22.13+, pnpm 10, PostgreSQL 17 binaries. Fully runnable l
 # 1. Install dependencies
 pnpm install --frozen-lockfile
 
-# 2. Setup database and run migrations
-pnpm db:generate
+# 2. Setup database and synchronize schema
 node scripts/database.mjs      # Starts standalone PostgreSQL on local port 55432
-pnpm db:migrate    # Runs Prisma database migrations
+pnpm db:migrate    # Creates and applies development migrations
+pnpm db:generate   # Generate Prisma Client
 
 # 3. Start frontend and server development servers
 pnpm dev

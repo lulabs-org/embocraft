@@ -118,5 +118,5 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
-      - run: pnpm --filter @voxel/server exec prisma db push
+      - run: pnpm db:deploy
       - run: pnpm --filter @voxel/server exec vitest run test/database-persistence.test.ts --config ../../vitest.config.ts
