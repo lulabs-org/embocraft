@@ -56,7 +56,7 @@ model AgentCharacter {
  voiceServiceId String?
  thinking String?
  reasoningEffort String?
- createdAt Float?
+ createdAt DateTime? @default(now())
  state AgentCharacterState?
  logs AgentCharacterLog[]
  provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
