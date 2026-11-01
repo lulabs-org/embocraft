@@ -18,9 +18,10 @@ import {
 export function validateAICharacter(
   value: unknown,
   provider: SavedProvider,
+  options?: { allowMissingApiKey?: boolean },
 ): AICharacterSettings {
   const input = object(value);
-  const model = validateProviderModel(input.model, provider);
+  const model = validateProviderModel(input.model, provider, options);
   const name = text(input.name, '玩家昵称', 24);
   const goal = text(input.goal, '任务目标', 2000);
   if (!name) throw new AppError('请填写玩家昵称。');

@@ -39,13 +39,18 @@ export function resolveInferenceDefaults(
 export function validateProviderModel(
   value: unknown,
   provider: SavedProvider,
+  options?: { allowMissingApiKey?: boolean },
 ): string {
   const model = text(value, '模型', 128, provider.defaultModel);
   if (!model || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,127}$/.test(model))
     throw new AppError('请输入有效模型 ID。');
   if (provider.type === 'ollama' && /cloud/i.test(model))
     throw new AppError('Ollama 请选择已安装在目标服务上的模型。');
-  if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
+  if (
+    !options?.allowMissingApiKey &&
+    PROVIDER_SPECS[provider.type].requiresApiKey &&
+    !provider.apiKey
+  )
     throw new AppError('请先为该模型服务配置 API Key。');
   return model;
 }
