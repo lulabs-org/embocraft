@@ -3,6 +3,10 @@ export {
   type AICharacterDependencies,
 } from './services/orchestrator.service';
 export { AICharacterManager } from './services/character.manager';
+export {
+  CharacterQueries,
+  type CharacterQueryPort,
+} from './persistence/queries';
 export { CharacterVoiceCoordinator } from './services/voice-coordinator.service';
 export { validateAICharacter } from './domain/validation';
 export {

@@ -1,13 +1,15 @@
 import { ManagementCommands } from '../../management';
-import { AppError } from '../../../core/errors/app-error';
 import type { Express, Request } from 'express';
 import {
   AI_CHARACTER_LOG_MAX_PAGE_SIZE,
   AI_CHARACTER_LOG_PAGE_SIZE,
   type AICharacterLogPage,
 } from '@voxel/shared';
-import type { PublicAICharacterView } from '@voxel/shared/management';
 import type { AICharacterOrchestrator } from '../services/orchestrator.service';
+import type {
+  CharacterDetail,
+  CharacterQueryPort,
+} from '../persistence/queries';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 /** Opaque, versioned cursor wrapping a newest-first page offset. */
@@ -33,9 +35,7 @@ export type AICharacterRoutePort = Pick<
   | 'create'
   | 'flush'
   | 'join'
-  | 'publicIdentity'
-  | 'publicList'
-  | 'publicLogEntries'
+  | 'sessionId'
   | 'remove'
   | 'setVoice'
   | 'settled'
@@ -51,20 +51,14 @@ export function installAICharacterRoutes(
   app: Express,
   manager: AICharacterRoutePort,
   commands: ManagementCommands,
+  queries: CharacterQueryPort,
 ) {
-  const view = (id: string): PublicAICharacterView => {
-    const value = manager.publicList().find((a) => a.id === id);
-    if (!value) throw new AppError('AI 角色 不存在。', 404);
-    const { logEntries, ...rest } = value;
-    const newest = logEntries.at(-1);
-    return {
-      ...rest,
-      resourceVersion: manager.events.version,
-      taskIdentity: manager.publicIdentity(id) ?? null,
-      lastLog: newest?.text,
-      lastLogAt: newest ? newest.time : undefined,
-    };
-  };
+  const { events } = manager;
+  const response = (character: CharacterDetail, resourceVersion: number) => ({
+    ...character,
+    sessionId: manager.sessionId(character.id),
+    resourceVersion,
+  });
 
   const write = (req: Request, action: () => unknown | Promise<unknown>) =>
     commands.execute(
@@ -80,9 +74,10 @@ export function installAICharacterRoutes(
         const since = manager.storageRevision;
         const result = await action();
         await manager.flush(since);
-        return result && typeof result === 'object' && 'id' in result
-          ? view(String(result.id))
-          : result;
+        if (!result || typeof result !== 'object' || !('id' in result))
+          return result;
+        const version = events.version;
+        return response(await queries.get(String(result.id)), version);
       },
     );
 
@@ -105,8 +100,11 @@ export function installAICharacterRoutes(
    */
   app.get(
     '/ai-characters',
-    route((_req, res) => {
-      res.json(manager.publicList().map((a) => view(a.id)));
+    route(async (_req, res) => {
+      const version = events.version;
+      res.json(
+        (await queries.list()).map((character) => response(character, version)),
+      );
     }),
   );
 
@@ -133,7 +131,12 @@ export function installAICharacterRoutes(
    */
   app.get(
     '/ai-characters/:id',
-    route((req, res) => res.json(view(String(req.params.id)))),
+    route(async (req, res) => {
+      // Capture before the async read: a concurrent commit must not be stamped as seen.
+      const version = events.version;
+      const character = await queries.get(String(req.params.id));
+      res.json(response(character, version));
+    }),
   );
 
   /**
@@ -173,10 +176,8 @@ export function installAICharacterRoutes(
    */
   app.get(
     '/ai-characters/:id/logs',
-    route((req, res) => {
+    route(async (req, res) => {
       const id = String(req.params.id);
-      if (!manager.publicList().some((a) => a.id === id))
-        throw new AppError('AI 角色 不存在。', 404);
       const rawLimit = Number(req.query.limit ?? AI_CHARACTER_LOG_PAGE_SIZE);
       const limit = Number.isFinite(rawLimit)
         ? Math.min(
@@ -184,16 +185,14 @@ export function installAICharacterRoutes(
             AI_CHARACTER_LOG_MAX_PAGE_SIZE,
           )
         : AI_CHARACTER_LOG_PAGE_SIZE;
-      // Entries are stored oldest-first; serve newest-first.
-      const entries = [...manager.publicLogEntries(id)].reverse();
       const offset = decodeLogCursor(req.query.cursor);
-      const page = entries.slice(offset, offset + limit);
-      const nextOffset = offset + page.length;
+      const { entries, total } = await queries.logs(id, limit, offset);
+      const nextOffset = offset + entries.length;
       const body: AICharacterLogPage = {
-        entries: page,
-        total: entries.length,
+        entries,
+        total,
         nextCursor:
-          nextOffset < entries.length ? encodeLogCursor(nextOffset) : undefined,
+          nextOffset < total ? encodeLogCursor(nextOffset) : undefined,
       };
       res.json(body);
     }),

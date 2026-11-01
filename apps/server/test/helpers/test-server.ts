@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { env } from '../../src/core/config';
 import { createServer, type ServerOptions } from '../../src/server';
+import { memoryCharacterQueries } from './memory-character-queries';
 import {
   bootstrapProviders,
   TestAsrSettingsStore as AsrSettingsStore,
@@ -36,16 +37,21 @@ export async function createTestServer(
         'deepseek',
       );
     }
+    const archive =
+      options.archive ??
+      (providers instanceof MemoryProviderRepository
+        ? providers.archive
+        : new MemoryArchive());
+    const voiceServices = options.voiceServices ?? new VoiceServiceStore();
     server = await createServer({
       ...options,
       providers,
-      archive:
-        options.archive ??
-        (providers instanceof MemoryProviderRepository
-          ? providers.archive
-          : new MemoryArchive()),
+      archive,
+      characterQueries:
+        options.characterQueries ??
+        memoryCharacterQueries(archive, providers, voiceServices),
       asrSettings: options.asrSettings ?? new AsrSettingsStore(),
-      voiceServices: options.voiceServices ?? new VoiceServiceStore(),
+      voiceServices,
       config: env.readServer({
         SERVER_PORT: String(options.port ?? 0),
         SERVER_HOST: '127.0.0.1',

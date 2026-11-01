@@ -17,6 +17,8 @@ import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 
 import {
   AICharacterManager,
+  CharacterQueries,
+  type CharacterQueryPort,
   type AICharacterDependencies,
 } from './modules/ai-characters';
 
@@ -50,6 +52,7 @@ export type ServerOptions = {
   config?: ServerConfig;
   providers?: ProviderRepository;
   archive?: ArchivePort;
+  characterQueries?: CharacterQueryPort;
   voiceServices?: VoiceServiceStore;
   asrSettings?: AsrSettingsStore;
   speech?: LocalSpeech;
@@ -102,7 +105,10 @@ async function loadStores(
 export async function createServer(options: ServerOptions = {}) {
   const config = options.config ?? env.readServer();
   await (options.databaseCheck ?? checkStartupDatabase)(config.databaseUrl);
-  if (!config.databaseUrl && !(options.providers && options.archive))
+  if (
+    !config.databaseUrl &&
+    !(options.providers && options.archive && options.characterQueries)
+  )
     throw new Error('必须配置 DATABASE_URL 才能持久化模型服务与 Agent 数据。');
   const db = config.databaseUrl
     ? createDatabaseClient(config.databaseUrl)
@@ -139,6 +145,7 @@ export async function createServer(options: ServerOptions = {}) {
     management: {
       authenticate: gatewayAuth.middleware,
       characters,
+      characterQueries: options.characterQueries ?? new CharacterQueries(db!),
       tasks: characters.tasks,
       providers: providerService,
     },

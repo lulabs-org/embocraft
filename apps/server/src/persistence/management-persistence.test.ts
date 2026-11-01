@@ -6,7 +6,6 @@ import {
   AICharacterRegistry,
   AICharacterWakeScheduler,
   executionState,
-  type Job,
 } from '../modules/ai-characters';
 import { CharacterSnapshots } from '../modules/ai-characters/persistence/snapshots';
 import { ManagementEvents } from '../modules/management';
@@ -22,11 +21,31 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   for (const id of ['a', 'b']) {
     const runtime = createAgentRuntime();
     jobs.set(id, {
-      view: { id, name: id, status: 'idle', sessionId: `session-${id}` },
+      view: {
+        id,
+        name: id,
+        providerId: 'provider',
+        providerName: 'Provider',
+        model: 'fixture',
+        createdAt: 100,
+        maxTurns: 100,
+        intervalMode: 'fixed',
+        intervalMinMs: 1000,
+        intervalMaxMs: 1000,
+        intervalMs: 1000,
+        timeoutMs: 30000,
+        maxTokens: 1000,
+        thinking: 'disabled',
+        reasoningEffort: 'none',
+        permissions: { move: true, chat: true, place: false, remove: false },
+        status: 'idle',
+        sessionId: `session-${id}`,
+        logEntries: [],
+      },
       runtime,
       ledger: plans,
       abort: new AbortController(),
-    } as Job);
+    });
   }
   const scheduler = new AICharacterWakeScheduler();
   const cancel = vi.spyOn(scheduler, 'cancel');
@@ -56,7 +75,7 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
         characters.reject(records, jobs, affected, (id) =>
           scheduler.cancel(id),
         ),
-      commitCharacters: (records, views) => characters.commit(records, views),
+      commitCharacters: (records) => characters.commit(records),
       restoreTasks: (snapshot) => tasks.restore(committed, snapshot),
     },
   );
@@ -106,8 +125,7 @@ it('serializes joint snapshots and exposes both domains before publishing commit
   f.events.on((change) =>
     seen.push({
       resource: change.resource,
-      name: f.persistence.characters.publicList().find((c) => c.id === 'a')
-        ?.name,
+      name: f.persistence.characters.committedCharacterName('a'),
       goal: f.committed.plans[0]?.goal,
     }),
   );
@@ -121,7 +139,7 @@ it('serializes joint snapshots and exposes both domains before publishing commit
   const second = f.persist();
   await Promise.resolve();
   expect(pending).toHaveLength(1);
-  expect(f.persistence.characters.publicList()).toEqual([]);
+  expect(f.persistence.characters.committedCharacterName('a')).toBeUndefined();
   expect(f.committed.plans).toEqual([]);
   expect(seen).toEqual([]);
   expect(pending[0].snapshot.characters[0]).toMatchObject({
@@ -134,6 +152,7 @@ it('serializes joint snapshots and exposes both domains before publishing commit
   pending[0].resolve();
   await first;
   await vi.waitFor(() => expect(pending).toHaveLength(2));
+  expect(f.persistence.characters.committedCharacterName('a')).toBe('a');
   expect(seen).toEqual(
     ['characters', 'plans', 'runs'].map((resource) => ({
       resource,
@@ -144,13 +163,11 @@ it('serializes joint snapshots and exposes both domains before publishing commit
   expect(pending[1].snapshot.plans[0].goal).toBe('new goal');
   pending[1].resolve();
   await second;
-  expect(
-    f.persistence.characters.publicList().find((c) => c.id === 'a')?.name,
-  ).toBe('changed');
+  expect(f.persistence.characters.committedCharacterName('a')).toBe('changed');
   expect(f.committed.plans[0].goal).toBe('new goal');
 });
 
-it('persists an explicit character record while retaining derived fields in the committed public view', async () => {
+it('persists explicit character records without HTTP-only derived fields', async () => {
   const save = vi.fn(async (_snapshot: ManagementArchive) => {});
   const f = fixture(save);
   Object.assign(f.jobs.get('a')!.view, {
@@ -179,13 +196,23 @@ it('persists an explicit character record while retaining derived fields in the 
     expect(stored).not.toHaveProperty(key);
   }
   expect(stored.runtime).toBeDefined();
-  expect(
-    f.persistence.characters.publicList().find((view) => view.id === 'a'),
-  ).toMatchObject({
-    providerName: 'Provider',
-    voiceServiceName: 'Voice',
-    lastResponse: 'Derived reply',
-  });
+});
+
+it('retains committed task identity on failed saves and isolates returned identities', async () => {
+  const save = vi.fn(async (_snapshot: ManagementArchive) => {});
+  const f = fixture(save);
+  const job = f.jobs.get('a')!;
+  job.runtime.ensureTask('Inspect');
+  const identity = structuredClone(job.runtime.lease());
+  await f.persist();
+  f.persistence.characters.publicIdentity('a')!.revision++;
+  expect(f.persistence.characters.publicIdentity('a')).toEqual(identity);
+  const next = job.runtime.snapshot();
+  next.execution.task.identity!.revision++;
+  job.runtime.rollback(next);
+  save.mockRejectedValueOnce(new Error('disk unavailable'));
+  await expect(f.persist()).rejects.toThrow('disk unavailable');
+  expect(f.persistence.characters.publicIdentity('a')).toEqual(identity);
 });
 
 it('flush waits for queued saves without capturing another snapshot or advancing the failure revision', async () => {
@@ -215,9 +242,7 @@ it('flush waits for queued saves without capturing another snapshot or advancing
   await Promise.all([saving, flushing]);
   expect(flushed).toBe(true);
   expect(save).toHaveBeenCalledTimes(1);
-  expect(
-    f.persistence.characters.publicList().find((c) => c.id === 'a')?.name,
-  ).toBe('a');
+  expect(f.persistence.characters.committedCharacterName('a')).toBe('a');
   expect(f.persistence.storageRevision).toBe(revision);
 });
 
@@ -256,9 +281,7 @@ it('limits character-only failures to changed jobs without marking the task ledg
   f.jobs.get('b')!.view.name = 'unsaved';
   save.mockRejectedValueOnce(new Error('disk unavailable'));
   await expect(f.persist()).rejects.toThrow('disk unavailable');
-  expect(
-    f.persistence.characters.publicList().find((c) => c.id === 'b')?.name,
-  ).toBe('b');
+  expect(f.persistence.characters.committedCharacterName('b')).toBe('b');
   expect(f.persistence.tasks.storageFailed).toBe(false);
   expect(f.jobs.get('a')!.abort.signal.aborted).toBe(false);
   expect(f.jobs.get('b')!.abort.signal.aborted).toBe(true);

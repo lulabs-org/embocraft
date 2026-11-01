@@ -104,7 +104,7 @@ export class AICharacterOrchestrator {
           characters.reject(records, this.jobs, affected, (id) =>
             this.taskScheduler.cancel(id),
           ),
-        commitCharacters: (records, views) => characters.commit(records, views),
+        commitCharacters: (records) => characters.commit(records),
         restoreTasks: (snapshot) =>
           tasks.restore(this.committedPlans, snapshot),
       },
@@ -137,7 +137,7 @@ export class AICharacterOrchestrator {
       storageFailed: () => this.persistence.tasks.storageFailed,
       committedName: (id) =>
         this.persistence.characters.committedCharacterName(id),
-      publicIdentity: (id) => this.persistence.characters.publicIdentity(id),
+      publicIdentity: (id) => characters.publicIdentity(id),
       resourceVersion: () => this.events.version,
       isClosing: () => this.closing,
       assertWritable: (id) => this.assertWritable(id),
@@ -167,18 +167,6 @@ export class AICharacterOrchestrator {
       this.closing,
       id ? this.jobs.get(id)?.storageFailed : undefined,
     );
-  }
-
-  publicList() {
-    return this.persistence.characters.publicList();
-  }
-
-  publicIdentity(id: string) {
-    return this.persistence.characters.publicIdentity(id);
-  }
-
-  publicLogEntries(id: string) {
-    return this.persistence.characters.publicLogEntries(id);
   }
 
   async settled(id: string) {
@@ -243,6 +231,10 @@ export class AICharacterOrchestrator {
 
   currentRunId(id: string) {
     return this.jobs.get(id)?.currentRunId;
+  }
+
+  sessionId(id: string) {
+    return this.jobs.get(id)?.view.sessionId;
   }
 
   taskIdentity(id: string) {

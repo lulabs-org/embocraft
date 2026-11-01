@@ -7,28 +7,17 @@ import { characterSettings, type CharacterRecord } from './record';
 /** Character snapshots and failure handling; no file writes or task-ledger ownership. */
 export class CharacterSnapshots {
   private committed = new Map<string, CharacterRecord>();
-  private committedViews: AICharacterView[] = [];
-
-  publicList(): AICharacterView[] {
-    return structuredClone(this.committedViews);
-  }
-
   publicIdentity(id: string) {
-    const snapshot = this.committed.get(id)?.runtime;
-    return snapshot ? runtimeView(snapshot).identity : undefined;
-  }
-
-  publicLogEntries(id: string) {
-    return structuredClone(this.committed.get(id)?.logEntries ?? []);
+    const runtime = this.committed.get(id)?.runtime;
+    return runtime ? runtimeView(runtime).identity : undefined;
   }
 
   committedCharacterName(id: string): string | undefined {
     return this.committed.get(id)?.name;
   }
 
-  commit(records: CharacterRecord[], views: AICharacterView[]) {
+  commit(records: CharacterRecord[]) {
     this.committed = new Map(records.map((record) => [record.id, record]));
-    this.committedViews = views;
   }
 
   capture(

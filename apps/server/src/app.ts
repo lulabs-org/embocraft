@@ -10,6 +10,7 @@ import { installManagementHttp } from './modules/management';
 import {
   installAICharacterRoutes,
   type AICharacterRoutePort,
+  type CharacterQueryPort,
 } from './modules/ai-characters';
 import {
   installProviderRoutes,
@@ -32,6 +33,7 @@ export type AppDependencies = {
   management: {
     authenticate: RequestHandler;
     characters: AICharacterRoutePort;
+    characterQueries: CharacterQueryPort;
     providers: ProviderService;
     tasks: TaskPort;
   };
@@ -58,7 +60,12 @@ export function createApp(deps: AppDependencies) {
     authenticate: deps.management.authenticate,
     receiptBody: taskCommandBody,
     installRoutes: (app, commands) => {
-      installAICharacterRoutes(app, deps.management.characters, commands);
+      installAICharacterRoutes(
+        app,
+        deps.management.characters,
+        commands,
+        deps.management.characterQueries,
+      );
       installProviderRoutes(app, deps.management.providers, commands);
       installTaskRoutes(app, deps.management.tasks, commands);
     },
