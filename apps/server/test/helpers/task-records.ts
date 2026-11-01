@@ -1,5 +1,9 @@
 import { DEFAULT_TASK_LIMITS, type TaskPlan } from '@voxel/shared';
-import type { ManagementArchive } from '../../src/persistence/archive';
+import { testAgentConfig } from '../../../../tests/support/agent-config';
+import type {
+  CharacterRecord,
+  ManagementArchive,
+} from '../../src/persistence/archive';
 
 export function storedPlan(overrides: Partial<TaskPlan> = {}): TaskPlan {
   return {
@@ -34,6 +38,21 @@ export function storedRun(
     totalTokens: 0,
     accountedTokens: 0,
     logs: [],
+    ...overrides,
+  };
+}
+
+export function storedCharacter(
+  overrides: Partial<CharacterRecord> = {},
+): CharacterRecord {
+  const { apiKey: _apiKey, ...config } = testAgentConfig();
+  return {
+    ...config,
+    id: 'actor',
+    providerId: 'deepseek',
+    status: 'stopped',
+    createdAt: 1793491200123,
+    logEntries: [],
     ...overrides,
   };
 }

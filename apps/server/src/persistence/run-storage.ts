@@ -15,17 +15,28 @@ type StoredRun = ManagementArchive['runs'][number];
 export type SavedRun = {
   id: string;
   position: number;
+  characterId: string | null;
+  characterIdSnapshot: string | null;
   serialized: string;
   checkpoint?: { version: number; execution: Prisma.InputJsonValue };
 };
 
-export function captureRun(run: StoredRun, position: number): SavedRun {
+export function captureRun(
+  run: StoredRun,
+  position: number,
+  characters: Set<string>,
+): SavedRun {
   const { runtime, ...metadata } = run;
   if (runtime && (runtime.version !== 4 || !runtime.execution))
     throw new Error('Unsupported execution checkpoint.');
   return {
     id: run.id,
     position,
+    characterId:
+      run.characterId && characters.has(run.characterId)
+        ? run.characterId
+        : null,
+    characterIdSnapshot: run.characterId ?? null,
     serialized: stableJson(metadata),
     checkpoint: runtime
       ? {
@@ -43,6 +54,8 @@ export function restoreRun(
 ): StoredRun {
   const {
     position: _position,
+    characterId,
+    characterIdSnapshot,
     checkpoint: _checkpoint,
     scheduledAt,
     startedAt,
@@ -56,6 +69,9 @@ export function restoreRun(
     throw new Error('Unsupported execution checkpoint.');
   return {
     ...withoutNullFields(metadata),
+    ...((characterIdSnapshot ?? characterId) !== null
+      ? { characterId: characterIdSnapshot ?? characterId }
+      : {}),
     scheduledAt: scheduledAt.getTime(),
     ...(startedAt !== null ? { startedAt: startedAt.getTime() } : {}),
     ...(finishedAt !== null ? { finishedAt: finishedAt.getTime() } : {}),
@@ -85,6 +101,7 @@ export async function saveRun(
   if (
     !previous ||
     next.position !== previous.position ||
+    next.characterId !== previous.characterId ||
     next.serialized !== previous.serialized
   ) {
     const run = JSON.parse(next.serialized) as StoredRun;
@@ -92,7 +109,8 @@ export async function saveRun(
       position: next.position,
       planId: run.planId ?? null,
       planRevision: run.planRevision ?? null,
-      characterId: run.characterId ?? null,
+      characterId: next.characterId,
+      characterIdSnapshot: next.characterIdSnapshot,
       characterName: run.characterName ?? null,
       source: run.source,
       status: run.status,

@@ -25,26 +25,269 @@ import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { createServer } from '../src/server';
 import { newPlan, newRun } from '../src/modules/tasks';
 import { settleTaskUsage } from '../src/modules/tasks/domain/model';
-import { storedPlan, storedRun } from './helpers/task-records';
+import { storedCharacter, storedPlan, storedRun } from './helpers/task-records';
 
 const url = process.env.TEST_DATABASE_URL;
 const db = url ? createDatabaseClient(url) : undefined;
 
 describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   beforeEach(async () => {
-    await db!.ttsProvider.deleteMany();
-    await db!.asrProvider.deleteMany();
+    await db!.agentCharacterState.deleteMany();
     await db!.agentRequest.deleteMany();
     await db!.agentRun.deleteMany();
     await db!.agentPlan.deleteMany();
     await db!.agentCharacter.deleteMany();
     await db!.agentProvider.deleteMany();
+    await db!.ttsProvider.deleteMany();
+    await db!.asrProvider.deleteMany();
     await db!.blockEdit.deleteMany();
     await db!.world.deleteMany();
   });
   afterAll(async () => db?.$disconnect());
 
+  it('enforces current execution ownership and preserves history through reassignment and character deletion', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const runtime = createAgentRuntime().executionSnapshot();
+    const plan = storedPlan({ characterId: 'a', characterName: 'A' });
+    const first = storedRun({
+      id: 'first',
+      planId: plan.id,
+      characterId: 'a',
+      characterName: 'A',
+      runtime,
+    });
+    const second = storedRun({
+      id: 'second',
+      planId: plan.id,
+      characterId: 'a',
+      characterName: 'A',
+      runtime,
+    });
+    const foreign = storedRun({ id: 'foreign', characterId: 'b', runtime });
+    const snapshot: ManagementArchive = {
+      version: 3,
+      characters: [
+        storedCharacter({ id: 'a', currentRunId: first.id, runtime }),
+        storedCharacter({ id: 'b', runtime }),
+      ],
+      plans: [plan],
+      runs: [first, second, foreign],
+      requests: { 'a:create': plan.id },
+    };
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.load();
+    await archive.save(snapshot);
+    // Both referenced Runs exist: the composite FK must reject the wrong owner.
+    await expect(
+      db!.agentCharacterState.update({
+        where: { characterId: 'a' },
+        data: { currentRunId: foreign.id },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentRun.delete({ where: { id: first.id } }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentRunCheckpoint.delete({ where: { runId: first.id } }),
+    ).rejects.toThrow();
+    snapshot.characters[0].currentRunId = second.id;
+    snapshot.runs = [second, foreign];
+    await archive.save(snapshot); // Removes the formerly selected Run before updating state.
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(snapshot);
+    // A plan may be reassigned while ended history still belongs to the original actor.
+    plan.characterId = 'b';
+    plan.characterName = 'B';
+    second.status = 'completed';
+    await archive.save(snapshot);
+    expect(
+      (await db!.agentRun.findUniqueOrThrow({ where: { id: second.id } }))
+        .characterId,
+    ).toBe('a');
+    const failed = structuredClone(snapshot);
+    failed.characters = failed.characters.filter(
+      (character) => character.id !== 'a',
+    );
+    failed.requests.invalid = 'missing-plan';
+    await expect(archive.save(failed)).rejects.toThrow();
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(snapshot);
+    snapshot.characters = snapshot.characters.filter(
+      (character) => character.id !== 'a',
+    );
+    await archive.save(snapshot);
+    expect(
+      await db!.agentRun.findUniqueOrThrow({ where: { id: second.id } }),
+    ).toMatchObject({
+      characterId: null,
+      characterIdSnapshot: 'a',
+      characterName: 'A',
+      planId: plan.id,
+    });
+    const restarted = new DatabaseManagementArchive(db!);
+    const restored = (await restarted.load())!;
+    expect(restored).toEqual(snapshot);
+    await restarted.save(restored);
+    expect(
+      await db!.agentRequest.findUnique({ where: { key: 'a:create' } }),
+    ).toMatchObject({ planId: plan.id });
+  });
+
+  it('rejects dangling task references and duplicate manual requests while preserving scoped idempotency', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const p = storedPlan({ id: 'p', characterId: 'a' });
+    const q = storedPlan({ id: 'q', characterId: 'a' });
+    const snapshot: ManagementArchive = {
+      version: 3,
+      characters: [storedCharacter({ id: 'a' })],
+      plans: [p, q],
+      runs: [
+        storedRun({ planId: p.id, characterId: 'a', requestId: 'manual' }),
+      ],
+      requests: { 'a:create': p.id },
+    };
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.load();
+    await archive.save(snapshot);
+    await expect(
+      db!.agentPlan.update({
+        where: { id: p.id },
+        data: { characterId: 'missing' },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentRun.update({
+        where: { id: 'run' },
+        data: { planId: 'missing' },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentRequest.create({ data: { key: 'invalid', planId: 'missing' } }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentRequest.create({ data: { key: 'a:create', planId: q.id } }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentPlan.delete({ where: { id: p.id } }),
+    ).rejects.toThrow();
+    const duplicate = structuredClone(snapshot);
+    duplicate.runs.push({ ...duplicate.runs[0], id: 'duplicate' });
+    await expect(archive.save(duplicate)).rejects.toThrow();
+    const changed = structuredClone(snapshot);
+    changed.requests['a:create'] = q.id;
+    await expect(archive.save(changed)).rejects.toThrow();
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(snapshot);
+    snapshot.runs.push(
+      storedRun({
+        id: 'other-plan',
+        planId: q.id,
+        characterId: 'a',
+        requestId: 'manual',
+      }),
+    );
+    snapshot.runs.push(
+      storedRun({ id: 'chat', characterId: 'a', source: 'chat' }),
+    );
+    await archive.save(snapshot);
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(snapshot);
+    // Request mappings follow their plan's lifetime, not the actor's lifetime.
+    await db!.agentRequest.create({ data: { key: 'temporary', planId: q.id } });
+    await db!.agentRun.delete({ where: { id: 'other-plan' } });
+    await db!.agentPlan.delete({ where: { id: q.id } });
+    expect(
+      await db!.agentRequest.findUnique({ where: { key: 'temporary' } }),
+    ).toBeNull();
+  });
+
+  it('protects persisted TTS references and stores an explicitly cleared voice as SQL NULL', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.load();
+    const snapshot: ManagementArchive = {
+      version: 3,
+      characters: [
+        storedCharacter({ id: 'a', voiceServiceId: DEFAULT_TTS_PROVIDER.id }),
+      ],
+      plans: [],
+      runs: [],
+      requests: {},
+    };
+    await archive.save(snapshot);
+    await expect(
+      new DatabaseVoiceServicePersistence(db!).save([]),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      db!.agentCharacter.update({
+        where: { id: 'a' },
+        data: { voiceServiceId: 'missing' },
+      }),
+    ).rejects.toThrow();
+    snapshot.characters[0].voiceServiceId = '';
+    await archive.save(snapshot);
+    expect(
+      (await db!.agentCharacter.findUniqueOrThrow({ where: { id: 'a' } }))
+        .voiceServiceId,
+    ).toBeNull();
+    await new DatabaseVoiceServicePersistence(db!).save([]);
+    expect(await db!.ttsProvider.count()).toBe(0);
+  });
+
+  it('persists one ASR assignment per use and rolls back conflicting assignments with profile changes', async () => {
+    const persistence = new DatabaseAsrServicePersistence(db!);
+    const store = new AsrSettingsStore(persistence);
+    await store.load();
+    const a = await store.save({
+      ...DEFAULT_WHISPER_ASR,
+      provider: 'whisper',
+      name: 'A',
+    });
+    const b = await store.save({
+      ...DEFAULT_WHISPER_ASR,
+      provider: 'whisper',
+      name: 'B',
+    });
+    await store.assign('chat', a.id);
+    await store.assign('clip', a.id);
+    await store.assign('chat', b.id);
+    const restored = new AsrSettingsStore(persistence);
+    await restored.load();
+    expect(restored.assignments().chat?.id).toBe(b.id);
+    expect(restored.assignments().clip?.id).toBe(a.id);
+    await expect(
+      db!.asrAssignment.create({ data: { use: 'chat', providerId: a.id } }),
+    ).rejects.toThrow();
+    await expect(
+      db!.asrAssignment.create({
+        data: { use: 'spatial', providerId: 'missing' },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db!
+        .$executeRaw`INSERT INTO "AsrAssignment" ("use", "providerId") VALUES ('unknown', ${a.id})`,
+    ).rejects.toThrow();
+    const before = await persistence.load();
+    await expect(
+      persistence.save(
+        before.map((service) => ({
+          ...service,
+          name: 'uncommitted',
+          uses: ['chat'],
+        })),
+      ),
+    ).rejects.toThrow();
+    expect(await persistence.load()).toEqual(before);
+    await restored.remove(a.id);
+    expect(
+      await db!.asrAssignment.findUnique({ where: { use: 'clip' } }),
+    ).toBeNull();
+    // Unassigned uses retain the existing Whisper fallback after deletion/restart.
+    const after = new AsrSettingsStore(persistence);
+    await after.load();
+    expect(after.assignments().clip?.id).toBe(b.id);
+    expect(after.assignments().chat?.id).toBe(b.id);
+  });
+
   it('queries structured tasks, clears optional values and preserves token accounting after restart', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
     const plan = storedPlan({
       characterId: 'actor',
       characterName: 'Actor',
@@ -78,7 +321,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     });
     const snapshot: ManagementArchive = {
       version: 3,
-      characters: [],
+      characters: [storedCharacter({ id: 'actor', name: 'Actor' })],
       plans: [plan],
       runs: [run],
       requests: {},
@@ -359,29 +602,16 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await expect(restored.save(mismatched)).rejects.toThrow(
       '无法保存 Agent 数据库记录',
     );
-    await db!.agentRunCheckpoint.delete({ where: { runId: 'run' } });
-    await expect(new DatabaseManagementArchive(db!).load()).rejects.toThrow(
-      '无法读取 Agent 数据库记录',
-    );
-    await db!.agentRunCheckpoint.create({
-      data: {
-        runId: 'run',
-        version: 4,
-        execution: JSON.parse(JSON.stringify(checkpoint.execution)),
-      },
-    });
-    await db!.agentRun.update({
-      where: { id: 'run' },
-      data: { characterId: 'another' },
-    });
-    await expect(new DatabaseManagementArchive(db!).load()).rejects.toThrow(
-      '无法读取 Agent 数据库记录',
-    );
-    // Restore the test row before exercising cascade deletion through the archive.
-    await db!.agentRun.update({
-      where: { id: 'run' },
-      data: { characterId: 'actor', status: 'paused' },
-    });
+    await expect(
+      db!.agentRunCheckpoint.delete({ where: { runId: 'run' } }),
+    ).rejects.toThrow();
+    await expect(
+      db!.agentRun.update({
+        where: { id: 'run' },
+        data: { characterId: 'another' },
+      }),
+    ).rejects.toThrow();
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(loaded);
     loaded.characters = [];
     loaded.runs = [];
     await restored.save(loaded);
@@ -820,7 +1050,12 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       });
       await server.characters.flush(revision);
       await server.close();
-      // An old or deleted voice ID must not stop character restoration.
+      // Persisted references protect a voice even while the server is offline.
+      await expect(db!.ttsProvider.deleteMany()).rejects.toThrow();
+      await db!.agentCharacter.update({
+        where: { id: created.id },
+        data: { voiceReplies: false, voiceServiceId: null },
+      });
       await db!.ttsProvider.deleteMany();
       server = await createServer({ config });
       await server.listen();

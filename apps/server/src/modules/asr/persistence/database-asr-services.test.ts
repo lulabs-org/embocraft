@@ -24,7 +24,7 @@ describe('DatabaseAsrServicePersistence', () => {
             provider: 'bailian',
             model: 'fun-asr-realtime',
             apiKey: 'bailian-key',
-            uses: ['chat'],
+            assignments: [{ use: 'chat' }],
             region: 'beijing',
             workspaceId: 'ws-1',
             baseUrl: null,
@@ -38,7 +38,7 @@ describe('DatabaseAsrServicePersistence', () => {
             provider: 'whisper',
             model: 'Systran/faster-whisper-base',
             apiKey: 'whisper-key',
-            uses: ['spatial', 'clip'],
+            assignments: [{ use: 'spatial' }, { use: 'clip' }],
             region: null,
             workspaceId: null,
             baseUrl: 'http://localhost:8000/v1',
@@ -82,7 +82,13 @@ describe('DatabaseAsrServicePersistence', () => {
     const deleteService = vi.fn().mockResolvedValue({});
     const upsertService = vi.fn().mockResolvedValue({});
 
+    const deleteAssignments = vi.fn().mockResolvedValue({ count: 0 });
+    const createAssignments = vi.fn().mockResolvedValue({ count: 1 });
     const tx = {
+      asrAssignment: {
+        deleteMany: deleteAssignments,
+        createMany: createAssignments,
+      },
       asrProvider: {
         findMany: findManyServices,
         delete: deleteService,
@@ -121,8 +127,14 @@ describe('DatabaseAsrServicePersistence', () => {
     ];
 
     await persistence.save(services);
+    expect(deleteAssignments).toHaveBeenCalledOnce();
+    expect(createAssignments).toHaveBeenCalledWith({
+      data: [{ use: 'chat', providerId: 'b-1' }],
+    });
 
-    expect(deleteService).toHaveBeenCalledWith({ where: { id: 'old-service' } });
+    expect(deleteService).toHaveBeenCalledWith({
+      where: { id: 'old-service' },
+    });
 
     expect(upsertService).toHaveBeenCalledWith({
       where: { id: 'b-1' },
@@ -133,7 +145,6 @@ describe('DatabaseAsrServicePersistence', () => {
         provider: 'bailian',
         model: 'fun-asr-realtime',
         apiKey: 'b-key',
-        uses: ['chat'],
         region: 'singapore',
         workspaceId: 'ws-2',
         baseUrl: null,
@@ -146,7 +157,6 @@ describe('DatabaseAsrServicePersistence', () => {
         provider: 'bailian',
         model: 'fun-asr-realtime',
         apiKey: 'b-key',
-        uses: ['chat'],
         region: 'singapore',
         workspaceId: 'ws-2',
         baseUrl: null,
@@ -164,7 +174,6 @@ describe('DatabaseAsrServicePersistence', () => {
         provider: 'whisper',
         model: 'Systran/faster-whisper-base',
         apiKey: '',
-        uses: [],
         region: null,
         workspaceId: null,
         baseUrl: 'http://localhost:8000',
@@ -177,7 +186,6 @@ describe('DatabaseAsrServicePersistence', () => {
         provider: 'whisper',
         model: 'Systran/faster-whisper-base',
         apiKey: '',
-        uses: [],
         region: null,
         workspaceId: null,
         baseUrl: 'http://localhost:8000',
@@ -196,8 +204,11 @@ describe('DatabaseAsrServicePersistence', () => {
     } as unknown as PrismaClient;
 
     const persistence = new DatabaseAsrServicePersistence(db);
-    await expect(persistence.load()).rejects.toThrow('无法读取 ASR 数据库配置。');
-    await expect(persistence.save([])).rejects.toThrow('无法保存 ASR 数据库配置。');
+    await expect(persistence.load()).rejects.toThrow(
+      '无法读取 ASR 数据库配置。',
+    );
+    await expect(persistence.save([])).rejects.toThrow(
+      '无法保存 ASR 数据库配置。',
+    );
   });
 });
-

@@ -82,6 +82,7 @@ export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
     await db.agentRequest.findFirst({ select: { key: true } });
     await db.ttsProvider.findFirst({ select: { id: true } });
     await db.asrProvider.findFirst({ select: { id: true } });
+    await db.asrAssignment.findFirst({ select: { use: true } });
   } catch (error) {
     // Raw database errors can contain credentials; expose only the sanitized message.
     // eslint-disable-next-line preserve-caught-error
