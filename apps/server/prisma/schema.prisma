@@ -84,15 +84,62 @@ model AgentCharacterLog {
 
 model AgentPlan {
  id String @id
+ // Preserve archive ordering until task queries move to database pagination.
  position Int
- data Json
+ characterId String?
+ characterName String?
+ revision Int?
+ imported Boolean?
+ name String
+ goal String
+ scheduleKind String
+ scheduleSpec Json
+ timeZone String
+ limits Json
+ limitsMode String?
+ totalTokenBudgetEnabled Boolean?
+ totalTokenBudget BigInt
+ state String
+ reason String
+ nextRunAt DateTime?
+ spentTokens BigInt
+ createdAt DateTime
+ updatedAt DateTime
+
+ @@index([state, nextRunAt])
+ @@index([characterId, createdAt, id])
 }
 
 model AgentRun {
  id String @id
+ // Preserve archive ordering until task queries move to database pagination.
  position Int
- data Json
+ planId String?
+ planRevision Int?
+ characterId String?
+ characterName String?
+ source String
+ status String
+ reason String
+ scheduledAt DateTime
+ startedAt DateTime?
+ finishedAt DateTime?
+ eventId String?
+ coalescedTriggers Int?
+ lastTriggerAt DateTime?
+ snapshot Json
+ task Json?
+ totalTokens BigInt
+ accountedTokens BigInt
+ logs Json
+ actions Json?
+ requestId String?
+ lastBatch String?
+ requiresReassignment Boolean?
  checkpoint AgentRunCheckpoint?
+
+ @@index([planId, scheduledAt, id])
+ @@index([characterId, status])
 }
 
 // One execution checkpoint; never contains character conversations, inbox or usage.

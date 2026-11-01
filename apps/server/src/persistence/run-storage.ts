@@ -2,6 +2,14 @@ import type { AgentRun, AgentRunCheckpoint, Prisma } from '@prisma/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
 import type { ManagementArchive } from './archive';
 import { stableJson } from './stable-json';
+import { databaseJson } from '../core/database/client';
+import {
+  counter,
+  counterNumber,
+  timestamp,
+  taskJson,
+  withoutNullFields,
+} from './task-storage-values';
 
 type StoredRun = ManagementArchive['runs'][number];
 export type SavedRun = {
@@ -33,12 +41,29 @@ export function captureRun(run: StoredRun, position: number): SavedRun {
 export function restoreRun(
   row: AgentRun & { checkpoint: AgentRunCheckpoint | null },
 ): StoredRun {
-  // The checkpoint table is authoritative; never read a nested legacy runtime.
-  const { runtime: _runtime, ...metadata } = row.data as unknown as StoredRun;
+  const {
+    position: _position,
+    checkpoint: _checkpoint,
+    scheduledAt,
+    startedAt,
+    finishedAt,
+    lastTriggerAt,
+    totalTokens,
+    accountedTokens,
+    ...metadata
+  } = row;
   if (row.checkpoint && row.checkpoint.version !== 4)
     throw new Error('Unsupported execution checkpoint.');
   return {
-    ...metadata,
+    ...withoutNullFields(metadata),
+    scheduledAt: scheduledAt.getTime(),
+    ...(startedAt !== null ? { startedAt: startedAt.getTime() } : {}),
+    ...(finishedAt !== null ? { finishedAt: finishedAt.getTime() } : {}),
+    ...(lastTriggerAt !== null
+      ? { lastTriggerAt: lastTriggerAt.getTime() }
+      : {}),
+    totalTokens: counterNumber(totalTokens),
+    accountedTokens: counterNumber(accountedTokens),
     ...(row.checkpoint
       ? {
           runtime: {
@@ -62,11 +87,37 @@ export async function saveRun(
     next.position !== previous.position ||
     next.serialized !== previous.serialized
   ) {
-    const data = JSON.parse(next.serialized) as Prisma.InputJsonValue;
+    const run = JSON.parse(next.serialized) as StoredRun;
+    const data = {
+      position: next.position,
+      planId: run.planId ?? null,
+      planRevision: run.planRevision ?? null,
+      characterId: run.characterId ?? null,
+      characterName: run.characterName ?? null,
+      source: run.source,
+      status: run.status,
+      reason: run.reason,
+      scheduledAt: timestamp(run.scheduledAt),
+      startedAt: run.startedAt == null ? null : timestamp(run.startedAt),
+      finishedAt: run.finishedAt == null ? null : timestamp(run.finishedAt),
+      eventId: run.eventId ?? null,
+      coalescedTriggers: run.coalescedTriggers ?? null,
+      lastTriggerAt:
+        run.lastTriggerAt == null ? null : timestamp(run.lastTriggerAt),
+      snapshot: taskJson(run.snapshot),
+      task: databaseJson(run.task == null ? null : taskJson(run.task)),
+      totalTokens: counter(run.totalTokens),
+      accountedTokens: counter(run.accountedTokens),
+      logs: taskJson(run.logs),
+      actions: databaseJson(run.actions == null ? null : taskJson(run.actions)),
+      requestId: run.requestId ?? null,
+      lastBatch: run.lastBatch ?? null,
+      requiresReassignment: run.requiresReassignment ?? null,
+    };
     await tx.agentRun.upsert({
       where: { id: next.id },
-      create: { id: next.id, position: next.position, data },
-      update: { position: next.position, data },
+      create: { id: next.id, ...data },
+      update: data,
     });
   }
   if (stableJson(next.checkpoint) === stableJson(previous?.checkpoint)) return;

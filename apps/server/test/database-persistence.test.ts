@@ -24,6 +24,8 @@ import type { ManagementArchive } from '../src/persistence/archive';
 import { DatabaseManagementArchive } from '../src/persistence/database-archive';
 import { createServer } from '../src/server';
 import { newPlan, newRun } from '../src/modules/tasks';
+import { settleTaskUsage } from '../src/modules/tasks/domain/model';
+import { storedPlan, storedRun } from './helpers/task-records';
 
 const url = process.env.TEST_DATABASE_URL;
 const db = url ? createDatabaseClient(url) : undefined;
@@ -41,6 +43,103 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await db!.world.deleteMany();
   });
   afterAll(async () => db?.$disconnect());
+
+  it('queries structured tasks, clears optional values and preserves token accounting after restart', async () => {
+    const plan = storedPlan({
+      characterId: 'actor',
+      characterName: 'Actor',
+      revision: 2,
+      imported: false,
+      limitsMode: 'inherit',
+      totalTokenBudgetEnabled: false,
+      timing: { kind: 'weekly', time: '09:30', weekdays: [1, 5] },
+      nextRunAt: 1793491200123,
+      spentTokens: 3_000_000_000,
+    });
+    const run = storedRun({
+      planId: plan.id,
+      planRevision: 2,
+      characterId: 'actor',
+      characterName: 'Actor',
+      source: 'scheduled',
+      status: 'completed',
+      startedAt: 1793491200800,
+      finishedAt: 1793491200999,
+      eventId: 'event',
+      coalescedTriggers: 0,
+      lastTriggerAt: 1793491200789,
+      requestId: 'request',
+      lastBatch: 'batch',
+      totalTokens: 3_000_000_000,
+      accountedTokens: 3_000_000_000,
+      actions: [],
+      logs: ['done'],
+      requiresReassignment: false,
+    });
+    const snapshot: ManagementArchive = {
+      version: 3,
+      characters: [],
+      plans: [plan],
+      runs: [run],
+      requests: {},
+    };
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.load();
+    await archive.save(snapshot);
+    expect(
+      await db!.agentPlan.findMany({
+        where: {
+          state: 'enabled',
+          nextRunAt: { lte: new Date(1793491200123) },
+        },
+        select: { id: true, scheduleKind: true, spentTokens: true },
+      }),
+    ).toEqual([
+      { id: plan.id, scheduleKind: 'weekly', spentTokens: 3_000_000_000n },
+    ]);
+    expect(
+      await db!.agentRun.count({
+        where: { planId: plan.id, status: 'completed' },
+      }),
+    ).toBe(1);
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(snapshot);
+    delete plan.characterId;
+    delete plan.characterName;
+    delete plan.nextRunAt;
+    delete plan.limitsMode;
+    delete plan.totalTokenBudgetEnabled;
+    plan.state = 'paused';
+    delete run.characterId;
+    delete run.actions;
+    delete run.startedAt;
+    delete run.finishedAt;
+    delete run.lastTriggerAt;
+    delete run.eventId;
+    delete run.requestId;
+    delete run.lastBatch;
+    await archive.save(snapshot);
+    const restored = new DatabaseManagementArchive(db!);
+    const loaded = (await restored.load())!;
+    expect(loaded).toEqual(snapshot);
+    // Repeat settlement of the restored checkpoint must not charge its usage again.
+    expect(
+      settleTaskUsage(loaded.runs[0], 3_000_000_000, loaded.plans[0]),
+    ).toBe(0);
+    expect(
+      settleTaskUsage(loaded.runs[0], 3_000_000_007, loaded.plans[0]),
+    ).toBe(7);
+    await restored.save(loaded);
+    expect(
+      (await new DatabaseManagementArchive(db!).load())!.plans[0].spentTokens,
+    ).toBe(3_000_000_007);
+    const invalid = structuredClone(loaded);
+    invalid.plans[0].goal = 'must roll back';
+    invalid.runs[0].totalTokens = Number.MAX_SAFE_INTEGER + 1;
+    await expect(restored.save(invalid)).rejects.toThrow(
+      '无法保存 Agent 数据库记录',
+    );
+    expect(await new DatabaseManagementArchive(db!).load()).toEqual(loaded);
+  });
 
   it('updates state and appends or trims logs without rewriting configuration or retained logs', async () => {
     await bootstrapProviders(new DatabaseProviderRepository(db!));
@@ -172,12 +271,12 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       ],
       plans: [],
       runs: [
-        {
+        storedRun({
           id: 'run',
           characterId: 'actor',
           status: 'paused',
           runtime: checkpoint,
-        },
+        }),
       ],
       requests: {},
     } as unknown as ManagementArchive;
@@ -194,7 +293,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     });
     expect(storedState).not.toHaveProperty('runtime');
     expect(
-      (await db!.agentRun.findUniqueOrThrow({ where: { id: 'run' } })).data,
+      await db!.agentRun.findUniqueOrThrow({ where: { id: 'run' } }),
     ).not.toHaveProperty('runtime');
     expect(
       await db!.agentRunCheckpoint.findUniqueOrThrow({
@@ -273,7 +372,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     });
     await db!.agentRun.update({
       where: { id: 'run' },
-      data: { data: { id: 'run', characterId: 'another' } },
+      data: { characterId: 'another' },
     });
     await expect(new DatabaseManagementArchive(db!).load()).rejects.toThrow(
       '无法读取 Agent 数据库记录',
@@ -281,7 +380,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     // Restore the test row before exercising cascade deletion through the archive.
     await db!.agentRun.update({
       where: { id: 'run' },
-      data: { data: { id: 'run', characterId: 'actor', status: 'paused' } },
+      data: { characterId: 'actor', status: 'paused' },
     });
     loaded.characters = [];
     loaded.runs = [];
@@ -561,23 +660,23 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         },
       ],
       plans: [
-        { id: 'plan-b', goal: 'second' },
-        { id: 'plan-a', goal: 'first' },
+        storedPlan({ id: 'plan-b', goal: 'second' }),
+        storedPlan({ id: 'plan-a', goal: 'first' }),
       ],
       runs: [
-        {
+        storedRun({
           id: 'run-b',
           characterId: 'agent-1',
           planId: 'plan-b',
           status: 'completed',
-        },
-        {
+        }),
+        storedRun({
           id: 'run-a',
           characterId: 'agent-1',
           planId: 'plan-a',
           status: 'running',
           runtime: structuredClone(checkpoint),
-        },
+        }),
       ],
       requests: { 'agent-1:request': 'plan-a' },
     } as unknown as ManagementArchive;

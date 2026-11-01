@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
 import {
@@ -9,31 +9,19 @@ import {
 } from './character-storage';
 import { stableJson } from './stable-json';
 import { captureRun, restoreRun, saveRun, type SavedRun } from './run-storage';
+import {
+  capturePlan,
+  restorePlan,
+  savePlan,
+  type SavedPlan,
+} from './plan-storage';
 
-type SavedRow = {
-  id: string;
-  position: number;
-  serialized: string;
-};
 type SavedSnapshot = {
   characters: Map<string, SavedCharacter>;
-  plans: Map<string, SavedRow>;
+  plans: Map<string, SavedPlan>;
   runs: Map<string, SavedRun>;
   requests: Map<string, string>;
 };
-
-function rows<T extends { id: string }>(values: T[]): Map<string, SavedRow> {
-  return new Map(
-    values.map((value, position) => [
-      value.id,
-      {
-        id: value.id,
-        position,
-        serialized: stableJson(value),
-      },
-    ]),
-  );
-}
 
 function snapshot(
   archive: ManagementArchive,
@@ -71,24 +59,17 @@ function snapshot(
         captureCharacter(record, position, previous?.characters.get(record.id)),
       ]),
     ),
-    plans: rows(archive.plans),
+    plans: new Map(
+      archive.plans.map((plan, position) => [
+        plan.id,
+        capturePlan(plan, position),
+      ]),
+    ),
     runs: new Map(
       archive.runs.map((run, position) => [run.id, captureRun(run, position)]),
     ),
     requests: new Map(Object.entries(archive.requests)),
   };
-}
-
-function changed(current: SavedRow, previous?: SavedRow): boolean {
-  return (
-    !previous ||
-    current.position !== previous.position ||
-    current.serialized !== previous.serialized
-  );
-}
-
-function json(row: SavedRow): Prisma.InputJsonValue {
-  return JSON.parse(row.serialized) as Prisma.InputJsonValue;
 }
 
 /** Commits one character/task snapshot as a transaction of changed rows. */
@@ -122,9 +103,7 @@ export class DatabaseManagementArchive implements ArchivePort {
       const archive: ManagementArchive = {
         version: 3,
         characters: characters.map((row) => restoreCharacter(row, byRunId)),
-        plans: plans.map(
-          (row) => row.data as ManagementArchive['plans'][number],
-        ),
+        plans: plans.map(restorePlan),
         runs: restoredRuns,
         requests: Object.fromEntries(
           requests.map((row) => [row.key, row.planId]),
@@ -165,13 +144,8 @@ export class DatabaseManagementArchive implements ArchivePort {
           for (const [id, character] of next.characters) {
             await saveCharacter(tx, character, before.characters.get(id));
           }
-          for (const row of next.plans.values()) {
-            if (!changed(row, before.plans.get(row.id))) continue;
-            await tx.agentPlan.upsert({
-              where: { id: row.id },
-              create: { id: row.id, position: row.position, data: json(row) },
-              update: { position: row.position, data: json(row) },
-            });
+          for (const [id, plan] of next.plans) {
+            await savePlan(tx, plan, before.plans.get(id));
           }
           for (const [id, run] of next.runs) {
             await saveRun(tx, run, before.runs.get(id));

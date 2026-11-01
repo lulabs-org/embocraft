@@ -394,7 +394,7 @@ import { VoiceServiceStore } from './modules/tts';
 ### 4.2 全局快照持久化与存储注入（Database & Archive Engine）
 
 - **生产主干：基于 PostgreSQL 的关系型快照驱动（`src/persistence/database-archive.ts`）**：
-  - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 统一序列化并持久化至 PostgreSQL 表中；
+  - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 在同一事务中提交至 PostgreSQL 表中；角色、计划和执行元数据使用结构化列，运行时检查点与嵌套配置保留 JSON；
   - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
 - **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：
   - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各模块的 `persistence/` 内；
