@@ -50,14 +50,12 @@ cp -n .env.example .env
 # 1. 冻结锁文件严格安装依赖
 pnpm install --frozen-lockfile
 
-# 2. 生成 Prisma ORM 客户端
-pnpm db:generate
-
-# 3. 启动项目专有本地 PostgreSQL 17 实例（端口 55432）
+# 2. 启动项目专有本地 PostgreSQL 17 实例（端口 55432）
 node scripts/database.mjs
 
-# 4. 执行数据库架构迁移
+# 3. 创建并应用开发环境迁移，然后生成 Prisma 客户端
 pnpm db:migrate
+pnpm db:generate
 ```
 
 ::: info 本地数据库隔离机制
@@ -93,7 +91,7 @@ pnpm agent:mock
 | 异常现象 / 错误提示                        | 根本原因分析                     | 快速解决方案                                                |
 | :----------------------------------------- | :------------------------------- | :---------------------------------------------------------- |
 | **`connect ECONNREFUSED 127.0.0.1:55432`** | 本地沙箱 PostgreSQL 尚未启动     | 运行 `node scripts/database.mjs` 检查数据库状态，随后重启 `pnpm dev`。  |
-| **提示表结构未准备好 (`Table not found`)** | 数据库连接正常，但未执行迁移脚本 | 终端运行 `pnpm db:migrate` 同步数据表。                     |
+| **提示表结构未准备好 (`Table not found`)** | 数据库连接正常，但表结构与 schema 不一致 | 终端运行 `pnpm db:migrate` 同步数据表。                     |
 | **提示必须配置 `DATABASE_URL`** | 未配置数据库连接串，后端拒绝启动 | 在 `.env` 中配置有效连接串并运行 `pnpm db:migrate`；不会自动回退到内存模式。 |
 | **Vite 显示 Ready 但无法连接世界**         | 后端服务尚未完全就绪             | 检查后端终端日志，服务需成功连接数据库后才开放 2567 端口。  |
 

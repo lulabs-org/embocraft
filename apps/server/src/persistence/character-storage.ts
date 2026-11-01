@@ -5,7 +5,8 @@ import type {
   AgentCharacterLog,
 } from '@prisma/client';
 import { databaseJson } from '../core/database/client';
-import type { CharacterRecord } from './archive';
+import type { CharacterRecord, ManagementArchive } from './archive';
+import type { RuntimeState } from '@voxel/agent-runtime';
 import { stableJson } from './stable-json';
 
 type Log = { sequence: number; time: number | null; text: string };
@@ -14,7 +15,9 @@ export type SavedCharacter = {
   state: {
     status: string | null;
     currentRunId: string | null;
-    runtime: Prisma.InputJsonValue | null;
+    runtimeVersion: number | null;
+    memory: Prisma.InputJsonValue | null;
+    standby: Prisma.InputJsonValue | null;
   };
   logs: Log[];
 };
@@ -84,7 +87,9 @@ export function captureCharacter(
     state: {
       status: record.status ?? null,
       currentRunId: record.currentRunId ?? null,
-      runtime: json(record.runtime),
+      runtimeVersion: record.runtime?.version ?? null,
+      memory: json(record.runtime?.character),
+      standby: record.currentRunId ? null : json(record.runtime?.execution),
     },
     logs,
   };
@@ -95,10 +100,36 @@ export function restoreCharacter(
     state: AgentCharacterState | null;
     logs: AgentCharacterLog[];
   },
+  runs: Map<string, ManagementArchive['runs'][number]>,
 ): CharacterRecord {
   if (!row.state) throw new Error('Character recovery state is missing.');
   const { position: _position, state, logs, ...config } = row;
-  const { characterId: _characterId, ...recovery } = state;
+  const { status, currentRunId } = state;
+  let runtime: RuntimeState | undefined;
+  if (state.runtimeVersion !== null) {
+    if (state.runtimeVersion !== 4 || !state.memory)
+      throw new Error('Character memory is invalid.');
+    const run = currentRunId ? runs.get(currentRunId) : undefined;
+    if (
+      currentRunId &&
+      (!run?.runtime || run.characterId !== row.id || state.standby !== null)
+    )
+      throw new Error(
+        'Current execution checkpoint is missing or belongs to another character.',
+      );
+    const execution = run?.runtime?.execution ?? state.standby;
+    if (!execution) throw new Error('Character standby state is missing.');
+    runtime = {
+      version: 4,
+      character: structuredClone(
+        state.memory,
+      ) as unknown as RuntimeState['character'],
+      execution: structuredClone(execution) as RuntimeState['execution'],
+    };
+  } else if (currentRunId || state.memory !== null || state.standby !== null) {
+    throw new Error('Character runtime version is missing.');
+  }
+  const recovery = { status, currentRunId };
   // Missing optional legacy settings stay absent so domain defaults still apply.
   return {
     ...Object.fromEntries(
@@ -107,6 +138,7 @@ export function restoreCharacter(
     ...Object.fromEntries(
       Object.entries(recovery).filter(([, value]) => value !== null),
     ),
+    ...(runtime ? { runtime } : {}),
     logEntries: logs.map(({ time, text }) => ({ time, text })),
   } as CharacterRecord;
 }
@@ -133,7 +165,8 @@ export async function saveCharacter(
   if (!previous || stableJson(next.state) !== stableJson(previous.state)) {
     const data = {
       ...next.state,
-      runtime: databaseJson(next.state.runtime),
+      memory: databaseJson(next.state.memory),
+      standby: databaseJson(next.state.standby),
     };
     await tx.agentCharacterState.upsert({
       where: { characterId: id },

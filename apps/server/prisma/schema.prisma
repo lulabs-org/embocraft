@@ -62,12 +62,14 @@ model AgentCharacter {
  provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
 }
 
-// Runtime v4 stays intact in this first split; execution ownership is unchanged.
+// Character memory is independent of the selected Run checkpoint.
 model AgentCharacterState {
  characterId String @id
  status String?
  currentRunId String?
- runtime Json?
+ runtimeVersion Int?
+ memory Json?
+ standby Json?
  character AgentCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
 }
 
@@ -90,6 +92,15 @@ model AgentRun {
  id String @id
  position Int
  data Json
+ checkpoint AgentRunCheckpoint?
+}
+
+// One execution checkpoint; never contains character conversations, inbox or usage.
+model AgentRunCheckpoint {
+ runId String @id
+ version Int
+ execution Json
+ run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 }
 
 model AgentRequest {

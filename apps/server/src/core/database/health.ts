@@ -87,6 +87,6 @@ export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
     // eslint-disable-next-line preserve-caught-error
     throw new Error(databaseStartupMessage(error, databaseUrl));
   } finally {
-    await db?.$disconnect().catch(() => { });
+    await db?.$disconnect().catch(() => {});
   }
 }

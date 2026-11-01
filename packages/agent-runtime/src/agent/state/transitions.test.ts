@@ -33,7 +33,7 @@ describe('host state transitions', () => {
     expect(restoreState(JSON.parse(JSON.stringify(next)))).toEqual(next);
   });
 
-  it('resumes current snapshots with historical conversations and current character usage', () => {
+  it('resumes only the historical execution while preserving current character memory', () => {
     const archived = emptyState();
     archived.execution.task.current = {
       ...newTask('paused'),
@@ -59,18 +59,31 @@ describe('host state transitions', () => {
     const current = emptyState();
     current.character.usage = { calls: 20, tokens: 2000, estimated: false };
     current.character.conversation.exchanges = { public: ['newer'] };
+    current.character.inbox = {
+      version: 1,
+      events: [
+        {
+          id: 'new-plan',
+          kind: 'plan',
+          state: 'pending',
+          at: 200,
+          audience: 'public',
+        },
+      ],
+    };
+    current.character.conversation.lastChatAt = 200;
 
     const next = resumeTaskState(current, archived);
 
     expect(next).toEqual({
       version: 4,
-      character: { ...archived.character, usage: current.character.usage },
+      character: current.character,
       execution: {
         ...archived.execution,
         task: { ...archived.execution.task },
       },
     });
-    expect(next.character.usage).toBe(current.character.usage);
+    expect(next.character.usage).toEqual(current.character.usage);
     expect(next.execution.task.current).toEqual(
       archived.execution.task.current,
     );

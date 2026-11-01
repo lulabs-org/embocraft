@@ -121,7 +121,7 @@ export function captureTask(
     });
   }
   run.task = structuredClone(task);
-  run.runtime = record.runtime;
+  run.runtime = runtime.executionSnapshot();
   run.startedAt ??= task.startedAt;
   run.status =
     job.view.status === 'failed' &&
@@ -427,7 +427,7 @@ export async function executeTaskRunControl(
           { ...job.view, apiKey: '' },
           '已由玩家' + (operation === 'cancel' ? '结束。' : '暂停。'),
         );
-        run.runtime = runtime.snapshot();
+        run.runtime = runtime.executionSnapshot();
         run.status = run.task.status;
         run.reason = run.task.reason;
         if (operation === 'cancel') run.finishedAt = Date.now();

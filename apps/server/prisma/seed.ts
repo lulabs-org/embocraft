@@ -1,7 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { createDatabaseClient } from '../src/core/database/client';
 import { DEFAULT_PROVIDERS, DEFAULT_TTS_PROVIDER } from './seed-data';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL is required for seeding.');
+const prisma = createDatabaseClient(connectionString);
 
 async function main() {
   for (const provider of DEFAULT_PROVIDERS) {
@@ -22,7 +24,7 @@ async function main() {
 main()
   .catch((e) => {
     console.error('基础配置 Seed 失败：', e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();
