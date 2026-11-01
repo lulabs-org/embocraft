@@ -30,6 +30,10 @@ export { AICharacterHost } from './services/character-host.service';
 export type { ExecutionContext } from './services/execution-context';
 export { handleWorldEvent } from './services/world-event-handler';
 export {
+  CharacterLogService,
+  type CharacterLogQueryOptions,
+} from './services/character-log.service';
+export {
   installAICharacterRoutes,
   type AICharacterRoutePort,
 } from './routes/ai-characters.routes';
