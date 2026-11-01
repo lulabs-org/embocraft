@@ -44,6 +44,7 @@ import {
 } from './modules/providers';
 
 import { WorldRoom, WorldStore } from './modules/world';
+import { ChatStore } from './modules/chat';
 
 export type ServerOptions = {
   config?: ServerConfig;
@@ -179,9 +180,11 @@ export async function createServer(options: ServerOptions = {}) {
     greet: false,
     gracefullyShutdown: false,
   });
+  const chatStore = new ChatStore(db);
   server.define('world', WorldRoom, {
     voiceServices,
     store,
+    chatStore,
   });
   server.onBeforeShutdown(() => characters.close());
   let closing: Promise<void> | undefined;

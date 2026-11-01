@@ -1,214 +1,293 @@
 generator client {
- provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
+
 datasource db {
- provider = "postgresql"
+  provider = "postgresql"
 }
+
 model World {
- id String @id
- revision Int @default(0)
- edits BlockEdit[]
+  id        String      @id
+  revision  Int         @default(0)
+  createdAt DateTime    @default(now()) @db.Timestamptz
+  edits     BlockEdit[]
 }
+
 model BlockEdit {
- worldId String
- x Int
- y Int
- z Int
- material String?
- world World @relation(fields:[worldId], references:[id], onDelete: Cascade)
- @@id([worldId,x,y,z])
+  worldId   String
+  x         Int
+  y         Int
+  z         Int
+  material  String?
+  editedBy  String?
+  updatedAt DateTime    @default(now()) @updatedAt @db.Timestamptz
+
+  world     World       @relation(fields: [worldId], references: [id], onDelete: Cascade)
+
+  @@id([worldId, x, y, z])
+}
+
+enum PlayerKind {
+  human
+  ai_agent       @map("ai-agent")
+  scripted_agent @map("scripted-agent")
+}
+
+model Player {
+  id             String                 @id @default(uuid())
+  kind           PlayerKind             @default(human)
+  normalizedName String
+  displayName    String
+  characterId    String?
+  lastSeenAt     DateTime               @default(now()) @db.Timestamptz
+  createdAt      DateTime               @default(now()) @db.Timestamptz
+  updatedAt      DateTime               @updatedAt @db.Timestamptz
+
+  character        AgentCharacter?        @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  sentMessages     ChatMessage[]          @relation("Sender")
+  receivedMessages ChatMessageRecipient[]
+
+  @@unique([kind, normalizedName])
+  @@index([characterId])
+}
+
+enum ChatScope {
+  public
+  private
+  nearby
+}
+
+enum ChatKind {
+  text
+  audio
+}
+
+model ChatMessage {
+  id         String                 @id @default(uuid())
+  senderId   String?
+  senderName String
+  scope      ChatScope              @default(public)
+  kind       ChatKind               @default(text)
+  text       String
+  audioId    String?
+  durationMs Int?
+  createdAt  DateTime               @default(now()) @db.Timestamptz
+
+  sender     Player?                @relation("Sender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipients ChatMessageRecipient[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([senderId, createdAt(sort: Desc)])
+}
+
+model ChatMessageRecipient {
+  messageId String
+  playerId  String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  player    Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, playerId])
+  @@index([playerId])
 }
 
 model AgentProvider {
- id String @id
- position Int
- name String
- type String
- baseUrl String
- apiKey String
- defaultModel String
- characters AgentCharacter[]
+  id           String           @id
+  position     Int
+  name         String
+  type         String
+  baseUrl      String
+  apiKey       String
+  defaultModel String
+  createdAt    DateTime         @default(now()) @db.Timestamptz
+  updatedAt    DateTime         @updatedAt @db.Timestamptz
+  characters   AgentCharacter[]
 }
-
 
 model AgentCharacter {
- id String @id
- providerId String
- position Int
- name String?
- model String?
- goal String?
- roleDescription String?
- taskLimitsEnabled Boolean?
- maxTurns Int?
- maxStalledTurns Int?
- tokenBudget Int?
- taskTimeoutMs Int?
- intervalMode String?
- intervalMinMs Int?
- intervalMaxMs Int?
- intervalMs Int?
- timeoutMs Int?
- maxTokens Int?
- permissions Json?
- skills Json?
- voiceReplies Boolean?
- voiceServiceId String?
- thinking String?
- reasoningEffort String?
- createdAt DateTime? @default(now())
- state AgentCharacterState?
- logs AgentCharacterLog[]
- plans AgentPlan[]
- runs AgentRun[]
- voiceService TtsProvider? @relation(fields: [voiceServiceId], references: [id], onDelete: Restrict)
- provider AgentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  id                String               @id
+  providerId        String
+  position          Int
+  name              String?
+  model             String?
+  goal              String?
+  roleDescription   String?
+  taskLimitsEnabled Boolean?
+  maxTurns          Int?
+  maxStalledTurns   Int?
+  tokenBudget       Int?
+  taskTimeoutMs     Int?
+  intervalMode      String?
+  intervalMinMs     Int?
+  intervalMaxMs     Int?
+  intervalMs        Int?
+  timeoutMs         Int?
+  maxTokens         Int?
+  permissions       Json?
+  skills            Json?
+  voiceReplies      Boolean?
+  voiceServiceId    String?
+  thinking          String?
+  reasoningEffort   String?
+  createdAt         DateTime?            @default(now()) @db.Timestamptz
+  updatedAt         DateTime?            @updatedAt @db.Timestamptz
+  deletedAt         DateTime?            @db.Timestamptz
 
- @@index([voiceServiceId])
+  state             AgentCharacterState?
+  logs              AgentCharacterLog[]
+  plans             AgentPlan[]
+  runs              AgentRun[]
+  voiceService      TtsProvider?         @relation(fields: [voiceServiceId], references: [id], onDelete: Restrict)
+  provider          AgentProvider        @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  players           Player[]
+
+  @@index([voiceServiceId])
+  @@index([providerId])
 }
 
-// Character memory is independent of the selected Run checkpoint.
 model AgentCharacterState {
- characterId String @id
- status String?
- currentRunId String?
- currentCheckpoint AgentRunCheckpoint? @relation(fields: [currentRunId], references: [runId], onDelete: NoAction, onUpdate: NoAction)
- // Persist Runs and checkpoints before selecting the current execution.
- currentRun AgentRun? @relation("CurrentExecution", fields: [currentRunId, characterId], references: [id, characterId], onDelete: NoAction, onUpdate: NoAction)
- runtimeVersion Int?
- memory Json?
- standby Json?
- character AgentCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId       String              @id
+  status            String?
+  currentRunId      String?
+  runtimeVersion    Int?
+  memory            Json?
+  standby           Json?
+  updatedAt         DateTime            @default(now()) @updatedAt @db.Timestamptz
+
+  currentCheckpoint AgentRunCheckpoint? @relation(fields: [currentRunId], references: [runId], onDelete: NoAction, onUpdate: NoAction)
+  currentRun        AgentRun?           @relation("CurrentExecution", fields: [currentRunId, characterId], references: [id, characterId], onDelete: NoAction, onUpdate: NoAction)
+  character         AgentCharacter      @relation(fields: [characterId], references: [id], onDelete: Cascade)
 }
 
 model AgentCharacterLog {
- characterId String
- sequence Int
- time Float?
- text String
- character AgentCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
- @@id([characterId, sequence])
+  characterId String
+  sequence    Int
+  time        Float?
+  text        String
+  character   AgentCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([characterId, sequence])
 }
 
 model AgentPlan {
- id String @id
- // Preserve archive ordering until task queries move to database pagination.
- position Int
- characterId String?
- characterName String?
- revision Int?
- imported Boolean?
- name String
- goal String
- scheduleKind String
- scheduleSpec Json
- timeZone String
- limits Json
- limitsMode String?
- totalTokenBudgetEnabled Boolean?
- totalTokenBudget BigInt
- state String
- reason String
- nextRunAt DateTime?
- spentTokens BigInt
- createdAt DateTime
- updatedAt DateTime
+  id                      String          @id
+  position                Int
+  characterId             String?
+  characterName           String?
+  revision                Int?
+  imported                Boolean?
+  name                    String
+  goal                    String
+  scheduleKind            String
+  scheduleSpec            Json
+  timeZone                String
+  limits                  Json
+  limitsMode              String?
+  totalTokenBudgetEnabled Boolean?
+  totalTokenBudget        BigInt
+  state                   String
+  reason                  String
+  nextRunAt               DateTime?       @db.Timestamptz
+  spentTokens             BigInt          @default(0)
+  createdAt               DateTime        @db.Timestamptz
+  updatedAt               DateTime        @updatedAt @db.Timestamptz
 
- character AgentCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
- runs AgentRun[]
- requests AgentRequest[]
+  character               AgentCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  runs                    AgentRun[]
+  requests                AgentRequest[]
 
- @@index([state, nextRunAt])
- @@index([characterId, createdAt, id])
+  @@index([state, nextRunAt])
+  @@index([characterId, createdAt, id])
 }
 
 model AgentRun {
- id String @id
- // Preserve archive ordering until task queries move to database pagination.
- position Int
- planId String?
- planRevision Int?
- characterId String?
- // Historical domain/API attribution survives character deletion.
- characterIdSnapshot String?
- characterName String?
- source String
- status String
- reason String
- scheduledAt DateTime
- startedAt DateTime?
- finishedAt DateTime?
- eventId String?
- coalescedTriggers Int?
- lastTriggerAt DateTime?
- snapshot Json
- task Json?
- totalTokens BigInt
- accountedTokens BigInt
- logs Json
- actions Json?
- requestId String?
- lastBatch String?
- requiresReassignment Boolean?
- checkpoint AgentRunCheckpoint?
- character AgentCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
- plan AgentPlan? @relation(fields: [planId], references: [id], onDelete: Restrict)
- selectedBy AgentCharacterState[] @relation("CurrentExecution")
+  id                   String                @id
+  position             Int
+  planId               String?
+  planRevision         Int?
+  characterId          String?
+  characterIdSnapshot  String?
+  characterName        String?
+  source               String
+  status               String
+  reason               String
+  scheduledAt          DateTime              @db.Timestamptz
+  startedAt            DateTime?             @db.Timestamptz
+  finishedAt           DateTime?             @db.Timestamptz
+  eventId              String?
+  coalescedTriggers    Int?
+  lastTriggerAt        DateTime?             @db.Timestamptz
+  snapshot             Json
+  task                 Json?
+  totalTokens          BigInt                @default(0)
+  accountedTokens      BigInt                @default(0)
+  logs                 Json
+  actions              Json?
+  requestId            String?
+  lastBatch            String?
+  requiresReassignment Boolean?
+  createdAt            DateTime              @default(now()) @db.Timestamptz
+  updatedAt            DateTime              @updatedAt @db.Timestamptz
 
- @@unique([id, characterId])
- @@unique([planId, requestId])
+  checkpoint           AgentRunCheckpoint?
+  character            AgentCharacter?       @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  plan                 AgentPlan?            @relation(fields: [planId], references: [id], onDelete: Restrict)
+  selectedBy           AgentCharacterState[] @relation("CurrentExecution")
 
- @@index([planId, scheduledAt, id])
- @@index([characterId, status])
+  @@unique([id, characterId])
+  @@unique([planId, requestId])
+  @@index([planId, scheduledAt, id])
+  @@index([characterId, status])
 }
 
-// One execution checkpoint; never contains character conversations, inbox or usage.
 model AgentRunCheckpoint {
- runId String @id
- version Int
- execution Json
- selectedBy AgentCharacterState[]
- run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId      String                @id
+  version    Int
+  execution  Json
+  selectedBy AgentCharacterState[]
+  run        AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
 }
 
 model AgentRequest {
- key String @id
- planId String
- plan AgentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  key       String    @id
+  planId    String
+  createdAt DateTime  @default(now()) @db.Timestamptz
+  plan      AgentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
- @@index([planId])
+  @@index([planId])
 }
 
 model TtsProvider {
-  id            String  @id
+  id            String           @id
   position      Int
   name          String
   type          String
-  baseUrl       String  @default("")
-  apiKey        String  @default("")
-  model         String  @default("")
-  voice         String  @default("")
-  speed         Float   @default(1.0)
+  baseUrl       String           @default("")
+  apiKey        String           @default("")
+  model         String           @default("")
+  voice         String           @default("")
+  speed         Float            @default(1.0)
   voiceLanguage String?
-  characters AgentCharacter[]
+  createdAt     DateTime         @default(now()) @db.Timestamptz
+  updatedAt     DateTime         @updatedAt @db.Timestamptz
+  characters    AgentCharacter[]
 }
 
-
 model AsrProvider {
-  id          String   @id
+  id          String          @id
   position    Int
   name        String
-  provider    String   @default("bailian")
+  provider    String          @default("bailian")
   model       String
-  apiKey      String   @default("")
-  assignments AsrAssignment[]
+  apiKey      String          @default("")
   region      String?
   workspaceId String?
   baseUrl     String?
   temperature Float?
   prompt      String?
+  createdAt   DateTime        @default(now()) @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @db.Timestamptz
+  assignments AsrAssignment[]
 }
-
 
 enum AsrUse {
   chat
@@ -217,9 +296,24 @@ enum AsrUse {
 }
 
 model AsrAssignment {
-  use AsrUse @id
+  use        AsrUse      @id
   providerId String
-  provider AsrProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider   AsrProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@index([providerId])
+}
+
+model TokenUsage {
+  id          BigInt   @id @default(autoincrement())
+  characterId String
+  planId      String?
+  runId       String?
+  providerId  String?
+  model       String?
+  tokens      BigInt
+  at          DateTime @default(now()) @db.Timestamptz
+
+  @@index([characterId, at(sort: Desc)])
+  @@index([planId])
+  @@index([runId])
 }

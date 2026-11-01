@@ -39,7 +39,7 @@ export class WorldStore {
     }
     return world.revision;
   }
-  async save(edit: Edit) {
+  async save(edit: Edit, editedBy?: string) {
     if (!this.db) return;
     await this.db.$transaction(async (tx) => {
       const result = await tx.world.updateMany({
@@ -50,8 +50,8 @@ export class WorldStore {
       const { x, y, z, material } = edit;
       await tx.blockEdit.upsert({
         where: { worldId_x_y_z: { worldId: WORLD_ID, x, y, z } },
-        create: { worldId: WORLD_ID, x, y, z, material },
-        update: { material },
+        create: { worldId: WORLD_ID, x, y, z, material, editedBy },
+        update: { material, editedBy },
       });
     });
   }

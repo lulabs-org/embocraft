@@ -107,6 +107,11 @@ function databaseUrl(env: EnvLookup = process.env): string {
   return env.DATABASE_URL ?? '';
 }
 
+function encryptionSecret(env: EnvLookup = process.env): string | undefined {
+  const secret = (env.DATA_ENCRYPTION_KEY ?? '').trim();
+  return secret || undefined;
+}
+
 function readSpeechConfig(env: EnvLookup = process.env) {
   return {
     speechApiUrl: env.SPEECH_API_URL,
@@ -152,6 +157,7 @@ export const env = {
   load: loadEnvironment,
   webOrigin,
   databaseUrl,
+  encryptionSecret,
   readServer: readServerConfig,
   readSpeech: readSpeechConfig,
 } as const;

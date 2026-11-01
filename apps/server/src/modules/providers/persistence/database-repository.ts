@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import { toProviderView, type SavedProvider } from '../domain/model';
 import { validateProvider } from '../domain/validation';
@@ -22,7 +23,12 @@ export class DatabaseProviderRepository implements ProviderRepository {
       if (rows.length > MAX_PROVIDERS) {
         throw new AppError('模型服务配置格式错误。', 500);
       }
-      this.values = rows.map((row) => validateProvider(row));
+      this.values = rows.map((row) =>
+        validateProvider({
+          ...row,
+          apiKey: decryptSecret(row.apiKey),
+        }),
+      );
       this.nextPosition = rows.reduce(
         (max, row) => Math.max(max, row.position + 1),
         0,
@@ -63,15 +69,19 @@ export class DatabaseProviderRepository implements ProviderRepository {
       }
 
       const { id: _, ...payload } = provider;
+      const dbPayload = {
+        ...payload,
+        apiKey: encryptSecret(payload.apiKey),
+      };
       try {
         await this.db.agentProvider.upsert({
           where: { id: provider.id },
           create: {
-            ...payload,
+            ...dbPayload,
             id: provider.id,
             position: this.nextPosition++,
           },
-          update: payload,
+          update: dbPayload,
         });
       } catch {
         throw new AppError('无法保存模型服务数据库配置。', 500);

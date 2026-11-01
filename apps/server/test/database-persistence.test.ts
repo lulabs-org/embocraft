@@ -32,6 +32,10 @@ const db = url ? createDatabaseClient(url) : undefined;
 
 describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   beforeEach(async () => {
+    await db!.tokenUsage.deleteMany();
+    await db!.chatMessageRecipient.deleteMany();
+    await db!.chatMessage.deleteMany();
+    await db!.player.deleteMany();
     await db!.agentCharacterState.deleteMany();
     await db!.agentRequest.deleteMany();
     await db!.agentRun.deleteMany();
@@ -129,6 +133,9 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(
       await db!.agentRequest.findUnique({ where: { key: 'a:create' } }),
     ).toMatchObject({ planId: plan.id });
+    expect(
+      await db!.tokenUsage.count({ where: { characterId: 'a' } }),
+    ).toBeGreaterThanOrEqual(0);
   });
 
   it('rejects dangling task references and duplicate manual requests while preserving scoped idempotency', async () => {
@@ -1074,5 +1081,40 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await server?.close();
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it('persists player identities and chat messages with recipients in database', async () => {
+    const { ChatStore } = await import('../src/modules/chat');
+    const chatStore = new ChatStore(db!);
+
+    const aliceId = await chatStore.recordPlayer({
+      name: 'Alice',
+      kind: 'human',
+    });
+    const bobId = await chatStore.recordPlayer({
+      name: 'Bob',
+      kind: 'human',
+    });
+
+    expect(aliceId).toBeDefined();
+    expect(bobId).toBeDefined();
+
+    await chatStore.recordMessage({
+      senderName: 'Alice',
+      senderKind: 'human',
+      scope: 'private',
+      kind: 'text',
+      text: 'Secret message for Bob',
+      recipients: ['Bob'],
+    });
+
+    const messages = await db!.chatMessage.findMany({
+      include: { recipients: true },
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0].senderName).toBe('Alice');
+    expect(messages[0].text).toBe('Secret message for Bob');
+    expect(messages[0].recipients).toHaveLength(1);
+    expect(messages[0].recipients[0].playerId).toBe(bobId);
   });
 });

@@ -108,7 +108,15 @@ export function restoreCharacter(
   runs: Map<string, ManagementArchive['runs'][number]>,
 ): CharacterRecord {
   if (!row.state) throw new Error('Character recovery state is missing.');
-  const { position: _position, state, logs, createdAt, ...config } = row;
+  const {
+    position: _position,
+    state,
+    logs,
+    createdAt,
+    updatedAt: _updatedAt,
+    deletedAt: _deletedAt,
+    ...config
+  } = row;
   const { status, currentRunId } = state;
   const restoredCreatedAt =
     createdAt instanceof Date

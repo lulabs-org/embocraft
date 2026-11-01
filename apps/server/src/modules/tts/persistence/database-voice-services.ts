@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import type {
   SavedVoice,
@@ -21,7 +22,7 @@ export class DatabaseVoiceServicePersistence
         name: row.name,
         type: row.type as SavedVoice['type'],
         baseUrl: row.baseUrl,
-        apiKey: row.apiKey,
+        apiKey: decryptSecret(row.apiKey),
         model: row.model,
         voice: row.voice,
         speed: row.speed,
@@ -48,7 +49,7 @@ export class DatabaseVoiceServicePersistence
             name: value.name,
             type: value.type,
             baseUrl: value.baseUrl,
-            apiKey: value.apiKey,
+            apiKey: encryptSecret(value.apiKey),
             model: value.model,
             voice: value.voice,
             speed: value.speed,
