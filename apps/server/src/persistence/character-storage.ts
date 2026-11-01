@@ -35,7 +35,6 @@ function configuration(record: CharacterRecord, position: number) {
     position,
     name: record.name ?? null,
     model: record.model ?? null,
-    goal: record.goal ?? null,
     roleDescription: record.roleDescription ?? null,
     taskLimitsEnabled: record.taskLimitsEnabled ?? null,
     maxTurns: record.maxTurns ?? null,

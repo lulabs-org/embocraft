@@ -108,12 +108,12 @@ async function createWithTask(
   m: AICharacterManager,
   value: Record<string, unknown>,
 ) {
-  const { goal, ...profile } = value;
+  const { goal = 'Wait', ...profile } = value;
   const created = m.create(profile);
   await m.settled(created.id);
   await m.tasks.createTaskPlan(created.id, {
     name: String(goal).slice(0, 80),
-    goal,
+    goal: String(goal),
     timing: { kind: 'immediate' },
     timeZone: 'UTC',
     limits: {
@@ -128,7 +128,6 @@ const settings = {
   voiceServiceId: 'local-default',
   providerId: 'deepseek',
   name: 'Reusable',
-  goal: 'Wait',
   maxTurns: 1,
 };
 it('saves task heartbeat independently without resetting or resuming progress', async () => {
@@ -313,7 +312,7 @@ it('closing while join is pending cannot leave an orphan player or start inferen
       > => [{ name: 'complete_task', arguments: { summary: '测试决策' } }],
     );
   const m = setup(s, decide),
-    job = m.create({ ...settings, goal: '' });
+    job = m.create(settings);
   await vi.waitFor(() => expect(s.join).toHaveBeenCalled());
   m.stop(job.id);
   resolve();
@@ -336,9 +335,9 @@ it('unexpected disconnect releases identity and allows rejoining the same saved 
   await vi.waitFor(() => expect(m.list()[0]?.status).toBe('idle'));
   expect(m.list()[0]).toMatchObject({
     id: job.id,
-    goal: 'New goal',
     sessionId: 'player-1',
   });
+  expect(m.list()[0].task?.goal).toBe('New goal');
   expect(s.join).toHaveBeenCalledTimes(2);
 });
 
@@ -533,18 +532,17 @@ it('keeps the current chat-assigned goal consistent through editing, persistence
   );
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   const before = m.list()[0];
-  expect(before.goal).toBe(before.task?.goal);
+  expect(before.task?.goal).toBe('Build a new house');
   const updated = await m.update(job.id, {
     maxTokens: 1024,
   });
   expect(updated.task).toEqual(before.task);
   const partial = await m.update(job.id, { maxTokens: 2048 });
-  expect(partial.goal).toBe('Build a new house');
   expect(partial.task).toEqual(before.task);
   await m.close();
   const restored = setup(s, decide);
   await restored.load();
-  expect(restored.list()[0].goal).toBe('Build a new house');
+  expect(restored.list()[0].task?.goal).toBe('Build a new house');
   await startTask(restored, job.id, { goal: restored.list()[0].task!.goal });
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(3));
   expect(decide.mock.calls[2][1]).toMatchObject({
@@ -606,14 +604,11 @@ it('creates and restores a standby character with no task or automatic model cal
   const m = setup(session, decide);
   const created = m.create({
     ...settings,
-    goal: '',
-
     roleDescription: '你是一名建筑师，负责建造房屋。',
   });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   expect(m.list()[0]).toMatchObject({
     id: created.id,
-    goal: '',
     sessionId: 'player-1',
     roleDescription: '你是一名建筑师，负责建造房屋。',
     permissions: { move: true, chat: true, place: false, remove: false },
@@ -713,16 +708,12 @@ it('joining a stopped character preserves the task without executing or resettin
 
 it('standby creation rejects task input and still enforces online capacity', async () => {
   const m = setup(fakeSession(), vi.fn());
-  expect(() => m.create(settings)).toThrow('Tasks');
-  expect(() => m.create({ ...settings, goal: '', startTask: true })).toThrow(
-    'Tasks',
-  );
-  expect(() => m.create({ ...settings, goal: '', joinWorld: 'no' })).toThrow(
-    '开关',
-  );
+  expect(() => m.create({ ...settings, goal: 'A task' })).toThrow('Tasks');
+  expect(() => m.create({ ...settings, startTask: true })).toThrow('Tasks');
+  expect(() => m.create({ ...settings, joinWorld: 'no' })).toThrow('开关');
   for (let i = 0; i < 4; i++)
-    m.create({ ...settings, name: `Standby ${i}`, goal: '' });
-  expect(() => m.create({ ...settings, goal: '' })).toThrow('最多同时在线');
+    m.create({ ...settings, name: `Standby ${i}` });
+  expect(() => m.create(settings)).toThrow('最多同时在线');
 });
 
 it('retains capability settings and construction progress across edits, reload and resume', async () => {
@@ -889,7 +880,7 @@ it('applies task budgets on assignment and renewal, rejecting invalid budgets be
   const s = fakeSession();
   const decide = vi.fn(async () => [{ name: 'observe', arguments: {} }]);
   const m = setup(s, decide);
-  const job = m.create({ ...settings, goal: '' });
+  const job = m.create(settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   await startTask(m, job.id, {
     goal: '测试任务',
@@ -942,7 +933,7 @@ it('uses newly saved provider configuration on the next decision without resetti
       };
     }),
   });
-  const job = manager.create({ ...settings, goal: '', maxTokens: 777 });
+  const job = manager.create({ ...settings, maxTokens: 777 });
   await vi.waitFor(() => expect(manager!.list()[0].status).toBe('idle'));
   await store.save(
     { ...store.get('deepseek'), apiKey: 'updated-key' },
@@ -963,7 +954,7 @@ it('uses newly saved provider configuration on the next decision without resetti
 
 it('reloads 500 timestamped activity records and truncates excess entries', async () => {
   const m = setup(fakeSession());
-  const created = m.create({ ...settings, goal: '' });
+  const created = m.create(settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   const logged = m.list()[0];
   expect(logged.logEntries.length).toBeGreaterThan(0);
@@ -1145,7 +1136,7 @@ it.each([
     expect(m.plans.plans).toEqual(plans);
     expect(m.plans.runs).toEqual(runs);
     expect(decide).toHaveBeenCalledTimes(calls);
-    await m.update(job.id, { goal: '', roleDescription: 'Updated profile' });
+    await m.update(job.id, { roleDescription: 'Updated profile' });
     expect(m.list()[0].task).toEqual(before[0].task);
     expect(m.list()[0].usage).toEqual(before[0].usage);
     expect(m.plans.plans).toEqual(plans);
@@ -1247,7 +1238,7 @@ it('forwards the task lease, stable command ID and player event through the real
 
 it('rejects old runtime archives without overwriting them on shutdown', async () => {
   const originalManager = setup(fakeSession());
-  const created = originalManager.create({ ...settings, goal: '' });
+  const created = originalManager.create(settings);
   await originalManager.settled(created.id);
   await originalManager.close();
   const archive = JSON.parse(store.archive.json!);

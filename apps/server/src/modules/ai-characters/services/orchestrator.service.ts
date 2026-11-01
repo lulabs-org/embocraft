@@ -264,7 +264,6 @@ export class AICharacterOrchestrator {
         const run = this.plans.runs.find((run) => run.id === currentRunId);
         return structuredClone({
           ...view,
-          goal: state.task?.goal ?? view.goal,
           voiceServiceName: this.voiceCoordinator.getServiceName(
             view.voiceServiceId,
           ),
@@ -323,7 +322,7 @@ export class AICharacterOrchestrator {
     const provider = this.providers.getRuntime(
       text(input.providerId, '模型服务', 80),
     );
-    const settings = validateAICharacter({ ...input, goal: '' }, provider);
+    const settings = validateAICharacter(input, provider);
     const joinWorld = boolean(input.joinWorld, true);
     this.checkVoice(settings);
     if (joinWorld && [...this.jobs.values()].filter(resident).length >= 4)
@@ -391,12 +390,10 @@ export class AICharacterOrchestrator {
     const provider = this.providers.getRuntime(
       text(input.providerId, '模型服务', 80, job.view.providerId),
     );
-    const currentGoal = job.runtime.view().task?.goal ?? job.view.goal;
     const settings = validateAICharacter(
       {
         ...job.view,
         ...input,
-        goal: currentGoal,
         permissions:
           input.permissions !== undefined
             ? input.permissions

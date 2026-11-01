@@ -58,7 +58,6 @@ export function taskExecutionFixture() {
       permissions: { move: true, chat: true, place: false, remove: false },
       id: 'actor',
       name: 'Fixture',
-      goal: '',
       providerId: 'fixture',
       model: 'fixture',
       status: 'idle',

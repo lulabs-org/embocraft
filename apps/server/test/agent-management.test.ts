@@ -122,7 +122,7 @@ describe('provider configuration boundary', () => {
   });
   it('bounds runtime settings and defaults to no block edits', () => {
     const p = provider();
-    const input = { name: 'AI', goal: 'Observe' };
+    const input = { name: 'AI' };
     expect(validateAICharacter(input, p)).toMatchObject({
       maxTurns: 100,
       permissions: { move: true, chat: true, place: false, remove: false },
@@ -155,7 +155,7 @@ describe('provider configuration boundary', () => {
   });
   it('accepts optional role guidance without treating it as a task or permission', () => {
     const p = provider();
-    const input = { name: '建筑师', goal: '' };
+    const input = { name: '建筑师' };
     expect(validateAICharacter(input, p).roleDescription).toBe('');
     expect(
       validateAICharacter(
@@ -164,7 +164,6 @@ describe('provider configuration boundary', () => {
       ),
     ).toMatchObject({
       roleDescription: '负责规划和建造房屋。\n先确认需求。',
-      goal: '',
       permissions: { move: true, chat: true, place: false, remove: false },
     });
     expect(
@@ -203,7 +202,7 @@ describe('multi-provider SDK requests', () => {
 
 describe('managed scheduling validation', () => {
   it('accepts random scheduling and keeps requests finite', () => {
-    const base = { name: 'AI', goal: 'Observe' };
+    const base = { name: 'AI' };
     expect(validateAICharacter(base, provider())).toMatchObject({
       intervalMode: 'fixed',
       maxTurns: 100,

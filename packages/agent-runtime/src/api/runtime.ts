@@ -144,7 +144,7 @@ export class AgentRuntime extends RuntimeExecution {
 
   /** CLI keeps its original waiting-only scheduling and initial-goal behavior. */
   async runUntilSettled(config: AgentConfig, signal: AbortSignal) {
-    this.ensureTask(config.goal);
+    if (config.goal) this.ensureTask(config.goal);
     do {
       if (signal.aborted) break;
       await this.run(config, { signal });

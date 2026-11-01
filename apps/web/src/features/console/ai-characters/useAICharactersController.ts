@@ -70,7 +70,6 @@ export function useAICharactersController(
             model:
               providers.find((p) => p.id === job.providerId)?.defaultModel ??
               '',
-            goal: job.task?.goal ?? job.goal,
           }
         : {
             ...initialAICharacter,
@@ -105,7 +104,6 @@ export function useAICharactersController(
       if (!selected?.defaultModel.trim())
         throw new Error('请先在模型服务中配置并保存模型 ID。');
       const {
-        goal,
         timeoutMs,
         maxTokens,
         thinking,
@@ -151,7 +149,6 @@ export function useAICharactersController(
           ...saved,
           taskLimitsEnabled: saved.taskLimitsEnabled ?? false,
           model: selected.defaultModel,
-          goal: saved.task?.goal ?? saved.goal,
         });
         setEditingAgent(saved.id);
         setShowAgentForm(true);

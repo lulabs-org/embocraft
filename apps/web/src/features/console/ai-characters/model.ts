@@ -4,7 +4,6 @@ export const initialAICharacter: AICharacterSettings = {
   providerId: '',
   model: '',
   name: '',
-  goal: '',
   roleDescription: '',
 
   intervalMode: 'fixed',

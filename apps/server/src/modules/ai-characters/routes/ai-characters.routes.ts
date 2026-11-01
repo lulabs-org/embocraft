@@ -236,7 +236,7 @@ export function installAICharacterRoutes(
    *     security:
    *       - ManagementBearer: []
    *     summary: 更新 AI 角色配置
-   *     description: 不创建或替换任务，不修改任务目标；startTask、taskTimeZone 或非空 goal 返回 400，请使用 Tasks。
+   *     description: 不创建或替换任务，不修改任务目标；startTask、taskTimeZone 或 goal 返回 400，请使用 Tasks。
    *     tags:
    *       - AI Characters
    *     parameters:

@@ -255,7 +255,7 @@ try {
       .list()
       .find((j) => j.id === job.id)!;
     assert.equal(resumed.sessionId, idle.sessionId);
-    assert.equal(resumed.goal, 'A different task');
+    assert.equal(resumed.task?.goal, 'A different task');
     const current = room.state.players.get(resumed.sessionId!)!;
     assert.deepEqual(
       { x: current.x, y: current.y, z: current.z },
@@ -350,7 +350,6 @@ try {
   const standbyResponse = await api('/ai-characters', 'POST', {
     providerId: 'deepseek',
     name: 'Standby',
-    goal: '',
   });
   assert.equal(standbyResponse.status, 201);
   const standby = (await standbyResponse.json()) as AICharacterView;

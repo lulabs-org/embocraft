@@ -6,7 +6,7 @@ export const aiCharactersApi = {
   listAgents: (signal?: AbortSignal) =>
     consoleFetch<PublicAICharacterView[]>('/ai-characters', { signal }),
   saveAgent: (
-    settings: Partial<Omit<AICharacterSettings, 'goal'>> & {
+    settings: Partial<AICharacterSettings> & {
       joinWorld?: boolean;
     },
     id?: string,

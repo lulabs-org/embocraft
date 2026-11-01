@@ -109,7 +109,6 @@ model AgentCharacter {
   position          Int
   name              String?
   model             String?
-  goal              String?
   roleDescription   String?
   taskLimitsEnabled Boolean?
   maxTurns          Int?
