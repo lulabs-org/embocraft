@@ -127,6 +127,24 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，嵌入的运行时状态为 version 4，Pi 检查点为 v3。存档恢复前经过结构校验，不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
 
+## Plan / Run 结构化迁移
+
+`20261101040000_structure_plans_runs` 将 `AgentPlan.data` 和 `AgentRun.data` 中的归属、状态、时间、用量和请求信息迁入独立列。计划调度拆成 `scheduleKind` / `scheduleSpec`；限制、执行输入快照、任务详情、日志和动作仍使用独立 JSON 列。执行检查点继续只存于 `AgentRunCheckpoint`。
+
+迁移在一个事务内锁定两表，增加列、回填、逐行重建 JSON 核对，最后删除两个 `data` 列。未知字段、ID 不一致、时间精度丢失、非法计数或缺少必填值会使整个迁移回滚。`latestRun` 是查询派生值，不迁入计划表；历史可选配置保持缺省语义。成功迁移后不保留旧列，也不支持旧版本服务继续读写。
+
+部署时先停止旧服务写入，在目标 `DATABASE_URL` 下执行 `pnpm db:deploy`，再启动新版本。该迁移要求数据库已完成前述角色/检查点迁移，不能修复更早迁移已删除的数据。
+
+数据库时间与领域/API 的毫秒数由适配器转换；累计 Token 使用 `BIGINT`，接口仍使用安全整数 `number`。本阶段保留 `position` 和联合快照提交方式，未引入外键重构或数据库分页。
+
+使用已完成迁移的独立测试库验证：
+
+```bash
+TEST_DATABASE_URL="$TASK_TEST_DATABASE_URL" pnpm exec vitest run apps/server/test/database-persistence.test.ts apps/server/test/task-storage-migration.test.ts
+```
+
+迁移测试会在测试库的临时 schema 中建立旧结构、写入旧 JSON 并执行真实迁移；持久化测试会清空该测试库的业务表，请勿指向业务数据库。
+
 ## HTTP 领域路径
 
 共享模型配置使用 `/providers`，全局计划使用 `/tasks`，运行控制使用 `/task-runs`，TTS 配置和试听使用 `/voice/tts/services`，Piper 模型目录与安装使用 `/voice/tts/piper`。它们与 `/ai-characters`、`/voice/asr/services` 都需要管理员 Bearer 令牌。Agent 音色绑定继续为 `/ai-characters/:id/voice`；聊天音频继续使用 `/chat` 下的玩家会话鉴权。
