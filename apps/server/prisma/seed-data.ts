@@ -32,6 +32,20 @@ export const DEFAULT_TTS_PROVIDER = {
   voiceLanguage: null,
 } as const;
 
+export const DEFAULT_ASR_PROVIDER = {
+  id: 'local-default',
+  position: 0,
+  name: 'Speaches 识别服务',
+  provider: 'whisper',
+  model: 'Systran/faster-whisper-base',
+  apiKey: '',
+  region: null,
+  workspaceId: null,
+  baseUrl: '',
+  temperature: 0,
+  prompt: '',
+} as const;
+
 export const DEFAULT_CHARACTER = {
   id: 'default-character',
   providerId: 'deepseek',
