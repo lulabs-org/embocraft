@@ -1,33 +1,12 @@
 import { ManagementCommands } from '../../management';
 import type { Express, Request } from 'express';
-import {
-  AI_CHARACTER_LOG_MAX_PAGE_SIZE,
-  AI_CHARACTER_LOG_PAGE_SIZE,
-  type AICharacterLogPage,
-} from '@voxel/shared';
 import type { AICharacterOrchestrator } from '../services/orchestrator.service';
+import { CharacterLogService } from '../services/character-log.service';
 import type {
   CharacterDetail,
   CharacterQueryPort,
 } from '../persistence/queries';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
-
-/** Opaque, versioned cursor wrapping a newest-first page offset. */
-const encodeLogCursor = (offset: number) =>
-  Buffer.from(`v1:${offset}`, 'utf8').toString('base64url');
-
-const decodeLogCursor = (cursor: unknown): number => {
-  if (typeof cursor !== 'string' || !cursor) return 0;
-  try {
-    const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
-    const [version, value] = decoded.split(':');
-    if (version !== 'v1') return 0;
-    const offset = Number(value);
-    return Number.isFinite(offset) && offset > 0 ? Math.trunc(offset) : 0;
-  } catch {
-    return 0;
-  }
-};
 
 export type AICharacterRoutePort = Pick<
   AICharacterOrchestrator,
@@ -52,6 +31,7 @@ export function installAICharacterRoutes(
   manager: AICharacterRoutePort,
   commands: ManagementCommands,
   queries: CharacterQueryPort,
+  logService: CharacterLogService = new CharacterLogService(queries),
 ) {
   const { events } = manager;
   const response = (character: CharacterDetail, resourceVersion: number) => ({
@@ -177,23 +157,10 @@ export function installAICharacterRoutes(
   app.get(
     '/ai-characters/:id/logs',
     route(async (req, res) => {
-      const id = String(req.params.id);
-      const rawLimit = Number(req.query.limit ?? AI_CHARACTER_LOG_PAGE_SIZE);
-      const limit = Number.isFinite(rawLimit)
-        ? Math.min(
-            Math.max(Math.trunc(rawLimit), 1),
-            AI_CHARACTER_LOG_MAX_PAGE_SIZE,
-          )
-        : AI_CHARACTER_LOG_PAGE_SIZE;
-      const offset = decodeLogCursor(req.query.cursor);
-      const { entries, total } = await queries.logs(id, limit, offset);
-      const nextOffset = offset + entries.length;
-      const body: AICharacterLogPage = {
-        entries,
-        total,
-        nextCursor:
-          nextOffset < total ? encodeLogCursor(nextOffset) : undefined,
-      };
+      const body = await logService.getLogsPage(String(req.params.id), {
+        limit: req.query.limit,
+        cursor: req.query.cursor,
+      });
       res.json(body);
     }),
   );
