@@ -12,7 +12,10 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { env } from '../src/core/config';
 import { createDatabaseClient } from '../src/core/database/client';
-import { AICharacterManager } from '../src/modules/ai-characters';
+import {
+  AICharacterManager,
+  CharacterQueries,
+} from '../src/modules/ai-characters';
 import { AsrSettingsStore } from '../src/modules/asr/persistence/asr-settings-store';
 import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/database-asr-services';
 import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/database-voice-services';
@@ -48,6 +51,255 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await db!.world.deleteMany();
   });
   afterAll(async () => db?.$disconnect());
+
+  it('queries persisted character details, current checkpoints and log pages without a running manager', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
+    const runtime = createAgentRuntime();
+    runtime.ensureTask('Inspect the world');
+    const identity = runtime.lease();
+    const state = runtime.snapshot();
+    state.character.usage = { calls: 2, tokens: 120, estimated: false };
+    state.execution.health.lastResponse = 'Saved reply';
+    state.execution.conversation.audienceExpired = true;
+    const run = storedRun({
+      id: 'current',
+      characterId: 'actor',
+      status: 'running',
+      runtime: state,
+    });
+    const older = storedCharacter({
+      id: 'actor',
+      currentRunId: run.id,
+      runtime: state,
+      voiceServiceId: DEFAULT_TTS_PROVIDER.id,
+      logEntries: [
+        { text: 'First', time: 100 },
+        { text: 'Second', time: 200 },
+        { text: 'Legacy latest', time: null },
+      ],
+    });
+    const later = storedRun({
+      id: 'later',
+      characterId: 'actor',
+      scheduledAt: 400,
+      coalescedTriggers: 2,
+    });
+    const earlier = storedRun({
+      id: 'earlier',
+      characterId: 'actor',
+      scheduledAt: 300,
+    });
+    await new DatabaseManagementArchive(db!).save({
+      version: 3,
+      characters: [older, storedCharacter({ id: 'newer' })],
+      plans: [],
+      runs: [run, later, earlier],
+      requests: {},
+    });
+    const queries = new CharacterQueries(db!);
+    const detail = await queries.get('actor');
+    expect(detail).toMatchObject({
+      id: 'actor',
+      createdAt: older.createdAt,
+      voiceServiceName: DEFAULT_TTS_PROVIDER.name,
+      task: { goal: 'Inspect the world' },
+      taskIdentity: identity,
+      taskExecution: {
+        runId: run.id,
+        limits: run.snapshot.limits,
+        source: run.source,
+      },
+      usage: state.character.usage,
+      lastResponse: 'Saved reply',
+      taskRequiresReassignment: true,
+      lastLog: 'Legacy latest',
+      lastLogAt: null,
+    });
+    expect(detail.queuedTasks).toEqual([
+      {
+        id: earlier.id,
+        goal: earlier.snapshot.goal,
+        scheduledAt: 300,
+        coalescedTriggers: 0,
+      },
+      {
+        id: later.id,
+        goal: later.snapshot.goal,
+        scheduledAt: 400,
+        coalescedTriggers: 2,
+      },
+    ]);
+    for (const key of [
+      'logEntries',
+      'runtime',
+      'state',
+      'memory',
+      'provider',
+      'apiKey',
+      'position',
+    ]) {
+      expect(detail).not.toHaveProperty(key);
+    }
+    const list = await queries.list();
+    expect(list.map((item) => item.id)).toEqual(['newer', 'actor']);
+    expect(list[1]).toEqual(detail);
+    expect(list[0]).toMatchObject({ taskIdentity: null, queuedTasks: [] });
+    expect(await queries.logs('actor', 2, 0)).toEqual({
+      entries: [older.logEntries[2], older.logEntries[1]],
+      total: 3,
+    });
+    expect(await queries.logs('actor', 2, 2)).toEqual({
+      entries: [older.logEntries[0]],
+      total: 3,
+    });
+    expect(await queries.logs('actor', 2, 99)).toEqual({
+      entries: [],
+      total: 3,
+    });
+    expect(await queries.logs('actor', 2, 1e100)).toEqual({
+      entries: [],
+      total: 3,
+    });
+    expect(await queries.logs('newer', 2, 0)).toEqual({
+      entries: [],
+      total: 0,
+    });
+    await expect(queries.get('missing')).rejects.toMatchObject({ status: 404 });
+    await expect(queries.logs('missing', 2, 0)).rejects.toMatchObject({
+      status: 404,
+    });
+
+    await db!.agentCharacter.update({
+      where: { id: 'actor' },
+      data: { name: 'Changed in SQL' },
+    });
+    expect((await queries.get('actor')).name).toBe('Changed in SQL');
+    let written!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      written = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const saving = db!.$transaction(async (tx) => {
+      await tx.agentCharacter.update({
+        where: { id: 'actor' },
+        data: { name: 'Next commit' },
+      });
+      written();
+      await gate;
+    });
+    await ready;
+    try {
+      expect((await queries.get('actor')).name).toBe('Changed in SQL');
+    } finally {
+      release();
+      await saving;
+    }
+    expect((await queries.get('actor')).name).toBe('Next commit');
+  });
+
+  it('serves HTTP character reads from PostgreSQL while keeping uncommitted runtime changes private', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const directory = await mkdtemp(join(tmpdir(), 'voxel-query-test-'));
+    const config = env.readServer({
+      DATABASE_URL: url!,
+      SERVER_PORT: '0',
+      SERVER_HOST: '127.0.0.1',
+      WEB_ORIGIN: 'http://world.test',
+      AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
+      AGENT_GATEWAY_TOKEN_FILE: join(directory, 'gateway-token'),
+    });
+    const server = await createServer({ config });
+    try {
+      await server.listen();
+      const base = server.url.replace(/^ws:/, 'http:');
+      const headers = {
+        Authorization: 'Bearer fixture-gateway-token-for-tests',
+        Origin: 'http://world.test',
+        'Content-Type': 'application/json',
+      };
+      const created = await fetch(base + '/ai-characters', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          providerId: 'ollama',
+          model: 'qwen2.5:3b',
+          name: 'Saved',
+          joinWorld: false,
+        }),
+      });
+      expect(created.status).toBe(201);
+      const original = await created.json();
+      const path = `${base}/ai-characters/${original.id}`;
+      const get = async (url: string) => {
+        const response = await fetch(url, { headers });
+        expect(response.status).toBe(200);
+        return response.json();
+      };
+      expect(await get(path)).toEqual(original);
+      const job = server.characters.jobs.get(original.id)!;
+      job.view.name = 'Unsaved runtime name';
+      job.view.logEntries.push({ text: 'Unsaved runtime log', time: 1 });
+      job.view.sessionId = 'live-connection';
+      expect(await get(path)).toMatchObject({
+        name: 'Saved',
+        sessionId: 'live-connection',
+      });
+      await db!.agentCharacter.update({
+        where: { id: original.id },
+        data: { name: 'SQL name' },
+      });
+      await db!.agentCharacterLog.createMany({
+        data: [
+          {
+            characterId: original.id,
+            sequence: 1,
+            text: 'DB first',
+            time: 100,
+          },
+          {
+            characterId: original.id,
+            sequence: 2,
+            text: 'DB latest',
+            time: null,
+          },
+        ],
+      });
+      const detail = await get(path);
+      expect(detail).toMatchObject({
+        name: 'SQL name',
+        lastLog: 'DB latest',
+        lastLogAt: null,
+      });
+      expect(await get(base + '/ai-characters')).toEqual([detail]);
+      const firstPage = await get(path + '/logs?limit=1');
+      expect(firstPage).toMatchObject({
+        entries: [{ text: 'DB latest', time: null }],
+        total: 2,
+      });
+      const lastPage = await get(
+        path + '/logs?limit=1&cursor=' + firstPage.nextCursor,
+      );
+      expect(lastPage).toEqual({
+        entries: [{ text: 'DB first', time: 100 }],
+        total: 2,
+      });
+      server.characters.events.publish('providers');
+      expect((await get(path)).resourceVersion).toBe(
+        detail.resourceVersion + 1,
+      );
+      // Test cleanup restores the live object before the normal shutdown save.
+      job.view.name = 'Saved';
+      job.view.logEntries = [];
+      delete job.view.sessionId;
+    } finally {
+      await server.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 
   it('enforces current execution ownership and preserves history through reassignment and character deletion', async () => {
     await bootstrapProviders(new DatabaseProviderRepository(db!));
@@ -690,7 +942,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     );
     try {
       await restarted.load();
-      expect(restarted.publicList()[0]).toMatchObject({
+      expect((await new CharacterQueries(db!).list())[0]).toMatchObject({
         id: id!,
         status: 'stopped',
         task: { goal: 'Recover progress', status: 'paused' },
@@ -1013,7 +1265,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await expect(manager.flush(revision)).rejects.toThrow(
         '无法保存 Agent 数据库记录',
       );
-      expect(manager.publicList()).toEqual([]);
+      expect(await new CharacterQueries(db!).list()).toEqual([]);
       expect(changes).toEqual([]);
       expect(await db!.agentCharacter.count()).toBe(0);
     } finally {
@@ -1037,7 +1289,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
       server = await createServer({ config });
       await server.listen();
-      expect(server.characters.publicList()).toEqual([]);
+      expect(await new CharacterQueries(db!).list()).toEqual([]);
       expect(server.providers.list()).toHaveLength(0);
       expect(server.voiceServices.list().map((service) => service.id)).toEqual([
         'local-default',
@@ -1069,7 +1321,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       expect(server.providers.list()).toHaveLength(1);
       expect(server.voiceServices.list()).toEqual([]);
       expect(server.asrSettings.list()).toEqual([]);
-      expect(server.characters.publicList()).toEqual([
+      expect(await new CharacterQueries(db!).list()).toEqual([
         expect.objectContaining({
           id: created.id,
           name: 'Database Agent',

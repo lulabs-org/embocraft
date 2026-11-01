@@ -446,7 +446,11 @@ it('returns one persisted result for concurrent HTTP commands and protects recei
     expect(b.status).toBe(201);
     const first = await a.json();
     expect((await b.json()).id).toBe(first.id);
-    expect(server.characters.publicList()).toHaveLength(1);
+    expect(
+      await (
+        await fetch(server.httpUrl + '/ai-characters', { headers })
+      ).json(),
+    ).toHaveLength(1);
     expect((await send({ ...body, name: 'Different' })).status).toBe(409);
     const receiptUrl = server.httpUrl + '/management/commands/same-create';
     expect((await fetch(receiptUrl)).status).toBe(401);
@@ -491,7 +495,11 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
     expect(response.status).toBe(500);
     expect(session).not.toHaveBeenCalled();
     expect(changed).not.toHaveBeenCalled();
-    expect(server.characters.publicList()).toEqual([]);
+    expect(
+      await (
+        await fetch(server.httpUrl + '/ai-characters', { headers })
+      ).json(),
+    ).toEqual([]);
     const receipt = await (
       await fetch(server.httpUrl + '/management/commands/failed-create', {
         headers,
