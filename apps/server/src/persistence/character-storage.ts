@@ -54,7 +54,12 @@ function configuration(record: CharacterRecord, position: number) {
     voiceServiceId: record.voiceServiceId ?? null,
     thinking: record.thinking ?? null,
     reasoningEffort: record.reasoningEffort ?? null,
-    createdAt: record.createdAt ?? null,
+    createdAt:
+      record.createdAt != null
+        ? (record.createdAt as unknown) instanceof Date
+          ? (record.createdAt as unknown as Date)
+          : new Date(record.createdAt)
+        : null,
   };
 }
 
@@ -103,8 +108,16 @@ export function restoreCharacter(
   runs: Map<string, ManagementArchive['runs'][number]>,
 ): CharacterRecord {
   if (!row.state) throw new Error('Character recovery state is missing.');
-  const { position: _position, state, logs, ...config } = row;
+  const { position: _position, state, logs, createdAt, ...config } = row;
   const { status, currentRunId } = state;
+  const restoredCreatedAt =
+    createdAt instanceof Date
+      ? createdAt.getTime()
+      : typeof createdAt === 'number'
+        ? createdAt
+        : typeof createdAt === 'string'
+          ? new Date(createdAt).getTime()
+          : undefined;
   let runtime: RuntimeState | undefined;
   if (state.runtimeVersion !== null) {
     if (state.runtimeVersion !== 4 || !state.memory)
@@ -135,6 +148,9 @@ export function restoreCharacter(
     ...Object.fromEntries(
       Object.entries(config).filter(([, value]) => value !== null),
     ),
+    ...(restoredCreatedAt !== undefined
+      ? { createdAt: restoredCreatedAt }
+      : {}),
     ...Object.fromEntries(
       Object.entries(recovery).filter(([, value]) => value !== null),
     ),
