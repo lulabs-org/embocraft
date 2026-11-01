@@ -63,6 +63,8 @@ export function restoreRun(
     lastTriggerAt,
     totalTokens,
     accountedTokens,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
     ...metadata
   } = row;
   if (row.checkpoint && row.checkpoint.version !== 4)
@@ -137,6 +139,21 @@ export async function saveRun(
       create: { id: next.id, ...data },
       update: data,
     });
+    const prevRun = previous
+      ? (JSON.parse(previous.serialized) as StoredRun)
+      : undefined;
+    const delta = run.totalTokens - (prevRun?.totalTokens ?? 0);
+    const charId = next.characterId ?? run.characterId;
+    if (delta > 0 && charId) {
+      await tx.tokenUsage.create({
+        data: {
+          characterId: charId,
+          planId: run.planId ?? null,
+          runId: next.id,
+          tokens: BigInt(delta),
+        },
+      });
+    }
   }
   if (stableJson(next.checkpoint) === stableJson(previous?.checkpoint)) return;
   if (next.checkpoint) {

@@ -38,6 +38,15 @@ export type Player = Vec3 & {
   voiceListening?: boolean;
   voiceReplies?: boolean;
 };
+
+export function normalizePlayerName(value: unknown): string {
+  const name = typeof value === 'string' ? value.normalize('NFC').trim() : '';
+  return name.slice(0, 24).trim() || 'Explorer';
+}
+
+export function playerNameKey(value: unknown): string {
+  return normalizePlayerName(value).toLowerCase();
+}
 /** Per-frame movement input from the player: local x/z axes, jump, and camera yaw. */
 export type Input = { x: number; z: number; jump: boolean; yaw: number };
 

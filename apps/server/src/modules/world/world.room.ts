@@ -1,4 +1,4 @@
-import { WorldChat, visibleEvent } from '../chat';
+import { ChatStore, WorldChat, visibleEvent } from '../chat';
 import { PiperTts, type VoiceServiceStore } from '../tts';
 import { AgentSpeech } from './services/agent-speech.service';
 import { createSpatialSignaling } from './services/spatial-signaling.service';
@@ -42,9 +42,11 @@ export class WorldRoom extends Room<WorldState> {
         ?.send('agent.speech.error', { message }),
     (actor) => this.voiceServices?.forActor(actor) ?? new PiperTts(),
   );
+  private chatStore?: ChatStore;
   chat = new WorldChat(
     () => this.state.players.values(),
     (actor, data) => this.chatEvent(actor, data),
+    this.chatStore,
   );
   blocks = terrain();
   store!: WorldStore;
@@ -71,9 +73,16 @@ export class WorldRoom extends Room<WorldState> {
     options: {
       voiceServices?: VoiceServiceStore;
       store?: WorldStore;
+      chatStore?: ChatStore;
     } = {},
   ) {
     this.voiceServices = options.voiceServices;
+    this.chatStore = options.chatStore;
+    this.chat = new WorldChat(
+      () => this.state.players.values(),
+      (actor, data) => this.chatEvent(actor, data),
+      this.chatStore,
+    );
     this.releaseVoiceServices = this.voiceServices?.onChange((actor) =>
       this.agentSpeech.cancel(actor),
     );
@@ -191,7 +200,8 @@ export class WorldRoom extends Room<WorldState> {
               return;
             }
             const edit = payload as Edit;
-            await this.store.save(edit);
+            const actorName = this.state.players.get(client.sessionId)?.name;
+            await this.store.save(edit, actorName ?? client.sessionId);
             if (edit.material === null) this.blocks.delete(key(edit));
             else
               this.blocks.set(key(edit), {
@@ -270,6 +280,7 @@ export class WorldRoom extends Room<WorldState> {
           .map((b) => b.y),
       ) + 0.55;
     this.state.players.set(p.id, p);
+    void this.chatStore?.recordPlayer({ name: p.name, kind: p.kind as 'human' | 'ai-agent' | 'scripted-agent' });
     this.bodies.set(p.id, {
       vy: 0,
       grounded: false,

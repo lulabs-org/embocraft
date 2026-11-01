@@ -8,6 +8,7 @@ import {
 import { ChatCredentials } from './credentials.service';
 import { ChatAudioClips } from './audio-clips.service';
 import { SpatialSpeech } from './spatial-speech.service';
+import type { ChatStore } from '../persistence/chat-store';
 
 /** Room-facing chat API; each stateful concern owns its own lifecycle. */
 export class WorldChat {
@@ -19,6 +20,7 @@ export class WorldChat {
   constructor(
     private players: () => Iterable<Player>,
     private emit: (actor: string, data: ChatData) => void,
+    private store?: ChatStore,
   ) {
     this.credentials = new ChatCredentials(players);
     this.audioClips = new ChatAudioClips(
@@ -88,11 +90,23 @@ export class WorldChat {
     if (Date.now() - (this.sent.get(actor) ?? 0) < CHAT_MIN_INTERVAL_MS)
       throw new AppError('发送过快，请稍候。', 429);
     this.sent.set(actor, Date.now());
+    const sender = [...this.players()].find((p) => p.id === actor);
+    const senderName = sender?.name ?? '';
     this.emit(actor, {
       ...route,
       text: text.trim(),
       kind: 'text',
-      name: [...this.players()].find((p) => p.id === actor)!.name,
+      name: senderName,
+    });
+    void this.store?.recordMessage({
+      senderName,
+      senderKind: sender?.kind as 'human' | 'ai-agent' | 'scripted-agent',
+      scope: route.scope,
+      kind: 'text',
+      text: text.trim(),
+      recipients: route.recipients
+        .map((id) => [...this.players()].find((p) => p.id === id)?.name)
+        .filter((n): n is string => !!n),
     });
   }
   beginUpload(actor: string, value: unknown) {

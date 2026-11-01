@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type { AsrUse, BailianAsrSettings } from '@voxel/shared';
+import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import type { AsrServicePersistence, SavedService } from './asr-settings-store';
 
@@ -26,7 +27,7 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
             baseUrl: row.baseUrl ?? '',
             temperature: row.temperature ?? 0,
             prompt: row.prompt ?? '',
-            apiKey: row.apiKey,
+            apiKey: decryptSecret(row.apiKey),
             ...(uses ? { uses } : {}),
           };
         }
@@ -38,7 +39,7 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
             'fun-asr-realtime') as BailianAsrSettings['model'],
           region: (row.region || 'beijing') as BailianAsrSettings['region'],
           workspaceId: row.workspaceId ?? '',
-          apiKey: row.apiKey,
+          apiKey: decryptSecret(row.apiKey),
           ...(uses ? { uses } : {}),
         };
       });
@@ -66,7 +67,7 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
             name: value.name,
             provider: isWhisper ? 'whisper' : 'bailian',
             model: value.model,
-            apiKey: value.apiKey ?? '',
+            apiKey: encryptSecret(value.apiKey ?? ''),
             region: !isWhisper ? value.region : null,
             workspaceId: !isWhisper ? value.workspaceId : null,
             baseUrl: isWhisper ? (value.baseUrl ?? '') : null,
