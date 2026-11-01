@@ -7,6 +7,7 @@ interface LobbyCardProps {
   onNameChange: (name: string) => void;
   onJoin: () => void;
   onCreateAgent: () => void;
+  onPreloadConsole?: () => void;
 }
 
 export function LobbyCard({
@@ -15,6 +16,7 @@ export function LobbyCard({
   onNameChange,
   onJoin,
   onCreateAgent,
+  onPreloadConsole,
 }: LobbyCardProps) {
   const { t, language } = useI18n();
 
@@ -65,7 +67,12 @@ export function LobbyCard({
         )}
         <button>{t('lobby.enterWorld')}</button>
       </form>
-      <button className="join-agents" onClick={onCreateAgent}>
+      <button
+        className="join-agents"
+        onClick={onCreateAgent}
+        onPointerEnter={onPreloadConsole}
+        onFocus={onPreloadConsole}
+      >
         {t('lobby.createAgent')}
       </button>
       <small>{t('lobby.footer')}</small>
