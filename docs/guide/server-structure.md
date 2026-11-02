@@ -107,12 +107,14 @@ apps/server/
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
         │
         ├── asr/                         # ── 2. 语音识别（ASR） ──
+        │   ├── domain/                  # 领域模型与纯校验规则
+        │   │   ├── model.ts             # 实体定义、用途 (chat/spatial/clip) 与脱敏视图
+        │   │   └── validation.ts        # 百炼/Whisper 参数校验与通用服务组装
         │   ├── services/                # 识别引擎与调度
         │   │   ├── local-speech.service.ts # LocalSpeech：Whisper API 识别
         │   │   ├── bailian.service.ts   # 百炼 WebSocket 协议桥接
         │   │   ├── speech-scheduler.service.ts # 识别队列、超时与取消
-        │   │   ├── transcript.ts        # Whisper 转写结果解析
-        │   │   └── whisper-settings.ts  # Whisper 配置校验
+        │   │   └── transcript.ts        # Whisper 转写结果解析
         │   ├── persistence/             # ASR 配置存储及数据库适配
         │   │   ├── asr-settings-store.ts # AsrSettingsStore：配置与识别占用
         │   │   └── database-asr-services.ts
@@ -123,7 +125,7 @@ apps/server/
         │   │   └── capabilities.routes.ts # /voice/capabilities 运行时能力探针
         │   ├── sockets/
         │   │   └── asr.socket.ts        # /voice/asr/realtime 实时流式识别
-        │   └── index.ts                 # installAsrHttp、installAsrSocket、LocalSpeech 等
+        │   └── index.ts                 # installAsrHttp、installAsrSocket、LocalSpeech、领域模型等
         │
         ├── tts/                         # ── 2b. 语音合成（TTS）与音色服务 ──
         │   ├── services/

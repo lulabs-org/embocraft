@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { AsrEvent, BailianAsrDraft } from '@voxel/shared';
-import { asrEndpoint } from '../persistence/asr-settings-store';
+import { bailianAsrEndpoint } from '../domain';
 
 function handshakeFailure(status: number | undefined) {
   if (status === 401)
@@ -74,7 +74,7 @@ export function bridgeBailianAsr(
   client.on('close', cleanup);
   client.on('error', cleanup);
   try {
-    upstream = connect(asrEndpoint(settings), settings.apiKey);
+    upstream = connect(bailianAsrEndpoint(settings), settings.apiKey);
   } catch {
     fail('无法连接阿里云识别服务，请检查配置。');
     return cleanup;

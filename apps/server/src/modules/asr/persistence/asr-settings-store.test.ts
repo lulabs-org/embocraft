@@ -1,7 +1,7 @@
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { expect, it } from 'vitest';
 import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
-import { asrEndpoint, validateAsrSettings } from './asr-settings-store';
+import { bailianAsrEndpoint, validateBailianSettings } from '../domain';
 const draft = {
   ...DEFAULT_BAILIAN_ASR,
   name: '模型 A',
@@ -112,23 +112,27 @@ it('serializes concurrent creates and enforces the service limit', async () => {
 });
 it('restricts endpoints, models, and cross-region credential reuse', () => {
   expect(
-    asrEndpoint({ ...draft, region: 'singapore', workspaceId: 'workspace123' }),
+    bailianAsrEndpoint({
+      ...draft,
+      region: 'singapore',
+      workspaceId: 'workspace123',
+    }),
   ).toBe(
     'wss://workspace123.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference',
   );
   expect(() =>
-    validateAsrSettings({ ...draft, apiKey: '', region: 'singapore' }, draft),
+    validateBailianSettings({ ...draft, apiKey: '', region: 'singapore' }, draft),
   ).toThrow('重新填写');
   expect(() =>
-    validateAsrSettings({ ...draft, apiKey: '', workspaceId: 'other' }, draft),
+    validateBailianSettings({ ...draft, apiKey: '', workspaceId: 'other' }, draft),
   ).toThrow('重新填写');
   expect(() =>
-    validateAsrSettings({ ...draft, workspaceId: 'example.com/path' }),
+    validateBailianSettings({ ...draft, workspaceId: 'example.com/path' }),
   ).toThrow('ID');
   expect(() =>
-    validateAsrSettings({ ...draft, apiKey: 'key\nheader' }),
+    validateBailianSettings({ ...draft, apiKey: 'key\nheader' }),
   ).toThrow('格式');
-  expect(() => validateAsrSettings({ ...draft, model: 'qwen-tts' })).toThrow(
+  expect(() => validateBailianSettings({ ...draft, model: 'qwen-tts' })).toThrow(
     '模型',
   );
 });
