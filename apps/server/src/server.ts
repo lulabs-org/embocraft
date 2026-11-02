@@ -9,8 +9,8 @@ import { createApp } from './app';
 import { env, type ServerConfig } from './core/config';
 import { createDatabaseClient } from './core/database/client';
 import { checkStartupDatabase } from './core/database/health';
-import type { ArchivePort } from './persistence/archive';
-import { DatabaseManagementArchive } from './persistence/database-archive';
+import type { ArchivePort } from './persistence/management-archive';
+import { DatabaseManagementArchive } from './persistence/database-management-archive';
 
 import type { SocketRoutes } from './core/transport/socket-routes';
 import { RoutedWebSocketTransport } from './core/transport/websocket.transport';

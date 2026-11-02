@@ -8,7 +8,7 @@ import {
   type AICharacterSettings,
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
-import type { ArchivePort } from '../../../persistence/archive';
+import type { ArchivePort } from '../../../persistence/management-archive';
 import { ManagementPersistence } from '../../../persistence/management-persistence';
 import { migrateArchive } from '../../../persistence/migrate-archive';
 import { ConsoleSyncEvents } from '../../console-sync';

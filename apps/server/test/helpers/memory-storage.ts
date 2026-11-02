@@ -17,7 +17,7 @@ import {
 import type {
   ArchivePort,
   ManagementArchive,
-} from '../../src/persistence/archive';
+} from '../../src/persistence/management-archive';
 
 /** Clone on both sides of the persistence boundary, including JSON's undefined semantics. */
 export class MemoryPersistence<T> {

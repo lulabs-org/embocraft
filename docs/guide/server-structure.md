@@ -75,8 +75,8 @@ apps/server/
     │       └── voice-service-connection.ts # ASR/TTS 共用连接参数校验
     │
     ├── persistence/                     # ════════【全局数据快照与持久化底座】════════
-    │   ├── archive.ts                   # 跨模块快照契约（ArchivePort, ManagementArchive）
-    │   ├── database-archive.ts          # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
+    │   ├── management-archive.ts        # 跨模块快照契约（ArchivePort, ManagementArchive）
+    │   ├── database-management-archive.ts # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
     │   ├── management-persistence.ts    # 跨模块快照串行提交与 storageRevision 失败代次
     │   └── migrate-archive.ts           # 存档结构校验与历史版本迁移
     │
@@ -394,7 +394,7 @@ import { VoiceServiceStore } from './modules/tts';
 
 ### 4.2 全局快照持久化与存储注入（Database & Archive Engine）
 
-- **生产主干：基于 PostgreSQL 的关系型快照驱动（`src/persistence/database-archive.ts`）**：
+- **生产主干：基于 PostgreSQL 的关系型快照驱动（`src/persistence/database-management-archive.ts`）**：
   - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 在同一事务中提交至 PostgreSQL 表中；角色、计划和执行元数据使用结构化列，运行时检查点与嵌套配置保留 JSON；
   - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
 - **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：

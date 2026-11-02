@@ -3,7 +3,7 @@ import { testAgentConfig } from '../../../../tests/support/agent-config';
 import type {
   CharacterRecord,
   ManagementArchive,
-} from '../../src/persistence/archive';
+} from '../../src/persistence/management-archive';
 
 export function storedPlan(overrides: Partial<TaskPlan> = {}): TaskPlan {
   return {

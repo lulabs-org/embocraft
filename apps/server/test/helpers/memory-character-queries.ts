@@ -1,6 +1,6 @@
 import { runtimeView } from '@voxel/agent-runtime';
 import { AppError } from '../../src/core/errors/app-error';
-import type { ArchivePort } from '../../src/persistence/archive';
+import type { ArchivePort } from '../../src/persistence/management-archive';
 import type { CharacterQueryPort } from '../../src/modules/ai-characters';
 import type { ProviderRepository } from '../../src/modules/providers';
 import type { VoiceServiceStore } from '../../src/modules/tts';

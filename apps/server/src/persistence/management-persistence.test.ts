@@ -10,7 +10,7 @@ import {
 import { CharacterSnapshots } from '../modules/ai-characters/persistence/snapshots';
 import { ConsoleSyncEvents } from '../modules/console-sync';
 import { PlanService, TaskSnapshots, newPlan, newRun } from '../modules/tasks';
-import type { ManagementArchive } from './archive';
+import type { ManagementArchive } from './management-archive';
 import { ManagementPersistence } from './management-persistence';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {

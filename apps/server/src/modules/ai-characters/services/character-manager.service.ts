@@ -1,6 +1,6 @@
 import { Session } from '@voxel/agent-runtime';
 
-import type { ArchivePort } from '../../../persistence/archive';
+import type { ArchivePort } from '../../../persistence/management-archive';
 import type { VoiceServiceStore } from '../../tts';
 import type { ProviderRuntimePort } from '../../providers';
 import {
