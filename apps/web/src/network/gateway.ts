@@ -62,7 +62,7 @@ export function reportUnknownOutcome(error: UnknownOutcome) {
   void reconcileOutcomes();
 }
 async function reconcileOutcomes() {
-  if (reconciling || !getGatewayToken()) return;
+  if (reconciling) return;
   reconciling = true;
   const owner = client;
   try {
@@ -91,7 +91,7 @@ async function reconcileOutcomes() {
   }
 }
 export function openGateway() {
-  if (client || !getGatewayToken()) return;
+  if (client) return;
   const c = new ManagementEvents({
     url: gatewaySocketUrl(),
     token: getGatewayToken,

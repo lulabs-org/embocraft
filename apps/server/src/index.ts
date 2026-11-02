@@ -6,22 +6,26 @@ try {
   const config = env.load();
   const server = await createServer({ config });
   const url = (await server.listen()).replace(/^ws:/, 'http:');
-  console.log(
-    config.gateway.token
-      ? 'Agent Gateway 使用 AGENT_GATEWAY_TOKEN。'
-      : `Agent Gateway 令牌文件 ${config.gateway.tokenFile}`,
-  );
-  // 仅在本地开发模式打印令牌值，方便直接粘贴到网页控制台解锁；生产环境维持只打印来源。
-  if (!config.isProduction) {
+  if (config.gateway.token) {
+    console.log('Agent Gateway 使用 AGENT_GATEWAY_TOKEN');
+  } else if (config.gateway.tokenFile) {
+    console.log(`Agent Gateway 令牌文件 ${config.gateway.tokenFile}`);
+  } else {
+    console.log('[开发模式] 未配置 AGENT_GATEWAY_TOKEN，Agent Gateway 已开启免密访问。');
+  }
+  // 仅在本地开发模式且启用了 Token 时打印令牌值，方便直接粘贴到网页控制台解锁
+  if (!config.isProduction && (config.gateway.token || config.gateway.tokenFile)) {
     try {
       const token =
         config.gateway.token?.trim() ||
-        (await readFile(config.gateway.tokenFile, 'utf8')).trim();
+        (config.gateway.tokenFile
+          ? (await readFile(config.gateway.tokenFile, 'utf8')).trim()
+          : '');
       if (token) {
         console.log(
-          '[开发模式] 控制台管理员令牌（粘贴到网页「控制台」解锁框）：\n' +
-            `${token}\n` +
-            '获取方式亦可用：pnpm agent:ctl auth show',
+          '[开发模式] 控制台管理员令牌：\n' +
+          `${token}\n` +
+          '获取方式亦可用：pnpm agent:ctl auth show',
         );
       }
     } catch {

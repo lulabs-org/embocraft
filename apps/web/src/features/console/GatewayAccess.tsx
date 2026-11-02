@@ -9,19 +9,17 @@ import { TokenHelpPopover } from './TokenHelpPopover';
 export function GatewayAccess({
   open,
   status,
-  savedToken,
   error,
   onClose,
 }: {
   open: boolean;
   status: string;
-  savedToken: string;
   error: string;
   onClose: () => void;
 }) {
   const { t } = useI18n();
   const [token, setToken] = useState('');
-  const connecting = !!savedToken && status !== 'unauthorized';
+  const connecting = status !== 'unauthorized';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

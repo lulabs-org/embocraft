@@ -134,9 +134,8 @@ function readServerConfig(env: EnvLookup = process.env) {
     databaseUrl: databaseUrl(env),
     isProduction: (env.NODE_ENV ?? '').trim() === 'production',
     gateway: {
-      token: env.AGENT_GATEWAY_TOKEN,
-      tokenFile:
-        env.AGENT_GATEWAY_TOKEN_FILE || dataPath('agent-gateway-token'),
+      token: env.AGENT_GATEWAY_TOKEN?.trim() || undefined,
+      tokenFile: env.AGENT_GATEWAY_TOKEN_FILE?.trim() || undefined,
       origins: gatewayOrigins,
     },
   };
