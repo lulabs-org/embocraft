@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
-import { CommandRouter } from './command-router.service';
+import { CommandRouter } from '../../../core/concurrency/command-router';
 
-/** Shared HTTP write receipts. Reads and event subscriptions never enter this queue. */
-export class ManagementCommands extends CommandRouter {
+/** Shared HTTP write receipts for console sync. Reads and event subscriptions never enter this queue. */
+export class ConsoleSyncCommands extends CommandRouter {
   constructor(
     private receiptBody: (body: unknown) => unknown = (body) => body ?? {},
   ) {

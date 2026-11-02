@@ -1,5 +1,5 @@
 import type { Express, RequestHandler } from 'express';
-import { ManagementScope } from '../../management';
+import { ManagementScope } from '../../../core/http/middleware/management-policy';
 import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { installVoiceServiceRoutes } from './voice-services.routes';
 

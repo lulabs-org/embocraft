@@ -91,7 +91,7 @@ it('protects each management domain and retains transport policies after path mi
       '/providers/missing/health',
       '/tasks',
       '/task-runs/missing/pause',
-      '/management/commands/missing',
+      '/console-sync/commands/missing',
       '/voice/tts/services',
       '/voice/asr/services',
     ];
@@ -452,7 +452,7 @@ it('returns one persisted result for concurrent HTTP commands and protects recei
       ).json(),
     ).toHaveLength(1);
     expect((await send({ ...body, name: 'Different' })).status).toBe(409);
-    const receiptUrl = server.httpUrl + '/management/commands/same-create';
+    const receiptUrl = server.httpUrl + '/console-sync/commands/same-create';
     expect((await fetch(receiptUrl)).status).toBe(401);
     const receipt = await (await fetch(receiptUrl, { headers })).json();
     expect(receipt).toMatchObject({
@@ -462,7 +462,7 @@ it('returns one persisted result for concurrent HTTP commands and protects recei
     expect(JSON.stringify(receipt)).not.toContain('fixture-only');
     expect(
       await (
-        await fetch(server.httpUrl + '/management/commands/missing', {
+        await fetch(server.httpUrl + '/console-sync/commands/missing', {
           headers,
         })
       ).json(),
@@ -501,7 +501,7 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
       ).json(),
     ).toEqual([]);
     const receipt = await (
-      await fetch(server.httpUrl + '/management/commands/failed-create', {
+      await fetch(server.httpUrl + '/console-sync/commands/failed-create', {
         headers,
       })
     ).json();
@@ -549,7 +549,7 @@ it('shares command receipts across management domains without adding receipts to
       });
       expect(conflict.status, path).toBe(409);
     }
-    const receipt = await fetch(server.httpUrl + '/management/commands/' + id, {
+    const receipt = await fetch(server.httpUrl + '/console-sync/commands/' + id, {
       headers,
     });
     expect(await receipt.json()).toMatchObject({
@@ -574,7 +574,7 @@ it('shares command receipts across management domains without adding receipts to
     }
     expect(new Set(voiceIds).size).toBe(2);
     const voiceReceipt = await fetch(
-      server.httpUrl + '/management/commands/tts-command',
+      server.httpUrl + '/console-sync/commands/tts-command',
       { headers },
     );
     expect(await voiceReceipt.json()).toEqual({ state: 'unknown' });

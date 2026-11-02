@@ -230,6 +230,6 @@ export async function managementRequest<T>(
 }
 export const commandReceipt = (baseUrl: string, token: string, id: string) =>
   managementRequest<CommandReceipt>(
-    `${baseUrl}/management/commands/${encodeURIComponent(id)}`,
+    `${baseUrl}/console-sync/commands/${encodeURIComponent(id)}`,
     { token },
   );

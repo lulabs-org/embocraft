@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { CommandRouter } from '../src/modules/management';
+import { CommandRouter } from '../src/core/concurrency/command-router';
 import {
   ManagementError,
   MANAGEMENT_EVENTS_VERSION,
@@ -9,7 +9,7 @@ import {
   type SocketLike,
 } from '@voxel/shared/management';
 import { gatewaySocket } from '../src/modules/gateway';
-import { ManagementEvents as ServerManagementEvents } from '../src/modules/management';
+import { ConsoleSyncEvents as ServerManagementEvents } from '../src/modules/console-sync';
 import { EventEmitter } from 'node:events';
 import { GatewayAuth } from '../src/modules/gateway';
 import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';

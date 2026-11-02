@@ -3,7 +3,7 @@ type EventSnapshot = {
   runs: { id: string; planId?: string; source?: string }[];
 };
 
-export type ManagementResourceChange = {
+export type ConsoleResourceChange = {
   resource: 'characters' | 'providers' | 'plans' | 'runs';
   planIds?: string[];
   runIds?: string[];
@@ -11,14 +11,14 @@ export type ManagementResourceChange = {
   version: number;
 };
 
-export class ManagementEvents {
-  private listeners = new Set<(change: ManagementResourceChange) => void>();
+export class ConsoleSyncEvents {
+  private listeners = new Set<(change: ConsoleResourceChange) => void>();
   private previous = new Map<string, string>();
   private planState = new Map<string, string>();
   private runState = new Map<string, string>();
   version = 0;
 
-  on(listener: (change: ManagementResourceChange) => void) {
+  on(listener: (change: ConsoleResourceChange) => void) {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -66,11 +66,11 @@ export class ManagementEvents {
   }
 
   publish(
-    resource: ManagementResourceChange['resource'],
+    resource: ConsoleResourceChange['resource'],
     characterIds: string[] = [],
     details: { planIds?: string[]; runIds?: string[] } = {},
   ) {
-    const c: ManagementResourceChange = {
+    const c: ConsoleResourceChange = {
       resource,
       characterIds,
       ...details,

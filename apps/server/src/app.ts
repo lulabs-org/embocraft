@@ -6,11 +6,11 @@ import {
   installHealthRoutes,
   type HealthConfig,
 } from './core/http/routes/health.routes';
+import { ManagementScope } from './core/http/middleware/management-policy';
 import {
-  ManagementCommands,
-  ManagementScope,
-  installManagementRoutes,
-} from './modules/management';
+  ConsoleSyncCommands,
+  installConsoleSyncRoutes,
+} from './modules/console-sync';
 import {
   installAICharacterRoutes,
   type AICharacterRoutePort,
@@ -60,22 +60,22 @@ export function createApp(deps: AppDependencies) {
   app.use(publicCors(deps.origin));
   installDocsRoutes(app);
   installHealthRoutes(app, deps.health);
-  // 管理控制面 (Management Control Plane) 路由切面与并发队列
-  const commands = new ManagementCommands(taskCommandBody);
+  // 控制台数据同步与命令并发队列
+  const consoleSync = new ConsoleSyncCommands(taskCommandBody);
   const managementScope = new ManagementScope(
     app,
-    ['/ai-characters', '/providers', '/tasks', '/task-runs', '/management'],
+    ['/ai-characters', '/providers', '/tasks', '/task-runs', '/console-sync'],
     deps.management.authenticate,
   );
   installAICharacterRoutes(
     app,
     deps.management.characters,
-    commands,
+    consoleSync,
     deps.management.characterQueries,
   );
-  installProviderRoutes(app, deps.management.providers, commands);
-  installTaskRoutes(app, deps.management.tasks, commands);
-  installManagementRoutes(app, commands);
+  installProviderRoutes(app, deps.management.providers, consoleSync);
+  installTaskRoutes(app, deps.management.tasks, consoleSync);
+  installConsoleSyncRoutes(app, consoleSync);
   managementScope.close();
   installAsrHttp(app, { ...deps.asr, origin: deps.origin });
   installTtsHttp(app, deps.tts);

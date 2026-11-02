@@ -16,7 +16,7 @@ const options: swaggerJsdoc.Options = {
     servers: [{ url: '/', description: '当前服务器' }],
     tags: [
       { name: 'System', description: '服务状态' },
-      { name: 'Management', description: '管理命令执行状态' },
+      { name: 'ConsoleSync', description: '控制台同步与命令执行状态' },
       { name: 'World', description: '世界与在线状态' },
       { name: 'AI Characters', description: 'AI 角色配置、上下线与语音设置' },
       { name: 'Providers', description: '共享 LLM 提供商配置与模型目录' },

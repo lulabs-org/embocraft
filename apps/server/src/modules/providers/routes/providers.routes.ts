@@ -1,4 +1,4 @@
-import { ManagementCommands } from '../../management';
+import { ConsoleSyncCommands } from '../../console-sync';
 import type { Express } from 'express';
 import type { ProviderService } from '../services/provider.service';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
@@ -9,7 +9,7 @@ import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 export function installProviderRoutes(
   app: Express,
   providers: ProviderService,
-  commands: ManagementCommands,
+  consoleSync: ConsoleSyncCommands,
 ) {
   /**
    * @openapi
@@ -53,7 +53,7 @@ export function installProviderRoutes(
   app.post(
     '/providers',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'providers', () =>
+      const result = await consoleSync.execute(req, 'providers', () =>
         providers.save(req.body),
       );
       res.status(201).json(result);
@@ -88,7 +88,7 @@ export function installProviderRoutes(
   app.put(
     '/providers/:id',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'providers', () =>
+      const result = await consoleSync.execute(req, 'providers', () =>
         providers.save(req.body, String(req.params.id)),
       );
       res.json(result);
@@ -117,7 +117,7 @@ export function installProviderRoutes(
   app.delete(
     '/providers/:id',
     route(async (req, res) => {
-      await commands.execute(req, 'providers', () =>
+      await consoleSync.execute(req, 'providers', () =>
         providers.remove(String(req.params.id)),
       );
       res.sendStatus(204);

@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest';
-import { ManagementCommands } from './commands.service';
+import { ConsoleSyncCommands } from './console-sync.service';
 import { taskCommandBody } from '../../tasks';
 import { AppError } from '../../../core/errors/app-error';
 
-type Request = Parameters<ManagementCommands['execute']>[0];
+type Request = Parameters<ConsoleSyncCommands['execute']>[0];
 
 function request(body: unknown, id = 'request'): Request {
   return {
@@ -15,7 +15,7 @@ function request(body: unknown, id = 'request'): Request {
 }
 
 it('preserves task precondition normalization and receipt identity', async () => {
-  const commands = new ManagementCommands(taskCommandBody);
+  const commands = new ConsoleSyncCommands(taskCommandBody);
   const action = vi.fn(async (id) => ({ id }));
   await commands.execute(
     request({ goal: 'observe', expectedPlanRevision: 1 }),
@@ -45,7 +45,7 @@ it('preserves task precondition normalization and receipt identity', async () =>
 });
 
 it('checks admission again at execution, records the rejection, and continues the lane', async () => {
-  const commands = new ManagementCommands(taskCommandBody);
+  const commands = new ConsoleSyncCommands(taskCommandBody);
   let release!: () => void;
   let writable = true;
   const first = commands.execute(request({}, 'first'), 'tasks', async () => {

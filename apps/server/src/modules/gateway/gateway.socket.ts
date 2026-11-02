@@ -1,6 +1,6 @@
 import type WebSocket from 'ws';
 import type { IncomingMessage } from 'node:http';
-import type { ManagementEvents } from '../management';
+import type { ConsoleSyncEvents } from '../console-sync';
 import {
   ManagementError,
   MANAGEMENT_EVENTS_VERSION,
@@ -8,13 +8,13 @@ import {
   type ManagementFrame,
 } from '@voxel/shared/management';
 import { parseEventConnect } from './validation';
-import { publicError } from '../management';
+import { publicError } from '../../core/errors/public-error';
 import type { GatewayAuth } from './auth.service';
 import type { SocketRoutes } from '../../core/transport/socket-routes';
 
 /** The socket owns only notifications. Snapshots and all commands use authenticated HTTP. */
 export function gatewaySocket(
-  events: ManagementEvents,
+  events: ConsoleSyncEvents,
   auth: GatewayAuth,
   socket: WebSocket,
   req: IncomingMessage,
@@ -85,7 +85,7 @@ export function gatewaySocket(
 /** Registers the gateway socket on the shared Colyseus socket server. */
 export function installGatewaySocket(
   routes: SocketRoutes,
-  deps: { events: ManagementEvents; auth: GatewayAuth },
+  deps: { events: ConsoleSyncEvents; auth: GatewayAuth },
 ) {
   routes.set('/ai-characters/gateway', (socket, req) =>
     gatewaySocket(deps.events, deps.auth, socket, req),
