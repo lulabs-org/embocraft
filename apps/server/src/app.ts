@@ -6,7 +6,11 @@ import {
   installHealthRoutes,
   type HealthConfig,
 } from './core/http/routes/health.routes';
-import { installManagementHttp } from './modules/management';
+import {
+  ManagementCommands,
+  ManagementScope,
+  installManagementRoutes,
+} from './modules/management';
 import {
   installAICharacterRoutes,
   type AICharacterRoutePort,
@@ -56,20 +60,23 @@ export function createApp(deps: AppDependencies) {
   app.use(publicCors(deps.origin));
   installDocsRoutes(app);
   installHealthRoutes(app, deps.health);
-  installManagementHttp(app, {
-    authenticate: deps.management.authenticate,
-    receiptBody: taskCommandBody,
-    installRoutes: (app, commands) => {
-      installAICharacterRoutes(
-        app,
-        deps.management.characters,
-        commands,
-        deps.management.characterQueries,
-      );
-      installProviderRoutes(app, deps.management.providers, commands);
-      installTaskRoutes(app, deps.management.tasks, commands);
-    },
-  });
+  // 管理控制面 (Management Control Plane) 路由切面与并发队列
+  const commands = new ManagementCommands(taskCommandBody);
+  const managementScope = new ManagementScope(
+    app,
+    ['/ai-characters', '/providers', '/tasks', '/task-runs', '/management'],
+    deps.management.authenticate,
+  );
+  installAICharacterRoutes(
+    app,
+    deps.management.characters,
+    commands,
+    deps.management.characterQueries,
+  );
+  installProviderRoutes(app, deps.management.providers, commands);
+  installTaskRoutes(app, deps.management.tasks, commands);
+  installManagementRoutes(app, commands);
+  managementScope.close();
   installAsrHttp(app, { ...deps.asr, origin: deps.origin });
   installTtsHttp(app, deps.tts);
   installWorldRoutes(app, deps.world.roomId);

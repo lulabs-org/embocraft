@@ -38,6 +38,29 @@ export const managementErrors = errorHandler((error) => {
   return { status: e.status, body: { error: e.message } };
 });
 
+/**
+ * 线性声明管理接口切面的作用域生命周期：
+ * 1. 构造时挂载身份鉴权与 32 KiB JSON 限制中间件
+ * 2. 期间由调用方线性注册各个管理领域路由
+ * 3. close() 挂载未命中 404 及统一管理异常处理中间件
+ */
+export class ManagementScope {
+  constructor(
+    private readonly app: Express,
+    private readonly paths: string | string[],
+    authenticate: RequestHandler,
+  ) {
+    app.use(paths, authenticate, ...managementBody);
+  }
+
+  close() {
+    this.app.use(this.paths, (_req, res) => {
+      res.status(404).json({ error: '管理接口不存在，请确认前后端版本一致。' });
+    });
+    this.app.use(this.paths, managementErrors);
+  }
+}
+
 /** Full policy for the existing 32 KiB management APIs; ASR has its own contract. */
 export function installManagementJsonRoutes(
   app: Express,
@@ -45,11 +68,7 @@ export function installManagementJsonRoutes(
   authenticate: RequestHandler,
   install: () => void,
 ) {
-  app.use(paths, authenticate, ...managementBody);
-  // Register on the app itself so command fingerprints retain the full req.path.
+  const scope = new ManagementScope(app, paths, authenticate);
   install();
-  app.use(paths, (_req, res) => {
-    res.status(404).json({ error: '管理接口不存在，请确认前后端版本一致。' });
-  });
-  app.use(paths, managementErrors);
+  scope.close();
 }

@@ -10,4 +10,7 @@ export {
   installManagementHttp,
   type ManagementHttpDependencies,
 } from './routes/management.http';
-export { installManagementJsonRoutes } from './routes/management-policy';
+export {
+  ManagementScope,
+  installManagementJsonRoutes,
+} from './routes/management-policy';
