@@ -7,6 +7,7 @@ import {
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
+import { DatabaseAsrServicePersistence } from './database-asr-services';
 import {
   validateWhisperConnection,
   validateWhisperSettings,
@@ -117,7 +118,9 @@ export class AsrSettingsStore {
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
-  constructor(private readonly storage: AsrServicePersistence) {}
+  constructor(
+    private readonly storage: AsrServicePersistence = new DatabaseAsrServicePersistence(),
+  ) {}
   async load() {
     const saved = await this.storage.load();
     if (
@@ -281,3 +284,6 @@ export class AsrSettingsStore {
     });
   }
 }
+
+/** 默认的全局 ASR 配置存储单例 */
+export const defaultAsrSettingsStore = new AsrSettingsStore();

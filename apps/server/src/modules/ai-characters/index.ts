@@ -5,6 +5,7 @@ export {
 export { AICharacterManager } from './services/character-manager.service';
 export {
   CharacterQueries,
+  defaultCharacterQueries,
   type CharacterQueryPort,
 } from './persistence/queries';
 export { CharacterVoiceCoordinator } from './services/voice-coordinator.service';
@@ -24,7 +25,10 @@ export {
 } from './services/character-job';
 export type { VoiceServicePort } from './ports';
 export type { CharacterRecord } from './persistence/record';
-export { taskExecutionState, executionState } from './services/task-execution-adapter';
+export {
+  taskExecutionState,
+  executionState,
+} from './services/task-execution-adapter';
 export { AICharacterWakeScheduler } from './services/wake-scheduler.service';
 export { AICharacterHost } from './services/character-host.service';
 export type { ExecutionContext } from './services/execution-context';

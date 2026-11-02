@@ -4,9 +4,14 @@ import { key, WORLD_ID, type Block, type Edit } from '@voxel/shared';
 import { createDatabaseClient } from '../../../core/database/client';
 import { WorldStore } from './store';
 
-vi.mock('../../../core/database/client', () => ({
-  createDatabaseClient: vi.fn(),
-}));
+vi.mock('../../../core/database/client', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../core/database/client')>();
+  return {
+    ...actual,
+    createDatabaseClient: vi.fn(),
+  };
+});
 
 const world = { upsert: vi.fn(), updateMany: vi.fn() };
 const blockEdit = { upsert: vi.fn() };

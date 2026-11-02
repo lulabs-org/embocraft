@@ -72,4 +72,3 @@ export const DEFAULT_CHARACTER = {
   thinking: 'disabled',
   reasoningEffort: 'high',
 } as const;
-

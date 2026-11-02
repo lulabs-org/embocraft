@@ -226,4 +226,3 @@ it('aborts signal on client disconnect and suppresses post-abort errors', async 
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(log).not.toHaveBeenCalled();
 });
-

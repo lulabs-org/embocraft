@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { getDatabaseClient } from '../core/database/client';
+import { db as defaultDb } from '../core/database/client';
 import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
 import {
@@ -117,7 +117,7 @@ export class DatabaseManagementArchive implements ArchivePort {
   private readonly db: PrismaClient;
 
   constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+    this.db = db ?? defaultDb;
   }
 
   async load(): Promise<ManagementArchive | undefined> {
@@ -223,3 +223,6 @@ export class DatabaseManagementArchive implements ArchivePort {
     }
   }
 }
+
+/** 默认的 Agent 持久化归档单例 */
+export const defaultDatabaseArchive = new DatabaseManagementArchive();

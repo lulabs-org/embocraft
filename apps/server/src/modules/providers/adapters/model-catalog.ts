@@ -22,7 +22,9 @@ export class ModelCatalog {
 
   constructor(
     private readonly providers: ProviderRuntimePort,
-    private readonly client: (provider: SavedProvider) => Promise<Response> = fetchProviderModels,
+    private readonly client: (
+      provider: SavedProvider,
+    ) => Promise<Response> = fetchProviderModels,
   ) {}
 
   async models(id: string) {

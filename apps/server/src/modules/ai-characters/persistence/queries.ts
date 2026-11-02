@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { getDatabaseClient } from '../../../core/database/client';
+import { db as defaultDb } from '../../../core/database/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
 import type {
   AICharacterSettings,
@@ -108,7 +108,7 @@ export class CharacterQueries {
   private readonly db: PrismaClient;
 
   constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+    this.db = db ?? defaultDb;
   }
 
   async get(id: string): Promise<CharacterDetail> {
@@ -155,3 +155,6 @@ export class CharacterQueries {
     );
   }
 }
+
+/** 默认的 Agent 查询服务单例 */
+export const defaultCharacterQueries = new CharacterQueries();

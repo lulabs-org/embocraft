@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
 import { SpeachesModels } from '../../../core/audio/speaches-models';
+import { DatabaseVoiceServicePersistence } from './database-voice-services';
 import { PiperTts } from '../services/piper.service';
 import { RemoteTts } from '../services/remote.service';
 import type { SpeechSynthesizer } from '../services/speech-synthesizer';
@@ -100,7 +101,7 @@ export class VoiceServiceStore {
   private listeners = new Set<(actor: string) => void>();
   private running = 0;
   constructor(
-    private readonly storage: VoiceServicePersistence,
+    private readonly storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
     private factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
       value.type === 'speaches' ? new PiperTts(value) : new RemoteTts(value),
   ) {}
@@ -267,3 +268,6 @@ export class VoiceServiceStore {
     }
   }
 }
+
+/** 默认的全局语音服务存储单例 */
+export const defaultVoiceServiceStore = new VoiceServiceStore();

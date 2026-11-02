@@ -711,8 +711,7 @@ it('standby creation rejects task input and still enforces online capacity', asy
   expect(() => m.create({ ...settings, goal: 'A task' })).toThrow('Tasks');
   expect(() => m.create({ ...settings, startTask: true })).toThrow('Tasks');
   expect(() => m.create({ ...settings, joinWorld: 'no' })).toThrow('开关');
-  for (let i = 0; i < 4; i++)
-    m.create({ ...settings, name: `Standby ${i}` });
+  for (let i = 0; i < 4; i++) m.create({ ...settings, name: `Standby ${i}` });
   expect(() => m.create(settings)).toThrow('最多同时在线');
 });
 

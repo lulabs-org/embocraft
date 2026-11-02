@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { getDatabaseClient } from '../../../core/database/client';
+import { db as defaultDb } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import { toProviderView, type SavedProvider } from '../domain/model';
@@ -16,7 +16,7 @@ export class DatabaseProviderRepository implements ProviderRepository {
   private readonly db: PrismaClient;
 
   constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+    this.db = db ?? defaultDb;
   }
 
   async load(): Promise<void> {

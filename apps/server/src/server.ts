@@ -18,6 +18,7 @@ import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 import {
   AICharacterManager,
   CharacterQueries,
+  defaultCharacterQueries,
   type CharacterQueryPort,
   type AICharacterDependencies,
 } from './modules/ai-characters';
@@ -25,6 +26,8 @@ import {
 import {
   AsrSettingsStore,
   DatabaseAsrServicePersistence,
+  defaultAsrSettingsStore,
+  defaultLocalSpeech,
   installAsrSocket,
   LocalSpeech,
   type AsrBridge,
@@ -32,6 +35,7 @@ import {
 
 import {
   DatabaseVoiceServicePersistence,
+  defaultVoiceServiceStore,
   VoiceServiceStore,
 } from './modules/tts';
 
@@ -39,6 +43,9 @@ import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 
 import {
   DatabaseProviderRepository,
+  defaultModelCatalog,
+  defaultProviderHealthChecker,
+  defaultProviderRepository,
   ModelCatalog,
   ProviderHealthChecker,
   ProviderService,
@@ -46,7 +53,8 @@ import {
 } from './modules/providers';
 
 import { WorldRoom, WorldStore } from './modules/world';
-import { ChatStore } from './modules/chat';
+import { ChatStore, defaultChatStore } from './modules/chat';
+import { defaultDatabaseArchive } from './persistence/database-archive';
 
 export type ServerOptions = {
   config?: ServerConfig;
@@ -80,13 +88,19 @@ async function loadStores(
   options: ServerOptions,
   db?: PrismaClient,
 ): Promise<CoreStores> {
-  const providers = options.providers ?? new DatabaseProviderRepository(db);
+  const providers =
+    options.providers ??
+    (db ? new DatabaseProviderRepository(db) : defaultProviderRepository);
   const voiceServices =
     options.voiceServices ??
-    new VoiceServiceStore(new DatabaseVoiceServicePersistence(db));
+    (db
+      ? new VoiceServiceStore(new DatabaseVoiceServicePersistence(db))
+      : defaultVoiceServiceStore);
   const asrSettings =
     options.asrSettings ??
-    new AsrSettingsStore(new DatabaseAsrServicePersistence(db));
+    (db
+      ? new AsrSettingsStore(new DatabaseAsrServicePersistence(db))
+      : defaultAsrSettingsStore);
   const loads = [
     GatewayAuth.load(config.gateway),
     providers.load(),
@@ -121,7 +135,9 @@ export async function createServer(options: ServerOptions = {}) {
   const store = options.worldStore ?? new WorldStore(config.databaseUrl, db);
   let world: WorldRoom | undefined;
   let url = '';
-  const archive = options.archive ?? new DatabaseManagementArchive(db);
+  const archive =
+    options.archive ??
+    (db ? new DatabaseManagementArchive(db) : defaultDatabaseArchive);
   const characters = new AICharacterManager(
     providers,
     () => url,
@@ -129,8 +145,12 @@ export async function createServer(options: ServerOptions = {}) {
     options.agentDependencies,
     voiceServices,
   );
-  const modelCatalog = new ModelCatalog(providers);
-  const providerHealth = new ProviderHealthChecker(providers);
+  const modelCatalog = options.providers
+    ? new ModelCatalog(providers)
+    : defaultModelCatalog;
+  const providerHealth = options.providers
+    ? new ProviderHealthChecker(providers)
+    : defaultProviderHealthChecker;
   const providerService = new ProviderService(
     providers,
     modelCatalog,
@@ -138,14 +158,17 @@ export async function createServer(options: ServerOptions = {}) {
     () => characters.events.publish('providers'),
     providerHealth,
   );
-  const speech = options.speech ?? new LocalSpeech();
+  const speech = options.speech ?? defaultLocalSpeech;
+  const characterQueries =
+    options.characterQueries ??
+    (db ? new CharacterQueries(db) : defaultCharacterQueries);
   const app = createApp({
     origin: config.webOrigin,
     health: config,
     management: {
       authenticate: gatewayAuth.middleware,
       characters,
-      characterQueries: options.characterQueries ?? new CharacterQueries(db),
+      characterQueries,
       tasks: characters.tasks,
       providers: providerService,
     },
@@ -187,7 +210,7 @@ export async function createServer(options: ServerOptions = {}) {
     greet: false,
     gracefullyShutdown: false,
   });
-  const chatStore = new ChatStore(db);
+  const chatStore = db ? new ChatStore(db) : defaultChatStore;
   server.define('world', WorldRoom, {
     voiceServices,
     store,
