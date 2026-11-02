@@ -214,9 +214,22 @@ export const apiSchemas = {
     type: 'object',
     required: ['items', 'total'],
     properties: {
-      items: { type: 'array', items: ref('TaskPlan') },
+      items: { type: 'array', items: ref('TaskPlanSummary') },
       total: integer,
       nextOffset: integer,
+    },
+  },
+  TaskPlanSummary: {
+    type: 'object',
+    required: ['id', 'name', 'timing', 'timeZone', 'state'],
+    properties: {
+      id: text,
+      name: text,
+      timing: planProperties.timing,
+      timeZone: text,
+      state: { ...text, enum: ['enabled', 'paused', 'completed', 'archived'] },
+      characterId: text,
+      characterName: text,
     },
   },
   TaskRunPage: {

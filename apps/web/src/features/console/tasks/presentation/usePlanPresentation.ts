@@ -1,9 +1,13 @@
-import type { AICharacterSummary, TaskPlan } from '@voxel/shared';
+import type {
+  AICharacterSummary,
+  TaskPlan,
+  TaskPlanSummary,
+} from '@voxel/shared';
 import { useI18n } from '../../../../i18n/context';
 import { planTime } from './plan-presentation';
 export function usePlanPresentation(characters: AICharacterSummary[]) {
   const { t } = useI18n();
-  const bindingName = (p: TaskPlan) =>
+  const bindingName = (p: TaskPlanSummary) =>
     p.characterId
       ? (characters.find((a) => a.id === p.characterId)?.name ??
         p.characterName ??

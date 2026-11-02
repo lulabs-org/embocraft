@@ -757,6 +757,16 @@ it('filters global plans and controls plan state independently of a chat task re
     characterId: a,
   });
   expect(result.items).toHaveLength(1);
+  expect(result.items[0]).toEqual({
+    id: p.id,
+    name: '每天巡查',
+    timing: { kind: 'daily', time: '09:00' },
+    timeZone: p.timeZone,
+    state: 'paused',
+    characterId: a,
+    characterName: expect.any(String),
+  });
+  expect(manager.tasks.publicPlan(p.id)).toHaveProperty('goal');
   const none = await manager.tasks.planPage({
     search: '不存在',
   });
