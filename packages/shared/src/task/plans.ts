@@ -36,6 +36,17 @@ export type TaskPlan = TaskPlanDraft & {
   spentTokens: number;
   latestRun?: TaskRun;
 };
+/** Fields needed to render a plan in the paginated management list. */
+export type TaskPlanSummary = Pick<
+  TaskPlan,
+  | 'id'
+  | 'name'
+  | 'timing'
+  | 'timeZone'
+  | 'state'
+  | 'characterId'
+  | 'characterName'
+>;
 export type TaskRun = {
   id: string;
   planId?: string;

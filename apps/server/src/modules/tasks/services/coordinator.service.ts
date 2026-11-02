@@ -10,7 +10,7 @@ import { validatePlan } from '../domain/validation';
 import { PlanService } from '../persistence/plan-store';
 import { TaskScheduler } from './scheduler.service';
 
-import type { WorldEvent } from '@voxel/shared';
+import type { TaskPlanSummary, WorldEvent } from '@voxel/shared';
 import { isRepeating } from '@voxel/shared';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import { CommandQueue } from '../../../core/concurrency/command-queue';
@@ -111,8 +111,9 @@ export class TaskCoordinator {
       !['immediate', 'once', 'interval', 'daily', 'weekly'].includes(p.timing)
     )
       throw new AppError('执行方式无效。');
-    let all = this.publicPlans(p.characterId, true).filter(
+    let all = this.committedPlans.plans.filter(
       (plan) =>
+        (!p.characterId || plan.characterId === p.characterId) &&
         (!p.search ||
           plan.name
             .toLocaleLowerCase()
@@ -127,7 +128,19 @@ export class TaskCoordinator {
     all.sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
     const offset = p.offset ?? 0;
     return {
-      items: all.slice(offset, offset + 20),
+      items: all.slice(offset, offset + 20).map(
+        (plan): TaskPlanSummary => ({
+          id: plan.id,
+          name: plan.name,
+          timing: structuredClone(plan.timing),
+          timeZone: plan.timeZone,
+          state: plan.state,
+          characterId: plan.characterId,
+          characterName: plan.characterId
+            ? (this.host.committedName(plan.characterId) ?? plan.characterName)
+            : plan.characterName,
+        }),
+      ),
       total: all.length,
       nextOffset: offset + 20 < all.length ? offset + 20 : undefined,
     };

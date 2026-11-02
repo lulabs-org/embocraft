@@ -1,4 +1,4 @@
-import type { TaskPlan, TaskRun } from '@voxel/shared';
+import type { TaskPlan, TaskPlanSummary, TaskRun } from '@voxel/shared';
 import { i18n } from '../../../../i18n';
 
 export const runEnded = (run: TaskRun) =>
@@ -64,7 +64,9 @@ export function planTime(at: number | undefined, zone: string) {
     : '—';
 }
 
-export function timingLabel(plan: TaskPlan) {
+export function timingLabel(
+  plan: Pick<TaskPlanSummary, 'timing' | 'timeZone'>,
+) {
   const t = plan.timing;
   switch (t.kind) {
     case 'immediate':

@@ -1,4 +1,9 @@
-import type { TaskPlan, TaskPlanDraft, TaskRunPage } from '@voxel/shared';
+import type {
+  TaskPlan,
+  TaskPlanDraft,
+  TaskPlanSummary,
+  TaskRunPage,
+} from '@voxel/shared';
 import type {
   PublicPlanView,
   PlanQueryFilter,
@@ -10,7 +15,7 @@ export { displayedTaskIdentity } from '../execution/api';
 import { controlTaskRun } from '../execution/api';
 
 export type PlanPage = {
-  items: PublicPlanView[];
+  items: TaskPlanSummary[];
   total: number;
   nextOffset?: number;
 };
