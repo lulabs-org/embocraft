@@ -25,11 +25,6 @@ const include = {
       currentCheckpoint: true,
     },
   },
-  logs: {
-    orderBy: { sequence: 'desc' },
-    take: 1,
-    select: { time: true, text: true },
-  },
   runs: {
     where: { status: 'queued' },
     orderBy: [{ scheduledAt: 'asc' }, { position: 'asc' }],
@@ -52,7 +47,6 @@ function detail(row: CharacterRow): CharacterDetail {
     state,
     provider,
     voiceService,
-    logs,
     runs,
     position: _position,
     createdAt,
@@ -92,17 +86,19 @@ function detail(row: CharacterRow): CharacterDetail {
             : undefined,
         }
       : undefined,
-    queuedTasks: runs.map((run) => ({
-      id: run.id,
-      goal: (run.snapshot as TaskRun['snapshot']).goal,
-      scheduledAt: run.scheduledAt.getTime(),
-      coalescedTriggers: run.coalescedTriggers ?? 0,
-    })),
+    ...(runs.length
+      ? {
+          queuedTasks: runs.map((run) => ({
+            id: run.id,
+            goal: (run.snapshot as TaskRun['snapshot']).goal,
+            scheduledAt: run.scheduledAt.getTime(),
+            coalescedTriggers: run.coalescedTriggers ?? 0,
+          })),
+        }
+      : {}),
     usage: memory?.usage,
     lastResponse: execution?.health.lastResponse,
     taskRequiresReassignment: !!execution?.conversation.audienceExpired,
-    lastLog: logs[0]?.text,
-    lastLogAt: logs[0]?.time,
   };
 }
 
