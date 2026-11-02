@@ -5,7 +5,7 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../../../core/errors/app-error';
-import { LocalSpeech } from '../services/local-speech.service';
+import { WhisperAdapter as LocalSpeech } from '../engines';
 import { installTranscribeRoutes } from './transcribe.routes';
 describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore;

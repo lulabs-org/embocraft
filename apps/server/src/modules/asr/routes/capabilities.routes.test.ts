@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
 
-import { LocalSpeech } from '../services/local-speech.service';
+import { WhisperAdapter as LocalSpeech } from '../engines';
 import { PiperModels } from '../../tts/services/piper-models.service';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 

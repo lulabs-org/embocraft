@@ -6,7 +6,7 @@ import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { LocalSpeech } from '../services/local-speech.service';
+import { WhisperAdapter as LocalSpeech } from '../engines';
 import { scheduleSpeech } from '../services/speech-scheduler.service';
 import { MAX_AUDIO_BYTES } from '../../../core/audio/normalize';
 export function installTranscribeRoutes(

@@ -1,19 +1,30 @@
-import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../../../core/audio/speech-endpoint';
+import { AppError } from '../../../../core/errors/app-error';
+import { speechEndpoint } from '../../../../core/audio/speech-endpoint';
 import { DEFAULT_WHISPER_ASR, type WhisperAsrDraft } from '@voxel/shared';
-import { readWhisperTranscript } from './transcript';
+import { readWhisperTranscript } from '../../services/transcript';
 import {
   audioFormats,
   MAX_AUDIO_BYTES,
   normalizeRecording,
-} from '../../../core/audio/normalize';
+} from '../../../../core/audio/normalize';
+import type {
+  BatchTranscribeOptions,
+  BatchTranscriberPort,
+  EngineStatus,
+} from '../../ports';
 
-export class LocalSpeech {
+/**
+ * Whisper / Speaches 批处理音频识别适配器，实现 BatchTranscriberPort
+ */
+export class WhisperAdapter implements BatchTranscriberPort {
+  readonly provider = 'whisper' as const;
   private busy = false;
+
   constructor(
     private apiUrl = speechEndpoint(),
     private fetcher: typeof fetch = fetch,
   ) {}
+
   private connection(settings?: WhisperAsrDraft) {
     return {
       baseUrl: (settings?.baseUrl?.trim() || this.apiUrl).replace(/\/+$/, ''),
@@ -22,7 +33,11 @@ export class LocalSpeech {
         : undefined,
     };
   }
-  async status(settings?: WhisperAsrDraft, signal?: AbortSignal) {
+
+  async status(
+    settings?: WhisperAsrDraft,
+    signal?: AbortSignal,
+  ): Promise<EngineStatus> {
     try {
       const connection = this.connection(settings);
       const base = connection.baseUrl.replace(/\/v1$/, '');
@@ -67,16 +82,38 @@ export class LocalSpeech {
       };
     }
   }
+
   async normalize(audio: Buffer, contentType: string, signal: AbortSignal) {
     return normalizeRecording(audio, contentType, signal);
   }
+
+  /**
+   * 批处理转录音频（支持 BatchTranscribeOptions 参数对象或分立参数）
+   */
   async transcribe(
     audio: Buffer,
-    contentType: string,
-    language: string,
-    signal: AbortSignal,
+    contentTypeOrOptions: string | BatchTranscribeOptions,
+    language?: string,
+    signal?: AbortSignal,
     settings?: WhisperAsrDraft,
-  ) {
+  ): Promise<string> {
+    let contentType: string;
+    let actualLanguage: string;
+    let actualSignal: AbortSignal;
+    let actualSettings: WhisperAsrDraft | undefined;
+
+    if (typeof contentTypeOrOptions === 'string') {
+      contentType = contentTypeOrOptions;
+      actualLanguage = language!;
+      actualSignal = signal!;
+      actualSettings = settings;
+    } else {
+      contentType = contentTypeOrOptions.contentType;
+      actualLanguage = contentTypeOrOptions.language;
+      actualSignal = contentTypeOrOptions.signal;
+      actualSettings = contentTypeOrOptions.settings;
+    }
+
     const format = audioFormats[contentType.split(';')[0].trim().toLowerCase()];
     if (!format)
       throw new AppError(
@@ -85,30 +122,32 @@ export class LocalSpeech {
       );
     if (!audio.length || audio.length > MAX_AUDIO_BYTES)
       throw new AppError('音频不能为空且不能超过 5 MiB。', 413);
-    if (!['auto', 'zh', 'en'].includes(language))
+    if (!['auto', 'zh', 'en'].includes(actualLanguage))
       throw new AppError('只支持自动检测、中文或英文识别。');
     if (this.busy)
       throw new AppError('服务器正在识别另一段录音，请稍后重试。', 429);
+
     this.busy = true;
     try {
-      signal.throwIfAborted();
-      const status = await this.status(settings, signal);
-      signal.throwIfAborted();
-      if (!status.available) throw new AppError(status.reason, 503);
+      actualSignal.throwIfAborted();
+      const status = await this.status(actualSettings, actualSignal);
+      actualSignal.throwIfAborted();
+      if (!status.available) throw new AppError(status.reason ?? '服务不可用', 503);
       return await this.transcribeRemote(
         audio,
         format,
-        language,
-        signal,
-        settings,
+        actualLanguage,
+        actualSignal,
+        actualSettings,
       );
     } catch (error) {
-      if (error instanceof AppError || signal.aborted) throw error;
+      if (error instanceof AppError || actualSignal.aborted) throw error;
       throw new AppError('请求 Speaches 识别服务失败或超时。', 502);
     } finally {
       this.busy = false;
     }
   }
+
   private async transcribeRemote(
     audio: Buffer,
     format: string,
@@ -146,7 +185,7 @@ export class LocalSpeech {
     if (language !== 'auto') form.append('language', language);
     form.append('vad_filter', 'true');
     form.append('response_format', 'verbose_json');
-    // Prompts are transcription context, so only send explicitly configured text.
+
     const prompt = settings?.prompt.trim();
     if (prompt) form.append('prompt', prompt);
     if (settings?.temperature !== undefined)

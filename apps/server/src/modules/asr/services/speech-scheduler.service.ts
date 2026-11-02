@@ -1,5 +1,5 @@
 import type { WhisperAsrDraft } from '@voxel/shared';
-import { LocalSpeech } from './local-speech.service';
+import { WhisperAdapter } from '../engines';
 import { AppError } from '../../../core/errors/app-error';
 
 type Job = { run: () => Promise<void>; cancel: () => void };
@@ -7,7 +7,7 @@ type Job = { run: () => Promise<void>; cancel: () => void };
 export class SpeechScheduler {
   private running = false;
   private queue: Job[] = [];
-  constructor(private speech: LocalSpeech) {}
+  constructor(private speech: WhisperAdapter) {}
   transcribe(
     audio: Buffer,
     type: string,
@@ -75,8 +75,8 @@ export class SpeechScheduler {
     }
   }
 }
-const schedulers = new WeakMap<LocalSpeech, SpeechScheduler>();
-export function scheduleSpeech(speech: LocalSpeech) {
+const schedulers = new WeakMap<WhisperAdapter, SpeechScheduler>();
+export function scheduleSpeech(speech: WhisperAdapter) {
   let scheduler = schedulers.get(speech);
   if (!scheduler) {
     scheduler = new SpeechScheduler(speech);

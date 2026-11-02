@@ -110,9 +110,11 @@ apps/server/
         │   ├── domain/                  # 领域模型与纯校验规则
         │   │   ├── model.ts             # 实体定义、用途 (chat/spatial/clip) 与脱敏视图
         │   │   └── validation.ts        # 百炼/Whisper 参数校验与通用服务组装
-        │   ├── services/                # 识别引擎与调度
-        │   │   ├── local-speech.service.ts # LocalSpeech：Whisper API 识别
-        │   │   ├── bailian.service.ts   # 百炼 WebSocket 协议桥接
+        │   ├── ports.ts                 # 模块端口契约（BatchTranscriberPort、StreamingAsrPort 等）
+        │   ├── engines/                 # 外部语音识别引擎适配器
+        │   │   ├── whisper/             # Whisper 批处理适配器与模型目录探测
+        │   │   └── bailian/             # 阿里云百炼实时流式识别适配器与端点管理
+        │   ├── services/                # 识别调度服务
         │   │   ├── speech-scheduler.service.ts # 识别队列、超时与取消
         │   │   └── transcript.ts        # Whisper 转写结果解析
         │   ├── persistence/             # ASR 配置存储及数据库适配

@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from 'express';
 import type { AsrSettingsStore } from '../persistence/asr-settings-store';
-import type { LocalSpeech } from '../services/local-speech.service';
+import type { WhisperAdapter as LocalSpeech } from '../engines';
 import { installAsrRoutes } from './asr.routes';
 import { installTranscribeRoutes } from './transcribe.routes';
 import { installCapabilitiesRoutes } from './capabilities.routes';

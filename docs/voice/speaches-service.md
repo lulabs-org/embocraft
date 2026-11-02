@@ -141,8 +141,8 @@ const response = await fetch(`${this.endpoint}/audio/speech`, {
 });
 ```
 
-### (3) 语音识别调用 (`LocalSpeechService`)
-位于 `apps/server/src/modules/asr/services/local-speech.service.ts`：
+### (3) 语音识别调用 (`WhisperAdapter` / `LocalSpeech`)
+位于 `apps/server/src/modules/asr/engines/whisper/whisper.adapter.ts`：
 控制台「语音识别（ASR）」中的 **Speaches 识别服务** 支持独立的 `API Base URL` 和可选 `API Key`。留空使用部署默认地址，界面会通过管理接口 `GET /voice/asr/defaults` 显示实际默认值。模型列表通过 `POST /voice/asr/models` 从当前连接的 `GET /v1/models?task=automatic-speech-recognition` 获取，支持未保存的连接和手动刷新，不使用固定模型列表，也不会因查询触发下载。
 
 保存的连接同时用于服务状态检查、录音试用、聊天语音和附近语音的识别请求。构建 `FormData` 上传录音至所选服务的 `/audio/transcriptions`，使用保存的模型、温度和提示词。密钥仅保存在服务端，修改地址须重新填写密钥；旧配置的服务 ID、用途分配及模型保持兼容，未配置地址时继续使用部署默认值。

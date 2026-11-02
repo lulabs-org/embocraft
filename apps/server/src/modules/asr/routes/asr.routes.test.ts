@@ -10,7 +10,7 @@ import WebSocket from 'ws';
 import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
 
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
-import { LocalSpeech } from '../services/local-speech.service';
+import { WhisperAdapter as LocalSpeech } from '../engines';
 import { createAsrSocket } from '../sockets/asr.socket';
 import { installAsrRoutes } from './asr.routes.ts';
 import { installCapabilitiesRoutes } from './capabilities.routes';
