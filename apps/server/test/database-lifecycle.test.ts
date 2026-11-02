@@ -12,9 +12,14 @@ import {
 
 import { WorldStore } from '../src/modules/world';
 
-vi.mock('../src/core/database/client', () => ({
-  createDatabaseClient: vi.fn(),
-}));
+vi.mock('../src/core/database/client', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../src/core/database/client')>();
+  return {
+    ...actual,
+    createDatabaseClient: vi.fn(),
+  };
+});
 
 const disconnect = vi.fn();
 const loadWorld = vi.fn();
