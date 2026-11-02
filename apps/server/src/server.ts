@@ -88,7 +88,7 @@ async function loadStores(
     options.asrSettings ??
     new AsrSettingsStore(new DatabaseAsrServicePersistence(db));
   const loads = [
-    GatewayAuth.load(config.gateway),
+    GatewayAuth.load({ ...config.gateway, isProduction: config.isProduction }),
     providers.load(),
     voiceServices.load(),
     asrSettings.load(),

@@ -17,7 +17,8 @@
     "db:reset": "pnpm --filter @voxel/server exec prisma migrate reset",
     "db:deploy": "pnpm --filter @voxel/server exec prisma migrate deploy",
     "db:seed": "pnpm --filter @voxel/server exec prisma db seed",
-    "db:studio": "pnpm --filter @voxel/server exec prisma studio"
+    "db:studio": "pnpm --filter @voxel/server exec prisma studio",
+    "agent:ctl": "tsx scripts/agent/agent-control.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

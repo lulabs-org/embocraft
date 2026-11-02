@@ -90,6 +90,29 @@ describe('gateway command boundary', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('disables authentication in development when AGENT_GATEWAY_TOKEN is not configured', async () => {
+    const auth = await GatewayAuth.load({
+      origins: ['http://localhost'],
+      isProduction: false,
+    });
+    expect(auth.enabled).toBe(false);
+    expect(auth.verify('')).toBe(true);
+    expect(auth.verify('any-token')).toBe(true);
+    expect(auth.acceptsOrigin('http://localhost')).toBe(true);
+    expect(auth.acceptsOrigin('https://other')).toBe(false);
+  });
+
+  it('refuses to start in production without AGENT_GATEWAY_TOKEN', async () => {
+    await expect(
+      GatewayAuth.load({
+        origins: ['http://localhost'],
+        isProduction: true,
+      }),
+    ).rejects.toThrow(
+      '生产环境必须配置 AGENT_GATEWAY_TOKEN 环境变量，禁止无鉴权启动 Agent Gateway。',
+    );
+  });
 });
 class FakeSocket implements SocketLike {
   readyState = 1;

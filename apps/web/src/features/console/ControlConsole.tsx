@@ -10,7 +10,6 @@ import {
   closeGateway,
   gatewayError,
   gatewayState,
-  getGatewayToken,
   onGatewayState,
   openGateway,
 } from '../../network/gateway';
@@ -39,13 +38,12 @@ export function ControlConsole({
   const { t } = useI18n();
   const status = useSyncExternalStore(onGatewayState, gatewayState);
   const gatewayFailure = useSyncExternalStore(onGatewayState, gatewayError);
-  const savedToken = useSyncExternalStore(onGatewayState, getGatewayToken);
   const [hasConnected, setHasConnected] = useState(false);
-  const locked = !savedToken || status === 'unauthorized' || !hasConnected;
+  const locked = status === 'unauthorized' || !hasConnected;
   useEffect(() => {
-    if (!savedToken || status === 'unauthorized') setHasConnected(false);
+    if (status === 'unauthorized') setHasConnected(false);
     else if (status === 'ready') setHasConnected(true);
-  }, [savedToken, status]);
+  }, [status]);
   useEffect(() => {
     if (open) openGateway();
     return () => closeGateway();
@@ -77,7 +75,6 @@ export function ControlConsole({
       <GatewayAccess
         open={open}
         status={status}
-        savedToken={savedToken}
         error={gatewayFailure}
         onClose={onClose}
       />
