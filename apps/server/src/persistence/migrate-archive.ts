@@ -1,5 +1,5 @@
 import { AppError } from '../core/errors/app-error';
-import type { ManagementArchive } from './archive';
+import type { ManagementArchive } from './management-archive';
 
 /** Validate and normalize a persisted v3 management archive before restoration. */
 export function migrateArchive(saved: unknown): ManagementArchive {

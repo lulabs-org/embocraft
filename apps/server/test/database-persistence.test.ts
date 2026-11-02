@@ -23,8 +23,8 @@ import { VoiceServiceStore } from '../src/modules/tts/persistence/voice-service-
 import { bootstrapProviders } from './helpers/provider-seed';
 import { DatabaseProviderRepository } from '../src/modules/providers';
 import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
-import type { ManagementArchive } from '../src/persistence/archive';
-import { DatabaseManagementArchive } from '../src/persistence/database-archive';
+import type { ManagementArchive } from '../src/persistence/management-archive';
+import { DatabaseManagementArchive } from '../src/persistence/database-management-archive';
 import { createServer } from '../src/server';
 import { newPlan, newRun } from '../src/modules/tasks';
 import { settleTaskUsage } from '../src/modules/tasks/domain/model';

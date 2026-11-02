@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { getDatabaseClient } from '../core/database/client';
 import { AppError } from '../core/errors/app-error';
-import type { ArchivePort, ManagementArchive } from './archive';
+import type { ArchivePort, ManagementArchive } from './management-archive';
 import {
   captureCharacter,
   restoreCharacter,
