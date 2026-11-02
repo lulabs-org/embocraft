@@ -1,115 +1,19 @@
-import {
-  type AsrAssignments,
-  type AsrUse,
-  type AsrServiceDraft,
-  type AsrServiceView,
-  type BailianAsrDraft,
-} from '@voxel/shared';
-import { randomUUID } from 'node:crypto';
+import { type AsrAssignments, type AsrUse } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import {
-  validateWhisperConnection,
-  validateWhisperSettings,
-} from '../services/whisper-settings';
 import { SpeachesModels } from '../../../core/audio/speaches-models';
+import {
+  ASR_USES,
+  toAsrServiceView,
+  validateAsrService,
+  validateWhisperConnection,
+  type SavedService,
+} from '../domain';
 
-export function validateAsrSettings(
-  value: unknown,
-  previous?: BailianAsrDraft,
-): BailianAsrDraft {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new AppError('识别服务配置无效。');
-  const v = value as Record<string, unknown>;
-  if (v.region !== 'beijing' && v.region !== 'singapore')
-    throw new AppError('请选择北京或新加坡地域。');
-  if (v.model !== 'fun-asr-realtime' && v.model !== 'paraformer-realtime-v2')
-    throw new AppError('请选择支持的实时识别模型。');
-  if (
-    typeof v.workspaceId !== 'string' ||
-    !/^[a-zA-Z0-9-]{0,80}$/.test(v.workspaceId)
-  )
-    throw new AppError('业务空间 ID 格式无效。');
-  if (
-    typeof v.apiKey !== 'string' ||
-    v.apiKey.length > 4096 ||
-    /[\r\n\0]/.test(v.apiKey)
-  )
-    throw new AppError('API Key 格式无效。');
-  let apiKey = v.apiKey.trim();
-  if (!apiKey && previous?.apiKey) {
-    if (previous.region !== v.region || previous.workspaceId !== v.workspaceId)
-      throw new AppError('更换地域或业务空间时，请重新填写 API Key。');
-    apiKey = previous.apiKey;
-  }
-  if (!apiKey) throw new AppError('请填写百炼 API Key。');
-  return {
-    region: v.region,
-    workspaceId: v.workspaceId,
-    model: v.model,
-    apiKey,
-  };
-}
+export type { SavedService };
 
-export function asrEndpoint(settings: BailianAsrDraft) {
-  const host = settings.workspaceId
-    ? `${settings.workspaceId}.${settings.region === 'beijing' ? 'cn-beijing' : 'ap-southeast-1'}.maas.aliyuncs.com`
-    : settings.region === 'beijing'
-      ? 'dashscope.aliyuncs.com'
-      : 'dashscope-intl.aliyuncs.com';
-  return `wss://${host}/api-ws/v1/inference`;
-}
-
-// Assignments live alongside the service in its existing database JSON record.
-export type SavedService = AsrServiceDraft & { id: string; uses?: AsrUse[] };
-const uses: AsrUse[] = ['chat', 'spatial', 'clip'];
 export interface AsrServicePersistence {
   load(): Promise<SavedService[]>;
   save(values: SavedService[]): Promise<void>;
-}
-const publicView = ({
-  uses: _uses,
-  ...value
-}: SavedService): AsrServiceView => {
-  const { apiKey, ...settings } = value;
-  return { ...settings, hasApiKey: !!apiKey };
-};
-function validateService(
-  input: unknown,
-  previous?: SavedService,
-): SavedService {
-  if (!input || typeof input !== 'object' || Array.isArray(input))
-    throw new AppError('识别服务配置无效。');
-  const value = input as Record<string, unknown>;
-  const provider = value.provider ?? 'bailian';
-  if (provider !== 'whisper' && provider !== 'bailian')
-    throw new AppError('请选择支持的识别服务类型。');
-  if (previous && provider !== (previous.provider ?? 'bailian'))
-    throw new AppError('已有服务不能更改类型，请添加新的服务。');
-  const settings =
-    provider === 'whisper'
-      ? {
-          ...validateWhisperSettings(
-            value,
-            previous?.provider === 'whisper' ? previous : undefined,
-          ),
-          provider: 'whisper' as const,
-        }
-      : {
-          ...validateAsrSettings(
-            input,
-            previous?.provider === 'whisper' ? undefined : previous,
-          ),
-          provider: 'bailian' as const,
-        };
-  const name = (input as Record<string, unknown>).name;
-  if (
-    typeof name !== 'string' ||
-    !name.trim() ||
-    name.length > 50 ||
-    /[\r\n\0]/.test(name)
-  )
-    throw new AppError('请填写 1–50 字的识别服务名称。');
-  return { ...settings, name: name.trim(), id: previous?.id ?? randomUUID() };
 }
 
 export class AsrSettingsStore {
@@ -133,7 +37,7 @@ export class AsrSettingsStore {
     )
       throw new AppError('ASR 数据库配置格式无效。', 500);
     this.values = saved.map((service) => ({
-      ...validateService(service),
+      ...validateAsrService(service),
       id: service.id,
       ...(service.uses ? { uses: service.uses } : {}),
     }));
@@ -142,12 +46,12 @@ export class AsrSettingsStore {
         (service) =>
           service.uses &&
           (!Array.isArray(service.uses) ||
-            service.uses.some((use) => !uses.includes(use)) ||
+            service.uses.some((use) => !ASR_USES.includes(use)) ||
             (service.provider !== 'whisper' && service.uses.includes('clip'))),
       )
     )
       throw new AppError('ASR 服务分配格式无效。', 500);
-    for (const use of uses) {
+    for (const use of ASR_USES) {
       if (
         this.values.filter((service) => service.uses?.includes(use)).length > 1
       )
@@ -155,7 +59,7 @@ export class AsrSettingsStore {
     }
   }
   list() {
-    return this.values.map(publicView);
+    return this.values.map(toAsrServiceView);
   }
   async models(value: unknown, signal?: AbortSignal) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -204,7 +108,7 @@ export class AsrSettingsStore {
   }
   assign(use: unknown, id: unknown) {
     return this.mutate(async () => {
-      if (!uses.includes(use as AsrUse) || typeof id !== 'string')
+      if (!ASR_USES.includes(use as AsrUse) || typeof id !== 'string')
         throw new AppError('识别服务分配无效。');
       const selected = this.get(id);
       if (use === 'clip' && selected.provider !== 'whisper')
@@ -255,14 +159,14 @@ export class AsrSettingsStore {
       if (!id && this.values.length >= 20)
         throw new AppError('最多保存 20 个识别服务。');
       const previous = id ? this.get(id) : undefined;
-      const entry = validateService(input, previous);
+      const entry = validateAsrService(input, previous);
       if (previous?.uses) entry.uses = previous.uses;
       const next = id
         ? this.values.map((v) => (v.id === id ? entry : v))
         : [...this.values, entry];
       await this.persist(next);
       this.values = next;
-      return publicView(entry);
+      return toAsrServiceView(entry);
     });
   }
   remove(id: string) {

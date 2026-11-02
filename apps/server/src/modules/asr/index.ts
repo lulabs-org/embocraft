@@ -4,3 +4,11 @@ export { DatabaseAsrServicePersistence } from './persistence/database-asr-servic
 export { installAsrSocket, type AsrBridge } from './sockets/asr.socket';
 export { LocalSpeech } from './services/local-speech.service';
 export { scheduleSpeech } from './services/speech-scheduler.service';
+export {
+  ASR_USES,
+  toAsrServiceView,
+  validateAsrService,
+  validateBailianSettings,
+  validateWhisperSettings,
+  type SavedService,
+} from './domain';
