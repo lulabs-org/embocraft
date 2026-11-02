@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { getDatabaseClient } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import type {
@@ -10,7 +11,11 @@ import type {
 export class DatabaseVoiceServicePersistence
   implements VoiceServicePersistence
 {
-  constructor(private readonly db: PrismaClient) {}
+  private readonly db: PrismaClient;
+
+  constructor(db?: PrismaClient) {
+    this.db = db ?? getDatabaseClient();
+  }
 
   async load(): Promise<SavedVoice[] | undefined> {
     try {

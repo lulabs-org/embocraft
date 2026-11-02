@@ -1,4 +1,5 @@
 import type { PlayerKind, PrismaClient } from '@prisma/client';
+import { getDatabaseClient } from '../../../core/database/client';
 import { playerNameKey } from '@voxel/shared';
 
 export type RecordedPlayer = {
@@ -25,7 +26,19 @@ function toPlayerKind(kind?: string): PlayerKind {
 }
 
 export class ChatStore {
-  constructor(private readonly db?: PrismaClient) {}
+  private readonly db?: PrismaClient;
+
+  constructor(db?: PrismaClient) {
+    if (db !== undefined) {
+      this.db = db;
+    } else {
+      try {
+        this.db = getDatabaseClient();
+      } catch {
+        this.db = undefined;
+      }
+    }
+  }
 
   async recordPlayer(player: RecordedPlayer): Promise<string | undefined> {
     if (!this.db) return undefined;

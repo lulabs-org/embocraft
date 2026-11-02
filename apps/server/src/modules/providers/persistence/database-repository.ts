@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { getDatabaseClient } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import { toProviderView, type SavedProvider } from '../domain/model';
@@ -12,8 +13,11 @@ export class DatabaseProviderRepository implements ProviderRepository {
   private values: SavedProvider[] = [];
   private nextPosition = 0;
   private queue: Promise<unknown> = Promise.resolve();
+  private readonly db: PrismaClient;
 
-  constructor(private readonly db: PrismaClient) {}
+  constructor(db?: PrismaClient) {
+    this.db = db ?? getDatabaseClient();
+  }
 
   async load(): Promise<void> {
     try {
@@ -63,7 +67,8 @@ export class DatabaseProviderRepository implements ProviderRepository {
       const provider = validateProvider(raw, existing);
       if (
         !existing &&
-        (this.values.length >= MAX_PROVIDERS || this.nextPosition >= MAX_PROVIDERS)
+        (this.values.length >= MAX_PROVIDERS ||
+          this.nextPosition >= MAX_PROVIDERS)
       ) {
         throw new AppError(`最多保存 ${MAX_PROVIDERS} 个模型服务。`);
       }
@@ -119,4 +124,3 @@ export class DatabaseProviderRepository implements ProviderRepository {
     return operation;
   }
 }
-

@@ -80,13 +80,13 @@ async function loadStores(
   options: ServerOptions,
   db?: PrismaClient,
 ): Promise<CoreStores> {
-  const providers = options.providers ?? new DatabaseProviderRepository(db!);
+  const providers = options.providers ?? new DatabaseProviderRepository(db);
   const voiceServices =
     options.voiceServices ??
-    new VoiceServiceStore(new DatabaseVoiceServicePersistence(db!));
+    new VoiceServiceStore(new DatabaseVoiceServicePersistence(db));
   const asrSettings =
     options.asrSettings ??
-    new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
+    new AsrSettingsStore(new DatabaseAsrServicePersistence(db));
   const loads = [
     GatewayAuth.load(config.gateway),
     providers.load(),
@@ -121,7 +121,7 @@ export async function createServer(options: ServerOptions = {}) {
   const store = options.worldStore ?? new WorldStore(config.databaseUrl, db);
   let world: WorldRoom | undefined;
   let url = '';
-  const archive = options.archive ?? new DatabaseManagementArchive(db!);
+  const archive = options.archive ?? new DatabaseManagementArchive(db);
   const characters = new AICharacterManager(
     providers,
     () => url,
@@ -145,7 +145,7 @@ export async function createServer(options: ServerOptions = {}) {
     management: {
       authenticate: gatewayAuth.middleware,
       characters,
-      characterQueries: options.characterQueries ?? new CharacterQueries(db!),
+      characterQueries: options.characterQueries ?? new CharacterQueries(db),
       tasks: characters.tasks,
       providers: providerService,
     },
