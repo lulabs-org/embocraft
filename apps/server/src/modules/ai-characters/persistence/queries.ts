@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { getDatabaseClient } from '../../../core/database/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
 import type {
   AICharacterSettings,
@@ -104,7 +105,11 @@ function detail(row: CharacterRow): CharacterDetail {
 
 /** HTTP reads go straight to PostgreSQL, independently of runtime recovery snapshots. */
 export class CharacterQueries {
-  constructor(private readonly db: PrismaClient) {}
+  private readonly db: PrismaClient;
+
+  constructor(db?: PrismaClient) {
+    this.db = db ?? getDatabaseClient();
+  }
 
   async get(id: string): Promise<CharacterDetail> {
     const row = await this.db.$transaction(

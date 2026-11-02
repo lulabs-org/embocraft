@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { getDatabaseClient } from '../core/database/client';
 import { AppError } from '../core/errors/app-error';
 import type { ArchivePort, ManagementArchive } from './archive';
 import {
@@ -113,8 +114,11 @@ export class DatabaseManagementArchive implements ArchivePort {
     runs: [],
     requests: {},
   });
+  private readonly db: PrismaClient;
 
-  constructor(private readonly db: PrismaClient) {}
+  constructor(db?: PrismaClient) {
+    this.db = db ?? getDatabaseClient();
+  }
 
   async load(): Promise<ManagementArchive | undefined> {
     try {
