@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import type { ArchivePort } from '../../../persistence/archive';
 import { ManagementPersistence } from '../../../persistence/management-persistence';
 import { migrateArchive } from '../../../persistence/migrate-archive';
-import { ManagementEvents } from '../../management';
+import { ConsoleSyncEvents } from '../../console-sync';
 import type { ProviderRuntimePort, SavedProvider } from '../../providers';
 import { appendAICharacterLog } from '../domain/activity-log';
 import { AICharacterWakeScheduler } from './wake-scheduler.service';
@@ -50,7 +50,7 @@ import { CharacterVoiceCoordinator } from './voice-coordinator.service';
 
 export class AICharacterOrchestrator {
   readonly jobs = new AICharacterRegistry();
-  readonly events = new ManagementEvents();
+  readonly events = new ConsoleSyncEvents();
   readonly taskScheduler = new AICharacterWakeScheduler();
   readonly persistence: ManagementPersistence<
     CharacterSnapshots,

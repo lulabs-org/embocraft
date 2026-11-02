@@ -8,7 +8,7 @@ import {
   executionState,
 } from '../modules/ai-characters';
 import { CharacterSnapshots } from '../modules/ai-characters/persistence/snapshots';
-import { ManagementEvents } from '../modules/management';
+import { ConsoleSyncEvents } from '../modules/console-sync';
 import { PlanService, TaskSnapshots, newPlan, newRun } from '../modules/tasks';
 import type { ManagementArchive } from './archive';
 import { ManagementPersistence } from './management-persistence';
@@ -16,7 +16,7 @@ import { ManagementPersistence } from './management-persistence';
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const plans = new PlanService();
   const committed = new PlanService();
-  const events = new ManagementEvents();
+  const events = new ConsoleSyncEvents();
   const jobs = new AICharacterRegistry();
   for (const id of ['a', 'b']) {
     const runtime = createAgentRuntime();

@@ -174,7 +174,7 @@ it('documents the spatial text, command receipt, and OpenAPI JSON endpoints', ()
   ).toMatchObject({ type: 'string', maxLength: 240 });
   expect(spatial.responses?.['200']).toBeDefined();
 
-  const receipt = spec.paths['/management/commands/{id}']?.get;
+  const receipt = spec.paths['/console-sync/commands/{id}']?.get;
   expect(receipt).toBeDefined();
   expect(receipt.responses?.['200']).toBeDefined();
 
@@ -188,7 +188,7 @@ it('documents resource ownership, management and chat credentials, with no globa
   expect(spec.servers).toEqual([{ url: '/', description: '当前服务器' }]);
   expect(spec.security).toBeUndefined();
   const management = [
-    ['/management', 'Management'],
+    ['/console-sync', 'ConsoleSync'],
     ['/ai-characters', 'AI Characters'],
     ['/providers', 'Providers'],
     ['/tasks', 'Tasks'],

@@ -132,7 +132,7 @@ export class HttpManagementProbe {
         };
         break;
       case 'commands.get':
-        path = '/management/commands/' + enc(p.commandId);
+        path = '/console-sync/commands/' + enc(p.commandId);
         break;
       case 'providers.list':
         path = '/providers';

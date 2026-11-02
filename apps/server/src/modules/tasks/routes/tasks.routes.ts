@@ -31,7 +31,7 @@ function queryText(value: unknown): string | undefined {
 export function installTaskRoutes(
   app: Express,
   tasks: TaskPort,
-  commands: CommandExecutor,
+  consoleSync: CommandExecutor,
 ) {
   // ---------------------------------------------------------------------------
   // 任务计划与执行运行的 HTTP 适配
@@ -203,7 +203,7 @@ export function installTaskRoutes(
   app.post(
     '/tasks',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'plans', (commandId) =>
+      const result = await consoleSync.execute(req, 'plans', (commandId) =>
         tasks.createTaskPlan(
           resolveCharacterId(req) ?? '',
           withRequestId(req.body, commandId),
@@ -259,7 +259,7 @@ export function installTaskRoutes(
   app.put(
     '/tasks/:planId',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'plans', () =>
+      const result = await consoleSync.execute(req, 'plans', () =>
         tasks.updateTaskPlan(
           resolveCharacterId(req),
           String(req.params.planId),
@@ -310,7 +310,7 @@ export function installTaskRoutes(
   app.delete(
     '/tasks/:planId',
     route(async (req, res) => {
-      await commands.execute(req, 'plans', () =>
+      await consoleSync.execute(req, 'plans', () =>
         tasks.controlTaskPlan(
           resolveCharacterId(req),
           String(req.params.planId),
@@ -373,7 +373,7 @@ export function installTaskRoutes(
   app.post(
     '/tasks/:planId/reassign',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'plans', () =>
+      const result = await consoleSync.execute(req, 'plans', () =>
         tasks.reassignPlan(
           String(req.params.planId),
           String(req.body?.targetCharacterId ?? ''),
@@ -507,7 +507,7 @@ export function installTaskRoutes(
   app.post(
     '/tasks/:planId/:operation',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'plans', (commandId) =>
+      const result = await consoleSync.execute(req, 'plans', (commandId) =>
         tasks.controlTaskPlan(
           resolveCharacterId(req),
           String(req.params.planId),
@@ -577,7 +577,7 @@ export function installTaskRoutes(
   app.post(
     '/task-runs/:runId/:operation',
     route(async (req, res) => {
-      const result = await commands.execute(req, 'plans', () =>
+      const result = await consoleSync.execute(req, 'plans', () =>
         tasks.controlTaskRun(
           resolveCharacterId(req),
           String(req.params.runId),

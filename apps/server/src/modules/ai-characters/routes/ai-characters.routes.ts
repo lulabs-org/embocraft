@@ -1,4 +1,4 @@
-import { ManagementCommands } from '../../management';
+import { ConsoleSyncCommands } from '../../console-sync';
 import type { Express, Request } from 'express';
 import type { AICharacterOrchestrator } from '../services/orchestrator.service';
 import { CharacterLogService } from '../services/character-log.service';
@@ -29,7 +29,7 @@ export type AICharacterRoutePort = Pick<
 export function installAICharacterRoutes(
   app: Express,
   manager: AICharacterRoutePort,
-  commands: ManagementCommands,
+  consoleSync: ConsoleSyncCommands,
   queries: CharacterQueryPort,
   logService: CharacterLogService = new CharacterLogService(queries),
 ) {
@@ -41,7 +41,7 @@ export function installAICharacterRoutes(
   });
 
   const write = (req: Request, action: () => unknown | Promise<unknown>) =>
-    commands.execute(
+    consoleSync.execute(
       req,
       req.method === 'DELETE' ? 'plans' : String(req.params.id ?? 'registry'),
       async () => {

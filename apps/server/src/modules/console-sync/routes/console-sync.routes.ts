@@ -1,21 +1,24 @@
 import type { Express } from 'express';
 import { identifier } from '../../../core/http/validation';
-import type { ManagementCommands } from '../services/commands.service';
+import type { ConsoleSyncCommands } from '../services/console-sync.service';
 
-export function installManagementRoutes(
+/**
+ * 注册控制台数据同步与命令回执查询路由
+ */
+export function installConsoleSyncRoutes(
   app: Express,
-  commands: ManagementCommands,
+  consoleSync: ConsoleSyncCommands,
 ) {
   /**
    * @openapi
-   * /management/commands/{id}:
+   * /console-sync/commands/{id}:
    *   get:
    *     security:
    *       - ManagementBearer: []
-   *     summary: 查询管理命令回执
+   *     summary: 查询控制台命令回执
    *     description: 根据写入请求使用的 Idempotency-Key 或服务器生成的命令 ID 查询执行状态；过期或不存在的命令返回 unknown。
    *     tags:
-   *       - Management
+   *       - ConsoleSync
    *     parameters:
    *       - in: path
    *         name: id
@@ -55,11 +58,12 @@ export function installManagementRoutes(
    *       403:
    *         $ref: '#/components/responses/Management403'
    */
-  app.get('/management/commands/:id', (req, res) => {
+  app.get('/console-sync/commands/:id', (req, res) => {
     if (!identifier(req.params.id)) {
       res.status(400).json({ error: '命令标识无效。' });
       return;
     }
-    res.json(commands.get(req.params.id));
+    res.json(consoleSync.get(req.params.id));
   });
 }
+
