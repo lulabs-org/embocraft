@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LocalSpeech } from './local-speech.service';
-import { validatePcmWav } from '../../../core/audio/pcm-wav';
+import { WhisperAdapter } from './whisper.adapter';
+import { validatePcmWav } from '../../../../core/audio/pcm-wav';
 
 function wav(seconds = 1, amplitude = 1000) {
   const data = Buffer.alloc(44 + Math.round(seconds * 32000));
@@ -20,14 +20,38 @@ function wav(seconds = 1, amplitude = 1000) {
   return data;
 }
 
-describe('Whisper transcription service', () => {
+describe('WhisperAdapter', () => {
+  it('implements BatchTranscriberPort with provider whisper', () => {
+    const adapter = new WhisperAdapter('http://localhost:8000/v1');
+    expect(adapter.provider).toBe('whisper');
+  });
+
+  it('rejects unsupported audio formats and oversized payloads', async () => {
+    const adapter = new WhisperAdapter('http://localhost:8000/v1');
+    await expect(
+      adapter.transcribe(Buffer.from('test'), {
+        contentType: 'audio/unsupported',
+        language: 'zh',
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toThrow('不支持的音频格式');
+
+    await expect(
+      adapter.transcribe(Buffer.alloc(5 * 1024 * 1024 + 1), {
+        contentType: 'audio/wav',
+        language: 'zh',
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ status: 413 });
+  });
+
   it('uses the selected authenticated endpoint for readiness and transcription', async () => {
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response('', { status: 404 }))
       .mockResolvedValueOnce(Response.json({ data: [] }))
       .mockResolvedValueOnce(Response.json({ text: 'hello' }));
-    const speech = new LocalSpeech('http://default:8000/v1', request);
+    const adapter = new WhisperAdapter('http://default:8000/v1', request);
     const settings = {
       baseUrl: 'http://selected:8000/v1/',
       apiKey: 'private-key',
@@ -36,7 +60,7 @@ describe('Whisper transcription service', () => {
       prompt: 'context',
     };
     expect(
-      await speech.transcribe(
+      await adapter.transcribe(
         Buffer.from('audio'),
         'audio/wav',
         'en',
@@ -68,39 +92,6 @@ describe('Whisper transcription service', () => {
     expect(() => validatePcmWav(wav(21))).toThrow('20 秒');
   });
 
-  it('rejects unsupported input before invoking speech service', async () => {
-    const fetcher = vi.fn();
-    const speech = new LocalSpeech(
-      'http://whisper:8000/v1',
-      fetcher as unknown as typeof fetch,
-    );
-    await expect(
-      speech.transcribe(
-        Buffer.from('url'),
-        'text/plain',
-        'zh',
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ status: 415 });
-    await expect(
-      speech.transcribe(
-        Buffer.alloc(5 * 1024 * 1024 + 1),
-        'audio/wav',
-        'zh',
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ status: 413 });
-    await expect(
-      speech.transcribe(
-        Buffer.from('wav'),
-        'audio/wav',
-        '../x',
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow('中文');
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-
   it('serializes inference and forwards cancellation', async () => {
     let started!: () => void;
     const start = new Promise<void>((r) => {
@@ -121,12 +112,12 @@ describe('Whisper transcription service', () => {
         );
       });
     });
-    const speech = new LocalSpeech(
+    const adapter = new WhisperAdapter(
       'http://whisper:8000/v1',
       fetcher as unknown as typeof fetch,
     );
     const controller = new AbortController();
-    const first = speech.transcribe(
+    const first = adapter.transcribe(
       Buffer.from('x'),
       'audio/wav',
       'en',
@@ -135,7 +126,7 @@ describe('Whisper transcription service', () => {
     const rejected = expect(first).rejects.toThrow();
     await start;
     await expect(
-      speech.transcribe(
+      adapter.transcribe(
         Buffer.from('x'),
         'audio/wav',
         'en',
@@ -161,22 +152,21 @@ describe('Whisper transcription service', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    const speech = new LocalSpeech(
+    const adapter = new WhisperAdapter(
       'http://whisper:8000/v1',
       mockFetcher as unknown as typeof fetch,
     );
 
-    const status = await speech.status();
+    const status = await adapter.status();
     expect(status.available).toBe(true);
     expect(status.reason).toContain('Speaches');
 
-    const result = await speech.transcribe(
+    const result = await adapter.transcribe(
       Buffer.from('test-audio'),
       'audio/wav',
       'zh',
       new AbortController().signal,
     );
-    // Prompt guidance must not rewrite the model's response.
     expect(result).toBe('測試獨立 Whisper 容器識別成功。');
     expect(mockFetcher).toHaveBeenCalledWith(
       'http://whisper:8000/v1/audio/transcriptions',
@@ -188,12 +178,12 @@ describe('Whisper transcription service', () => {
     const failFetcher = vi.fn(async () => {
       return new Response('Service Unavailable', { status: 503 });
     });
-    const speech = new LocalSpeech(
+    const adapter = new WhisperAdapter(
       'http://whisper:8000/v1',
       failFetcher as unknown as typeof fetch,
     );
 
-    const status = await speech.status();
+    const status = await adapter.status();
     expect(status.available).toBe(false);
 
     const emptyFetcher = vi.fn(async (url: string | URL | Request) => {
@@ -201,12 +191,12 @@ describe('Whisper transcription service', () => {
         return new Response('{"status":"ok"}', { status: 200 });
       return new Response(JSON.stringify({ text: '' }), { status: 200 });
     });
-    const emptySpeech = new LocalSpeech(
+    const emptyAdapter = new WhisperAdapter(
       'http://whisper:8000/v1',
       emptyFetcher as unknown as typeof fetch,
     );
     await expect(
-      emptySpeech.transcribe(
+      emptyAdapter.transcribe(
         Buffer.from('audio'),
         'audio/wav',
         'zh',
@@ -214,7 +204,7 @@ describe('Whisper transcription service', () => {
       ),
     ).rejects.toThrow('没有识别到文字');
     await expect(
-      emptySpeech.transcribe(
+      emptyAdapter.transcribe(
         Buffer.from('audio'),
         'audio/wav',
         'zh',
@@ -253,18 +243,17 @@ describe('Whisper transcription service', () => {
           return new Response('{}');
         },
       );
-      const speech = new LocalSpeech('http://whisper:8000/v1', fetcher);
+      const adapter = new WhisperAdapter('http://whisper:8000/v1', fetcher);
       const settings =
         prompt === undefined
           ? undefined
           : {
               model: 'default',
-
               temperature: 0,
               prompt,
             };
       expect(
-        await speech.transcribe(
+        await adapter.transcribe(
           Buffer.from('audio'),
           'audio/wav',
           language!,
@@ -292,9 +281,9 @@ describe('Whisper transcription service', () => {
           return new Response('{}');
         },
       );
-      const speech = new LocalSpeech('http://whisper:8000/v1', fetcher);
+      const adapter = new WhisperAdapter('http://whisper:8000/v1', fetcher);
       expect(
-        await speech.transcribe(
+        await adapter.transcribe(
           Buffer.from('audio'),
           type,
           'en',

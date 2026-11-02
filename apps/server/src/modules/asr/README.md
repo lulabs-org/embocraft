@@ -24,12 +24,14 @@ apps/server/src/modules/asr/
 │   ├── model.ts                  # SavedService 实体、用途分配 (chat/spatial/clip) 与脱敏视图
 │   ├── validation.ts             # 百炼/Whisper 参数校验与通用服务组装
 │   └── validation.test.ts        # 纯业务逻辑单元测试
+├── ports.ts                      # 模块端口契约 (BatchTranscriberPort, StreamingAsrPort 等)
+├── engines/                      # 外部引擎适配器
+│   ├── whisper/                  # Whisper 批处理适配器与模型目录探测
+│   └── bailian/                  # 阿里云百炼实时流式识别适配器与端点管理
 ├── persistence/
 │   ├── asr-settings-store.ts     # AsrSettingsStore：配置持久化、内存缓存、使用中租借锁 (acquire/release)
 │   └── database-asr-services.ts  # DatabaseAsrServicePersistence：数据库加载与保存
 ├── services/
-│   ├── bailian.service.ts        # 阿里云百炼 WebSocket 协议桥接
-│   ├── local-speech.service.ts   # LocalSpeech：Speaches / Whisper HTTP 客户端 (支持本地/远程)
 │   ├── speech-scheduler.service.ts # SpeechScheduler：针对 Whisper 的并发限制队列 (最大 4 并发)
 │   └── transcript.ts             # Whisper JSON 响应解析
 ├── routes/

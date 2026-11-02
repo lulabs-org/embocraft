@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { LocalSpeech } from '../services/local-speech.service';
+import { WhisperAdapter as LocalSpeech } from '../engines';
 import { PiperModels } from '../../tts';
 export function installCapabilitiesRoutes(
   app: Express,
