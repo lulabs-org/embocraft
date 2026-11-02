@@ -66,7 +66,7 @@ export type AICharacterView = AICharacterSettings & {
   sessionId?: string;
   /**
    * Full activity log, oldest-first. Internal/persisted shape only: the
-   * `/ai-characters` list and detail responses omit this and expose `lastLog`;
+   * `/ai-characters` list and detail responses omit this;
    * the complete history is served by `GET /ai-characters/{id}/logs`.
    */
   logEntries: AICharacterLogEntry[];
@@ -92,15 +92,10 @@ export type AICharacterView = AICharacterSettings & {
 
 /**
  * Public HTTP shape for `GET /ai-characters` and `GET /ai-characters/{id}`.
- * Omits the heavy `logEntries` array and carries only the newest log line so
- * summary cards stay small; the full history lives behind `GET /ai-characters/{id}/logs`.
+ * Omits the heavy `logEntries` array; the full history lives behind
+ * `GET /ai-characters/{id}/logs`.
  */
-export type AICharacterSummary = Omit<AICharacterView, 'logEntries'> & {
-  /** Newest activity-log text, if any. */
-  lastLog?: string;
-  /** UTC epoch milliseconds of the newest activity-log entry; null when unrecorded. */
-  lastLogAt?: number | null;
-};
+export type AICharacterSummary = Omit<AICharacterView, 'logEntries'>;
 
 /** A page of activity-log entries, newest-first, for `GET /ai-characters/{id}/logs`. */
 export type AICharacterLogPage = {

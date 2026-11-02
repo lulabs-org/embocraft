@@ -234,7 +234,7 @@ export const apiSchemas = {
     required: ['id', 'name', 'status'],
     properties: { id: text, name: text, status: text, task: object },
     description:
-      '控制当前执行时返回的 Agent 公开状态，包含当前任务及用量；不含完整日志数组（仅保留 lastLog/lastLogAt），完整历史请调用 GET /ai-characters/{id}/logs。',
+      '控制当前执行时返回的 Agent 公开状态，包含当前任务及用量；日志请调用 GET /ai-characters/{id}/logs。',
   },
   AICharacterLogPage: {
     type: 'object',

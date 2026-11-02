@@ -77,6 +77,12 @@ export function installAICharacterRoutes(
    *     responses:
    *       200:
    *         description: AI 角色列表
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 $ref: '#/components/schemas/AICharacterView'
    */
   app.get(
     '/ai-characters',

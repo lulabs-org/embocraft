@@ -54,7 +54,7 @@ it('does not reinitialize the role editor when polling updates the same role', a
     <StrictMode>
       <AICharacterDetail
         {...props}
-        job={{ ...job, lastLog: 'polled' }}
+        job={{ ...job, status: 'idle' }}
         openAgentEditor={newerOpen}
       />
     </StrictMode>,

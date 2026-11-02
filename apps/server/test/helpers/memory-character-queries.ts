@@ -18,6 +18,17 @@ export function memoryCharacterQueries(
         const { runtime, currentRunId, logEntries, ...config } = record;
         const state = runtime ? runtimeView(runtime) : undefined;
         const run = saved?.runs.find((run) => run.id === currentRunId);
+        const queuedTasks = (saved?.runs ?? [])
+          .filter(
+            (run) => run.characterId === record.id && run.status === 'queued',
+          )
+          .sort((a, b) => a.scheduledAt - b.scheduledAt)
+          .map((run) => ({
+            id: run.id,
+            goal: run.snapshot.goal,
+            scheduledAt: run.scheduledAt,
+            coalescedTriggers: run.coalescedTriggers ?? 0,
+          }));
         return {
           ...config,
           providerName: providers.getRuntime(record.providerId).name,
@@ -35,22 +46,10 @@ export function memoryCharacterQueries(
                 action: state?.action,
               }
             : undefined,
-          queuedTasks: (saved?.runs ?? [])
-            .filter(
-              (run) => run.characterId === record.id && run.status === 'queued',
-            )
-            .sort((a, b) => a.scheduledAt - b.scheduledAt)
-            .map((run) => ({
-              id: run.id,
-              goal: run.snapshot.goal,
-              scheduledAt: run.scheduledAt,
-              coalescedTriggers: run.coalescedTriggers ?? 0,
-            })),
+          ...(queuedTasks.length ? { queuedTasks } : {}),
           usage: state?.usage,
           lastResponse: state?.lastResponse,
           taskRequiresReassignment: state?.requiresReassignment ?? false,
-          lastLog: logEntries.at(-1)?.text,
-          lastLogAt: logEntries.at(-1)?.time,
         };
       })
       .reverse();

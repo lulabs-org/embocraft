@@ -66,7 +66,8 @@ export function AICharacterDetail(
         <p role="alert" className="agent-error">
           {t('console.characters.lastRunFailed', {
             reason:
-              job.lastLog || t('console.characters.checkConnectionModelHint'),
+              job.task?.reason ||
+              t('console.characters.checkConnectionModelHint'),
           })}
         </p>
       )}

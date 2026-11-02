@@ -54,10 +54,11 @@ it('returns consistent committed summaries for character detail, list and writes
       name: 'Second',
       resourceVersion: version,
       taskIdentity: null,
-      lastLog: 'Latest legacy entry',
-      lastLogAt: null,
     });
     expect(detail).not.toHaveProperty('logEntries');
+    expect(detail).not.toHaveProperty('lastLog');
+    expect(detail).not.toHaveProperty('lastLogAt');
+    expect(detail).not.toHaveProperty('queuedTasks');
     const list = await get(server.httpUrl + '/ai-characters');
     expect(list.map((character: { id: string }) => character.id)).toEqual([
       second.id,

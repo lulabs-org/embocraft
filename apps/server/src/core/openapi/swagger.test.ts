@@ -48,6 +48,19 @@ const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
     })),
 );
 
+it('documents the AI character list response body', () => {
+  expect(spec.paths['/ai-characters'].get.responses?.['200']).toMatchObject({
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/AICharacterView' },
+        },
+      },
+    },
+  });
+});
+
 function collectSources(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);

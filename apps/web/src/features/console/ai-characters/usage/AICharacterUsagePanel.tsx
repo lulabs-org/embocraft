@@ -8,11 +8,6 @@ export function AICharacterUsagePanel({ job }: { job: AICharacterSummary }) {
   const approx = job.usage?.estimated
     ? t('console.characters.approxPrefix')
     : '';
-  // lastLogAt is the newest activity-log timestamp exposed on the summary.
-  const lastLogTime =
-    typeof job.lastLogAt === 'number' && Number.isFinite(job.lastLogAt)
-      ? job.lastLogAt
-      : undefined;
   const relative = (ts?: number | null) => {
     if (typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) return '—';
     const minutes = Math.floor((Date.now() - ts) / 60000);
@@ -74,12 +69,6 @@ export function AICharacterUsagePanel({ job }: { job: AICharacterSummary }) {
               '—'
             )}
           </strong>
-        </div>
-        <div>
-          <span className="agents-section-label">
-            {t('console.characters.statLastActivity')}
-          </span>
-          <strong>{relative(lastLogTime)}</strong>
         </div>
         <div>
           <span className="agents-section-label">

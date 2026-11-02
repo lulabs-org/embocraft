@@ -113,8 +113,6 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       usage: state.character.usage,
       lastResponse: 'Saved reply',
       taskRequiresReassignment: true,
-      lastLog: 'Legacy latest',
-      lastLogAt: null,
     });
     expect(detail.queuedTasks).toEqual([
       {
@@ -144,7 +142,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const list = await queries.list();
     expect(list.map((item) => item.id)).toEqual(['newer', 'actor']);
     expect(list[1]).toEqual(detail);
-    expect(list[0]).toMatchObject({ taskIdentity: null, queuedTasks: [] });
+    expect(list[0]).toMatchObject({ taskIdentity: null });
+    expect(list[0]).not.toHaveProperty('queuedTasks');
     expect(await queries.logs('actor', 2, 0)).toEqual({
       entries: [older.logEntries[2], older.logEntries[1]],
       total: 3,
@@ -271,9 +270,10 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       const detail = await get(path);
       expect(detail).toMatchObject({
         name: 'SQL name',
-        lastLog: 'DB latest',
-        lastLogAt: null,
       });
+      expect(detail).not.toHaveProperty('lastLog');
+      expect(detail).not.toHaveProperty('lastLogAt');
+      expect(detail).not.toHaveProperty('queuedTasks');
       expect(await get(base + '/ai-characters')).toEqual([detail]);
       const firstPage = await get(path + '/logs?limit=1');
       expect(firstPage).toMatchObject({
