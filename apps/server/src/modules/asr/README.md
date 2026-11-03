@@ -33,6 +33,7 @@ apps/server/src/modules/asr/
 │   └── database-asr-services.ts  # DatabaseAsrServicePersistence：数据库加载与保存
 ├── services/
 │   ├── speech-scheduler.service.ts # SpeechScheduler：针对 Whisper 的并发限制队列 (最大 4 并发)
+│   ├── realtime-asr.service.ts   # RealtimeAsrService：实时流识别并发会话限制与引擎调度 (最大 2 并发)
 │   └── transcript.ts             # Whisper JSON 响应解析
 ├── routes/
 │   ├── asr.http.ts               # HTTP 中间件与路由挂载入口
