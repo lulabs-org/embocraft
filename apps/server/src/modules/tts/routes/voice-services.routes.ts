@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../../../core/audio/speech-endpoint';
+import { env } from '../../../core/config/env';
 import {
   asyncAbortableRoute,
   asyncRoute as route,
@@ -41,7 +41,7 @@ export function installVoiceServiceRoutes(
     '/voice/tts/defaults',
     route((_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ baseUrl: speechEndpoint() });
+      res.json({ baseUrl: env.speechEndpoint() });
     }),
   );
 

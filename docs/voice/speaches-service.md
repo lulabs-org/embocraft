@@ -111,12 +111,13 @@ services:
 
 后端服务源码中主要通过两个模块发起 HTTP 通信：
 
-### (1) 端点解析 (`speechEndpoint`)
-位于 `apps/server/src/core/audio/speech-endpoint.ts`：
+### (1) 端点解析 (`env.speechEndpoint`)
+位于 `apps/server/src/core/config/env.ts`：
 ```typescript
-export function speechEndpoint() {
-  const c = env.readSpeech();
-  return (c.speechApiUrl?.trim() || 'http://127.0.0.1:8000/v1').replace(/\/+$/, '');
+function readSpeechConfig(env: EnvLookup = process.env) {
+  return {
+    speechApiUrl: (env.SPEECH_API_URL?.trim() || DEFAULT_SPEECH_API_URL).replace(/\/+$/, ''),
+  };
 }
 ```
 

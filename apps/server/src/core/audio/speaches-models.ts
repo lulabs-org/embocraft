@@ -1,6 +1,6 @@
 import type { SpeachesModel, SpeachesVoice } from '@voxel/shared';
 import { AppError } from '../errors/app-error';
-import { speechEndpoint } from './speech-endpoint';
+import { env } from '../config/env';
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -38,7 +38,7 @@ export class SpeachesModels {
     try {
       bounded.throwIfAborted();
       const endpoint = (
-        this.config.baseUrl?.trim() || speechEndpoint()
+        this.config.baseUrl?.trim() || env.speechEndpoint()
       ).replace(/\/+$/, '');
       const response = await this.request(`${endpoint}/models?task=${task}`, {
         signal: bounded,

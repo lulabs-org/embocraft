@@ -63,7 +63,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 音频能力按职责拆为 `core/audio`、`modules/asr`、`modules/tts` 三部分，空间语音与 Agent 发声归入 `modules/world`：
 
-- `core/audio/` 只放无业务状态的共享基础设施：`pcm-wav.ts`（无 I/O 的 PCM WAV 格式、时长与音量校验）、`normalize.ts`/`command.ts`（FFmpeg、子进程与临时文件处理）、`speech-endpoint.ts`（部署默认的语音服务地址）、`speaches-models.ts`（Speaches 模型与音色发现）以及 `voice-service-connection.ts`（ASR/TTS 共用的连接参数校验）。该目录只依赖 `core`。
+- `core/audio/` 只放无业务状态的共享基础设施：`pcm-wav.ts`（无 I/O 的 PCM WAV 格式、时长与音量校验）、`normalize.ts`/`command.ts`（FFmpeg、子进程与临时文件处理）、`speaches-models.ts`（Speaches 模型与音色发现）以及 `voice-service-connection.ts`（ASR/TTS 共用的连接参数校验）。该目录只依赖 `core`。
 - `modules/asr/` 按 `persistence/`、`services/`、`routes/`、`sockets/` 分层。`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权与 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。门面导出 `installAsrHttp`、`AsrSettingsStore`、`DatabaseAsrServicePersistence`、`installAsrSocket`、`AsrBridge`、`LocalSpeech` 与 `scheduleSpeech`。`/voice/capabilities` 同时报告 Whisper 与 Piper 状态，经 `tts` 门面读取 `PiperModels`。
 - `modules/tts/` 按 `persistence/`、`services/`、`routes/` 分层，合成契约位于 `services/speech-synthesizer.ts`。`routes/tts.http.ts` 的 `installTtsHttp` 通过 management 管线注册 `/voice/tts`。门面导出 `installTtsHttp`、`VoiceServiceStore`、`DatabaseVoiceServicePersistence`、`PiperTts`、`PiperModels` 与 `SpeechSynthesizer`。`tts` 不依赖 `asr`、`chat` 或 `world`。
 - 两个 Store 仍包含原有校验与运行时协调职责，显式接收持久化适配器；生产使用 PostgreSQL，测试使用内存实现。默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。
