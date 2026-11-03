@@ -1,35 +1,73 @@
-import type { Express } from 'express';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import express, { type Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
+import { asyncApiSpec } from './asyncapi';
+
+const require = createRequire(import.meta.url);
+const asyncApiDistDir = path.dirname(
+  require.resolve('@asyncapi/react-component/package.json'),
+);
+
+function renderAsyncApiHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EmboCraft WebSocket API (AsyncAPI)</title>
+  <link rel="stylesheet" href="/asyncapi-assets/css/default.min.css" />
+  <style>
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body>
+  <div id="asyncapi"></div>
+  <script src="/asyncapi-assets/js/index.js"></script>
+  <script>
+    fetch('/asyncapi.json')
+      .then((res) => res.json())
+      .then((schema) => {
+        if (window.AsyncApiStandalone) {
+          window.AsyncApiStandalone.render(
+            { schema, config: { show: { sidebar: true } } },
+            document.getElementById('asyncapi'),
+          );
+        }
+      });
+  </script>
+</body>
+</html>`;
+}
 
 export function installDocsRoutes(app: Express) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-  /**
-   * @openapi
-   * /api-docs.json:
-   *   get:
-   *     summary: 获取 OpenAPI JSON 文档
-   *     tags:
-   *       - System
-   *     responses:
-   *       200:
-   *         description: 当前服务器的 OpenAPI 3.0 文档
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               required: [openapi, info, paths]
-   *               properties:
-   *                 openapi:
-   *                   type: string
-   *                   example: 3.0.0
-   *                 info:
-   *                   type: object
-   *                 paths:
-   *                   type: object
-   */
-  app.get('/api-docs.json', (_req, res) => {
+  app.use(
+    '/asyncapi-assets/css',
+    express.static(path.join(asyncApiDistDir, 'styles')),
+  );
+  app.use(
+    '/asyncapi-assets/js',
+    express.static(path.join(asyncApiDistDir, 'browser', 'standalone')),
+  );
+
+  const docsRouter = express.Router();
+
+  docsRouter.get('/api-docs.json', (_req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.json(swaggerSpec);
   });
+
+  docsRouter.get('/asyncapi-docs', (_req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderAsyncApiHtml());
+  });
+
+  docsRouter.get('/asyncapi.json', (_req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json(asyncApiSpec);
+  });
+
+  app.use(docsRouter);
 }

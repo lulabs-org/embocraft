@@ -66,4 +66,3 @@ export function installConsoleSyncRoutes(
     res.json(consoleSync.get(req.params.id));
   });
 }
-

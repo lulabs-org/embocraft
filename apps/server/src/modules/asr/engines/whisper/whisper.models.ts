@@ -31,4 +31,3 @@ export async function listWhisperModels(
 ): Promise<SpeachesModel[]> {
   return new WhisperModelCatalog(config, request).list(signal);
 }
-

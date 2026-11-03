@@ -6,11 +6,11 @@
 
 ## 1. 核心职责与能力
 
-| 能力 | 传输协议 | 默认支持引擎 | 核心场景 |
-| :--- | :--- | :--- | :--- |
-| **服务配置管理** | HTTP REST (`/voice/asr/*`) | 全部 (Whisper, 百炼) | 供应商配置 CRUD、API Key 脱敏、用途绑定 (`chat`/`spatial`/`clip`) |
-| **音频文件转录** | HTTP POST (`/voice/transcribe`) | Speaches / OpenAI 兼容 Whisper | 录音片段上传、短语音/长音频批量转文字、并发排队调度 |
-| **实时流式识别** | WebSocket (`/voice/asr/realtime`)| 阿里云百炼 (DashScope) | 浏览器实时麦克风推流（PCM），低延迟双向推送 interim/final 文本 |
+| 能力             | 传输协议                          | 默认支持引擎                   | 核心场景                                                          |
+| :--------------- | :-------------------------------- | :----------------------------- | :---------------------------------------------------------------- |
+| **服务配置管理** | HTTP REST (`/voice/asr/*`)        | 全部 (Whisper, 百炼)           | 供应商配置 CRUD、API Key 脱敏、用途绑定 (`chat`/`spatial`/`clip`) |
+| **音频文件转录** | HTTP POST (`/voice/transcribe`)   | Speaches / OpenAI 兼容 Whisper | 录音片段上传、短语音/长音频批量转文字、并发排队调度               |
+| **实时流式识别** | WebSocket (`/voice/asr/realtime`) | 阿里云百炼 (DashScope)         | 浏览器实时麦克风推流（PCM），低延迟双向推送 interim/final 文本    |
 
 ---
 
@@ -45,6 +45,7 @@ apps/server/src/modules/asr/
 ```
 
 ### 现存历史包袱与边界问题：
+
 1. **命名历史包袱**：
    - `LocalSpeech`：实际是 Speaches / OpenAI 兼容 Whisper HTTP 客户端，支持本地与远程地址，并非仅本地。
    - `speech-scheduler.service.ts`：实际仅是 Whisper 批处理请求的限流排队器，并非全局语音调度器。
@@ -111,4 +112,3 @@ apps/server/src/modules/asr/
 3. **在 Provider 列表中注册**：
    - 在 `validateService` 与 Store/Service 中挂载该 Provider 的分支。
    - 在前端管理界面添加该 Provider 的表单项配置。
-

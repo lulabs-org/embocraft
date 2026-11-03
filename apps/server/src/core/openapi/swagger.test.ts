@@ -177,11 +177,9 @@ it('documents the spatial text, command receipt, and OpenAPI JSON endpoints', ()
   const receipt = spec.paths['/console-sync/commands/{id}']?.get;
   expect(receipt).toBeDefined();
   expect(receipt.responses?.['200']).toBeDefined();
-
-  const document = spec.paths['/api-docs.json']?.get;
-  expect(document).toBeDefined();
-  expect(document.tags).toEqual(['System']);
-  expect(document.security).toBeUndefined();
+  expect(spec.paths['/api-docs.json']).toBeUndefined();
+  expect(spec.paths['/asyncapi.json']).toBeUndefined();
+  expect(spec.paths['/asyncapi-docs']).toBeUndefined();
 });
 
 it('documents resource ownership, management and chat credentials, with no global auth on public APIs', () => {

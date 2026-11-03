@@ -52,7 +52,12 @@ export class GatewayAuth {
         }
         token = (await readFile(config.tokenFile, 'utf8')).trim();
       }
-      if (!token || token.length < 24 || token.length > 4096 || /\s/.test(token)) {
+      if (
+        !token ||
+        token.length < 24 ||
+        token.length > 4096 ||
+        /\s/.test(token)
+      ) {
         throw Error('管理令牌需为 24–4096 个无空白字符。');
       }
       return new GatewayAuth(token, config.origins, true);

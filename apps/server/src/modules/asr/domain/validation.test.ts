@@ -16,38 +16,40 @@ describe('Bailian settings validation & endpoints', () => {
   };
 
   it('generates correct endpoints for beijing and singapore with or without workspaceId', () => {
-    expect(bailianAsrEndpoint({ ...draft, region: 'beijing', workspaceId: '' })).toBe(
-      'wss://dashscope.aliyuncs.com/api-ws/v1/inference',
-    );
-    expect(bailianAsrEndpoint({ ...draft, region: 'singapore', workspaceId: '' })).toBe(
-      'wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference',
-    );
+    expect(
+      bailianAsrEndpoint({ ...draft, region: 'beijing', workspaceId: '' }),
+    ).toBe('wss://dashscope.aliyuncs.com/api-ws/v1/inference');
+    expect(
+      bailianAsrEndpoint({ ...draft, region: 'singapore', workspaceId: '' }),
+    ).toBe('wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference');
     expect(
       bailianAsrEndpoint({
         ...draft,
         region: 'singapore',
         workspaceId: 'ws-123',
       }),
-    ).toBe(
-      'wss://ws-123.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference',
-    );
+    ).toBe('wss://ws-123.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference');
     expect(
       bailianAsrEndpoint({
         ...draft,
         region: 'beijing',
         workspaceId: 'ws-beijing',
       }),
-    ).toBe(
-      'wss://ws-beijing.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference',
-    );
+    ).toBe('wss://ws-beijing.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference');
   });
 
   it('validates required fields and constraints', () => {
     expect(() =>
-      validateBailianSettings({ ...draft, apiKey: '', region: 'singapore' }, draft),
+      validateBailianSettings(
+        { ...draft, apiKey: '', region: 'singapore' },
+        draft,
+      ),
     ).toThrow('重新填写');
     expect(() =>
-      validateBailianSettings({ ...draft, apiKey: '', workspaceId: 'other' }, draft),
+      validateBailianSettings(
+        { ...draft, apiKey: '', workspaceId: 'other' },
+        draft,
+      ),
     ).toThrow('重新填写');
     expect(() =>
       validateBailianSettings({ ...draft, workspaceId: 'example.com/path' }),
@@ -143,4 +145,3 @@ describe('General ASR Service entity validation & view', () => {
     expect((view as Record<string, unknown>).apiKey).toBeUndefined();
   });
 });
-

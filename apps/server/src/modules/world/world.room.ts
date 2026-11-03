@@ -280,7 +280,10 @@ export class WorldRoom extends Room<WorldState> {
           .map((b) => b.y),
       ) + 0.55;
     this.state.players.set(p.id, p);
-    void this.chatStore?.recordPlayer({ name: p.name, kind: p.kind as 'human' | 'ai-agent' | 'scripted-agent' });
+    void this.chatStore?.recordPlayer({
+      name: p.name,
+      kind: p.kind as 'human' | 'ai-agent' | 'scripted-agent',
+    });
     this.bodies.set(p.id, {
       vy: 0,
       grounded: false,

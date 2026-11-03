@@ -14,4 +14,3 @@ export class CommandRouter extends CommandQueue<ManagementErrorData> {
     });
   }
 }
-

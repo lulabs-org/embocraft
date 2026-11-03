@@ -28,4 +28,3 @@ describe('secrets encryption', () => {
     expect(encryptSecret(encrypted)).toBe(encrypted);
   });
 });
-

@@ -72,7 +72,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 ## 结构验收
 
-本轮目录与命名整理已完成。架构测试位于 `tests/server-boundaries.test.ts`，检查跨模块门面、依赖方向、Socket 契约、循环依赖及再导出形成的间接 HTTP 依赖。`core/openapi/swagger.test.ts` 扫描全部服务端非测试 TypeScript 文件中的显式 `app.get/post/put/patch/delete` 注册；动态路径、Router 别名和 `app.use` 不在当前覆盖范围。测试反例验证再导出和非路由文件中的新增路由不能绕过已有检查。ASR/TTS Store 的校验、运行时协调和持久化职责保持现状，进一步拆分需单独评估。
+本轮目录与命名整理已完成。架构测试位于 `tests/server-boundaries.test.ts`，检查跨模块门面、依赖方向、Socket 契约、循环依赖及再导出形成的间接 HTTP 依赖。`core/openapi/swagger.test.ts` 扫描全部服务端非测试 TypeScript 文件中的显式 `app.get/post/put/patch/delete` 注册；动态路径、Router 别名和 `app.use` 不在当前覆盖范围。测试反例验证再导出和非路由文件中的新增路由不能绕过已有检查。WebSocket 长连接接口（`/voice/asr/realtime` 与 `/ai-characters/gateway`）通过 `core/openapi/asyncapi.ts` 提供 AsyncAPI 3.0 规范，可通过 `/asyncapi-docs` 查阅交互式文档或通过 `/asyncapi.json` 获取协议定义。ASR/TTS Store 的校验、运行时协调和持久化职责保持现状，进一步拆分需单独评估。
 
 ## 状态与测试
 

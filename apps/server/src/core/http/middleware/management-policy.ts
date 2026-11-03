@@ -72,4 +72,3 @@ export function installManagementJsonRoutes(
   install();
   scope.close();
 }
-

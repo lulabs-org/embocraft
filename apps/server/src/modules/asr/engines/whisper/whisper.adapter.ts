@@ -132,7 +132,8 @@ export class WhisperAdapter implements BatchTranscriberPort {
       actualSignal.throwIfAborted();
       const status = await this.status(actualSettings, actualSignal);
       actualSignal.throwIfAborted();
-      if (!status.available) throw new AppError(status.reason ?? '服务不可用', 503);
+      if (!status.available)
+        throw new AppError(status.reason ?? '服务不可用', 503);
       return await this.transcribeRemote(
         audio,
         format,

@@ -13,10 +13,9 @@ export class PiperTts implements SpeechSynthesizer {
       baseUrl?: string;
       apiKey?: string;
     } = {},
-    private endpoint = (options.baseUrl?.trim() || env.speechEndpoint()).replace(
-      /\/+$/,
-      '',
-    ),
+    private endpoint = (
+      options.baseUrl?.trim() || env.speechEndpoint()
+    ).replace(/\/+$/, ''),
     private request: typeof fetch = fetch,
   ) {}
   async synthesize(text: string, signal: AbortSignal) {
