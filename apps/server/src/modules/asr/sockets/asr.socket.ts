@@ -4,10 +4,11 @@ import { env } from '../../../core/config/env';
 import { originAllowed } from '../../../core/http/origin-policy';
 import { AppError } from '../../../core/errors/app-error';
 import type { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { bridgeBailianAsr } from '../engines/bailian/bailian.adapter';
 import type { SocketRoutes } from '../../../core/transport/socket-routes';
-
-export type AsrBridge = Parameters<typeof createAsrSocket>[1];
+import {
+  RealtimeAsrService,
+  type AsrBridge,
+} from '../services/realtime-asr.service';
 
 /**
  * WebSocket 实时语音识别接口处理器
@@ -25,11 +26,15 @@ export type AsrBridge = Parameters<typeof createAsrSocket>[1];
  *   - 服务端下行: AsrEvent JSON 格式 (ready, partial, final, finished, error)
  */
 export function createAsrSocket(
-  store: AsrSettingsStore,
-  bridge = bridgeBailianAsr,
+  storeOrService: AsrSettingsStore | RealtimeAsrService,
+  bridge?: AsrBridge,
   origin = env.webOrigin(),
 ) {
-  let running = 0;
+  const service =
+    storeOrService instanceof RealtimeAsrService
+      ? storeOrService
+      : new RealtimeAsrService(storeOrService, { bridge });
+
   return (client: WebSocket, req: IncomingMessage) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     client.on('error', () => {});
@@ -42,21 +47,11 @@ export function createAsrSocket(
     try {
       if (!originAllowed(req.headers.origin, origin))
         throw new AppError('不允许此页面访问实时识别。');
-      if (running >= 2) throw new AppError('实时识别服务繁忙，请稍后重试。');
       if (language !== 'zh' && language !== 'en')
         throw new AppError('不支持的识别语言。');
       if (!serviceId) throw new AppError('请先选择已保存的识别服务。');
-      const { settings, release } = store.acquire(serviceId);
-      if (settings.provider === 'whisper') {
-        release();
-        throw new AppError('Whisper 服务请使用服务器音频识别接口。');
-      }
-      running++;
-      client.once('close', () => {
-        running--;
-        release();
-      });
-      bridge(client, settings, language);
+
+      service.startSession(client, serviceId, language);
     } catch (error) {
       reject(
         error instanceof AppError
@@ -74,10 +69,14 @@ export function installAsrSocket(
     settings: AsrSettingsStore;
     bridge?: AsrBridge;
     origin?: string;
+    service?: RealtimeAsrService;
   },
 ) {
+  const service =
+    deps.service ??
+    new RealtimeAsrService(deps.settings, { bridge: deps.bridge });
   routes.set(
     '/voice/asr/realtime',
-    createAsrSocket(deps.settings, deps.bridge, deps.origin),
+    createAsrSocket(service, undefined, deps.origin),
   );
 }
