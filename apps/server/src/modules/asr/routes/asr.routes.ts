@@ -10,7 +10,6 @@ import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express, type Request, type Response } from 'express';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
 import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../../../core/audio/speech-endpoint';
 
 export function installAsrRoutes(
   app: Express,
@@ -88,7 +87,7 @@ export function installAsrRoutes(
    */
   app.get('/voice/asr/defaults', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ baseUrl: speechEndpoint() });
+    res.json({ baseUrl: env.speechEndpoint() });
   });
   /**
    * @openapi

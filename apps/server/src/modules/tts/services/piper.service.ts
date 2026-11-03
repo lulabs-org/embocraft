@@ -1,7 +1,7 @@
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 import { validatePcmWav } from '../../../core/audio/pcm-wav';
 import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../../../core/audio/speech-endpoint';
+import { env } from '../../../core/config/env';
 import type { SpeechSynthesizer } from './speech-synthesizer';
 
 export class PiperTts implements SpeechSynthesizer {
@@ -13,7 +13,7 @@ export class PiperTts implements SpeechSynthesizer {
       baseUrl?: string;
       apiKey?: string;
     } = {},
-    private endpoint = (options.baseUrl?.trim() || speechEndpoint()).replace(
+    private endpoint = (options.baseUrl?.trim() || env.speechEndpoint()).replace(
       /\/+$/,
       '',
     ),

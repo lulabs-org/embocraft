@@ -11,6 +11,7 @@ export type EnvLookup = Record<string, string | undefined>;
 const DEFAULT_PORT = 2567;
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_WEB_ORIGIN = 'http://127.0.0.1:5173';
+const DEFAULT_SPEECH_API_URL = 'http://127.0.0.1:8000/v1';
 const DEFAULT_GATEWAY_ORIGINS = [
   'http://localhost',
   'http://127.0.0.1',
@@ -114,7 +115,9 @@ function encryptionSecret(env: EnvLookup = process.env): string | undefined {
 
 function readSpeechConfig(env: EnvLookup = process.env) {
   return {
-    speechApiUrl: env.SPEECH_API_URL,
+    speechApiUrl: (
+      env.SPEECH_API_URL?.trim() || DEFAULT_SPEECH_API_URL
+    ).replace(/\/+$/, ''),
   };
 }
 
@@ -157,6 +160,7 @@ export const env = {
   webOrigin,
   databaseUrl,
   encryptionSecret,
+  speechEndpoint: (env?: EnvLookup) => readSpeechConfig(env).speechApiUrl,
   readServer: readServerConfig,
   readSpeech: readSpeechConfig,
 } as const;

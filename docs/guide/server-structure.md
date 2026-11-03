@@ -68,8 +68,6 @@ apps/server/
     │       ├── normalize.ts             # 录音/合成音频 FFmpeg 规整与临时文件生命周期
     │       ├── normalize.test.ts
     │       ├── command.ts               # 子进程执行与可执行文件查找
-    │       ├── speech-endpoint.ts       # 部署默认的语音服务地址
-    │       ├── speech-endpoint.test.ts
     │       ├── speaches-models.ts       # Speaches 模型与音色发现
     │       ├── speaches-models.test.ts
     │       └── voice-service-connection.ts # ASR/TTS 共用连接参数校验
@@ -462,7 +460,7 @@ graph LR
 音频能力按职责拆分为共享基础设施、ASR、TTS 与世界内语音协作四部分，依赖方向为 `world/chat → asr/tts → core/audio`，`tts` 不依赖 `asr`：
 
 - **共享音频基础设施（`core/audio/`）**：
-  `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；`normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行；`speech-endpoint.ts`、`speaches-models.ts` 与 `voice-service-connection.ts` 提供 ASR/TTS 共用的服务地址、Speaches 模型发现和连接参数校验。该目录只依赖 `core`。
+  `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；`normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行；`speaches-models.ts` 与 `voice-service-connection.ts` 提供 Speaches 模型发现和连接参数校验。默认语音服务地址统一由 `core/config/env.ts` 解析。该目录只依赖 `core`。
 - **ASR 模块（`modules/asr/`）**：
   `services/` 保留 `LocalSpeech` 的 Whisper 识别、`bridgeBailianAsr` 的百炼流式协议与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责 `AsrSettingsStore` 与数据库适配；`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权和 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
 - **TTS 模块（`modules/tts/`）**：

@@ -1,5 +1,5 @@
 import { AppError } from '../../../../core/errors/app-error';
-import { speechEndpoint } from '../../../../core/audio/speech-endpoint';
+import { env } from '../../../../core/config/env';
 import { DEFAULT_WHISPER_ASR, type WhisperAsrDraft } from '@voxel/shared';
 import { readWhisperTranscript } from '../../services/transcript';
 import {
@@ -21,7 +21,7 @@ export class WhisperAdapter implements BatchTranscriberPort {
   private busy = false;
 
   constructor(
-    private apiUrl = speechEndpoint(),
+    private apiUrl = env.speechEndpoint(),
     private fetcher: typeof fetch = fetch,
   ) {}
 

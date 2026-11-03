@@ -1,11 +1,11 @@
 import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import { speechEndpoint } from '../../../core/audio/speech-endpoint';
+import { env } from '../../../core/config/env';
 
 /** Read-only readiness checks; Docker startup owns model installation. */
 export class PiperModels {
   constructor(
-    private endpoint = speechEndpoint(),
+    private endpoint = env.speechEndpoint(),
     private request: typeof fetch = fetch,
   ) {}
   private async installed(signal?: AbortSignal): Promise<Set<string>> {

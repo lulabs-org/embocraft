@@ -34,8 +34,12 @@ describe('server assembly and lifecycle', () => {
     ])
       expect(() => env.readServer(testEnv)).toThrow();
     expect(
-      env.readSpeech({ SPEECH_API_URL: 'http://speech:8000/v1' }).speechApiUrl,
+      env.readSpeech({ SPEECH_API_URL: 'http://speech:8000/v1/' })
+        .speechApiUrl,
     ).toBe('http://speech:8000/v1');
+    expect(env.speechEndpoint({ SPEECH_API_URL: '  ' })).toBe(
+      'http://127.0.0.1:8000/v1',
+    );
   });
 
   it('preserves HTTP contracts and closes SSE, ASR, Gateway and world clients idempotently', async () => {
