@@ -121,10 +121,16 @@ it('restricts endpoints, models, and cross-region credential reuse', () => {
     'wss://workspace123.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference',
   );
   expect(() =>
-    validateBailianSettings({ ...draft, apiKey: '', region: 'singapore' }, draft),
+    validateBailianSettings(
+      { ...draft, apiKey: '', region: 'singapore' },
+      draft,
+    ),
   ).toThrow('重新填写');
   expect(() =>
-    validateBailianSettings({ ...draft, apiKey: '', workspaceId: 'other' }, draft),
+    validateBailianSettings(
+      { ...draft, apiKey: '', workspaceId: 'other' },
+      draft,
+    ),
   ).toThrow('重新填写');
   expect(() =>
     validateBailianSettings({ ...draft, workspaceId: 'example.com/path' }),
@@ -132,9 +138,9 @@ it('restricts endpoints, models, and cross-region credential reuse', () => {
   expect(() =>
     validateBailianSettings({ ...draft, apiKey: 'key\nheader' }),
   ).toThrow('格式');
-  expect(() => validateBailianSettings({ ...draft, model: 'qwen-tts' })).toThrow(
-    '模型',
-  );
+  expect(() =>
+    validateBailianSettings({ ...draft, model: 'qwen-tts' }),
+  ).toThrow('模型');
 });
 
 it('persists multiple Whisper parameter profiles alongside cloud profiles', async () => {

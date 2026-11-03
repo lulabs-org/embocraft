@@ -549,9 +549,12 @@ it('shares command receipts across management domains without adding receipts to
       });
       expect(conflict.status, path).toBe(409);
     }
-    const receipt = await fetch(server.httpUrl + '/console-sync/commands/' + id, {
-      headers,
-    });
+    const receipt = await fetch(
+      server.httpUrl + '/console-sync/commands/' + id,
+      {
+        headers,
+      },
+    );
     expect(await receipt.json()).toMatchObject({
       state: 'committed',
       result: { id: provider.id },

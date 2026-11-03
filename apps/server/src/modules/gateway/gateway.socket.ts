@@ -12,7 +12,17 @@ import { publicError } from '../../core/errors/public-error';
 import type { GatewayAuth } from './auth.service';
 import type { SocketRoutes } from '../../core/transport/socket-routes';
 
-/** The socket owns only notifications. Snapshots and all commands use authenticated HTTP. */
+/**
+ * WebSocket AI 角色控制台网关处理器
+ *
+ * AsyncAPI Channel: `/ai-characters/gateway`
+ * 文档与规范请参阅: `/asyncapi-docs` 及 `/asyncapi.json`
+ *
+ * - 认证要求: 连接后 5 秒内客户端须发送 `{ "type": "connect", "token": "<MANAGEMENT_BEARER_TOKEN>" }`
+ * - 消息交互:
+ *   - 服务端下行: ManagementFrame (connected, snapshot, changed, error)
+ *   - 写操作须通过鉴权的 HTTP 接口发起，长连接只接收通知
+ */
 export function gatewaySocket(
   events: ConsoleSyncEvents,
   auth: GatewayAuth,

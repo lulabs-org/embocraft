@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { validateAICharacter } from '../src/modules/ai-characters';
-import {
-  ModelCatalog,
-  validateProvider,
-} from '../src/modules/providers';
+import { ModelCatalog, validateProvider } from '../src/modules/providers';
 import {
   bootstrapProviders,
   MemoryProviderRepository,

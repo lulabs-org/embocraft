@@ -225,7 +225,10 @@ describe('BailianAdapter & bridgeBailianAsr', () => {
     'distinguishes network error %s from authentication failures',
     (code, hint) => {
       const t = setup();
-      t.upstream.emit('error', Object.assign(new Error('private-key'), { code }));
+      t.upstream.emit(
+        'error',
+        Object.assign(new Error('private-key'), { code }),
+      );
       expect(t.messages()[0].message).toContain(hint);
       expect(JSON.stringify(t.messages())).not.toContain('private-key');
       expect(t.client.close).toHaveBeenCalledOnce();

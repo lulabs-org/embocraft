@@ -37,14 +37,13 @@ describe('WhisperModelCatalog', () => {
   });
 
   it('helper listWhisperModels function works identically', async () => {
-    const mockFetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({ data: [] }),
-          { status: 200 },
+    const mockFetch = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ data: [] }), { status: 200 }),
         ),
-      ),
-    );
+      );
 
     const models = await listWhisperModels(
       { baseUrl: 'http://localhost:8000/v1' },

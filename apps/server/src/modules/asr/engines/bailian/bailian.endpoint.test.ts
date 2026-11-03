@@ -37,7 +37,9 @@ describe('bailian.endpoint', () => {
         region: 'singapore',
         workspaceId: 'my-space',
       }),
-    ).toBe('wss://my-space.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference');
+    ).toBe(
+      'wss://my-space.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference',
+    );
   });
 
   it('maps handshake failures to user-friendly messages', () => {

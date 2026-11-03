@@ -108,7 +108,9 @@ describe('DatabaseVoiceServicePersistence', () => {
 
     await persistence.save(services);
 
-    expect(deleteService).toHaveBeenCalledWith({ where: { id: 'old-service' } });
+    expect(deleteService).toHaveBeenCalledWith({
+      where: { id: 'old-service' },
+    });
     expect(upsertService).toHaveBeenCalledWith({
       where: { id: 'service-1' },
       create: {
@@ -146,7 +148,11 @@ describe('DatabaseVoiceServicePersistence', () => {
     } as unknown as PrismaClient;
 
     const persistence = new DatabaseVoiceServicePersistence(db);
-    await expect(persistence.load()).rejects.toThrow('无法读取语音服务数据库配置。');
-    await expect(persistence.save([])).rejects.toThrow('无法保存语音服务数据库配置。');
+    await expect(persistence.load()).rejects.toThrow(
+      '无法读取语音服务数据库配置。',
+    );
+    await expect(persistence.save([])).rejects.toThrow(
+      '无法保存语音服务数据库配置。',
+    );
   });
 });

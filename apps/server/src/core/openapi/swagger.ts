@@ -11,7 +11,8 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'EmboCraft API',
       version: '1.0.0',
-      description: 'API documentation for EmboCraft Server',
+      description:
+        'API documentation for EmboCraft Server. WebSocket 实时语音识别与控制台网关请参阅 [WebSocket AsyncAPI 文档](/asyncapi-docs)。',
     },
     servers: [{ url: '/', description: '当前服务器' }],
     tags: [

@@ -11,10 +11,15 @@ try {
   } else if (config.gateway.tokenFile) {
     console.log(`Agent Gateway 令牌文件 ${config.gateway.tokenFile}`);
   } else {
-    console.log('[开发模式] 未配置 AGENT_GATEWAY_TOKEN，Agent Gateway 已开启免密访问。');
+    console.log(
+      '[开发模式] 未配置 AGENT_GATEWAY_TOKEN，Agent Gateway 已开启免密访问。',
+    );
   }
   // 仅在本地开发模式且启用了 Token 时打印令牌值，方便直接粘贴到网页控制台解锁
-  if (!config.isProduction && (config.gateway.token || config.gateway.tokenFile)) {
+  if (
+    !config.isProduction &&
+    (config.gateway.token || config.gateway.tokenFile)
+  ) {
     try {
       const token =
         config.gateway.token?.trim() ||
@@ -24,17 +29,19 @@ try {
       if (token) {
         console.log(
           '[开发模式] 控制台管理员令牌：\n' +
-          `${token}\n` +
-          '获取方式亦可用：pnpm agent:ctl auth show',
+            `${token}\n` +
+            '获取方式亦可用：pnpm agent:ctl auth show',
         );
       }
     } catch {
       /* 令牌文件读取失败不影响服务启动，跳过打印。 */
     }
   }
-  console.log(`Voxel server ${url}`);
-  console.log(`Swagger UI   ${url}/api-docs`);
-  console.log(`OpenAPI JSON ${url}/api-docs.json`);
+  console.log(`Embocraft Server  ${url}`);
+  console.log(`Swagger UI        ${url}/api-docs`);
+  console.log(`OpenAPI JSON      ${url}/api-docs.json`);
+  console.log(`AsyncAPI UI       ${url}/asyncapi-docs`);
+  console.log(`AsyncAPI JSON     ${url}/asyncapi.json`);
   const stop = () => {
     void server
       .close()

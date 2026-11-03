@@ -9,7 +9,21 @@ import type { SocketRoutes } from '../../../core/transport/socket-routes';
 
 export type AsrBridge = Parameters<typeof createAsrSocket>[1];
 
-/** One server's ASR handler owns the concurrency limit and service references. */
+/**
+ * WebSocket 实时语音识别接口处理器
+ *
+ * AsyncAPI Channel: `/voice/asr/realtime`
+ * 文档与规范请参阅: `/asyncapi-docs` 及 `/asyncapi.json`
+ *
+ * - Query 参数:
+ *   - `language`: 'zh' | 'en' (必填)
+ *   - `serviceId`: 已保存的 ASR 服务配置 ID (必填)
+ * - Headers:
+ *   - `Origin`: 页面来源 (必须在白名单内)
+ * - 消息交互:
+ *   - 客户端上行: 16000Hz 16-bit 单声道 PCM 原始音频二进制流
+ *   - 服务端下行: AsrEvent JSON 格式 (ready, partial, final, finished, error)
+ */
 export function createAsrSocket(
   store: AsrSettingsStore,
   bridge = bridgeBailianAsr,

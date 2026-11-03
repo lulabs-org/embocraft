@@ -223,12 +223,7 @@ export class BailianAdapter implements StreamingAsrPort {
     private readonly connect: BailianWsConnector = defaultBailianConnector,
   ) {}
 
-  bridge(
-    client: WebSocket,
-    settings: BailianAsrDraft,
-    language: string,
-  ): void {
+  bridge(client: WebSocket, settings: BailianAsrDraft, language: string): void {
     bridgeBailianAsr(client, settings, language, this.connect);
   }
 }
-

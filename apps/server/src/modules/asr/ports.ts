@@ -41,11 +41,7 @@ export interface BatchTranscriberPort {
  */
 export interface StreamingAsrPort {
   readonly provider: 'bailian';
-  bridge(
-    client: WebSocket,
-    settings: BailianAsrDraft,
-    language: string,
-  ): void;
+  bridge(client: WebSocket, settings: BailianAsrDraft, language: string): void;
 }
 
 /**
