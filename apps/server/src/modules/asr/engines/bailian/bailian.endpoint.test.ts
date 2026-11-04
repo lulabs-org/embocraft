@@ -1,10 +1,7 @@
 import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { describe, expect, it } from 'vitest';
-import {
-  bailianAsrEndpoint,
-  connectionFailure,
-  handshakeFailure,
-} from './bailian.endpoint';
+import { bailianAsrEndpoint } from '../../domain';
+import { connectionFailure, handshakeFailure } from './bailian.endpoint';
 
 const draft = {
   ...DEFAULT_BAILIAN_ASR,

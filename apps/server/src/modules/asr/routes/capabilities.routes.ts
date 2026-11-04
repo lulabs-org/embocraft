@@ -4,13 +4,19 @@ import { env } from '../../../core/config/env';
 import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
+import type { AsrSettingsStore } from '../services/asr-settings-store';
 import { WhisperAdapter as LocalSpeech } from '../engines';
-import { PiperModels } from '../../tts';
+
+export type TtsStatusQuery = () => Promise<{
+  available: boolean;
+  reason: string;
+}>;
+
 export function installCapabilitiesRoutes(
   app: Express,
   speech = new LocalSpeech(),
   asrSettings: AsrSettingsStore,
+  ttsStatus: TtsStatusQuery,
   origin = env.webOrigin(),
 ) {
   app.use(
@@ -73,7 +79,7 @@ export function installCapabilitiesRoutes(
           local: await speech.status(
             selected?.provider === 'whisper' ? selected : undefined,
           ),
-          agentSpeech: await new PiperModels().status(),
+          agentSpeech: await ttsStatus(),
         });
       } catch (error) {
         res.status(error instanceof AppError ? error.status : 500).json({

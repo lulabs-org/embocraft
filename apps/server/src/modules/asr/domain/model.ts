@@ -1,11 +1,4 @@
-import type {
-  AsrAssignments,
-  AsrServiceDraft,
-  AsrServiceView,
-  AsrUse,
-  BailianAsrDraft,
-  WhisperAsrDraft,
-} from '@voxel/shared';
+import type { AsrServiceDraft, AsrServiceView, AsrUse } from '@voxel/shared';
 
 /** Supported usage scenarios for ASR service binding. */
 export const ASR_USES: readonly AsrUse[] = ['chat', 'spatial', 'clip'] as const;
@@ -30,12 +23,3 @@ export function toAsrServiceView({
   const { apiKey, ...settings } = value;
   return { ...settings, hasApiKey: !!apiKey };
 }
-
-export type {
-  AsrAssignments,
-  AsrServiceDraft,
-  AsrServiceView,
-  AsrUse,
-  BailianAsrDraft,
-  WhisperAsrDraft,
-};

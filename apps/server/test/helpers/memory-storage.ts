@@ -9,7 +9,7 @@ import type { ProviderRepository } from '../../src/modules/providers';
 import {
   AsrSettingsStore,
   type SavedService,
-} from '../../src/modules/asr/persistence/asr-settings-store';
+} from '../../src/modules/asr/services/asr-settings-store';
 import {
   VoiceServiceStore,
   type SavedVoice,

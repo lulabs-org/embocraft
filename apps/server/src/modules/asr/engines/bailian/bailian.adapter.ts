@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { AsrEvent, BailianAsrDraft } from '@voxel/shared';
+import { bailianAsrEndpoint } from '../../domain';
 import type { StreamingAsrPort } from '../../ports';
-import {
-  bailianAsrEndpoint,
-  connectionFailure,
-  handshakeFailure,
-} from './bailian.endpoint';
+import { connectionFailure, handshakeFailure } from './bailian.endpoint';
 
 export type BailianWsConnector = (url: string, key: string) => WebSocket;
 

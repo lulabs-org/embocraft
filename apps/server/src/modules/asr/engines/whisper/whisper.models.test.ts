@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { TestAsrSettingsStore } from '../../../../../test/helpers/memory-storage';
 import { WhisperModelCatalog, listWhisperModels } from './whisper.models';
 
 describe('WhisperModelCatalog', () => {
@@ -51,5 +52,32 @@ describe('WhisperModelCatalog', () => {
       mockFetch as unknown as typeof fetch,
     );
     expect(models).toEqual([]);
+  });
+
+  it('forwards cancellation through the store model discovery path', async () => {
+    const store = new TestAsrSettingsStore();
+    const controller = new AbortController();
+    const reason = new Error('discovery cancelled');
+    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(init.signal?.reason),
+            { once: true },
+          );
+        }),
+    );
+    try {
+      const result = store.models(
+        { baseUrl: 'http://speech:8000/v1' },
+        controller.signal,
+      );
+      expect(request).toHaveBeenCalledOnce();
+      controller.abort(reason);
+      await expect(result).rejects.toBe(reason);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
