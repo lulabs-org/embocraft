@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ChatStore } from './chat-store';
 import type { PrismaClient } from '@prisma/client';
+import * as database from '../../../core/database/client';
 
 describe('ChatStore', () => {
   it('records player and chat messages with recipients in db', async () => {
@@ -62,6 +63,11 @@ describe('ChatStore', () => {
   });
 
   it('handles gracefully when db is not provided', async () => {
+    const getClient = vi
+      .spyOn(database, 'getDatabaseClient')
+      .mockImplementation(() => {
+        throw new Error('database unavailable');
+      });
     const store = new ChatStore(undefined);
     expect(
       await store.recordPlayer({ name: 'Alice', kind: 'human' }),
@@ -74,5 +80,6 @@ describe('ChatStore', () => {
         text: 'Hello',
       }),
     ).resolves.not.toThrow();
+    getClient.mockRestore();
   });
 });

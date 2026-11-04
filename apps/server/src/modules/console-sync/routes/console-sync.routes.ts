@@ -1,14 +1,12 @@
-import type { Router } from 'express';
+import express, { type Router } from 'express';
 import { identifier } from '../../../core/http/validation';
 import type { ConsoleSyncCommands } from '../services/console-sync.service';
 
-/**
- * 注册控制台数据同步与命令回执查询路由
- */
-export function installConsoleSyncRoutes(
-  router: Router,
+/** 创建独立的控制台同步路由 Router 实例 */
+export function createConsoleSyncRouter(
   consoleSync: ConsoleSyncCommands,
-) {
+): Router {
+  const router = express.Router();
   /**
    * @openapi
    * /console-sync/commands/{id}:
@@ -65,4 +63,5 @@ export function installConsoleSyncRoutes(
     }
     res.json(consoleSync.get(req.params.id));
   });
+  return router;
 }

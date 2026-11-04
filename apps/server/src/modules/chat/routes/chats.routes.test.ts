@@ -9,7 +9,7 @@ import {
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import type { LocalSpeech } from '../../asr';
 import { WorldChat } from '../services/chat.service';
-import { installChatRoutes } from './chats.routes';
+import { createChatRouter } from './chats.routes';
 
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 
@@ -39,13 +39,14 @@ it('publishes confirmed external recognition only with the speaker’s live tick
   const token = chat.issue('speaker');
   const origin = 'http://127.0.0.1:5173';
   const app = express();
-  installChatRoutes(
-    app,
-    () => chat,
-    undefined,
-    undefined,
-    origin,
-    new TestAsrSettingsStore(),
+  app.use(
+    createChatRouter(
+      () => chat,
+      undefined,
+      undefined,
+      origin,
+      new TestAsrSettingsStore(),
+    ),
   );
   app.use(errorHandler());
   server = createServer(app);
@@ -135,7 +136,7 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   } as unknown as AsrSettingsStore;
   const app = express();
   const origin = 'http://127.0.0.1:5173';
-  installChatRoutes(app, () => chat, speech, undefined, origin, store);
+  app.use(createChatRouter(() => chat, speech, undefined, origin, store));
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

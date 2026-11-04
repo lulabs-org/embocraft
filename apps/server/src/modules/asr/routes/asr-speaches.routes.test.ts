@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
 import { expect, it, vi } from 'vitest';
 import { createTestServer } from '../../../../test/helpers/test-server';
-import { TestAsrSettingsStore } from '../../../../test/helpers/memory-storage';
 
 it('protects discovery, reuses saved keys only for the same endpoint, and never saves discovery drafts', async () => {
   const calls: string[] = [];
@@ -25,8 +24,8 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
     upstream.listen(0, '127.0.0.1', resolve),
   );
   const baseUrl = `http://127.0.0.1:${(upstream.address() as { port: number }).port}/v1`;
-  const voices = new TestAsrSettingsStore();
-  const server = await createTestServer({ asrSettings: voices });
+  const server = await createTestServer();
+  const voices = server.asrSettings;
   try {
     vi.stubEnv('SPEECH_API_URL', 'http://deployment-speech:8000/v1/');
     expect((await fetch(`${server.httpUrl}/voice/asr/defaults`)).status).toBe(
@@ -49,7 +48,7 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
       temperature: 0,
       prompt: '',
     });
-    const before = await voices.persistence.load();
+    const before = voices.list();
     const discover = (
       body: unknown,
       token = 'fixture-gateway-token-for-tests',
@@ -91,7 +90,7 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
       200,
     );
     expect(calls.at(-1)).toBe('Bearer new-draft-key');
-    expect(await voices.persistence.load()).toEqual(before);
+    expect(voices.list()).toEqual(before);
     expect(JSON.stringify(voices.list())).not.toContain('fixture-secret');
   } finally {
     vi.unstubAllEnvs();

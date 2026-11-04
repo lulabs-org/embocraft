@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { LocalSpeech } from '../src/modules/asr';
 import { PiperModels } from '../src/modules/tts/services/piper-models.service';
-import { MemoryArchive } from './helpers/memory-storage';
+import { DatabaseManagementArchive } from '../src/persistence/database-management-archive';
 import { createTestServer } from './helpers/test-server';
 
 const token = 'Bearer fixture-gateway-token-for-tests';
@@ -13,19 +13,18 @@ const headers = {
 };
 
 it('assembles public audio endpoints separately from protected management routes', async () => {
-  const speech = new LocalSpeech();
-  vi.spyOn(speech, 'status').mockResolvedValue({
+  vi.spyOn(LocalSpeech.prototype, 'status').mockResolvedValue({
     available: true,
     reason: 'fixture',
   });
   const transcribe = vi
-    .spyOn(speech, 'transcribe')
+    .spyOn(LocalSpeech.prototype, 'transcribe')
     .mockResolvedValue('fixture text');
   vi.spyOn(PiperModels.prototype, 'status').mockResolvedValue({
     available: false,
     reason: 'fixture',
   });
-  const server = await createTestServer({ origin, speech });
+  const server = await createTestServer({ origin });
   try {
     const capabilities = await fetch(server.httpUrl + '/voice/capabilities', {
       headers: { Origin: origin },
@@ -373,6 +372,7 @@ it('routes resource IDs and request bodies to their owning domain without old Ag
 
 it('keeps a stopped character provider until the character is removed', async () => {
   const server = await createTestServer({ origin });
+  await server.characters.flush();
   const changed = vi.fn();
   const off = server.characters.events.on(changed);
   const providerUrl = server.httpUrl + '/providers/deepseek';
@@ -473,27 +473,21 @@ it('returns one persisted result for concurrent HTTP commands and protects recei
 });
 
 it('does not acknowledge or publish an HTTP creation whose archive cannot be saved', async () => {
-  const session = vi.fn();
-  const archive = new MemoryArchive();
-  const server = await createTestServer({
-    origin,
-    archive,
-    agentDependencies: {
-      session,
-      model: () => ({}),
-    },
-  });
+  const server = await createTestServer({ origin });
   const changed = vi.fn();
   const off = server.characters.events.on(changed);
-  archive.saveError = new Error(`private storage failure: ${server.directory}`);
+  const failedSave = vi
+    .spyOn(DatabaseManagementArchive.prototype, 'save')
+    .mockRejectedValueOnce(
+      new Error(`private storage failure: ${server.directory}`),
+    );
   try {
     const response = await fetch(server.httpUrl + '/ai-characters', {
       method: 'POST',
       headers: { ...headers, 'Idempotency-Key': 'failed-create' },
-      body: JSON.stringify({ providerId: 'deepseek', name: 'Failure fixture' }),
+      body: JSON.stringify({ providerId: 'deepseek', name: 'Failure fixture', joinWorld: false }),
     });
     expect(response.status).toBe(500);
-    expect(session).not.toHaveBeenCalled();
     expect(changed).not.toHaveBeenCalled();
     expect(
       await (
@@ -509,7 +503,7 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
     expect(JSON.stringify(receipt)).not.toContain(server.directory);
   } finally {
     off();
-    archive.saveError = undefined;
+    failedSave.mockRestore();
     await server.close();
   }
 });

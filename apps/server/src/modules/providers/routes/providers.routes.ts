@@ -1,16 +1,14 @@
 import { ConsoleSyncCommands } from '../../console-sync';
-import type { Router } from 'express';
+import express, { type Router } from 'express';
 import type { ProviderService } from '../services/provider.service';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
-/**
- * 安装 Provider（模型提供商）相关 HTTP REST 路由
- */
-export function installProviderRoutes(
-  router: Router,
+/** 创建独立的 Provider 路由 Router 实例 */
+export function createProviderRouter(
   providers: ProviderService,
   consoleSync: ConsoleSyncCommands,
-) {
+): Router {
+  const router = express.Router();
   /**
    * @openapi
    * /providers:
@@ -176,4 +174,5 @@ export function installProviderRoutes(
       res.json(await providers.health(String(req.params.id)));
     }),
   );
+  return router;
 }

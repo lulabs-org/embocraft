@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
 import { LocalSpeech } from '../src/modules/asr';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
-import { installChatRoutes } from '../src/modules/chat/routes/chats.routes';
+import { createChatRouter } from '../src/modules/chat/routes/chats.routes';
 import { TestAsrSettingsStore } from './helpers/memory-storage';
 import {
   pcmWav,
@@ -72,13 +72,14 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
     );
   });
   const app = express();
-  installChatRoutes(
-    app,
-    () => chat,
-    new LocalSpeech('http://asr.test/v1', upstream),
-    undefined,
-    'http://127.0.0.1:5173',
-    new TestAsrSettingsStore(),
+  app.use(
+    createChatRouter(
+      () => chat,
+      new LocalSpeech('http://asr.test/v1', upstream),
+      undefined,
+      'http://127.0.0.1:5173',
+      new TestAsrSettingsStore(),
+    ),
   );
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

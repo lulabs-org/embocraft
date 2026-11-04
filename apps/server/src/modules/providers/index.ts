@@ -12,7 +12,7 @@ export type { SavedProvider } from './domain/model';
 export { validateProvider } from './domain/validation';
 export { DatabaseProviderRepository } from './persistence/database-repository';
 export type { ProviderRepository, ProviderRuntimePort } from './ports';
-export { installProviderRoutes } from './routes/providers.routes';
+export { createProviderRouter } from './routes/providers.routes';
 export {
   PROVIDERS_CHANGED,
   type ProviderChangedEvent,

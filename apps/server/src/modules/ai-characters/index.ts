@@ -37,6 +37,6 @@ export {
   type CharacterLogQueryOptions,
 } from './services/character-log.service';
 export {
-  installAICharacterRoutes,
+  createAICharacterRouter,
   type AICharacterRoutePort,
 } from './routes/ai-characters.routes';

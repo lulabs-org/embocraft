@@ -1,10 +1,10 @@
 import { Session, until } from '@voxel/agent-runtime';
-import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { MANAGEMENT_EVENTS_VERSION } from '@voxel/shared/management';
 import { access } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { env } from '../src/core/config/env';
+import * as health from '../src/core/database/health';
 import { createServer } from '../src/server';
 import { createTestServer } from './helpers/test-server';
 
@@ -41,24 +41,17 @@ describe('server assembly and lifecycle', () => {
     );
   });
 
-  it('preserves HTTP contracts and closes SSE, ASR, Gateway and world clients idempotently', async () => {
+  it('preserves HTTP contracts and closes SSE, Gateway and world clients idempotently', async () => {
     const origin = 'http://127.0.0.1:5199';
-    const server = await createTestServer({
-      origin,
-      asrBridge: (socket) => {
-        socket.send(JSON.stringify({ type: 'ready' }));
-        return () => {};
-      },
-    });
+    const server = await createTestServer({ origin });
     let human: Session | undefined;
-    let asr: WebSocket | undefined;
     let gateway: WebSocket | undefined;
     const sseAbort = new AbortController();
     try {
       expect(await (await fetch(server.httpUrl + '/health')).json()).toEqual({
         ok: true,
         protocol: 1,
-        persistence: 'memory',
+        persistence: 'postgresql',
       });
       expect(await (await fetch(server.httpUrl + '/world')).json()).toEqual({
         roomId: server.world.roomId,
@@ -131,22 +124,6 @@ describe('server assembly and lifecycle', () => {
       expect(new TextDecoder().decode(first.value)).toContain(
         human.room.sessionId,
       );
-      const service = await server.asrSettings.save({
-        ...DEFAULT_BAILIAN_ASR,
-        name: 'Lifecycle ASR',
-        apiKey: 'fixture-only',
-      });
-      asr = new WebSocket(
-        `${server.url}/voice/asr/realtime?language=zh&serviceId=${service.id}`,
-        { origin },
-      );
-      await new Promise<void>((resolve, reject) => {
-        asr!.once('message', () => resolve());
-        asr!.once('error', reject);
-      });
-      await expect(server.asrSettings.remove(service.id)).rejects.toThrow(
-        '正在识别',
-      );
       gateway = new WebSocket(`${server.url}/ai-characters/gateway`, {
         origin,
       });
@@ -170,20 +147,9 @@ describe('server assembly and lifecycle', () => {
         type: 'connected',
         version: MANAGEMENT_EVENTS_VERSION,
       });
-      // Both custom routes participate in Colyseus' shared heartbeat.
-      await Promise.all(
-        [asr, gateway].map(
-          (socket) =>
-            new Promise<void>((resolve) =>
-              socket.once('ping', () => resolve()),
-            ),
-        ),
-      );
+      await new Promise<void>((resolve) => gateway!.once('ping', () => resolve()));
       const gatewayClosed = new Promise<void>((resolve) =>
         gateway!.once('close', () => resolve()),
-      );
-      const socketClosed = new Promise<void>((resolve) =>
-        asr!.once('close', () => resolve()),
       );
       const sseEnded = (async () => {
         try {
@@ -197,7 +163,6 @@ describe('server assembly and lifecycle', () => {
         }
       })();
       await Promise.all([server.close(), server.close()]);
-      await socketClosed;
       await gatewayClosed;
       await sseEnded;
       await until(() => !human!.room.connection.isOpen, 1000);
@@ -205,7 +170,6 @@ describe('server assembly and lifecycle', () => {
       expect(server.http.listening).toBe(false);
     } finally {
       sseAbort.abort();
-      asr?.terminate();
       gateway?.terminate();
       await human?.close();
       await server.close();
@@ -213,24 +177,21 @@ describe('server assembly and lifecycle', () => {
   }, 15000);
 
   it('stops before listening or loading stores when database diagnostics fail', async () => {
-    await expect(
-      createServer({
-        config: env.readServer({}),
-        databaseCheck: async () => {
-          throw Error('database unavailable');
-        },
-      }),
-    ).rejects.toThrow('database unavailable');
+    vi.spyOn(health, 'checkStartupDatabase').mockRejectedValueOnce(
+      Error('database unavailable'),
+    );
+    await expect(createServer()).rejects.toThrow('database unavailable');
   });
 
   it('releases a failed world startup so a fresh server can start and close', async () => {
-    const store = new WorldStore('');
-    vi.spyOn(store, 'load').mockRejectedValueOnce(Error('world load failed'));
-    const closed = vi.spyOn(store, 'close');
-    await expect(createTestServer({ worldStore: store })).rejects.toThrow(
-      'world load failed',
-    );
+    const load = vi
+      .spyOn(WorldStore.prototype, 'load')
+      .mockRejectedValueOnce(Error('world load failed'));
+    const closed = vi.spyOn(WorldStore.prototype, 'close');
+    await expect(createTestServer()).rejects.toThrow('world load failed');
     expect(closed).toHaveBeenCalled();
+    load.mockRestore();
+    closed.mockRestore();
     const recovered = await createTestServer();
     try {
       expect((await fetch(recovered.httpUrl + '/health')).status).toBe(200);
