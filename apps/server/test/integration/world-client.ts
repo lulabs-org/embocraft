@@ -101,7 +101,7 @@ try {
         (v) => v.x === cell.x && v.y === cell.y && v.z === cell.z,
       ),
     );
-    assert.equal(fresh.snapshot?.persistence, 'memory');
+    assert.equal(fresh.snapshot?.persistence, 'postgresql');
   } finally {
     await fresh.close();
   }
