@@ -1,6 +1,6 @@
 export { WorldRoom } from './world.room';
 export { WorldStore } from './persistence/store';
 export {
-  installWorldRoutes,
-  installPresenceRoutes,
+  createWorldRouter,
+  createPresenceRouter,
 } from './routes/worlds.routes';

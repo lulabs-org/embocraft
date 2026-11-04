@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import { CommandRouter } from '../../../core/concurrency/command-router';
+import { taskCommandBody } from '../../tasks';
 
 /** Shared HTTP write receipts for console sync. Reads and event subscriptions never enter this queue. */
 export class ConsoleSyncCommands extends CommandRouter {
   constructor(
-    private receiptBody: (body: unknown) => unknown = (body) => body ?? {},
+    private receiptBody: (body: unknown) => unknown = taskCommandBody,
   ) {
     super();
   }

@@ -10,7 +10,6 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { env } from '../src/core/config';
 import { createDatabaseClient } from '../src/core/database/client';
 import {
   AICharacterManager,
@@ -203,15 +202,11 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   it('serves HTTP character reads from PostgreSQL while keeping uncommitted runtime changes private', async () => {
     await bootstrapProviders(new DatabaseProviderRepository(db!));
     const directory = await mkdtemp(join(tmpdir(), 'voxel-query-test-'));
-    const config = env.readServer({
-      DATABASE_URL: url!,
-      SERVER_PORT: '0',
-      SERVER_HOST: '127.0.0.1',
-      WEB_ORIGIN: 'http://world.test',
-      AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
-      AGENT_GATEWAY_TOKEN_FILE: join(directory, 'gateway-token'),
-    });
-    const server = await createServer({ config });
+    process.env.DATABASE_URL = url!;
+    process.env.SERVER_PORT = '0';
+    process.env.WEB_ORIGIN = 'http://world.test';
+    process.env.AGENT_GATEWAY_TOKEN = 'fixture-gateway-token-for-tests';
+    const server = await createServer();
     try {
       await server.listen();
       const base = server.httpUrl;
@@ -239,7 +234,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         return response.json();
       };
       expect(await get(path)).toEqual(original);
-      const job = server.characters.jobs.get(original.id)!;
+      const job = server._internals.characters.jobs.get(original.id)!;
       job.view.name = 'Unsaved runtime name';
       job.view.logEntries.push({ text: 'Unsaved runtime log', time: 1 });
       job.view.sessionId = 'live-connection';
@@ -287,7 +282,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         entries: [{ text: 'DB first', time: 100 }],
         total: 2,
       });
-      server.characters.events.publish('providers');
+      server._internals.characters.events.publish('providers');
       expect((await get(path)).resourceVersion).toBe(
         detail.resourceVersion + 1,
       );
@@ -1276,38 +1271,34 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
 
   it('starts from an empty database and restores saved state through the production server assembly', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'voxel-database-test-'));
-    const config = env.readServer({
-      DATABASE_URL: url!,
-      SERVER_PORT: '0',
-      SERVER_HOST: '127.0.0.1',
-      WEB_ORIGIN: 'http://127.0.0.1:5173',
-      AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
-      AGENT_GATEWAY_TOKEN_FILE: join(directory, 'gateway-token'),
-    });
+    process.env.DATABASE_URL = url!;
+    process.env.SERVER_PORT = '0';
+    process.env.WEB_ORIGIN = 'http://127.0.0.1:5173';
+    process.env.AGENT_GATEWAY_TOKEN = 'fixture-gateway-token-for-tests';
     let server: Awaited<ReturnType<typeof createServer>> | undefined;
     try {
       await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
-      server = await createServer({ config });
+      server = await createServer();
       await server.listen();
       expect(await new CharacterQueries(db!).list()).toEqual([]);
-      expect(server.providers.list()).toHaveLength(0);
-      expect(server.voiceServices.list().map((service) => service.id)).toEqual([
+      expect(server._internals.providers.list()).toHaveLength(0);
+      expect(server._internals.voiceServices.list().map((service) => service.id)).toEqual([
         'local-default',
       ]);
-      expect(server.asrSettings.list()).toEqual([]);
-      await server.providers.save(
+      expect(server._internals.asrSettings.list()).toEqual([]);
+      await server._internals.providers.save(
         { name: 'Ollama', type: 'ollama', defaultModel: 'qwen2.5:3b' },
         'ollama',
       );
-      const revision = server.characters.storageRevision;
-      const created = server.characters.create({
+      const revision = server._internals.characters.storageRevision;
+      const created = server._internals.characters.create({
         name: 'Database Agent',
         providerId: 'ollama',
         joinWorld: false,
         voiceReplies: true,
         voiceServiceId: 'local-default',
       });
-      await server.characters.flush(revision);
+      await server._internals.characters.flush(revision);
       await server.close();
       // Persisted references protect a voice even while the server is offline.
       await expect(db!.ttsProvider.deleteMany()).rejects.toThrow();
@@ -1316,11 +1307,11 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         data: { voiceReplies: false, voiceServiceId: null },
       });
       await db!.ttsProvider.deleteMany();
-      server = await createServer({ config });
+      server = await createServer();
       await server.listen();
-      expect(server.providers.list()).toHaveLength(1);
-      expect(server.voiceServices.list()).toEqual([]);
-      expect(server.asrSettings.list()).toEqual([]);
+      expect(server._internals.providers.list()).toHaveLength(1);
+      expect(server._internals.voiceServices.list()).toEqual([]);
+      expect(server._internals.asrSettings.list()).toEqual([]);
       expect(await new CharacterQueries(db!).list()).toEqual([
         expect.objectContaining({
           id: created.id,

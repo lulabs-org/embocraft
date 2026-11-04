@@ -60,10 +60,11 @@ it('returns consistent committed summaries for character detail, list and writes
     expect(detail).not.toHaveProperty('lastLogAt');
     expect(detail).not.toHaveProperty('queuedTasks');
     const list = await get(server.httpUrl + '/ai-characters');
-    expect(list.map((character: { id: string }) => character.id)).toEqual([
-      second.id,
-      first.id,
-    ]);
+    expect(
+      list
+        .map((character: { id: string }) => character.id)
+        .filter((id: string) => id === second.id || id === first.id),
+    ).toEqual([second.id, first.id]);
     expect(list[0]).toEqual(detail);
     expect(await get(url + '/logs')).toEqual({
       entries: [

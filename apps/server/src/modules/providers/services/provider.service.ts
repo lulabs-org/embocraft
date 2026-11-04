@@ -1,7 +1,7 @@
 import { AppError } from '../../../core/errors/app-error';
-import type { ModelCatalog } from '../adapters/model-catalog';
-import type { ProviderHealthChecker } from '../adapters/health-checker';
-import type { ProviderRepository } from '../ports';
+import { ModelCatalog } from '../adapters/model-catalog';
+import { ProviderHealthChecker } from '../adapters/health-checker';
+import type { ProviderRepository, ProviderRuntimePort } from '../ports';
 
 export const PROVIDERS_CHANGED = 'providers.changed' as const;
 
@@ -14,16 +14,23 @@ export type ProviderEventPublisher = (event: ProviderChangedEvent) => void;
 
 /** Coordinates provider writes and their cross-module reference rule. */
 export class ProviderService {
+  private readonly catalog: Pick<ModelCatalog, 'models'>;
+  private readonly healthChecker: Pick<ProviderHealthChecker, 'check'>;
+
   constructor(
     private readonly store: Pick<
       ProviderRepository,
       'list' | 'save' | 'remove'
     >,
-    private readonly catalog: Pick<ModelCatalog, 'models'>,
-    private readonly hasCharacterReference: (id: string) => boolean,
-    private readonly changed: ProviderEventPublisher,
-    private readonly healthChecker: Pick<ProviderHealthChecker, 'check'>,
-  ) {}
+    catalog?: Pick<ModelCatalog, 'models'>,
+    private readonly hasCharacterReference: (id: string) => boolean = () => false,
+    private readonly changed: ProviderEventPublisher = () => {},
+    healthChecker?: Pick<ProviderHealthChecker, 'check'>,
+  ) {
+    this.catalog = catalog ?? new ModelCatalog(store as unknown as ProviderRuntimePort);
+    this.healthChecker =
+      healthChecker ?? new ProviderHealthChecker(store as unknown as ProviderRuntimePort);
+  }
 
   list() {
     return this.store.list();

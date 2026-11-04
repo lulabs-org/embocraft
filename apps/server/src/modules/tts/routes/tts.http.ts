@@ -1,4 +1,4 @@
-import type { Express, RequestHandler } from 'express';
+import express, { type Router, type RequestHandler } from 'express';
 import { createManagementRouter } from '../../../core/http/middleware/management-policy';
 import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { installVoiceServiceRoutes } from './voice-services.routes';
@@ -9,19 +9,21 @@ export type TtsRouteDependencies = {
   removeVoiceService: (id: string) => Promise<unknown>;
 };
 
-/** TTS HTTP composition; Agent voice bindings are checked by the injected callback. */
-export function installTtsHttp(app: Express, deps: TtsRouteDependencies) {
-  app.use(
+/** 创建独立的 TTS 路由 Router 实例 */
+export function createTtsRouter(deps: TtsRouteDependencies): Router {
+  const router = express.Router();
+  router.use(
     createManagementRouter(
       '/voice/tts',
       deps.authenticateManagement,
-      (router) => {
+      (management) => {
         installVoiceServiceRoutes(
-          router,
+          management,
           () => deps.voiceServices,
           deps.removeVoiceService,
         );
       },
     ),
   );
+  return router;
 }

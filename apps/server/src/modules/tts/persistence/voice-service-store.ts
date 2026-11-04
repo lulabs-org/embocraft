@@ -1,4 +1,4 @@
-import type { VoiceServiceDraft, VoiceServiceView } from '@voxel/shared';
+import type { VoiceServiceView } from '@voxel/shared';
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
@@ -7,12 +7,17 @@ import { SpeachesModels } from '../../../core/audio/speaches-models';
 import { PiperTts } from '../services/piper.service';
 import { RemoteTts } from '../services/remote.service';
 import type { SpeechSynthesizer } from '../services/speech-synthesizer';
+import { DatabaseVoiceServicePersistence } from './database-voice-services';
+import type {
+  SavedVoice,
+  VoiceServicePersistence,
+} from './voice-service-types';
 
-export type SavedVoice = VoiceServiceDraft & { id: string };
-export interface VoiceServicePersistence {
-  load(): Promise<SavedVoice[] | undefined>;
-  save(values: SavedVoice[]): Promise<void>;
-}
+export type {
+  SavedVoice,
+  VoiceServicePersistence,
+} from './voice-service-types';
+
 const publicView = ({ apiKey, ...value }: SavedVoice): VoiceServiceView => ({
   ...value,
   capability: 'tts',
@@ -100,7 +105,7 @@ export class VoiceServiceStore {
   private listeners = new Set<(actor: string) => void>();
   private running = 0;
   constructor(
-    private readonly storage: VoiceServicePersistence,
+    private readonly storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
     private factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
       value.type === 'speaches' ? new PiperTts(value) : new RemoteTts(value),
   ) {}

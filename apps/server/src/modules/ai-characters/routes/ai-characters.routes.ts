@@ -1,5 +1,5 @@
 import { ConsoleSyncCommands } from '../../console-sync';
-import type { Request, Router } from 'express';
+import express, { type Request, type Router } from 'express';
 import type { AICharacterOrchestrator } from '../services/orchestrator.service';
 import { CharacterLogService } from '../services/character-log.service';
 import type {
@@ -23,16 +23,14 @@ export type AICharacterRoutePort = Pick<
   | 'update'
 > & { readonly events: Pick<AICharacterOrchestrator['events'], 'version'> };
 
-/**
- * 安装 AI 角色基础配置与生命周期控制相关 HTTP REST 路由
- */
-export function installAICharacterRoutes(
-  router: Router,
+/** 创建独立的 AI 角色路由 Router 实例 */
+export function createAICharacterRouter(
   manager: AICharacterRoutePort,
   consoleSync: ConsoleSyncCommands,
   queries: CharacterQueryPort,
   logService: CharacterLogService = new CharacterLogService(queries),
-) {
+): Router {
+  const router = express.Router();
   const { events } = manager;
   const response = (character: CharacterDetail, resourceVersion: number) => ({
     ...character,
@@ -368,4 +366,5 @@ export function installAICharacterRoutes(
       res.json(result);
     }),
   );
+  return router;
 }

@@ -1,7 +1,7 @@
 import cors from 'cors';
+import express, { type Router } from 'express';
 import { env } from '../../../core/config/env';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import type { Router } from 'express';
 import type { WorldPresence } from '@voxel/shared';
 
 /**
@@ -24,36 +24,37 @@ import type { WorldPresence } from '@voxel/shared';
  *                   type: string
  *                   example: 4xK9pL2
  */
-export function installWorldRoutes(router: Router, getRoomId: () => string) {
+export function createWorldRouter(getRoomId: () => string): Router {
+  const router = express.Router();
   router.get('/world', (_req, res) => res.json({ roomId: getRoomId() }));
+  return router;
 }
 
-/** Read-only world presence. Viewing the lobby never reserves a player seat. */
-export function installPresenceRoutes(
-  router: Router,
+/**
+ * @openapi
+ * /world/presence:
+ *   get:
+ *     summary: 世界状态 SSE 长连接
+ *     description: 监听世界的在线玩家与在线状态 (Server-Sent Events)
+ *     tags:
+ *       - World
+ *     responses:
+ *       200:
+ *         description: 实时 SSE 事件流
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *       403:
+ *         description: Origin 不受信任
+ *       503:
+ *         description: 世界服务未就绪
+ */
+export function createPresenceRouter(
   read: () => WorldPresence | undefined,
   allowed = env.webOrigin(),
-) {
-  /**
-   * @openapi
-   * /world/presence:
-   *   get:
-   *     summary: 世界状态 SSE 长连接
-   *     description: 监听世界的在线玩家与在线状态 (Server-Sent Events)
-   *     tags:
-   *       - World
-   *     responses:
-   *       200:
-   *         description: 实时 SSE 事件流
-   *         content:
-   *           text/event-stream:
-   *             schema:
-   *               type: string
-   *       403:
-   *         description: Origin 不受信任
-   *       503:
-   *         description: 世界服务未就绪
-   */
+): Router {
+  const router = express.Router();
   router.get(
     '/world/presence',
     createOriginGuard({ origin: allowed, required: false }),
@@ -85,4 +86,5 @@ export function installPresenceRoutes(
       send();
     },
   );
+  return router;
 }

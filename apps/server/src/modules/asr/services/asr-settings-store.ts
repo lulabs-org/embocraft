@@ -1,6 +1,7 @@
 import { type AsrAssignments, type AsrUse } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { listWhisperModels } from '../engines/whisper/whisper.models';
+import { DatabaseAsrServicePersistence } from '../persistence/database-asr-services';
 import type { AsrRepositoryPort } from '../ports';
 import {
   ASR_USES,
@@ -17,7 +18,9 @@ export class AsrSettingsStore {
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
-  constructor(private readonly storage: AsrRepositoryPort) {}
+  constructor(
+    private readonly storage: AsrRepositoryPort = new DatabaseAsrServicePersistence(),
+  ) {}
   async load() {
     const saved = await this.storage.load();
     if (

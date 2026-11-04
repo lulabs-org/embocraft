@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import type {
   SavedVoice,
   VoiceServicePersistence,
-} from './voice-service-store';
+} from './voice-service-types';
 
 /** Persists TTS definitions; live bindings and synthesis stay in VoiceServiceStore. */
 export class DatabaseVoiceServicePersistence

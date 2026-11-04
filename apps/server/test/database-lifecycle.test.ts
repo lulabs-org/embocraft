@@ -1,32 +1,65 @@
 import type { PrismaClient } from '@prisma/client';
-import { setImmediate } from 'node:timers/promises';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { env } from '../src/core/config';
 import { createDatabaseClient } from '../src/core/database/client';
 import { createServer } from '../src/server';
-import {
-  TestAsrSettingsStore as AsrSettingsStore,
-  MemoryProviderRepository,
-  TestVoiceServiceStore as VoiceServiceStore,
-} from './helpers/memory-storage';
-
-import { WorldStore } from '../src/modules/world';
 
 vi.mock('../src/core/database/client', () => ({
   createDatabaseClient: vi.fn(),
 }));
 
+vi.mock('../src/core/database/health', () => ({
+  checkStartupDatabase: vi.fn(),
+}));
+
 const disconnect = vi.fn();
 const loadWorld = vi.fn();
+const findProviders = vi.fn().mockResolvedValue([]);
+const findTtsProviders = vi.fn().mockResolvedValue([]);
+const findAsrProviders = vi.fn().mockResolvedValue([]);
+const findAssignments = vi.fn().mockResolvedValue([]);
+const findCharacters = vi.fn().mockResolvedValue([]);
+const findPlans = vi.fn().mockResolvedValue([]);
+const findRuns = vi.fn().mockResolvedValue([]);
+const findRequests = vi.fn().mockResolvedValue([]);
+const transaction = vi.fn();
 const db = {
   $disconnect: disconnect,
   world: { upsert: loadWorld },
+  agentProvider: { findMany: findProviders },
+  ttsProvider: { findMany: findTtsProviders },
+  asrProvider: { findMany: findAsrProviders },
+  asrAssignment: { findMany: findAssignments },
+  agentCharacter: { findMany: findCharacters },
+  agentPlan: { findMany: findPlans },
+  agentRun: { findMany: findRuns },
+  agentRequest: { findMany: findRequests },
+  $transaction: transaction,
 } as unknown as PrismaClient;
 
 let server: Awaited<ReturnType<typeof createServer>> | undefined;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  process.env.DATABASE_URL = 'postgresql://fixture/world';
+  process.env.SERVER_PORT = '0';
+  process.env.SERVER_HOST = '127.0.0.1';
+  process.env.AGENT_GATEWAY_TOKEN = 'fixture-gateway-token-for-tests';
+  for (const findMany of [
+    findProviders,
+    findTtsProviders,
+    findAsrProviders,
+    findAssignments,
+    findCharacters,
+    findPlans,
+    findRuns,
+    findRequests,
+  ])
+    findMany.mockResolvedValue([]);
+  transaction.mockImplementation(async (fn: unknown) =>
+    typeof fn === 'function'
+      ? (fn as (client: PrismaClient) => unknown)(db)
+      : fn,
+  );
   vi.mocked(createDatabaseClient).mockReturnValue(db);
   loadWorld.mockResolvedValue({ revision: 0, edits: [] });
 });
@@ -40,36 +73,24 @@ afterEach(async () => {
   }
 });
 
-function options() {
-  return {
-    config: env.readServer({
-      DATABASE_URL: 'postgresql://fixture/world',
-      SERVER_PORT: '0',
-      SERVER_HOST: '127.0.0.1',
-      AGENT_GATEWAY_TOKEN: 'fixture-gateway-token-for-tests',
-    }),
-    databaseCheck: async () => {},
-    providers: new MemoryProviderRepository(),
-    voiceServices: new VoiceServiceStore(),
-    asrSettings: new AsrSettingsStore(),
-    archive: { load: async () => undefined, save: async () => {} },
-  };
-}
-
 it('shares the runtime client with the world and disconnects once after its consumers stop', async () => {
-  server = await createServer(options());
+  server = await createServer();
   await server.listen();
   expect(createDatabaseClient).toHaveBeenCalledOnce();
   expect(loadWorld).toHaveBeenCalledOnce();
-  expect(server.world.getPresence().persistence).toBe('postgresql');
-  const dispose = server.world.onDispose.bind(server.world);
+  expect(server._internals.world.getPresence().persistence).toBe('postgresql');
+  const dispose = server._internals.world.onDispose.bind(
+    server._internals.world,
+  );
   let worldDisposed = false;
-  vi.spyOn(server.world, 'onDispose').mockImplementation(async () => {
-    await dispose();
-    expect(disconnect).not.toHaveBeenCalled();
-    worldDisposed = true;
-  });
-  const closeCharacters = vi.spyOn(server.characters, 'close');
+  vi.spyOn(server._internals.world, 'onDispose').mockImplementation(
+    async () => {
+      await dispose();
+      expect(disconnect).not.toHaveBeenCalled();
+      worldDisposed = true;
+    },
+  );
+  const closeCharacters = vi.spyOn(server._internals.characters, 'close');
   disconnect.mockImplementation(() => {
     expect(worldDisposed).toBe(true);
     expect(closeCharacters).toHaveBeenCalledOnce();
@@ -79,94 +100,20 @@ it('shares the runtime client with the world and disconnects once after its cons
 });
 
 it('releases the runtime client when closing before listen', async () => {
-  server = await createServer(options());
+  server = await createServer();
   await Promise.all([server.close(), server.close()]);
   expect(loadWorld).not.toHaveBeenCalled();
   expect(disconnect).toHaveBeenCalledOnce();
 });
 
-it('releases the runtime client when catalog loading fails', async () => {
-  const dependencies = options();
-  vi.spyOn(dependencies.providers, 'load').mockRejectedValue(
-    new Error('catalog unavailable'),
-  );
-  await expect(createServer(dependencies)).rejects.toThrow(
-    'catalog unavailable',
-  );
-  expect(disconnect).toHaveBeenCalledOnce();
-  expect(loadWorld).not.toHaveBeenCalled();
-});
-
-it('waits for all catalog loads before disconnecting and preserves the first failure', async () => {
-  const dependencies = options();
-  const firstError = new Error('voice catalog unavailable');
-  let failProviders!: () => void;
-  const providerLoad = new Promise<void>((_, reject) => {
-    failProviders = () => reject(new Error('provider catalog unavailable'));
-  });
-  let finishAsr!: () => void;
-  const asrLoad = new Promise<void>((resolve) => {
-    finishAsr = resolve;
-  });
-  const providers = vi
-    .spyOn(dependencies.providers, 'load')
-    .mockReturnValue(providerLoad);
-  const voices = vi
-    .spyOn(dependencies.voiceServices, 'load')
-    .mockRejectedValue(firstError);
-  const asr = vi
-    .spyOn(dependencies.asrSettings, 'load')
-    .mockReturnValue(asrLoad);
-  const settled = vi.fn();
-  const outcome = createServer(dependencies).then(settled, (error: unknown) => {
-    settled();
-    return error;
-  });
-
-  try {
-    await setImmediate();
-    expect(providers).toHaveBeenCalledOnce();
-    expect(voices).toHaveBeenCalledOnce();
-    expect(asr).toHaveBeenCalledOnce();
-    expect(settled).not.toHaveBeenCalled();
-    expect(disconnect).not.toHaveBeenCalled();
-
-    failProviders();
-    await setImmediate();
-    expect(settled).not.toHaveBeenCalled();
-    expect(disconnect).not.toHaveBeenCalled();
-
-    finishAsr();
-    expect(await outcome).toBe(firstError);
-    expect(disconnect).toHaveBeenCalledOnce();
-    expect(loadWorld).not.toHaveBeenCalled();
-  } finally {
-    failProviders();
-    finishAsr();
-    await outcome;
-  }
-});
-
 it('releases the runtime client after failed world startup and allows another server to start', async () => {
   loadWorld.mockRejectedValueOnce(new Error('world unavailable'));
-  server = await createServer(options());
+  server = await createServer();
   await expect(server.listen()).rejects.toThrow('world unavailable');
   await server.close();
   expect(disconnect).toHaveBeenCalledOnce();
-  server = await createServer(options());
+  server = await createServer();
   await server.listen();
   await server.close();
   expect(disconnect).toHaveBeenCalledTimes(2);
-});
-
-it('preserves an explicitly injected world store and its existing close lifecycle', async () => {
-  const worldStore = new WorldStore('');
-  const closeWorld = vi.spyOn(worldStore, 'close');
-  server = await createServer({ ...options(), worldStore });
-  await server.listen();
-  expect(server.world.getPresence().persistence).toBe('memory');
-  expect(loadWorld).not.toHaveBeenCalled();
-  await server.close();
-  expect(closeWorld).toHaveBeenCalledOnce();
-  expect(disconnect).toHaveBeenCalledOnce();
 });

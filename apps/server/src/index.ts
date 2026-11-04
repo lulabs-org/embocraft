@@ -4,8 +4,9 @@ import { createServer } from './server';
 
 try {
   const config = env.load();
-  const server = await createServer({ config });
+  const server = await createServer();
   const { httpUrl: url } = await server.listen();
+
   if (config.gateway.token) {
     console.log('Agent Gateway 使用 AGENT_GATEWAY_TOKEN');
   } else if (config.gateway.tokenFile) {
@@ -29,8 +30,8 @@ try {
       if (token) {
         console.log(
           '[开发模式] 控制台管理员令牌：\n' +
-            `${token}\n` +
-            '获取方式亦可用：pnpm agent:ctl auth show',
+          `${token}\n` +
+          '获取方式亦可用：pnpm agent:ctl auth show',
         );
       }
     } catch {

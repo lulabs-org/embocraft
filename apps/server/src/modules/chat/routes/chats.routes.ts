@@ -39,14 +39,15 @@ function parseChatRoute(query: express.Request['query']) {
   };
 }
 
-export function installChatRoutes(
-  router: Router,
+/** 创建独立的 Chat 路由 Router 实例 */
+export function createChatRouter(
   getChat: () => WorldChat | undefined,
   speech = new LocalSpeech(),
   getAgentSpeech: () => AgentSpeechClips | undefined = () => undefined,
   origin = env.webOrigin(),
   asrSettings: AsrSettingsStore,
-) {
+): Router {
+  const router = express.Router();
   const speechService = new ChatSpeechService(speech, asrSettings);
   router.use(
     '/chat',
@@ -451,4 +452,5 @@ export function installChatRoutes(
       },
     })),
   );
+  return router;
 }

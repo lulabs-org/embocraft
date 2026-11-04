@@ -1,6 +1,7 @@
-import type { Express, RequestHandler } from 'express';
+import express, { type Router, type RequestHandler } from 'express';
 import type { AsrSettingsStore } from '../services/asr-settings-store';
 import type { WhisperAdapter as LocalSpeech } from '../engines';
+import { PiperModels } from '../../tts';
 import { installAsrRoutes } from './asr.routes';
 import { installTranscribeRoutes } from './transcribe.routes';
 import {
@@ -13,27 +14,30 @@ export type AsrRouteDependencies = {
   authenticateManagement: RequestHandler;
   speech: LocalSpeech;
   asrSettings: AsrSettingsStore;
-  ttsStatus: TtsStatusQuery;
+  ttsStatus?: TtsStatusQuery;
 };
 
-/** ASR HTTP composition; stores and cross-domain operations belong to the caller. */
-export function installAsrHttp(app: Express, deps: AsrRouteDependencies) {
-  app.use(
+/** 创建独立的 ASR 路由 Router 实例 */
+export function createAsrRouter(deps: AsrRouteDependencies): Router {
+  const router = express.Router();
+  router.use(
     ['/voice/asr/services', '/voice/asr/defaults', '/voice/asr/models'],
     deps.authenticateManagement,
   );
-  app.use('/voice/asr/assignments', (req, res, next) => {
+  router.use('/voice/asr/assignments', (req, res, next) => {
     if (req.method === 'GET') next();
     else deps.authenticateManagement(req, res, next);
   });
 
+  const ttsStatus = deps.ttsStatus ?? (() => new PiperModels().status());
   installCapabilitiesRoutes(
-    app,
+    router,
     deps.speech,
     deps.asrSettings,
-    deps.ttsStatus,
+    ttsStatus,
     deps.origin,
   );
-  installTranscribeRoutes(app, deps.speech, deps.asrSettings, deps.origin);
-  installAsrRoutes(app, deps.asrSettings, deps.origin, true);
+  installTranscribeRoutes(router, deps.speech, deps.asrSettings, deps.origin);
+  installAsrRoutes(router, deps.asrSettings, deps.origin, true);
+  return router;
 }

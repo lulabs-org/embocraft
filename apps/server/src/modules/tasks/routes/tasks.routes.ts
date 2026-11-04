@@ -1,4 +1,4 @@
-import type { Request, Router } from 'express';
+import express, { type Request, type Router } from 'express';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import type { TaskPort } from '../ports';
@@ -25,14 +25,12 @@ function queryText(value: unknown): string | undefined {
   return typeof value === 'string' && value ? value : undefined;
 }
 
-/**
- * 安装 Task / Plan（任务计划与运行历史）相关 HTTP REST 路由
- */
-export function installTaskRoutes(
-  router: Router,
+/** 创建独立的 Task / Plan 路由 Router 实例 */
+export function createTaskRouter(
   tasks: TaskPort,
   consoleSync: CommandExecutor,
-) {
+): Router {
+  const router = express.Router();
   // ---------------------------------------------------------------------------
   // 任务计划与执行运行的 HTTP 适配
   // ---------------------------------------------------------------------------
@@ -588,4 +586,5 @@ export function installTaskRoutes(
       res.json(result);
     }),
   );
+  return router;
 }

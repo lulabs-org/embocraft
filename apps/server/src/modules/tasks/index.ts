@@ -2,7 +2,7 @@
 export type { TaskPort } from './ports';
 
 // 2. HTTP 路由
-export { installTaskRoutes } from './routes/tasks.routes';
+export { createTaskRouter } from './routes/tasks.routes';
 export { taskCommandBody } from './domain/command-policy';
 
 // 3. 仓储与内存存储服务

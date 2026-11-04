@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import type { WorldPresence } from '@voxel/shared';
-import { installPresenceRoutes } from './worlds.routes.ts';
+import { createPresenceRouter } from './worlds.routes.ts';
 
 describe('read-only world presence stream', () => {
   let server: Server, url: string, state: WorldPresence | undefined;
@@ -31,7 +31,7 @@ describe('read-only world presence stream', () => {
     };
     read.mockClear();
     const app = express();
-    installPresenceRoutes(app, read);
+    app.use(createPresenceRouter(read));
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
