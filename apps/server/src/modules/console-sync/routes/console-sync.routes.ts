@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+import type { Router } from 'express';
 import { identifier } from '../../../core/http/validation';
 import type { ConsoleSyncCommands } from '../services/console-sync.service';
 
@@ -6,7 +6,7 @@ import type { ConsoleSyncCommands } from '../services/console-sync.service';
  * 注册控制台数据同步与命令回执查询路由
  */
 export function installConsoleSyncRoutes(
-  app: Express,
+  router: Router,
   consoleSync: ConsoleSyncCommands,
 ) {
   /**
@@ -58,7 +58,7 @@ export function installConsoleSyncRoutes(
    *       403:
    *         $ref: '#/components/responses/Management403'
    */
-  app.get('/console-sync/commands/:id', (req, res) => {
+  router.get('/console-sync/commands/:id', (req, res) => {
     if (!identifier(req.params.id)) {
       res.status(400).json({ error: '命令标识无效。' });
       return;

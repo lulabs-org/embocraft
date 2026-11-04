@@ -1,4 +1,4 @@
-import type { Express, Request } from 'express';
+import type { Request, Router } from 'express';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import type { TaskPort } from '../ports';
@@ -29,7 +29,7 @@ function queryText(value: unknown): string | undefined {
  * 安装 Task / Plan（任务计划与运行历史）相关 HTTP REST 路由
  */
 export function installTaskRoutes(
-  app: Express,
+  router: Router,
   tasks: TaskPort,
   consoleSync: CommandExecutor,
 ) {
@@ -99,7 +99,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.get(
+  router.get(
     '/tasks',
     route((req, res) => {
       const offset = queryText(req.query.offset);
@@ -151,7 +151,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.get(
+  router.get(
     '/tasks/:planId',
     route((req, res) => {
       res.json(tasks.publicPlan(String(req.params.planId)));
@@ -200,7 +200,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.post(
+  router.post(
     '/tasks',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'plans', (commandId) =>
@@ -256,7 +256,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.put(
+  router.put(
     '/tasks/:planId',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'plans', () =>
@@ -307,7 +307,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.delete(
+  router.delete(
     '/tasks/:planId',
     route(async (req, res) => {
       await consoleSync.execute(req, 'plans', () =>
@@ -370,7 +370,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.post(
+  router.post(
     '/tasks/:planId/reassign',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'plans', () =>
@@ -430,7 +430,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.get(
+  router.get(
     '/tasks/:planId/runs',
     route((req, res) => {
       const result = tasks.publicRuns(
@@ -504,7 +504,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.post(
+  router.post(
     '/tasks/:planId/:operation',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'plans', (commandId) =>
@@ -574,7 +574,7 @@ export function installTaskRoutes(
    *       '415':
    *         $ref: '#/components/responses/Management415'
    */
-  app.post(
+  router.post(
     '/task-runs/:runId/:operation',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'plans', () =>

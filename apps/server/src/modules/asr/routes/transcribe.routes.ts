@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express, { type Express } from 'express';
+import express, { type Router } from 'express';
 import { env } from '../../../core/config/env';
 import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
@@ -10,12 +10,12 @@ import { WhisperAdapter as LocalSpeech } from '../engines';
 import { scheduleSpeech } from '../services/speech-scheduler.service';
 import { MAX_AUDIO_BYTES } from '../../../core/audio/normalize';
 export function installTranscribeRoutes(
-  app: Express,
+  router: Router,
   speech = new LocalSpeech(),
   asrSettings: AsrSettingsStore,
   origin = env.webOrigin(),
 ) {
-  app.use(
+  router.use(
     '/voice/transcribe',
     createOriginGuard({
       origin,
@@ -78,7 +78,7 @@ export function installTranscribeRoutes(
    *                 text:
    *                   type: string
    */
-  app.post(
+  router.post(
     '/voice/transcribe',
     express.raw({ type: () => true, limit: MAX_AUDIO_BYTES }),
     asyncRoute(async (req, res) => {
@@ -122,7 +122,7 @@ export function installTranscribeRoutes(
       }
     }),
   );
-  app.use(
+  router.use(
     '/voice/transcribe',
     errorHandler((error) => ({
       status:

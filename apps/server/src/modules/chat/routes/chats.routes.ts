@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express, { type Express } from 'express';
+import express, { type Router } from 'express';
 import { env } from '../../../core/config/env';
 import {
   asyncAbortableRoute,
@@ -40,7 +40,7 @@ function parseChatRoute(query: express.Request['query']) {
 }
 
 export function installChatRoutes(
-  app: Express,
+  router: Router,
   getChat: () => WorldChat | undefined,
   speech = new LocalSpeech(),
   getAgentSpeech: () => AgentSpeechClips | undefined = () => undefined,
@@ -48,7 +48,7 @@ export function installChatRoutes(
   asrSettings: AsrSettingsStore,
 ) {
   const speechService = new ChatSpeechService(speech, asrSettings);
-  app.use(
+  router.use(
     '/chat',
     createOriginGuard({
       origin,
@@ -119,7 +119,7 @@ export function installChatRoutes(
    *       201:
    *         description: 发布成功，返回消息详情
    */
-  app.post(
+  router.post(
     '/chat/audio',
     rawAudio,
     asyncAbortableRoute(async (req, res, signal) => {
@@ -159,7 +159,7 @@ export function installChatRoutes(
    *                 id:
    *                   type: string
    */
-  app.post('/chat/spatial/start', (_req, res, next) => {
+  router.post('/chat/spatial/start', (_req, res, next) => {
     try {
       res.json({
         id: (res.locals.chat as WorldChat).beginSpatial(res.locals.actor),
@@ -188,7 +188,7 @@ export function installChatRoutes(
    *       204:
    *         description: 已成功结束
    */
-  app.delete('/chat/spatial/:id', (req, res) => {
+  router.delete('/chat/spatial/:id', (req, res) => {
     (res.locals.chat as WorldChat).endSpatial(
       res.locals.actor,
       String(req.params.id),
@@ -258,7 +258,7 @@ export function installChatRoutes(
    *       409:
    *         description: 麦克风已关闭，或语音流已过期、取消或处理过
    */
-  app.post(
+  router.post(
     '/chat/spatial/:id/text',
     express.json({ limit: '2kb' }),
     (req, res, next) => {
@@ -333,7 +333,7 @@ export function installChatRoutes(
    *       200:
    *         description: 实时转录部分结果
    */
-  app.post(
+  router.post(
     ['/chat/spatial/:id', '/chat/spatial/:id/preview'],
     rawAudio,
     asyncAbortableRoute(async (req, res, signal) => {
@@ -382,7 +382,7 @@ export function installChatRoutes(
    *               type: string
    *               format: binary
    */
-  app.get('/chat/agent-speech/:id', (req, res, next) => {
+  router.get('/chat/agent-speech/:id', (req, res, next) => {
     try {
       const service = getAgentSpeech();
       if (!service) throw new AppError('Agent 语音服务未就绪。', 503);
@@ -418,7 +418,7 @@ export function installChatRoutes(
    *               type: string
    *               format: binary
    */
-  app.get('/chat/audio/:id', (req, res, next) => {
+  router.get('/chat/audio/:id', (req, res, next) => {
     try {
       res
         .type('audio/wav')
@@ -432,7 +432,7 @@ export function installChatRoutes(
       next(e);
     }
   });
-  app.use(
+  router.use(
     '/chat',
     errorHandler((e) => ({
       status:

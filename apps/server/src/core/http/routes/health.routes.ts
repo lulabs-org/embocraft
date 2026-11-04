@@ -1,5 +1,5 @@
 import { env, type ServerConfig } from '../../config/env';
-import type { Express } from 'express';
+import type { Router } from 'express';
 
 export type HealthConfig = Pick<ServerConfig, 'databaseUrl'>;
 
@@ -30,10 +30,10 @@ export type HealthConfig = Pick<ServerConfig, 'databaseUrl'>;
  *                   example: memory
  */
 export function installHealthRoutes(
-  app: Express,
+  router: Router,
   config: HealthConfig = env.readServer(),
 ) {
-  app.get('/health', (_req, res) =>
+  router.get('/health', (_req, res) =>
     res.json({
       ok: true,
       protocol: 1,

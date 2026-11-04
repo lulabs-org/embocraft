@@ -1,5 +1,5 @@
 import { ConsoleSyncCommands } from '../../console-sync';
-import type { Express, Request } from 'express';
+import type { Request, Router } from 'express';
 import type { AICharacterOrchestrator } from '../services/orchestrator.service';
 import { CharacterLogService } from '../services/character-log.service';
 import type {
@@ -27,7 +27,7 @@ export type AICharacterRoutePort = Pick<
  * 安装 AI 角色基础配置与生命周期控制相关 HTTP REST 路由
  */
 export function installAICharacterRoutes(
-  app: Express,
+  router: Router,
   manager: AICharacterRoutePort,
   consoleSync: ConsoleSyncCommands,
   queries: CharacterQueryPort,
@@ -45,8 +45,9 @@ export function installAICharacterRoutes(
       req,
       req.method === 'DELETE' ? 'plans' : String(req.params.id ?? 'registry'),
       async () => {
+        const path = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
         manager.assertWritable(
-          ['stop'].includes(String(req.path.split('/').at(-1))) ||
+          ['stop'].includes(String(path.split('/').at(-1))) ||
             req.method === 'DELETE'
             ? undefined
             : req.params.id,
@@ -84,7 +85,7 @@ export function installAICharacterRoutes(
    *               items:
    *                 $ref: '#/components/schemas/AICharacterView'
    */
-  app.get(
+  router.get(
     '/ai-characters',
     route(async (_req, res) => {
       const version = events.version;
@@ -115,7 +116,7 @@ export function installAICharacterRoutes(
    *       404:
    *         description: AI 角色不存在
    */
-  app.get(
+  router.get(
     '/ai-characters/:id',
     route(async (req, res) => {
       // Capture before the async read: a concurrent commit must not be stamped as seen.
@@ -160,7 +161,7 @@ export function installAICharacterRoutes(
    *       404:
    *         description: AI 角色不存在
    */
-  app.get(
+  router.get(
     '/ai-characters/:id/logs',
     route(async (req, res) => {
       const body = await logService.getLogsPage(String(req.params.id), {
@@ -193,7 +194,7 @@ export function installAICharacterRoutes(
    *       400:
    *         description: 参数无效或包含任务参数，请使用 Tasks
    */
-  app.post(
+  router.post(
     '/ai-characters',
     route(async (req, res) => {
       const result = await write(req, () => manager.create(req.body));
@@ -229,7 +230,7 @@ export function installAICharacterRoutes(
    *       400:
    *         description: 参数无效或包含任务参数，请使用 Tasks
    */
-  app.put(
+  router.put(
     '/ai-characters/:id',
     route(async (req, res) => {
       const result = await write(req, () =>
@@ -261,7 +262,7 @@ export function installAICharacterRoutes(
    *       409:
    *         description: AI 角色正在更新
    */
-  app.delete(
+  router.delete(
     '/ai-characters/:id',
     route(async (req, res) => {
       await write(req, () => manager.remove(String(req.params.id)));
@@ -288,7 +289,7 @@ export function installAICharacterRoutes(
    *       200:
    *         description: 加入成功
    */
-  app.post(
+  router.post(
     '/ai-characters/:id/join',
     route(async (req, res) => {
       const id = String(req.params.id);
@@ -320,7 +321,7 @@ export function installAICharacterRoutes(
    *       200:
    *         description: 停止成功
    */
-  app.post(
+  router.post(
     '/ai-characters/:id/stop',
     route(async (req, res) => {
       const id = String(req.params.id);
@@ -358,7 +359,7 @@ export function installAICharacterRoutes(
    *       200:
    *         description: 音色设置成功
    */
-  app.post(
+  router.post(
     '/ai-characters/:id/voice',
     route(async (req, res) => {
       const result = await write(req, () =>

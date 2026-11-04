@@ -87,7 +87,7 @@ function assertDocumentedRoutes(files: string[], paths: RoutePaths) {
         ts.isCallExpression(node) &&
         ts.isPropertyAccessExpression(node.expression) &&
         ts.isIdentifier(node.expression.expression) &&
-        node.expression.expression.text === 'app' &&
+        ['app', 'router'].includes(node.expression.expression.text) &&
         ['get', 'post', 'put', 'patch', 'delete'].includes(
           node.expression.name.text,
         )

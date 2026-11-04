@@ -6,7 +6,10 @@ import {
   installHealthRoutes,
   type HealthConfig,
 } from './core/http/routes/health.routes';
-import { ManagementScope } from './core/http/middleware/management-policy';
+import {
+  DEFAULT_MANAGEMENT_PATHS,
+  createManagementRouter,
+} from './core/http/middleware/management-policy';
 import {
   ConsoleSyncCommands,
   installConsoleSyncRoutes,
@@ -66,21 +69,23 @@ export function createApp(deps: AppDependencies) {
   installHealthRoutes(app, deps.health);
   // 控制台数据同步与命令并发队列
   const consoleSync = new ConsoleSyncCommands(taskCommandBody);
-  const managementScope = new ManagementScope(
-    app,
-    ['/ai-characters', '/providers', '/tasks', '/task-runs', '/console-sync'],
-    deps.management.authenticate,
+  app.use(
+    createManagementRouter(
+      DEFAULT_MANAGEMENT_PATHS,
+      deps.management.authenticate,
+      (router) => {
+        installAICharacterRoutes(
+          router,
+          deps.management.characters,
+          consoleSync,
+          deps.management.characterQueries,
+        );
+        installProviderRoutes(router, deps.management.providers, consoleSync);
+        installTaskRoutes(router, deps.management.tasks, consoleSync);
+        installConsoleSyncRoutes(router, consoleSync);
+      },
+    ),
   );
-  installAICharacterRoutes(
-    app,
-    deps.management.characters,
-    consoleSync,
-    deps.management.characterQueries,
-  );
-  installProviderRoutes(app, deps.management.providers, consoleSync);
-  installTaskRoutes(app, deps.management.tasks, consoleSync);
-  installConsoleSyncRoutes(app, consoleSync);
-  managementScope.close();
   installAsrHttp(app, {
     ...deps.asr,
     origin: deps.origin,
@@ -88,6 +93,7 @@ export function createApp(deps: AppDependencies) {
   });
   installTtsHttp(app, deps.tts);
   installWorldRoutes(app, deps.world.roomId);
+  installPresenceRoutes(app, deps.world.presence, deps.origin);
   installChatRoutes(
     app,
     deps.chat.getChat,
@@ -96,7 +102,6 @@ export function createApp(deps: AppDependencies) {
     deps.origin,
     deps.asr.asrSettings,
   );
-  installPresenceRoutes(app, deps.world.presence, deps.origin);
   app.use(errorHandler());
   return app;
 }

@@ -1,7 +1,7 @@
 import cors from 'cors';
 import { env } from '../../../core/config/env';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import type { Express } from 'express';
+import type { Router } from 'express';
 import type { WorldPresence } from '@voxel/shared';
 
 /**
@@ -24,13 +24,13 @@ import type { WorldPresence } from '@voxel/shared';
  *                   type: string
  *                   example: 4xK9pL2
  */
-export function installWorldRoutes(app: Express, getRoomId: () => string) {
-  app.get('/world', (_req, res) => res.json({ roomId: getRoomId() }));
+export function installWorldRoutes(router: Router, getRoomId: () => string) {
+  router.get('/world', (_req, res) => res.json({ roomId: getRoomId() }));
 }
 
 /** Read-only world presence. Viewing the lobby never reserves a player seat. */
 export function installPresenceRoutes(
-  app: Express,
+  router: Router,
   read: () => WorldPresence | undefined,
   allowed = env.webOrigin(),
 ) {
@@ -54,7 +54,7 @@ export function installPresenceRoutes(
    *       503:
    *         description: 世界服务未就绪
    */
-  app.get(
+  router.get(
     '/world/presence',
     createOriginGuard({ origin: allowed, required: false }),
     cors({ origin: true }),

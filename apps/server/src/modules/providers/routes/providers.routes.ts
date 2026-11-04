@@ -1,5 +1,5 @@
 import { ConsoleSyncCommands } from '../../console-sync';
-import type { Express } from 'express';
+import type { Router } from 'express';
 import type { ProviderService } from '../services/provider.service';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
@@ -7,7 +7,7 @@ import { asyncRoute as route } from '../../../core/http/middleware/async-route';
  * 安装 Provider（模型提供商）相关 HTTP REST 路由
  */
 export function installProviderRoutes(
-  app: Express,
+  router: Router,
   providers: ProviderService,
   consoleSync: ConsoleSyncCommands,
 ) {
@@ -24,7 +24,7 @@ export function installProviderRoutes(
    *       200:
    *         description: 提供商配置列表
    */
-  app.get(
+  router.get(
     '/providers',
     route((_req, res) => {
       res.json(providers.list());
@@ -50,7 +50,7 @@ export function installProviderRoutes(
    *       201:
    *         description: 创建成功
    */
-  app.post(
+  router.post(
     '/providers',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'providers', () =>
@@ -85,7 +85,7 @@ export function installProviderRoutes(
    *       200:
    *         description: 更新成功
    */
-  app.put(
+  router.put(
     '/providers/:id',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'providers', () =>
@@ -114,7 +114,7 @@ export function installProviderRoutes(
    *       204:
    *         description: 删除成功
    */
-  app.delete(
+  router.delete(
     '/providers/:id',
     route(async (req, res) => {
       await consoleSync.execute(req, 'providers', () =>
@@ -143,7 +143,7 @@ export function installProviderRoutes(
    *       200:
    *         description: 可用模型列表
    */
-  app.get(
+  router.get(
     '/providers/:id/models',
     route(async (req, res) => {
       const models = await providers.models(String(req.params.id));
@@ -170,7 +170,7 @@ export function installProviderRoutes(
    *       200:
    *         description: 连通性与模型列表能力
    */
-  app.get(
+  router.get(
     '/providers/:id/health',
     route(async (req, res) => {
       res.json(await providers.health(String(req.params.id)));
