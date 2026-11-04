@@ -31,8 +31,8 @@ export class TaskService {
     this.policy().assertCurrent(lease);
   }
 
-  authorize(authority: TaskAuthority) {
-    this.policy().authorize(authority);
+  authorize(authority: TaskAuthority, command?: TaskCommand) {
+    this.policy().authorize(authority, command);
   }
 
   command(

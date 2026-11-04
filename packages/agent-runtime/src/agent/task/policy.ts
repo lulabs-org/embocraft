@@ -10,7 +10,7 @@ import type {
   TaskOutcome,
 } from '../../contracts/task';
 import { checkBudgetCap } from './budget';
-import { isEndedTask, newTask } from './state';
+import { isEndedTask, isExpiredPrivateTask, newTask } from './state';
 
 /** All task state changes use the same policy, independent of models and transports. */
 export class TaskPolicy {
@@ -46,8 +46,13 @@ export class TaskPolicy {
       throw new AgentRuntimeError('任务已修改，忽略过期执行结果。', true);
   }
 
-  authorize(authority: TaskAuthority) {
+  private canReplaceExpiredPrivateTask(command?: TaskCommand) {
+    return command?.type === 'start' && isExpiredPrivateTask(this.memory);
+  }
+
+  authorize(authority: TaskAuthority, command?: TaskCommand) {
     if (authority.kind === 'operator') return;
+    if (this.canReplaceExpiredPrivateTask(command)) return;
     const task = this.memory.task.current;
     const message = authority.message;
     const privateTo =
@@ -69,7 +74,7 @@ export class TaskPolicy {
     authority: TaskAuthority,
     config: AgentConfig,
   ): AICharacterTask {
-    this.authorize(authority);
+    this.authorize(authority, command);
     const memory = this.memory;
     let task = memory.task.current;
     if (command.type === 'start' || command.type === 'revise') {
@@ -77,7 +82,7 @@ export class TaskPolicy {
         throw new AgentRuntimeError('任务目标无效。');
     }
     if (command.type === 'start') {
-      if (!isEndedTask(task))
+      if (!isEndedTask(task) && !this.canReplaceExpiredPrivateTask(command))
         throw new AgentRuntimeError(
           '已有正在执行或未结束的任务，请修改或取消原任务。',
         );

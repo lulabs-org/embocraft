@@ -134,6 +134,21 @@ it('validates the player and agent, streams audio, delegates requests and releas
   await t.store.remove(t.service.id);
   expect(t.provider.close).toHaveBeenCalledOnce();
 });
+it('delegates recent speech at the requested timeline position instead of the whole conversation', async () => {
+  const t = await setup(),
+    socket = t.connect();
+  socket.message({ type: 'start', token: 'valid', agentId: 'agent' });
+  t.events.ready();
+  t.events.transcript('human', '旧对话'.repeat(100), {
+    startMs: 0,
+    endMs: 1000,
+  });
+  t.events.transcript('human', '请跟着我', { startMs: 20000, endMs: 21000 });
+  t.events.transcript('human', '后面的话', { startMs: 22000, endMs: 22500 });
+  t.events.delegation('follow', undefined, 21500);
+  expect(t.delegated).toHaveBeenCalledWith('请跟着我', expect.any(AbortSignal));
+  socket.close();
+});
 it('groups spoken replies into chat messages and flushes on interruption or stop', async () => {
   const t = await setup(),
     socket = t.connect();

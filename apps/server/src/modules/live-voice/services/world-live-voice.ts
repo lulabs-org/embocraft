@@ -57,7 +57,7 @@ export function authorizeWorldLiveVoice(
     `你是在游戏世界中的 Agent 玩家，名字是 ${JSON.stringify(character.name)}。`,
     `角色设定：${character.roleDescription || '与附近玩家友好交流。'}`,
     `正在与你对话的玩家是 ${JSON.stringify(actor.name)}。你的位置是 (${Math.round(agent.x)}, ${Math.round(agent.y)}, ${Math.round(agent.z)})。`,
-    '需要查看世界、执行行动或处理游戏任务时，委托游戏 Agent；只根据实际返回结果描述行动，不得声称未执行的任务已经完成。',
+    '玩家要求跟随、移动或其他世界行动时，立即委托游戏 Agent，包含玩家的原始请求；不要要求玩家另外创建任务。委托结果可能只是聊天回复，不是动作已开始或完成的证明。只根据明确的执行结果描述行动；结果不明确时如实说明正在确认。',
   ].join('\n');
   const delegate = (request: string, signal: AbortSignal) =>
     new Promise<string>((resolve, reject) => {
@@ -90,7 +90,10 @@ export function authorizeWorldLiveVoice(
           !valid()
         )
           return false;
-        finish(undefined, data.text);
+        finish(
+          undefined,
+          `游戏 Agent 的文字回复：${data.text}\n这条回复本身不是动作已启动或完成的确认；如无明确的工具结果，不要声称正在跟随或已经完成。`,
+        );
         return true;
       });
       try {

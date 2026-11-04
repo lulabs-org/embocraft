@@ -55,10 +55,13 @@ export class TurnBinding {
     return !this.expected || this.service.current(this.expected);
   }
 
-  authorize() {
+  authorize(command?: TaskCommand) {
     if (this.expected) this.service.assertCurrent(this.expected);
     if (this.message)
-      this.service.authorize({ kind: 'player', message: this.message });
+      this.service.authorize(
+        { kind: 'player', message: this.message },
+        command,
+      );
   }
 
   attach() {

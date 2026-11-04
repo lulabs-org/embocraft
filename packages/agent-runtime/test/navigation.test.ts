@@ -119,6 +119,67 @@ it('follows across host wakes with no extra model calls, hysteresis, pause/resum
   });
 });
 
+it('replaces an expired private task and physically follows the new requesting player', async () => {
+  const w = navigationWorld();
+  const player = {
+    ...w.observe().self,
+    id: 'human',
+    kind: 'human' as const,
+    x: 4,
+  };
+  w.players([player]);
+  const memory = emptyState();
+  memory.execution.task.current = {
+    ...newTask('旧任务', 'old', 'old'),
+    status: 'needs_input',
+  };
+  memory.execution.conversation.audienceExpired = true;
+  const attention = new AgentAttention();
+  attention.push(
+    {
+      seq: 1,
+      at: Date.now(),
+      type: 'chat',
+      actor: 'human',
+      actorKind: 'human',
+      data: {
+        scope: 'private',
+        recipients: [w.observe().self.id],
+        name: 'Player',
+        kind: 'text',
+        text: '跟着我',
+      },
+    },
+    w.observe().self.id,
+  );
+  const calls = [
+    [{ name: 'follow', arguments: { playerId: 'human', distance: 1.5 } }],
+  ];
+  const request = vi.fn<typeof fetch>(async () =>
+    toolResponse(calls.shift() ?? []),
+  );
+  const runner = new AgentRunner(undefined, request);
+  const config = { ...testAgentConfig(), maxTurns: 20, taskTimeoutMs: 60000 };
+  const run = () =>
+    runner.run({
+      session: w.session,
+      config,
+      signal: signal(),
+      memory,
+      attention,
+    });
+  await physics(w, async () => {
+    await run();
+    expect(memory.execution.effects.follow?.action.playerId).toBe('human');
+    for (let i = 0; i < 4; i++) await run();
+    expect(Math.abs(w.body.x - player.x)).toBeLessThanOrEqual(1.5);
+    player.x = 7;
+    w.players([player]);
+    for (let i = 0; i < 5; i++) await run();
+    expect(Math.abs(w.body.x - player.x)).toBeLessThanOrEqual(1.5);
+  });
+});
+
 it('runs come-here through native tools and only completes after observed arrival', async () => {
   const w = navigationWorld();
   for (let z = -1; z <= 1; z++) for (let y = 3; y <= 5; y++) w.put(2, y, z);

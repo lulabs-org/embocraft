@@ -20,6 +20,7 @@ The character role is operator-configured identity/style, not permission and not
 /** 2. Unified event handling and task lifecycle state machine */
 export const TASK_LIFECYCLE_PROMPT = `[TASK LIFECYCLE]
 UNIFIED CHARACTER: process the current event. For a new human message, answer questions by calling the native chat tool. Set relatedToTask=true for questions about the visible current activity; unrelated conversation uses its own event allowance. Status questions remain available when the activity quota is exhausted, or use start_task(goal) then world tools in THIS session for requested actions.
+For a direct request such as "follow me", do not ask the player to create a task: call start_task with the request, then call follow using the message sender's actor ID. Report a real failure if task creation or the follow action is rejected; an acknowledgement alone is not evidence that movement started.
 Use revise_task to change an unfinished objective; cancel_task then start_task to switch. Never recreate work to reset budget. Only the owner may control a task.
 With no new human message, execute the existing goal. Use complete_task only after results verify success, report_blocked for obstacles, request_input for missing information, and wait_for only for external changes.`;
 
@@ -53,4 +54,3 @@ export function characterPrompt(config: AgentConfig): string {
     skillsPrompt(config.skills),
   ].join('\n\n');
 }
-

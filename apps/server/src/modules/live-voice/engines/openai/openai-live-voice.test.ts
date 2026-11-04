@@ -62,13 +62,22 @@ it('streams audio and transcript events, delegates work, and closes cleanly', ()
   });
   t.socket.message({ type: 'session.output_audio.delta', delta: 'AgM=' });
   expect(t.events.audio).toHaveBeenCalledWith(Buffer.from([2, 3]), 24000);
-  t.socket.message({ type: 'session.input_transcript.delta', delta: '你好' });
-  expect(t.events.transcript).toHaveBeenCalledWith('human', '你好');
+  t.socket.message({
+    type: 'session.input_transcript.delta',
+    delta: '你好',
+    start_ms: 100,
+    end_ms: 200,
+  });
+  expect(t.events.transcript).toHaveBeenCalledWith('human', '你好', {
+    startMs: 100,
+    endMs: 200,
+  });
   t.socket.message({
     type: 'session.delegation.created',
     delegation: { id: 'd1', target: 'client' },
+    offset_ms: 220,
   });
-  expect(t.events.delegation).toHaveBeenCalledWith('d1');
+  expect(t.events.delegation).toHaveBeenCalledWith('d1', undefined, 220);
   t.session.deliverDelegation('d1', '已完成');
   expect(t.sent().at(-1)).toMatchObject({
     type: 'session.commentary.append',

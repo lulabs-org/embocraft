@@ -3,9 +3,13 @@ export type LiveVoiceEvents = {
   ready(): void;
   audio(pcm: Buffer, sampleRate: number): void;
   interrupted(): void;
-  transcript(speaker: 'human' | 'agent', text: string): void;
+  transcript(
+    speaker: 'human' | 'agent',
+    text: string,
+    timing?: { startMs: number; endMs: number },
+  ): void;
   transcriptEnd(): void;
-  delegation(id: string, request?: string): void;
+  delegation(id: string, request?: string, offsetMs?: number): void;
   cancelDelegation(id: string): void;
   error(message: string): void;
   closed(): void;

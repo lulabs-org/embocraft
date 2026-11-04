@@ -4,6 +4,7 @@ import { emptyState } from '../../contracts/state';
 import { TaskPolicy } from './policy';
 import { TaskService } from './service';
 import { newTask } from './state';
+import type { WorldEvent } from '@voxel/shared';
 
 const operator = { kind: 'operator' as const };
 const config = testAgentConfig();
@@ -44,6 +45,97 @@ function previousState() {
 }
 
 describe('task execution lifecycle', () => {
+  it('allows a new player request to replace only an expired private task, preserving its archived snapshot', async () => {
+    const memory = previousState();
+    memory.execution.task.current = {
+      ...newTask('old', 'old-session', 'old-session'),
+      status: 'needs_input',
+      tokens: 234,
+    };
+    memory.execution.conversation.audienceExpired = true;
+    const service = new TaskService(memory);
+    const message = {
+      actor: 'new-session',
+      data: {
+        scope: 'private',
+        recipients: ['agent'],
+        kind: 'text',
+        name: 'Player',
+        text: '跟着我',
+      },
+    } as WorldEvent;
+    const authority = { kind: 'player' as const, message };
+    const before = structuredClone(memory);
+    expect(() => service.authorize(authority)).toThrow('发起者');
+    expect(() =>
+      service.command({ type: 'resume' }, authority, config),
+    ).toThrow('发起者');
+    let archived: typeof memory | undefined;
+    await service.commit(
+      { type: 'start', goal: '跟随玩家' },
+      authority,
+      config,
+      async () => {},
+      undefined,
+      async (_task, previous) => {
+        archived = previous;
+      },
+    );
+    expect(archived).toEqual(before);
+    expect(memory.execution.task.current).toMatchObject({
+      goal: '跟随玩家',
+      owner: 'new-session',
+      privateTo: 'new-session',
+      tokens: 0,
+    });
+    expect(memory.execution.conversation.audienceExpired).toBeUndefined();
+    expect(memory.character.usage).toEqual(before.character.usage);
+  });
+
+  it('does not allow a different player to replace an unexpired private task', () => {
+    const memory = previousState();
+    memory.execution.task.current = {
+      ...newTask('old', 'old-session', 'old-session'),
+      status: 'needs_input',
+    };
+    delete memory.execution.conversation.audienceExpired;
+    const message = {
+      actor: 'new-session',
+      data: { scope: 'private' },
+    } as WorldEvent;
+    expect(() =>
+      new TaskService(memory).command(
+        { type: 'start', goal: 'follow' },
+        { kind: 'player', message },
+        config,
+      ),
+    ).toThrow('发起者');
+  });
+
+  it('restores the expired task if replacement cannot be persisted', async () => {
+    const memory = previousState();
+    memory.execution.task.current = {
+      ...newTask('old', 'old-session', 'old-session'),
+      status: 'needs_input',
+    };
+    memory.execution.conversation.audienceExpired = true;
+    const before = structuredClone(memory);
+    const message = {
+      actor: 'new-session',
+      data: { scope: 'private' },
+    } as WorldEvent;
+    await expect(
+      new TaskService(memory).commit(
+        { type: 'start', goal: 'follow' },
+        { kind: 'player', message },
+        config,
+        async () => {
+          throw Error('save failed');
+        },
+      ),
+    ).rejects.toThrow('检查点');
+    expect(memory).toEqual(before);
+  });
   it('retains live partition references while leasing and controlling an existing execution', () => {
     const memory = previousState();
     memory.execution.task.current!.status = 'running';

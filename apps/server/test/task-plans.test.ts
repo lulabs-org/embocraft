@@ -503,6 +503,58 @@ it('records chat execution without creating plans and rejects replacement of act
   expect(manager.plans.runs[0].task?.owner).toBe('owner');
 });
 
+it('archives an expired private task before a new player starts another task after restart', async () => {
+  const id = await role();
+  const message = (actor: string, seq: number): WorldEvent => ({
+    seq,
+    actor,
+    actorKind: 'human',
+    type: 'chat',
+    at: now,
+    data: {
+      scope: 'private',
+      recipients: ['fixture-player'],
+      text: '跟着我',
+      kind: 'text',
+      name: 'Player',
+    },
+  });
+  decide.mockImplementation(async () => [
+    { name: 'start_task', arguments: { goal: '旧请求' } },
+    { name: 'wait_for', arguments: { condition: 'players', reason: '等待' } },
+  ]);
+  currentSession.onEvent!(message('old-session', 1));
+  await vi.waitFor(() => expect(manager.plans.runs).toHaveLength(1));
+  await idle();
+  const originalId = manager.plans.runs[0].id;
+  await manager.close();
+  now += 10000;
+  manager = build();
+  await manager.load();
+  await idle();
+  expect(manager.list()[0].taskRequiresReassignment).toBe(true);
+  decide.mockImplementation(async () => [
+    { name: 'start_task', arguments: { goal: '跟随新玩家' } },
+    { name: 'wait_for', arguments: { condition: 'players', reason: '等待' } },
+  ]);
+  currentSession.onEvent!(message('new-session', 2));
+  await vi.waitFor(() => expect(manager.plans.runs).toHaveLength(2));
+  await idle();
+  const original = manager.plans.runs.find((run) => run.id === originalId)!;
+  const replacement = manager.plans.runs.find((run) => run.id !== originalId)!;
+  expect(original.task).toMatchObject({
+    goal: '旧请求',
+    owner: 'old-session',
+    status: 'needs_input',
+  });
+  expect(replacement.task).toMatchObject({
+    goal: '跟随新玩家',
+    owner: 'new-session',
+  });
+  expect(manager.currentRunId(id)).toBe(replacement.id);
+  expect(JSON.parse(store.archive.json!).runs).toHaveLength(2);
+});
+
 it('unchecked limits survive restart, resume and scheduled/manual executions without capping cumulative usage', async () => {
   const id = await role();
   const p = await manager.tasks.createTaskPlan(id, {

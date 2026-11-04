@@ -102,7 +102,10 @@ it('delegates to the actual Agent and returns only a private reply to that playe
   } as ChatData;
   expect(listener('other-agent', reply)).toBe(false);
   expect(listener('agent-session', reply)).toBe(true);
-  await expect(result).resolves.toBe('我开始处理。');
+  await expect(result).resolves.toContain(
+    '游戏 Agent 的文字回复：我开始处理。',
+  );
+  await expect(result).resolves.toContain('不是动作已启动或完成的确认');
   expect(t.listeners.size).toBe(0);
 });
 it('removes the listener when a conversation is cancelled', async () => {

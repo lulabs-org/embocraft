@@ -1,5 +1,6 @@
 import type { AICharacterTask } from '@voxel/shared';
 import type { BatchResult } from '../../contracts/action';
+import type { TaskExecutionState } from '../../contracts/state';
 
 export function newTask(
   goal: string,
@@ -29,6 +30,16 @@ export function isActiveTask(task?: AICharacterTask): task is AICharacterTask {
 /** A task that can never make progress again on its own. */
 export function isEndedTask(task?: AICharacterTask): boolean {
   return !task || task.status === 'completed' || task.status === 'cancelled';
+}
+
+/** An expired connection-bound audience cannot authorize resuming its old task. */
+export function isExpiredPrivateTask(memory: TaskExecutionState): boolean {
+  const task = memory.task.current;
+  return (
+    !!task?.privateTo &&
+    task.status === 'needs_input' &&
+    memory.conversation.audienceExpired === true
+  );
 }
 
 /** Restore batch history only; in-flight effects remain unknown and never replay automatically. */

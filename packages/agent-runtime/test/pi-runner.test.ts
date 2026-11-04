@@ -823,6 +823,68 @@ it('a task acknowledgement cannot end the wake before its world action', async (
   });
 });
 
+it('starts following a new player after an old private conversation expires', async () => {
+  const f = fixture([
+    [start('跟随玩家')],
+    [{ name: 'follow', arguments: { playerId: 'human', distance: 1.5 } }],
+  ]);
+  f.memory.execution.task.current = {
+    ...newTask('旧任务', 'old-session', 'old-session'),
+    status: 'needs_input',
+  };
+  f.memory.execution.conversation.audienceExpired = true;
+  f.world.players = [{ ...f.world.self, id: 'human', kind: 'human', x: 4 }];
+  f.message('private', 'human', '跟着我');
+  await f.run();
+  expect(f.memory.execution.task.current).toMatchObject({
+    goal: '跟随玩家',
+    owner: 'human',
+    privateTo: 'human',
+  });
+  expect(f.memory.execution.effects.follow?.action).toMatchObject({
+    playerId: 'human',
+    type: 'follow',
+  });
+});
+
+it('creates a follow task when the requesting player is targeted directly', async () => {
+  const f = fixture([
+    [{ name: 'follow', arguments: { playerId: 'human', distance: 1.5 } }],
+  ]);
+  f.memory.execution.task.current = {
+    ...newTask('旧任务', 'old-session', 'old-session'),
+    status: 'needs_input',
+  };
+  f.memory.execution.conversation.audienceExpired = true;
+  f.world.players = [{ ...f.world.self, id: 'human', kind: 'human', x: 4 }];
+  f.message('private', 'human', '跟着我');
+  await f.run();
+  expect(f.memory.execution.task.current).toMatchObject({
+    owner: 'human',
+    privateTo: 'human',
+    goal: '跟随玩家 human',
+  });
+  expect(f.memory.execution.effects.follow?.action.playerId).toBe('human');
+});
+
+it('does not implicitly create a follow task for a different player or without movement permission', async () => {
+  for (const [target, allowMove] of [
+    ['someone-else', true],
+    ['human', false],
+  ] as const) {
+    const f = fixture([
+      [{ name: 'follow', arguments: { playerId: target, distance: 1.5 } }],
+      [reply('无法跟随')],
+    ]);
+    delete f.memory.execution.task.current;
+    f.config.permissions.move = allowMove;
+    f.message('private', 'human', '跟着我');
+    await f.run();
+    expect(f.memory.execution.task.current).toBeUndefined();
+    expect(f.session.move).not.toHaveBeenCalledWith(1, 0, false);
+  }
+});
+
 it('exposes the same tools to chat and activity events, with durable task creation before effects', async () => {
   const f = fixture([[start('去 human 身边')], [move], [complete()]]);
   Reflect.deleteProperty(f.memory.execution.task, 'current');

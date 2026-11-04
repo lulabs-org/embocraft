@@ -1,4 +1,4 @@
-import { aiCharacterPermissions } from '@voxel/shared';
+import { aiCharacterPermissions, type WorldEvent } from '@voxel/shared';
 import type { AgentAction, AgentConfig, Observation } from '../../contracts';
 import { AgentRuntimeError } from '../../contracts/errors';
 import type { RuntimeState } from '../../contracts/state';
@@ -6,10 +6,12 @@ import type { TaskLease } from '../../contracts/task';
 import { initialToolState, type ToolState } from '../../contracts/tool-state';
 import { mergeSignals, withDeadline } from '../../kernel/abort';
 import { executeBatch } from '../../world/actions/batch';
+import { parseAction } from '../../world/actions/parse';
 import type { AgentAttention } from '../../world/observe/attention';
 import type { AgentSession } from '../../world/session/port';
 import type { RequestBudget } from '../task/budget';
 import { TaskService } from '../task/service';
+import { isEndedTask, isExpiredPrivateTask } from '../task/state';
 import { formatActionResult } from './build-tracker';
 import { paceChat } from './chat-pacing';
 import {
@@ -19,6 +21,27 @@ import {
   settleActionEffects,
 } from './effects';
 import { launchBackgroundWorldAction } from './lifecycle';
+
+/** A direct self-follow call can create a task only when no valid task exists. */
+export function implicitTaskForAction(
+  action: AgentAction,
+  message: WorldEvent | undefined,
+  memory: RuntimeState,
+  config: AgentConfig,
+) {
+  if (
+    action.type !== 'follow' ||
+    !message ||
+    action.playerId !== message.actor ||
+    !(
+      isEndedTask(memory.execution.task.current) ||
+      isExpiredPrivateTask(memory.execution)
+    )
+  )
+    return undefined;
+  parseAction(action, aiCharacterPermissions(config));
+  return { type: 'start' as const, goal: `跟随玩家 ${message.actor}` };
+}
 
 function guardSessionWithLease(
   session: AgentSession,

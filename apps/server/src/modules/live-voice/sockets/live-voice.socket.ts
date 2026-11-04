@@ -64,6 +64,7 @@ export class LiveVoiceSockets {
       heard = '',
       spoken = '',
       humanSpoken = '';
+    let fragments: { text: string; startMs: number; endMs: number }[] = [];
     const pending = new Map<string, AbortController>();
     const seenDelegations = new Set<string>();
     const converter = new Pcm16Upsampler();
@@ -186,9 +187,11 @@ export class LiveVoiceSockets {
               flushTranscript();
               send({ type: 'interrupted' });
             },
-            transcript: (speaker, text) => {
+            transcript: (speaker, text, timing) => {
               if (speaker === 'human') {
                 heard = (heard + text).slice(-4000);
+                if (timing)
+                  fragments = [...fragments, { text, ...timing }].slice(-500);
                 const owner = this.actorSessions
                   .get(conversation!.actorId)
                   ?.values()
@@ -215,7 +218,7 @@ export class LiveVoiceSockets {
               send({ type: 'transcript', speaker, text });
             },
             transcriptEnd: flushTranscript,
-            delegation: (id, request) => {
+            delegation: (id, request, offsetMs) => {
               if (closed || seenDelegations.has(id)) return;
               if (seenDelegations.size >= 1000)
                 return fail('实时语音请求过多，请重新开始对话。');
@@ -227,8 +230,24 @@ export class LiveVoiceSockets {
                 );
                 return;
               }
-              const text = (request ?? heard).trim();
+              const recent =
+                offsetMs === undefined
+                  ? ''
+                  : fragments
+                      .filter(
+                        (part) =>
+                          part.endMs > offsetMs - 12000 &&
+                          part.startMs <= offsetMs,
+                      )
+                      .map((part) => part.text)
+                      .join('');
+              const text = (
+                request ??
+                (offsetMs !== undefined && fragments.length ? recent : heard)
+              ).trim();
               heard = '';
+              if (offsetMs !== undefined)
+                fragments = fragments.filter((part) => part.startMs > offsetMs);
               if (!text || text.length > 240) {
                 session?.deliverDelegation(
                   id,

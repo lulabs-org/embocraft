@@ -17,7 +17,11 @@ import type { AgentAttention } from '../../world/observe/attention';
 import { worldSignature } from '../../world/observe/extract';
 import type { AgentSession } from '../../world/session/port';
 import { paceChat } from '../action/chat-pacing';
-import { executeTaskActions, executeTurnWorldAction } from '../action/executor';
+import {
+  executeTaskActions,
+  executeTurnWorldAction,
+  implicitTaskForAction,
+} from '../action/executor';
 import { characterPrompt } from '../prompt/character';
 import { buildDecisionPayload } from '../prompt/view';
 import { checkBudgetCap } from '../task/budget';
@@ -155,8 +159,8 @@ export class Turn implements ToolHost {
     }
   }
 
-  private authorize() {
-    this.binding.authorize();
+  private authorize(command?: TaskCommand) {
+    this.binding.authorize(command);
   }
 
   private attach() {
@@ -188,7 +192,7 @@ export class Turn implements ToolHost {
   ): Promise<AICharacterTask> {
     const message = this.message;
     if (!message) throw new AgentRuntimeError('任务控制需要明确玩家指令。');
-    this.authorize();
+    this.authorize(command);
     await this.stopAction();
     try {
       await this.binding.commitTask(
@@ -271,6 +275,13 @@ export class Turn implements ToolHost {
       await this.respond(action.text, relatedToTask);
       return { replied: true };
     }
+    const implicitTask = implicitTaskForAction(
+      action,
+      this.message,
+      this.memory,
+      this.config,
+    );
+    if (implicitTask) await this.commitTask(implicitTask);
     const lease = this.claimActiveTaskLease();
     return executeTurnWorldAction({
       id,

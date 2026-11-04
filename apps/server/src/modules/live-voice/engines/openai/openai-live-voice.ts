@@ -68,6 +68,9 @@ export class OpenAILiveVoice implements LiveVoiceSession {
           options.events.transcript(
             value.type === 'session.input_transcript.delta' ? 'human' : 'agent',
             value.delta,
+            Number.isFinite(value.start_ms) && Number.isFinite(value.end_ms)
+              ? { startMs: value.start_ms, endMs: value.end_ms }
+              : undefined,
           );
         } else if (
           value.type === 'session.delegation.created' &&
@@ -78,7 +81,11 @@ export class OpenAILiveVoice implements LiveVoiceSession {
             value.delegation.id.length > 512
           )
             throw Error('delegation');
-          options.events.delegation(value.delegation.id);
+          options.events.delegation(
+            value.delegation.id,
+            undefined,
+            Number.isFinite(value.offset_ms) ? value.offset_ms : undefined,
+          );
         } else if (value.type === 'session.closed') this.end();
       } catch {
         this.fail('OpenAI 实时语音服务返回了无效响应。');
