@@ -317,7 +317,7 @@ export function useChatController(connection: Connection, expanded = true) {
           callbacks,
           undefined,
           undefined,
-          service.provider === 'bailian'
+          service.provider !== 'whisper'
             ? (events) => new BailianSpeechSession(service.id, language, events)
             : (events) =>
                 new LiveSpeechSession(

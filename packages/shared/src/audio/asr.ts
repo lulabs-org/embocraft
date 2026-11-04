@@ -18,10 +18,30 @@ export const DEFAULT_WHISPER_ASR: WhisperAsrSettings = {
   temperature: 0,
   prompt: '',
 };
+export type LiveAsrProvider = 'openai' | 'gemini';
+export type LiveAsrDraft = {
+  [P in LiveAsrProvider]: {
+    provider: P;
+    name: string;
+    model: string;
+    apiKey: string;
+  };
+}[LiveAsrProvider];
+export type LiveAsrView = {
+  [P in LiveAsrProvider]: {
+    provider: P;
+    id: string;
+    name: string;
+    model: string;
+    hasApiKey: boolean;
+  };
+}[LiveAsrProvider];
 export type AsrProviderDraft =
+  | LiveAsrDraft
   | (BailianAsrDraft & { provider?: 'bailian'; name: string })
   | (WhisperAsrDraft & { provider: 'whisper'; name: string });
 export type AsrProviderView =
+  | LiveAsrView
   | (BailianAsrView & { provider?: 'bailian'; id: string; name: string })
   | (WhisperAsrView & { provider: 'whisper'; id: string; name: string });
 export type AsrServiceDraft = AsrProviderDraft;
@@ -41,6 +61,6 @@ export type AsrUse = 'chat' | 'spatial' | 'clip';
 export type AsrAssignment = {
   id: string;
   name: string;
-  provider: 'whisper' | 'bailian';
+  provider: 'whisper' | 'bailian' | LiveAsrProvider;
 };
 export type AsrAssignments = Record<AsrUse, AsrAssignment | null>;

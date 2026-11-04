@@ -1,7 +1,9 @@
 import type WebSocket from 'ws';
-import type { BailianAsrDraft } from '@voxel/shared';
+import type { BailianAsrDraft, LiveAsrDraft } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import type { AsrSettingsStore } from './asr-settings-store';
+import { bridgeOpenAIAsr } from '../engines/openai/openai.adapter';
+import { bridgeGeminiAsr } from '../engines/gemini/gemini.adapter';
 import { bridgeBailianAsr } from '../engines/bailian/bailian.adapter';
 
 export type AsrBridge = (
@@ -10,9 +12,21 @@ export type AsrBridge = (
   language: string,
 ) => void | (() => void);
 
+type LiveAsrBridge = (
+  client: WebSocket,
+  settings: LiveAsrDraft,
+  language: string,
+) => void | (() => void);
+
+const bridgeLiveAsr: LiveAsrBridge = (client, settings, language) =>
+  settings.provider === 'openai'
+    ? bridgeOpenAIAsr(client, settings, language)
+    : bridgeGeminiAsr(client, settings, language);
+
 export interface RealtimeAsrServiceOptions {
   maxConcurrency?: number;
   bridge?: AsrBridge;
+  liveBridge?: LiveAsrBridge;
 }
 
 /**
@@ -28,6 +42,7 @@ export class RealtimeAsrService {
   private running = 0;
   private readonly maxConcurrency: number;
   private readonly bridge: AsrBridge;
+  private readonly liveBridge: LiveAsrBridge;
 
   constructor(
     private readonly store: AsrSettingsStore,
@@ -36,9 +51,11 @@ export class RealtimeAsrService {
     if (typeof options === 'function') {
       this.maxConcurrency = 2;
       this.bridge = options;
+      this.liveBridge = bridgeLiveAsr;
     } else {
       this.maxConcurrency = options?.maxConcurrency ?? 2;
       this.bridge = options?.bridge ?? bridgeBailianAsr;
+      this.liveBridge = options?.liveBridge ?? bridgeLiveAsr;
     }
   }
 
@@ -63,7 +80,8 @@ export class RealtimeAsrService {
       release();
     });
 
-    this.bridge(client, settings, language);
+    if (settings.provider === 'openai' || settings.provider === 'gemini')
+      this.liveBridge(client, settings, language);
+    else this.bridge(client, settings, language);
   }
 }
-

@@ -241,7 +241,7 @@ export function SpeechRecognitionPanel({
                     ? `${t('console.asr.typeBrowser')} · ${browserLanguages.find(([code]) => code === value.language)?.[1] ?? value.language}`
                     : value.provider === 'whisper'
                       ? `Speaches · ${value.model}`
-                      : `${t('console.asr.typeBailian')} · ${value.model}`,
+                      : `${value.provider === 'openai' ? 'OpenAI' : value.provider === 'gemini' ? 'Gemini' : t('console.asr.typeBailian')} · ${value.model}`,
               }))
               .map((item) => (
                 <button

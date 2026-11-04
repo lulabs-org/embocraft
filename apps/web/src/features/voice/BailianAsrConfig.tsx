@@ -36,8 +36,11 @@ export function BailianAsrConfig({
     hasSavedKey &&
     draft.provider !== 'whisper' &&
     draft.provider !== 'browser' &&
-    saved?.region === draft.region &&
-    saved?.workspaceId === draft.workspaceId;
+    (draft.provider === 'openai' || draft.provider === 'gemini'
+      ? saved?.provider === draft.provider
+      : (saved?.provider === 'bailian' || saved?.provider === undefined) &&
+        saved?.region === draft.region &&
+        saved?.workspaceId === draft.workspaceId);
   return (
     <form
       onSubmit={(e) => {
@@ -72,6 +75,8 @@ export function BailianAsrConfig({
           >
             <option value="whisper">{t('console.asr.typeWhisper')}</option>
             <option value="bailian">{t('console.asr.typeBailian')}</option>
+            <option value="openai">OpenAI GPT Live Transcribe</option>
+            <option value="gemini">Gemini Live Transcription</option>
             <option value="browser">{t('console.asr.typeBrowser')}</option>
           </select>
         </label>
@@ -125,6 +130,32 @@ export function BailianAsrConfig({
                 onChange={(e) => change({ prompt: e.target.value })}
               />
             </label>
+          </>
+        ) : draft.provider === 'openai' || draft.provider === 'gemini' ? (
+          <>
+            <label>
+              {t('console.asr.recognitionModel')}
+              <input value={draft.model} readOnly />
+            </label>
+            <label>
+              API Key
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={draft.apiKey}
+                placeholder={
+                  hasSavedKey
+                    ? t('console.voice.keyPlaceholderNew')
+                    : t('console.voice.keyPlaceholderEmpty')
+                }
+                onChange={(e) => change({ apiKey: e.target.value })}
+              />
+            </label>
+            <small>
+              {hasSavedKey
+                ? t('console.voice.keyLeaveBlankHint')
+                : t('console.voice.keyServerOnly')}
+            </small>
           </>
         ) : (
           <>
@@ -227,7 +258,7 @@ export function BailianAsrConfig({
         <p className="agent-hint">{t('console.asr.browserHint')}</p>
       ) : draft.provider === 'whisper' ? (
         <p className="agent-hint">{t('console.asr.whisperHint')}</p>
-      ) : (
+      ) : draft.provider === 'openai' || draft.provider === 'gemini' ? null : (
         <a
           className="console-help-link"
           href="https://help.aliyun.com/zh/model-studio/real-time-speech-recognition-user-guide"

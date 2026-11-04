@@ -19,16 +19,26 @@ import {
 const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }
-    : provider === 'whisper'
+    : provider === 'openai' || provider === 'gemini'
       ? {
-          ...DEFAULT_WHISPER_ASR,
           provider,
           name: '',
-          baseUrl: '',
+          model:
+            provider === 'openai'
+              ? 'gpt-live-transcribe'
+              : 'gemini-3.5-transcribe-live',
           apiKey: '',
-          model: '',
         }
-      : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+      : provider === 'whisper'
+        ? {
+            ...DEFAULT_WHISPER_ASR,
+            provider,
+            name: '',
+            baseUrl: '',
+            apiKey: '',
+            model: '',
+          }
+        : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
   draft.provider === 'browser' ? draft : { ...draft, apiKey: '' };
 const formFor = (id: string, saved?: WebAsrService) => ({

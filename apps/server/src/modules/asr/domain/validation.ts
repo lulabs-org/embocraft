@@ -114,6 +114,30 @@ export function validateWhisperSettings(
   };
 }
 
+function validateLiveSettings(
+  value: Record<string, unknown>,
+  provider: 'openai' | 'gemini',
+  previous?: SavedService,
+) {
+  const expectedModel =
+    provider === 'openai'
+      ? 'gpt-live-transcribe'
+      : 'gemini-3.5-transcribe-live';
+  if (value.model !== expectedModel)
+    throw new AppError('请选择支持的实时识别模型。');
+  if (
+    typeof value.apiKey !== 'string' ||
+    value.apiKey.length > 4096 ||
+    /[\r\n\0]/.test(value.apiKey)
+  )
+    throw new AppError('API Key 格式无效。');
+  const apiKey =
+    value.apiKey.trim() ||
+    (previous?.provider === provider ? previous.apiKey : '');
+  if (!apiKey) throw new AppError('请填写 API Key。');
+  return { provider, model: expectedModel, apiKey };
+}
+
 // ============================================================================
 // 3. 通用 ASR 服务实体校验与组装
 // ============================================================================
@@ -126,27 +150,37 @@ export function validateAsrService(
     throw new AppError('识别服务配置无效。');
   const value = input as Record<string, unknown>;
   const provider = value.provider ?? 'bailian';
-  if (provider !== 'whisper' && provider !== 'bailian')
+  if (
+    provider !== 'whisper' &&
+    provider !== 'bailian' &&
+    provider !== 'openai' &&
+    provider !== 'gemini'
+  )
     throw new AppError('请选择支持的识别服务类型。');
   if (previous && provider !== (previous.provider ?? 'bailian'))
     throw new AppError('已有服务不能更改类型，请添加新的服务。');
 
   const settings =
-    provider === 'whisper'
-      ? {
-          ...validateWhisperSettings(
-            value,
-            previous?.provider === 'whisper' ? previous : undefined,
-          ),
-          provider: 'whisper' as const,
-        }
-      : {
-          ...validateBailianSettings(
-            input,
-            previous?.provider === 'whisper' ? undefined : previous,
-          ),
-          provider: 'bailian' as const,
-        };
+    provider === 'openai' || provider === 'gemini'
+      ? validateLiveSettings(value, provider, previous)
+      : provider === 'whisper'
+        ? {
+            ...validateWhisperSettings(
+              value,
+              previous?.provider === 'whisper' ? previous : undefined,
+            ),
+            provider: 'whisper' as const,
+          }
+        : {
+            ...validateBailianSettings(
+              input,
+              previous?.provider === 'bailian' ||
+                previous?.provider === undefined
+                ? previous
+                : undefined,
+            ),
+            provider: 'bailian' as const,
+          };
 
   const name = value.name;
   if (

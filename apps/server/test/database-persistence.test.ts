@@ -1003,6 +1003,40 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(empty.list()).toEqual([]);
   });
 
+  it.each([
+    ['openai', 'gpt-live-transcribe'],
+    ['gemini', 'gemini-3.5-transcribe-live'],
+  ] as const)(
+    'round-trips %s realtime ASR profiles through PostgreSQL',
+    async (provider, model) => {
+      const store = new AsrSettingsStore(
+        new DatabaseAsrServicePersistence(db!),
+      );
+      await store.load();
+      const service = await store.save({
+        provider,
+        model,
+        name: 'Live',
+        apiKey: 'test-private-key',
+      });
+      await store.assign('chat', service.id);
+      const restored = new AsrSettingsStore(
+        new DatabaseAsrServicePersistence(db!),
+      );
+      await restored.load();
+      expect(restored.get(service.id)).toMatchObject({
+        provider,
+        model,
+        apiKey: 'test-private-key',
+      });
+      expect(restored.assignments().chat).toMatchObject({
+        id: service.id,
+        provider,
+      });
+      expect(JSON.stringify(restored.list())).not.toContain('test-private-key');
+    },
+  );
+
   it('persists ASR profiles, masks credentials, and protects active recognition', async () => {
     const store = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
     await store.load();
@@ -1282,9 +1316,9 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await server.listen();
       expect(await new CharacterQueries(db!).list()).toEqual([]);
       expect(server._internals.providers.list()).toHaveLength(0);
-      expect(server._internals.voiceServices.list().map((service) => service.id)).toEqual([
-        'local-default',
-      ]);
+      expect(
+        server._internals.voiceServices.list().map((service) => service.id),
+      ).toEqual(['local-default']);
       expect(server._internals.asrSettings.list()).toEqual([]);
       await server._internals.providers.save(
         { name: 'Ollama', type: 'ollama', defaultModel: 'qwen2.5:3b' },

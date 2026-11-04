@@ -24,6 +24,16 @@ export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
         const uses = row.assignments.length
           ? row.assignments.map((assignment) => assignment.use as AsrUse)
           : undefined;
+        if (row.provider === 'openai' || row.provider === 'gemini') {
+          return {
+            id: row.id,
+            name: row.name,
+            provider: row.provider,
+            model: row.model,
+            apiKey: decryptSecret(row.apiKey),
+            ...(uses ? { uses } : {}),
+          };
+        }
         if (row.provider === 'whisper') {
           return {
             id: row.id,
@@ -68,14 +78,16 @@ export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
             await tx.asrProvider.delete({ where: { id: row.id } });
         for (const [position, value] of values.entries()) {
           const isWhisper = value.provider === 'whisper';
+          const isBailian =
+            value.provider === 'bailian' || value.provider === undefined;
           const payload = {
             position,
             name: value.name,
-            provider: isWhisper ? 'whisper' : 'bailian',
+            provider: value.provider ?? 'bailian',
             model: value.model,
             apiKey: encryptSecret(value.apiKey ?? ''),
-            region: !isWhisper ? value.region : null,
-            workspaceId: !isWhisper ? value.workspaceId : null,
+            region: isBailian ? value.region : null,
+            workspaceId: isBailian ? value.workspaceId : null,
             baseUrl: isWhisper ? (value.baseUrl ?? '') : null,
             temperature: isWhisper ? (value.temperature ?? 0) : null,
             prompt: isWhisper ? (value.prompt ?? '') : null,

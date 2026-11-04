@@ -8,9 +8,11 @@
 
 | 能力             | 传输协议                          | 默认支持引擎                   | 核心场景                                                          |
 | :--------------- | :-------------------------------- | :----------------------------- | :---------------------------------------------------------------- |
-| **服务配置管理** | HTTP REST (`/voice/asr/*`)        | 全部 (Whisper, 百炼)           | 供应商配置 CRUD、API Key 脱敏、用途绑定 (`chat`/`spatial`/`clip`) |
+| **服务配置管理** | HTTP REST (`/voice/asr/*`)        | Whisper、百炼、OpenAI、Gemini  | 供应商配置 CRUD、API Key 脱敏、用途绑定 (`chat`/`spatial`/`clip`) |
 | **音频文件转录** | HTTP POST (`/voice/transcribe`)   | Speaches / OpenAI 兼容 Whisper | 录音片段上传、短语音/长音频批量转文字、串行排队调度               |
-| **实时流式识别** | WebSocket (`/voice/asr/realtime`) | 阿里云百炼 (DashScope)         | 浏览器实时麦克风推流（PCM），低延迟双向推送 interim/final 文本    |
+| **实时流式识别** | WebSocket (`/voice/asr/realtime`) | 百炼、OpenAI、Gemini           | 浏览器实时麦克风推流（PCM），低延迟双向推送 interim/final 文本    |
+
+实时服务使用 `gpt-live-transcribe` 和 `gemini-3.5-transcribe-live` 进行语音转文字，支持聊天听写和附近语音字幕；语音消息文件转写仍使用 Whisper。API Key 仅保存在服务端。OpenAI 输入由服务端转换为 24 kHz PCM，并通过本地静音检测提交语音片段；Gemini 使用 16 kHz PCM 和服务端活动检测。
 
 ---
 
@@ -27,6 +29,8 @@ apps/server/src/modules/asr/
 ├── ports.ts                      # 模块端口契约 (BatchTranscriberPort, StreamingAsrPort 等)
 ├── engines/                      # 外部引擎适配器
 │   ├── whisper/                  # Whisper 批处理适配器与模型目录探测
+│   ├── openai/                   # OpenAI 实时转写适配器
+│   ├── gemini/                   # Gemini 实时转写适配器
 │   └── bailian/                  # 阿里云百炼实时流式识别适配器与握手、连接错误映射
 ├── persistence/
 │   └── database-asr-services.ts  # DatabaseAsrServicePersistence：数据库加载与保存
