@@ -7,6 +7,7 @@ import { matchMaker, Server } from '@colyseus/core';
 import type { PrismaClient } from '@prisma/client';
 import { createApp } from './app';
 import { env, type ServerConfig } from './core/config';
+import { resolveServerUrls, type ServerUrls } from './core/http/address';
 import { createDatabaseClient } from './core/database/client';
 import { checkStartupDatabase } from './core/database/health';
 import type { ArchivePort } from './persistence/management-archive';
@@ -62,11 +63,6 @@ export type ServerOptions = {
   asrBridge?: AsrBridge;
 };
 
-const wsHost = (host: string) => {
-  const h = ['0.0.0.0', '::'].includes(host) ? '127.0.0.1' : host;
-  return h.includes(':') ? `[${h}]` : h;
-};
-
 type CoreStores = {
   gatewayAuth: GatewayAuth;
   providers: ProviderRepository;
@@ -120,6 +116,7 @@ export async function createServer(options: ServerOptions = {}) {
     });
   const store = options.worldStore ?? new WorldStore(config.databaseUrl, db);
   let world: WorldRoom | undefined;
+  let serverUrls: ServerUrls | undefined;
   let url = '';
   const archive = options.archive ?? new DatabaseManagementArchive(db);
   const characters = new AICharacterManager(
@@ -228,6 +225,14 @@ export async function createServer(options: ServerOptions = {}) {
       if (!world) throw Error('世界尚未启动。');
       return world;
     },
+    get httpUrl() {
+      if (!serverUrls) throw Error('服务器尚未启动。');
+      return serverUrls.httpUrl;
+    },
+    get wsUrl() {
+      if (!serverUrls) throw Error('服务器尚未启动。');
+      return serverUrls.wsUrl;
+    },
     get url() {
       return url;
     },
@@ -237,11 +242,15 @@ export async function createServer(options: ServerOptions = {}) {
       listening = true;
       try {
         await server.listen(config.port, config.host);
-        url = `ws://${wsHost(config.host)}:${(http.address() as AddressInfo).port}`;
+        serverUrls = resolveServerUrls(
+          http.address() as AddressInfo,
+          config.host,
+        );
+        url = serverUrls.wsUrl;
         const listing = await matchMaker.createRoom('world', {});
         world = matchMaker.getLocalRoomById(listing.roomId) as WorldRoom;
         await characters.load();
-        return url;
+        return serverUrls;
       } catch (error) {
         await close();
         throw error;

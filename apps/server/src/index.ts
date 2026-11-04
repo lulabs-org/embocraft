@@ -5,7 +5,7 @@ import { createServer } from './server';
 try {
   const config = env.load();
   const server = await createServer({ config });
-  const url = (await server.listen()).replace(/^ws:/, 'http:');
+  const { httpUrl: url } = await server.listen();
   if (config.gateway.token) {
     console.log('Agent Gateway 使用 AGENT_GATEWAY_TOKEN');
   } else if (config.gateway.tokenFile) {
@@ -37,11 +37,11 @@ try {
       /* 令牌文件读取失败不影响服务启动，跳过打印。 */
     }
   }
-  console.log(`Embocraft Server  ${url}`);
-  console.log(`Swagger UI        ${url}/api-docs`);
-  console.log(`OpenAPI JSON      ${url}/api-docs.json`);
-  console.log(`AsyncAPI UI       ${url}/asyncapi-docs`);
-  console.log(`AsyncAPI JSON     ${url}/asyncapi.json`);
+  console.log(`Server        ${url}`);
+  console.log(`Swagger UI    ${url}/api-docs`);
+  console.log(`OpenAPI JSON  ${url}/api-docs.json`);
+  console.log(`AsyncAPI UI   ${url}/asyncapi-docs`);
+  console.log(`AsyncAPI JSON ${url}/asyncapi.json`);
   const stop = () => {
     void server
       .close()
