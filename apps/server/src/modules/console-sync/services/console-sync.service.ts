@@ -18,9 +18,10 @@ export class ConsoleSyncCommands extends CommandRouter {
   ) {
     const id = req.header('Idempotency-Key') ?? randomUUID();
     const body = this.receiptBody(req.body);
+    const path = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
     return this.run(
       id,
-      { method: req.method, path: req.path, body },
+      { method: req.method, path, body },
       lane,
       async () => {
         validate?.();

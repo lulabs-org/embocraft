@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+import type { Router } from 'express';
 import type { VoiceServiceStore } from '../persistence/voice-service-store';
 import { AppError } from '../../../core/errors/app-error';
 import { env } from '../../../core/config/env';
@@ -7,7 +7,7 @@ import {
   asyncRoute as route,
 } from '../../../core/http/middleware/async-route';
 export function installVoiceServiceRoutes(
-  app: Express,
+  router: Router,
   getVoices: () => VoiceServiceStore | undefined,
   removeVoice: (id: string) => Promise<unknown>,
 ) {
@@ -37,7 +37,7 @@ export function installVoiceServiceRoutes(
    *                 baseUrl:
    *                   type: string
    */
-  app.get(
+  router.get(
     '/voice/tts/defaults',
     route((_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
@@ -72,7 +72,7 @@ export function installVoiceServiceRoutes(
    *       200:
    *         description: 当前服务的 TTS 模型及音色列表
    */
-  app.post(
+  router.post(
     '/voice/tts/models',
     asyncAbortableRoute(async (req, res, signal) => {
       res.setHeader('Cache-Control', 'no-store');
@@ -94,7 +94,7 @@ export function installVoiceServiceRoutes(
    *       200:
    *         description: 语音服务配置列表
    */
-  app.get(
+  router.get(
     '/voice/tts/services',
     route((_req, res) => res.json(voices().list())),
   );
@@ -118,7 +118,7 @@ export function installVoiceServiceRoutes(
    *       201:
    *         description: 创建成功
    */
-  app.post(
+  router.post(
     '/voice/tts/services',
     route(async (req, res) =>
       res.status(201).json(await voices().save(req.body)),
@@ -150,7 +150,7 @@ export function installVoiceServiceRoutes(
    *       200:
    *         description: 更新成功
    */
-  app.put(
+  router.put(
     '/voice/tts/services/:id',
     route(async (req, res) =>
       res.json(await voices().save(req.body, String(req.params.id))),
@@ -176,7 +176,7 @@ export function installVoiceServiceRoutes(
    *       204:
    *         description: 删除成功
    */
-  app.delete(
+  router.delete(
     '/voice/tts/services/:id',
     route(async (req, res) => {
       await removeVoice(String(req.params.id));
@@ -218,7 +218,7 @@ export function installVoiceServiceRoutes(
    *               type: string
    *               format: binary
    */
-  app.post(
+  router.post(
     '/voice/tts/services/:id/preview',
     route(async (req, res) => {
       const abort = new AbortController();

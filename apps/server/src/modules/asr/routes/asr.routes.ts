@@ -7,12 +7,12 @@ import {
 } from '../../../core/http/middleware/async-route';
 import { assertJsonRequest } from '../../../core/http/middleware/require-json';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
-import express, { type Express, type Request, type Response } from 'express';
+import express, { type Request, type Response, type Router } from 'express';
 import type { AsrSettingsStore } from '../services/asr-settings-store';
 import { AppError } from '../../../core/errors/app-error';
 
 export function installAsrRoutes(
-  app: Express,
+  router: Router,
   store: AsrSettingsStore,
   origin = env.webOrigin(),
   authenticatedManagement = false,
@@ -47,11 +47,11 @@ export function installAsrRoutes(
    *       200:
    *         description: 附近语音、语音输入和语音消息转文字的服务分配
    */
-  app.get('/voice/asr/assignments', ...assignmentRead, (_req, res) => {
+  router.get('/voice/asr/assignments', ...assignmentRead, (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json(store.assignments());
   });
-  app.use('/voice/asr', (req, res, next) => {
+  router.use('/voice/asr', (req, res, next) => {
     if (
       authenticatedManagement &&
       (req.path === '/services' ||
@@ -63,7 +63,7 @@ export function installAsrRoutes(
       next();
     else pageAccess(req, res, next);
   });
-  app.use('/voice/asr', express.json({ limit: '8kb' }));
+  router.use('/voice/asr', express.json({ limit: '8kb' }));
   const route = (fn: (req: Request, res: Response) => unknown) =>
     asyncRoute((req, res) => {
       try {
@@ -85,7 +85,7 @@ export function installAsrRoutes(
    *       200:
    *         description: 默认识别服务连接配置
    */
-  app.get('/voice/asr/defaults', (_req, res) => {
+  router.get('/voice/asr/defaults', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ baseUrl: env.speechEndpoint() });
   });
@@ -115,7 +115,7 @@ export function installAsrRoutes(
    *       200:
    *         description: 已安装的 ASR 模型列表
    */
-  app.post(
+  router.post(
     '/voice/asr/models',
     asyncAbortableRoute(async (req, res, signal) => {
       assertJsonRequest(req);
@@ -143,7 +143,7 @@ export function installAsrRoutes(
    *               items:
    *                 type: object
    */
-  app.get('/voice/asr/services', (_req, res) => res.json(store.list()));
+  router.get('/voice/asr/services', (_req, res) => res.json(store.list()));
   /**
    * @openapi
    * /voice/asr/assignments/{use}:
@@ -173,7 +173,7 @@ export function installAsrRoutes(
    *       200:
    *         description: 更新后的三个功能的服务分配
    */
-  app.put(
+  router.put(
     '/voice/asr/assignments/:use',
     route(async (req, res) => {
       res.json(await store.assign(req.params.use, req.body?.serviceId));
@@ -203,7 +203,7 @@ export function installAsrRoutes(
    *       415:
    *         description: 请求非 JSON 格式
    */
-  app.post(
+  router.post(
     '/voice/asr/services',
     route(async (req, res) => res.status(201).json(await store.save(req.body))),
   );
@@ -236,7 +236,7 @@ export function installAsrRoutes(
    *       400:
    *         description: 配置格式错误
    */
-  app.put(
+  router.put(
     '/voice/asr/services/:id',
     route(async (req, res) =>
       res.json(await store.save(req.body, String(req.params.id))),
@@ -263,14 +263,14 @@ export function installAsrRoutes(
    *       204:
    *         description: 删除成功
    */
-  app.delete(
+  router.delete(
     '/voice/asr/services/:id',
     route(async (req, res) => {
       await store.remove(String(req.params.id));
       res.sendStatus(204);
     }),
   );
-  app.use(
+  router.use(
     '/voice/asr',
     errorHandler((error) => {
       const type =

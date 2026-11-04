@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import express, { type Express } from 'express';
+import express, { type Router } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
 import { asyncApiSpec } from './asyncapi';
@@ -41,13 +41,13 @@ function renderAsyncApiHtml(): string {
 </html>`;
 }
 
-export function installDocsRoutes(app: Express) {
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-  app.use(
+export function installDocsRoutes(router: Router) {
+  router.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  router.use(
     '/asyncapi-assets/css',
     express.static(path.join(asyncApiDistDir, 'styles')),
   );
-  app.use(
+  router.use(
     '/asyncapi-assets/js',
     express.static(path.join(asyncApiDistDir, 'browser', 'standalone')),
   );
@@ -69,5 +69,5 @@ export function installDocsRoutes(app: Express) {
     res.json(asyncApiSpec);
   });
 
-  app.use(docsRouter);
+  router.use(docsRouter);
 }

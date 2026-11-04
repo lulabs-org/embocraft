@@ -1,5 +1,5 @@
 import cors from 'cors';
-import type { Express } from 'express';
+import type { Router } from 'express';
 import { env } from '../../../core/config/env';
 import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
@@ -13,13 +13,13 @@ export type TtsStatusQuery = () => Promise<{
 }>;
 
 export function installCapabilitiesRoutes(
-  app: Express,
+  router: Router,
   speech = new LocalSpeech(),
   asrSettings: AsrSettingsStore,
   ttsStatus: TtsStatusQuery,
   origin = env.webOrigin(),
 ) {
-  app.use(
+  router.use(
     '/voice/capabilities',
     createOriginGuard({
       origin,
@@ -65,7 +65,7 @@ export function installCapabilitiesRoutes(
    *                 agentSpeech:
    *                   type: object
    */
-  app.get(
+  router.get(
     '/voice/capabilities',
     asyncRoute(async (req, res) => {
       try {
