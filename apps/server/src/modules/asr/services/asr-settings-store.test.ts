@@ -260,3 +260,31 @@ it('rejects invalid assignments and does not publish failed writes or client-inj
   await expect(store.assign('chat', ali.id)).rejects.toThrow('disk');
   expect(store.assignments().chat?.id).toBe(whisper.id);
 });
+
+it.each([
+  ['openai', 'gpt-live-transcribe'],
+  ['gemini', 'gemini-3.5-transcribe-live'],
+] as const)(
+  'saves, reloads and assigns %s live transcription to realtime uses',
+  async (provider, model) => {
+    const store = new AsrSettingsStore();
+    await store.load();
+    const service = await store.save({
+      provider,
+      model,
+      name: 'Live',
+      apiKey: 'private-key',
+    });
+    await store.assign('chat', service.id);
+    await store.assign('spatial', service.id);
+    await expect(store.assign('clip', service.id)).rejects.toThrow('Whisper');
+    const restored = new AsrSettingsStore(store.persistence);
+    await restored.load();
+    expect(restored.assignments()).toMatchObject({
+      chat: { id: service.id, provider },
+      spatial: { id: service.id, provider },
+    });
+    expect(restored.get(service.id).apiKey).toBe('private-key');
+    expect(JSON.stringify(restored.list())).not.toContain('private-key');
+  },
+);

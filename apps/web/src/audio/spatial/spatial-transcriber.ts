@@ -39,11 +39,11 @@ export class SpatialTranscriber {
     this.report({ text: '', partial: '', error: '' });
     const language =
       choice?.language ??
-      (choice?.provider === 'browser' || choice?.provider === 'bailian'
+      (choice?.provider === 'browser' ||
+      (choice?.provider && choice.provider !== 'whisper')
         ? 'zh-CN'
         : 'auto');
-    const external =
-      choice?.provider === 'bailian' || choice?.provider === 'browser';
+    const external = !!choice && choice.provider !== 'whisper';
     const confirmed = (text: string) => {
       if (generation !== this.generation) return;
       if (!text) {
@@ -103,10 +103,10 @@ export class SpatialTranscriber {
       language,
       events,
       stream,
-      choice?.provider === 'bailian'
+      choice && choice.provider !== 'whisper'
         ? undefined
         : speechTransport(language, this.token, this.request, choice?.id),
-      choice?.provider === 'bailian'
+      choice && choice.provider !== 'whisper'
         ? (sessionEvents) =>
             new BailianSpeechSession(choice.id, language, sessionEvents)
         : undefined,

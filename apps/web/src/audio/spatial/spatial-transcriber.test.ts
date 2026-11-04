@@ -168,3 +168,29 @@ it('publishes browser recognition only after a confirmed final result', async ()
   transcriber.stop();
   expect(browser.cancel).toHaveBeenCalled();
 });
+
+it.each(['openai', 'gemini'] as const)(
+  'routes %s spatial recognition through the streaming session',
+  async (provider) => {
+    const t = setup();
+    const start = vi.spyOn(LiveRecorder.prototype, 'start').mockResolvedValue();
+    try {
+      await t.transcriber.start(t.stream, {
+        id: 'live-1',
+        name: 'Live',
+        provider,
+      });
+      expect(start).toHaveBeenCalledWith(
+        'zh-CN',
+        expect.any(Object),
+        t.stream,
+        undefined,
+        expect.any(Function),
+      );
+      expect(t.request).not.toHaveBeenCalled();
+    } finally {
+      t.transcriber.stop();
+      start.mockRestore();
+    }
+  },
+);

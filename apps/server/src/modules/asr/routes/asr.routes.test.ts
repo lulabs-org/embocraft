@@ -289,3 +289,43 @@ it('rejects Whisper profiles on the cloud socket without starting a cloud task',
   expect(bridge).not.toHaveBeenCalled();
   await store.remove(local.id);
 });
+
+it.each([
+  ['openai', 'gpt-live-transcribe'],
+  ['gemini', 'gemini-3.5-transcribe-live'],
+] as const)(
+  'creates and assigns %s through the ASR API without exposing credentials',
+  async (provider, model) => {
+    const headers = { Origin: origin, 'Content-Type': 'application/json' };
+    const response = await fetch(`${url}/voice/asr/services`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        provider,
+        model,
+        name: 'Live',
+        apiKey: 'private-live-key',
+      }),
+    });
+    expect(response.status).toBe(201);
+    const service = await response.json();
+    expect(service).toMatchObject({ provider, model, hasApiKey: true });
+    expect(JSON.stringify(service)).not.toContain('private-live-key');
+    const assigned = await fetch(`${url}/voice/asr/assignments/chat`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ serviceId: service.id }),
+    });
+    expect(assigned.status).toBe(200);
+    expect((await assigned.json()).chat).toMatchObject({
+      id: service.id,
+      provider,
+    });
+    const clip = await fetch(`${url}/voice/asr/assignments/clip`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ serviceId: service.id }),
+    });
+    expect(clip.status).toBe(400);
+  },
+);

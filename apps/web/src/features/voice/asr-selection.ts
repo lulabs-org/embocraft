@@ -21,7 +21,7 @@ export function toAsrChoice(value: unknown): AsrChoice {
     !choice.id ||
     typeof choice.name !== 'string' ||
     !choice.name ||
-    !['whisper', 'bailian', 'browser'].includes(provider)
+    !['whisper', 'bailian', 'browser', 'openai', 'gemini'].includes(provider)
   )
     return unselectedAsrChoice;
   return {

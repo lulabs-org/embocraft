@@ -40,6 +40,36 @@ describe('RealtimeAsrService', () => {
     expect(service.runningSessions).toBe(0);
   });
 
+  it.each(['openai', 'gemini'] as const)(
+    'routes %s sessions through the live bridge and releases their lease',
+    (provider) => {
+      const release = vi.fn();
+      const settings = {
+        provider,
+        name: 'Live',
+        model: 'model',
+        apiKey: 'secret',
+      };
+      const store = {
+        acquire: vi.fn().mockReturnValue({ settings, release }),
+      } as unknown as AsrSettingsStore;
+      const liveBridge = vi.fn();
+      const bailianBridge = vi.fn();
+      const service = new RealtimeAsrService(store, {
+        bridge: bailianBridge,
+        liveBridge,
+      });
+      const client = createMockClient();
+      service.startSession(client, 'live-service', 'en');
+      expect(liveBridge).toHaveBeenCalledWith(client, settings, 'en');
+      expect(bailianBridge).not.toHaveBeenCalled();
+      expect(service.runningSessions).toBe(1);
+      (client as unknown as EventEmitter).emit('close');
+      expect(release).toHaveBeenCalledOnce();
+      expect(service.runningSessions).toBe(0);
+    },
+  );
+
   it('rejects Whisper provider and releases acquired lease', () => {
     const release = vi.fn();
     const mockStore = {

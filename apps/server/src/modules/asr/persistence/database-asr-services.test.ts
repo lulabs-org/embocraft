@@ -195,6 +195,66 @@ describe('DatabaseAsrServicePersistence', () => {
     });
   });
 
+  it.each([
+    ['openai', 'gpt-live-transcribe'],
+    ['gemini', 'gemini-3.5-transcribe-live'],
+  ] as const)(
+    'persists and reloads %s configurations and assignments',
+    async (provider, model) => {
+      const upsert = vi.fn().mockResolvedValue({});
+      const createMany = vi.fn().mockResolvedValue({});
+      const tx = {
+        asrAssignment: { deleteMany: vi.fn(), createMany },
+        asrProvider: { findMany: vi.fn().mockResolvedValue([]), upsert },
+      };
+      const db = {
+        asrProvider: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([
+              {
+                id: 'live-1',
+                name: 'Live',
+                provider,
+                model,
+                apiKey: 'key',
+                assignments: [{ use: 'chat' }],
+              },
+            ]),
+        },
+        $transaction: vi.fn(
+          async (cb: (value: typeof tx) => Promise<unknown>) => cb(tx),
+        ),
+      } as unknown as PrismaClient;
+      const persistence = new DatabaseAsrServicePersistence(db);
+      const values: SavedService[] = [
+        {
+          id: 'live-1',
+          name: 'Live',
+          provider,
+          model,
+          apiKey: 'key',
+          uses: ['chat'],
+        },
+      ];
+      await persistence.save(values);
+      expect(upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            provider,
+            model,
+            region: null,
+            workspaceId: null,
+          }),
+        }),
+      );
+      expect(createMany).toHaveBeenCalledWith({
+        data: [{ use: 'chat', providerId: 'live-1' }],
+      });
+      expect(await persistence.load()).toEqual(values);
+    },
+  );
+
   it('throws AppError on database load/save failure', async () => {
     const db = {
       asrProvider: {

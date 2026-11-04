@@ -145,3 +145,46 @@ describe('General ASR Service entity validation & view', () => {
     expect((view as Record<string, unknown>).apiKey).toBeUndefined();
   });
 });
+
+describe('live transcription settings', () => {
+  it.each([
+    ['openai', 'gpt-live-transcribe'],
+    ['gemini', 'gemini-3.5-transcribe-live'],
+  ] as const)(
+    'validates and redacts %s credentials while retaining saved keys',
+    (provider, model) => {
+      const saved = validateAsrService({
+        provider,
+        model,
+        name: 'Live',
+        apiKey: 'secret',
+      });
+      expect(toAsrServiceView(saved)).toMatchObject({
+        provider,
+        model,
+        hasApiKey: true,
+      });
+      expect(toAsrServiceView(saved)).not.toHaveProperty('apiKey');
+      expect(
+        validateAsrService(
+          { provider, model, name: 'Edited', apiKey: '' },
+          saved,
+        ).apiKey,
+      ).toBe('secret');
+      expect(() =>
+        validateAsrService({ provider, model, name: 'Live', apiKey: '' }),
+      ).toThrow('API Key');
+      expect(() =>
+        validateAsrService({ provider, model, name: 'Live', apiKey: 'x\ny' }),
+      ).toThrow('API Key');
+      expect(() =>
+        validateAsrService({
+          provider,
+          model: 'other',
+          name: 'Live',
+          apiKey: 'x',
+        }),
+      ).toThrow('模型');
+    },
+  );
+});

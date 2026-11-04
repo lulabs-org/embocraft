@@ -3,7 +3,12 @@ import type { AsrServiceDraft, AsrServiceView, AsrUse } from '@voxel/shared';
 /** Supported usage scenarios for ASR service binding. */
 export const ASR_USES: readonly AsrUse[] = ['chat', 'spatial', 'clip'] as const;
 
-export const SUPPORTED_ASR_PROVIDERS = ['whisper', 'bailian'] as const;
+export const SUPPORTED_ASR_PROVIDERS = [
+  'whisper',
+  'bailian',
+  'openai',
+  'gemini',
+] as const;
 export type SupportedAsrProvider = (typeof SUPPORTED_ASR_PROVIDERS)[number];
 
 /** Persisted ASR service entity; includes its unique ID and optional usage assignments. */
