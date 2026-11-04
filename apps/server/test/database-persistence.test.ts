@@ -214,7 +214,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const server = await createServer({ config });
     try {
       await server.listen();
-      const base = server.url.replace(/^ws:/, 'http:');
+      const base = server.httpUrl;
       const headers = {
         Authorization: 'Bearer fixture-gateway-token-for-tests',
         Origin: 'http://world.test',
