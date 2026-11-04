@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { BailianAsrDraft } from '@voxel/shared';
 import { useI18n } from '../../i18n/context';
 import type { AsrProvider } from './browser-asr-services';
@@ -9,9 +9,11 @@ import type { useAsrServices } from './useAsrServices';
 export function BailianAsrConfig({
   manager,
   disabled,
+  children,
 }: {
   manager: ReturnType<typeof useAsrServices>;
   disabled: boolean;
+  children: ReactNode;
 }) {
   const { t } = useI18n();
   const {
@@ -217,6 +219,26 @@ export function BailianAsrConfig({
             </div>
           </>
         )}
+      </fieldset>
+      {dirty && (
+        <p className="agent-hint">{t('console.asr.dirtyRecordHint')}</p>
+      )}
+      {draft.provider === 'browser' ? (
+        <p className="agent-hint">{t('console.asr.browserHint')}</p>
+      ) : draft.provider === 'whisper' ? (
+        <p className="agent-hint">{t('console.asr.whisperHint')}</p>
+      ) : (
+        <a
+          className="console-help-link"
+          href="https://help.aliyun.com/zh/model-studio/real-time-speech-recognition-user-guide"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {t('console.asr.aliyunDocs')}
+        </a>
+      )}
+      {children}
+      <fieldset disabled={busy || disabled}>
         <div className="voice-service-actions console-form-actions">
           <button
             className="primary"
@@ -239,23 +261,6 @@ export function BailianAsrConfig({
           </button>
         </div>
       </fieldset>
-      {dirty && (
-        <p className="agent-hint">{t('console.asr.dirtyRecordHint')}</p>
-      )}
-      {draft.provider === 'browser' ? (
-        <p className="agent-hint">{t('console.asr.browserHint')}</p>
-      ) : draft.provider === 'whisper' ? (
-        <p className="agent-hint">{t('console.asr.whisperHint')}</p>
-      ) : (
-        <a
-          className="console-help-link"
-          href="https://help.aliyun.com/zh/model-studio/real-time-speech-recognition-user-guide"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {t('console.asr.aliyunDocs')}
-        </a>
-      )}
     </form>
   );
 }
