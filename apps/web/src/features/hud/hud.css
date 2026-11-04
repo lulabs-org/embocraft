@@ -571,3 +571,18 @@
   margin-bottom: 112px;
   max-height: calc(var(--hud-height, 100dvh) - 196px);
 }
+
+.in-game .live-agent-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+  pointer-events: auto;
+}
+.in-game .live-agent-controls span {
+  padding: 5px 8px;
+  border-radius: var(--radius-control);
+  background: #233d31df;
+  color: white;
+}

@@ -125,6 +125,7 @@ model AgentCharacter {
   skills            Json?
   voiceReplies      Boolean?
   voiceServiceId    String?
+  liveVoiceServiceId String?
   thinking          String?
   reasoningEffort   String?
   createdAt         DateTime?            @default(now()) @db.Timestamptz
@@ -136,10 +137,12 @@ model AgentCharacter {
   plans             AgentPlan[]
   runs              AgentRun[]
   voiceService      TtsProvider?         @relation(fields: [voiceServiceId], references: [id], onDelete: Restrict)
+  liveVoiceService  LiveVoiceProvider?   @relation(fields: [liveVoiceServiceId], references: [id], onDelete: Restrict)
   provider          AgentProvider        @relation(fields: [providerId], references: [id], onDelete: Restrict)
   players           Player[]
 
   @@index([voiceServiceId])
+  @@index([liveVoiceServiceId])
   @@index([providerId])
 }
 
@@ -269,6 +272,17 @@ model TtsProvider {
   createdAt     DateTime         @default(now()) @db.Timestamptz
   updatedAt     DateTime         @updatedAt @db.Timestamptz
   characters    AgentCharacter[]
+}
+
+model LiveVoiceProvider {
+  id         String           @id
+  position   Int
+  name       String
+  provider   String
+  model      String
+  voice      String
+  apiKey     String
+  characters AgentCharacter[]
 }
 
 model AsrProvider {

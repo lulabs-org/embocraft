@@ -3,9 +3,12 @@ import { useI18n } from '../../../i18n';
 import type { AsrChoice } from '../../../audio/services/asr-choice';
 import {
   toAsrChoice,
+  setSpatialVoiceMode,
+  useSpatialVoiceMode,
   useAsrSelection,
   useAsrServices,
   type AsrUse,
+  type SpatialVoiceMode,
 } from '../../voice';
 
 function InputChoice({
@@ -64,6 +67,7 @@ function InputChoice({
 export function AsrInputSettings({ active }: { active: boolean }) {
   const { t } = useI18n();
   const [use, setUse] = useState<AsrUse>('spatial');
+  const spatialMode = useSpatialVoiceMode();
   const [drafts, setDrafts] = useState<Partial<Record<AsrUse, string>>>({});
   const chat = useAsrSelection('chat');
   const spatial = useAsrSelection('spatial');
@@ -107,9 +111,11 @@ export function AsrInputSettings({ active }: { active: boolean }) {
               <span className="console-sidebar-copy">
                 <strong>{t(`console.asrInput.${item}`)}</strong>
                 <small>
-                  {choices[item].selected.id
-                    ? choices[item].selected.name
-                    : t('console.asrInput.selectPlaceholder')}
+                  {item === 'spatial' && spatialMode === 'live'
+                    ? t('voice.modeLive')
+                    : choices[item].selected.id
+                      ? choices[item].selected.name
+                      : t('console.asrInput.selectPlaceholder')}
                 </small>
               </span>
             </button>
@@ -119,43 +125,68 @@ export function AsrInputSettings({ active }: { active: boolean }) {
       <div className="agent-form console-panel">
         <div className="console-panel-heading">
           <h3>{t(`console.asrInput.${use}`)}</h3>
-          <p>{t(`console.asrInput.${use}Help`)}</p>
-          <small>
+          <p>
             {t(
-              services.find((service) => service.id === draftId)?.provider ===
-                'browser'
-                ? 'console.asrInput.browserScope'
-                : 'console.asrInput.serverScope',
+              use === 'spatial' && spatialMode === 'live'
+                ? 'console.asrInput.spatialLiveHelp'
+                : `console.asrInput.${use}Help`,
             )}
-          </small>
+          </p>
+          {(use !== 'spatial' || spatialMode === 'traditional') && (
+            <small>
+              {t(
+                services.find((service) => service.id === draftId)?.provider ===
+                  'browser'
+                  ? 'console.asrInput.browserScope'
+                  : 'console.asrInput.serverScope',
+              )}
+            </small>
+          )}
         </div>
         {manager.error && (
           <p role="alert" className="agent-error">
             {manager.error}
           </p>
         )}
-        <div className="asr-input-controls">
-          <InputChoice
-            selection={selection}
-            services={services}
-            loaded={manager.loaded}
-            use={use}
-            draftId={draftId}
-            onDraftChange={(id) =>
-              setDrafts((current) => ({ ...current, [use]: id }))
-            }
-          />
-          <button
-            type="button"
-            className="primary"
-            disabled={!canSave || selection.saving || selection.loading}
-            onClick={() => void save()}
-          >
-            {draftIsAvailable && draftId === selection.selected.id
-              ? t('console.asrInput.saved')
-              : t('console.asrInput.save')}
-          </button>
-        </div>
+        {use === 'spatial' && (
+          <label className="asr-input-choice">
+            <strong>{t('voice.modeLabel')}</strong>
+            <select
+              value={spatialMode}
+              onChange={(event) =>
+                setSpatialVoiceMode(event.target.value as SpatialVoiceMode)
+              }
+            >
+              <option value="traditional">{t('voice.modeTraditional')}</option>
+              <option value="live">{t('voice.modeLive')}</option>
+            </select>
+            <small>{t('console.asrInput.modeHelp')}</small>
+          </label>
+        )}
+        {(use !== 'spatial' || spatialMode === 'traditional') && (
+          <div className="asr-input-controls">
+            <InputChoice
+              selection={selection}
+              services={services}
+              loaded={manager.loaded}
+              use={use}
+              draftId={draftId}
+              onDraftChange={(id) =>
+                setDrafts((current) => ({ ...current, [use]: id }))
+              }
+            />
+            <button
+              type="button"
+              className="primary"
+              disabled={!canSave || selection.saving || selection.loading}
+              onClick={() => void save()}
+            >
+              {draftIsAvailable && draftId === selection.selected.id
+                ? t('console.asrInput.saved')
+                : t('console.asrInput.save')}
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

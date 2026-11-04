@@ -28,6 +28,7 @@ import { createServer } from '../src/server';
 import { newPlan, newRun } from '../src/modules/tasks';
 import { settleTaskUsage } from '../src/modules/tasks/domain/model';
 import { storedCharacter, storedPlan, storedRun } from './helpers/task-records';
+import { DatabaseLiveVoice, LiveVoiceStore } from '../src/modules/live-voice';
 
 const url = process.env.TEST_DATABASE_URL;
 const db = url ? createDatabaseClient(url) : undefined;
@@ -43,6 +44,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await db!.agentRun.deleteMany();
     await db!.agentPlan.deleteMany();
     await db!.agentCharacter.deleteMany();
+    await db!.liveVoiceProvider.deleteMany();
     await db!.agentProvider.deleteMany();
     await db!.ttsProvider.deleteMany();
     await db!.asrProvider.deleteMany();
@@ -50,6 +52,43 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await db!.world.deleteMany();
   });
   afterAll(async () => db?.$disconnect());
+
+  it('restores live voice services and protects services assigned to Agents', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const store = new LiveVoiceStore(new DatabaseLiveVoice(db!));
+    await store.load();
+    const service = await store.save({
+      provider: 'gemini',
+      name: 'Live',
+      model: 'gemini-3.8-live',
+      voice: 'Kore',
+      apiKey: 'test-secret',
+    });
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter({ liveVoiceServiceId: service.id })],
+      plans: [],
+      runs: [],
+      requests: {},
+    });
+    const restored = new LiveVoiceStore(new DatabaseLiveVoice(db!));
+    await restored.load();
+    expect(restored.get(service.id)?.apiKey).toBe('test-secret');
+    expect((await archive.load())?.characters[0].liveVoiceServiceId).toBe(
+      service.id,
+    );
+    await expect(restored.remove(service.id)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(restored.get(service.id)).toBeDefined();
+    await db!.agentCharacter.update({
+      where: { id: 'actor' },
+      data: { liveVoiceServiceId: null },
+    });
+    await restored.remove(service.id);
+    expect(await db!.liveVoiceProvider.count()).toBe(0);
+  });
 
   it('queries persisted character details, current checkpoints and log pages without a running manager', async () => {
     await bootstrapProviders(new DatabaseProviderRepository(db!));

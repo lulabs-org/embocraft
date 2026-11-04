@@ -2,6 +2,21 @@ import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 import { afterEach, expect, it, vi } from 'vitest';
 import { voiceApi } from './api';
 afterEach(() => vi.unstubAllGlobals());
+it('reports nearby Agent discovery failures instead of treating them as an empty list', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ error: '游戏连接已失效，请重新进入。' }),
+          { status: 401 },
+        ),
+    ),
+  );
+  await expect(
+    voiceApi.liveAgents('token', new AbortController().signal),
+  ).rejects.toThrow('游戏连接已失效，请重新进入。');
+});
 it('rejects malformed capabilities instead of advertising local speech readiness', async () => {
   vi.stubGlobal(
     'fetch',

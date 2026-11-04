@@ -64,6 +64,14 @@ import {
   createPresenceRouter,
 } from './modules/world';
 import { ChatStore, createChatRouter } from './modules/chat';
+import {
+  LiveVoiceStore,
+  DatabaseLiveVoice,
+  createLiveVoiceRouter,
+  createLiveVoiceDiscovery,
+  LiveVoiceSockets,
+  authorizeWorldLiveVoice,
+} from './modules/live-voice';
 
 /**
  * 创建并装配服务器实例。
@@ -78,12 +86,16 @@ export async function createServer() {
   const voiceServices = new VoiceServiceStore(
     new DatabaseVoiceServicePersistence(db),
   );
-  const asrSettings = new AsrSettingsStore(new DatabaseAsrServicePersistence(db));
+  const asrSettings = new AsrSettingsStore(
+    new DatabaseAsrServicePersistence(db),
+  );
+  const liveVoiceServices = new LiveVoiceStore(new DatabaseLiveVoice(db));
   const loads = [
     GatewayAuth.load({ ...config.gateway, isProduction: config.isProduction }),
     providers.load(),
     voiceServices.load(),
     asrSettings.load(),
+    liveVoiceServices.load(),
   ] as const;
 
   const [gatewayAuth] = await Promise.all(loads).catch(async (error) => {
@@ -102,6 +114,7 @@ export async function createServer() {
     archive,
     undefined,
     voiceServices,
+    liveVoiceServices,
   );
   const providerService = new ProviderService(
     providers,
@@ -151,7 +164,16 @@ export async function createServer() {
     }),
   );
 
+  app.use(createLiveVoiceRouter(liveVoiceServices, gatewayAuth.middleware));
+
   // 3. 游戏世界房间与聊天路由
+  app.use(
+    createLiveVoiceDiscovery(
+      () => world,
+      () => characters.list(),
+      config.webOrigin,
+    ),
+  );
   app.use(createWorldRouter(() => world?.roomId ?? ''));
   app.use(createPresenceRouter(() => world?.getPresence(), config.webOrigin));
   app.use(
@@ -176,6 +198,18 @@ export async function createServer() {
     settings: asrSettings,
     origin: config.webOrigin,
   });
+  const liveVoiceSockets = new LiveVoiceSockets(
+    liveVoiceServices,
+    (token, agentId) =>
+      authorizeWorldLiveVoice(
+        () => world,
+        () => characters.list(),
+        token,
+        agentId,
+      ),
+    config.webOrigin,
+  );
+  sockets.set('/voice/live/session', liveVoiceSockets.handle);
   const transport = new RoutedWebSocketTransport(http, sockets);
   const server = new Server({
     transport,
@@ -192,25 +226,26 @@ export async function createServer() {
   let closing: Promise<void> | undefined;
   let listening = false;
   const close = () =>
-  (closing ??= (async () => {
-    try {
-      await server.gracefullyShutdown(false);
-    } finally {
-      // Colyseus closes its players; explicitly close ASR upgrades and HTTP/SSE too.
-      transport.closeConnections();
-      if (http.listening) {
-        http.close();
-        http.closeAllConnections();
-        await once(http, 'close');
-      }
+    (closing ??= (async () => {
       try {
-        if (!world) await store.close();
+        await server.gracefullyShutdown(false);
       } finally {
-        await db?.$disconnect();
-        world = undefined;
+        // Colyseus closes its players; explicitly close ASR upgrades and HTTP/SSE too.
+        liveVoiceSockets.close();
+        transport.closeConnections();
+        if (http.listening) {
+          http.close();
+          http.closeAllConnections();
+          await once(http, 'close');
+        }
+        try {
+          if (!world) await store.close();
+        } finally {
+          await db?.$disconnect();
+          world = undefined;
+        }
       }
-    }
-  })());
+    })());
   const listen = async () => {
     if (closing || listening) throw Error('服务器已经启动或关闭。');
     listening = true;
@@ -234,9 +269,15 @@ export async function createServer() {
   return {
     listen,
     close,
-    get httpUrl() { return serverUrls?.httpUrl ?? ''; },
-    get wsUrl() { return serverUrls?.wsUrl ?? ''; },
-    get url() { return url; },
+    get httpUrl() {
+      return serverUrls?.httpUrl ?? '';
+    },
+    get wsUrl() {
+      return serverUrls?.wsUrl ?? '';
+    },
+    get url() {
+      return url;
+    },
     _internals: {
       app,
       http,
@@ -245,7 +286,9 @@ export async function createServer() {
       providers,
       voiceServices,
       asrSettings,
-      get world() { return world!; },
+      get world() {
+        return world!;
+      },
     },
   };
 }

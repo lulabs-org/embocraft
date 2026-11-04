@@ -151,6 +151,13 @@ export class SpatialVoice {
       void p.sender.replaceTrack(null).catch(() => {});
     this.announce();
   };
+  /** A live Agent conversation shares the already-authorized spatial microphone and audio context. */
+  get liveMicrophone() {
+    return this.stream;
+  }
+  get liveAudioContext() {
+    return this.context;
+  }
   async setListening(enabled: boolean) {
     if (this.disposed) return;
     const generation = ++this.listenGeneration;

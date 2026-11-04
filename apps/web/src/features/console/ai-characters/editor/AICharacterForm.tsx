@@ -23,6 +23,7 @@ export function AICharacterForm(props: AICharacterFormProps) {
   const {
     providers,
     voiceServices,
+    liveVoiceServices,
     agent,
     setAgent,
     editingAgent,
@@ -132,6 +133,7 @@ export function AICharacterForm(props: AICharacterFormProps) {
             agent={agent}
             setAgent={setAgent}
             voiceServices={voiceServices}
+            liveVoiceServices={liveVoiceServices}
           />
           <CharacterBudgetSettings agent={agent} setAgent={setAgent} />
           {!editingAgent && (

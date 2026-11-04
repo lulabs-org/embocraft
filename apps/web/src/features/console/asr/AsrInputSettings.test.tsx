@@ -41,7 +41,7 @@ beforeEach(() => {
 it('keeps a changed service pending until saved, then updates only that use', async () => {
   await mount.render(<AsrInputSettings active />);
   const select = mount.host.querySelector<HTMLSelectElement>(
-    '.asr-input-choice select',
+    '.asr-input-controls select',
   )!;
   const save = mount.host.querySelector<HTMLButtonElement>(
     '.asr-input-controls > button',
@@ -79,7 +79,9 @@ it('keeps a changed service pending until saved, then updates only that use', as
 it('keeps the old assignment and pending draft when the server rejects saving', async () => {
   vi.mocked(voiceApi.assignAsrService).mockRejectedValue(new Error('无法保存'));
   await mount.render(<AsrInputSettings active />);
-  const select = mount.host.querySelector<HTMLSelectElement>('select')!;
+  const select = mount.host.querySelector<HTMLSelectElement>(
+    '.asr-input-controls select',
+  )!;
   const save = mount.host.querySelector<HTMLButtonElement>(
     '.asr-input-controls > button',
   )!;
@@ -94,4 +96,24 @@ it('keeps the old assignment and pending draft when the server rejects saving', 
   expect(
     JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!).spatial.id,
   ).toBe(whisper.id);
+});
+
+it('configures nearby voice mode in the console and retains it in this browser', async () => {
+  await mount.render(<AsrInputSettings active />);
+  const mode = mount.host.querySelector<HTMLSelectElement>(
+    '.console-panel > label select',
+  )!;
+  expect(mode.value).toBe('traditional');
+  await act(async () => {
+    mode.value = 'live';
+    mode.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(localStorage.getItem('voxel.spatial-voice-mode')).toBe('live');
+  expect(mount.host.querySelector('.asr-input-controls')).toBeNull();
+  await mount.render(<AsrInputSettings active />);
+  expect(
+    mount.host.querySelector<HTMLSelectElement>(
+      '.console-panel > label select',
+    )!.value,
+  ).toBe('live');
 });

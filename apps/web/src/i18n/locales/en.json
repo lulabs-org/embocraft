@@ -207,6 +207,13 @@
     "selectedRecipientsAria": "Selected recipients"
   },
   "voice": {
+    "liveSelect": "Select a nearby Agent",
+    "liveStart": "Start conversation",
+    "liveStop": "End conversation",
+    "liveConnecting": "Connecting…",
+    "liveNone": "No nearby live voice Agents",
+    "liveAgent": "Agent",
+    "liveYou": "You",
     "spatialAria": "Nearby Spatial Voice",
     "title": "Proximity Voice",
     "spatialHelp": "Volume varies by distance and orientation within 18 voxels.",
@@ -221,7 +228,14 @@
     "listenOff": "Mute Output",
     "listenOn": "Unmute Output",
     "captionPrivate": "Direct",
-    "captionNearby": "Proximity Voice"
+    "captionNearby": "Proximity Voice",
+    "modeLabel": "Nearby Agent voice mode",
+    "modeTraditional": "Traditional voice",
+    "modeLive": "Live voice",
+    "liveNearby": "{count} nearby live voice Agents",
+    "liveWaiting": "No Agents are nearby.",
+    "liveDiscoveryError": "Could not find nearby live voice Agents. Check the server connection.",
+    "liveUnconfigured": "Nearby Agents are unavailable. Check their chat permission and live voice service in the console."
   },
   "console": {
     "eyebrow": "WORLD CONSOLE",
@@ -239,7 +253,24 @@
       "providers": "Model Providers",
       "voice": "Text-to-Speech (TTS)",
       "asr": "Speech Recognition (ASR)",
+      "liveVoice": "Live voice",
       "asrInput": "ASR Assignments"
+    },
+    "liveVoice": {
+      "title": "Live voice",
+      "add": "Add live voice service",
+      "edit": "Edit live voice service",
+      "description": "Configure the Agent’s bidirectional voice model and voice.",
+      "name": "Service name",
+      "provider": "Provider",
+      "model": "Live model",
+      "voice": "Voice",
+      "save": "Save service",
+      "delete": "Delete service",
+      "error": "Unable to update live voice service.",
+      "character": "Live voice service",
+      "disabled": "Disabled",
+      "hint": "When enabled, this Agent can hear nearby players using live voice mode."
     },
     "asrInput": {
       "title": "Assign recognition services",
@@ -258,7 +289,9 @@
       "clipHelp": "Transcribes voice messages sent with Send Voice in chat so AI characters can understand them.",
       "missing": "The previous service is gone. Please choose another.",
       "serverScope": "Saved on the server and used by all browsers.",
-      "browserScope": "Built-in browser recognition is assigned only in this browser."
+      "browserScope": "Built-in browser recognition is assigned only in this browser.",
+      "modeHelp": "This setting applies only to this browser. Changing modes turns off the microphone; turn it on again to continue.",
+      "spatialLiveHelp": "Nearby Agents with live voice enabled converse through their configured services."
     },
     "gateway": {
       "title": "Console Access Authorization",

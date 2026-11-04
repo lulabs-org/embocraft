@@ -22,6 +22,7 @@ import { ProviderEditor } from './providers/ProviderEditor';
 import { TaskPlans } from './tasks';
 import { useConsoleController } from './useConsoleController';
 import { VoiceServices } from './voice/VoiceServices';
+import { LiveVoiceServices } from './voice/LiveVoiceServices';
 
 type ConsoleProps = {
   connection: Connection;
@@ -154,6 +155,12 @@ export function ControlConsole({
             >
               {t('console.tabs.voice')}
             </button>
+            <button
+              aria-pressed={tab === 'liveVoice'}
+              onClick={() => setTab('liveVoice')}
+            >
+              {t('console.tabs.liveVoice')}
+            </button>
             <button aria-pressed={tab === 'asr'} onClick={() => setTab('asr')}>
               {t('console.tabs.asr')}
             </button>
@@ -185,6 +192,12 @@ export function ControlConsole({
                 active={open && status === 'ready' && tab === 'voice'}
               />
             </div>
+            <div className="console-voice" hidden={tab !== 'liveVoice'}>
+              <LiveVoiceServices
+                services={controller.liveVoiceServices}
+                onChange={controller.setLiveVoiceServices}
+              />
+            </div>
             <div className="console-voice" hidden={tab !== 'asr'}>
               <SpeechRecognitionPanel
                 connection={connection}
@@ -199,6 +212,7 @@ export function ControlConsole({
             <div
               hidden={
                 tab === 'voice' ||
+                tab === 'liveVoice' ||
                 tab === 'asr' ||
                 tab === 'asrInput' ||
                 tab === 'plans'

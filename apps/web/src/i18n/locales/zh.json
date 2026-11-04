@@ -207,6 +207,13 @@
     "selectedRecipientsAria": "已选对象"
   },
   "voice": {
+    "liveSelect": "选择附近 Agent",
+    "liveStart": "开始对话",
+    "liveStop": "结束对话",
+    "liveConnecting": "正在连接…",
+    "liveNone": "附近没有可对话的 Agent",
+    "liveAgent": "Agent",
+    "liveYou": "你",
     "spatialAria": "附近空间语音",
     "title": "附近语音",
     "spatialHelp": "音量在 18 格内随距离、朝向变化。",
@@ -221,7 +228,14 @@
     "listenOff": "关闭收听",
     "listenOn": "开启收听",
     "captionPrivate": "私聊",
-    "captionNearby": "附近语音"
+    "captionNearby": "附近语音",
+    "modeLabel": "附近 Agent 语音模式",
+    "modeTraditional": "传统语音",
+    "modeLive": "实时语音",
+    "liveNearby": "附近 {count} 个实时语音 Agent",
+    "liveWaiting": "附近没有在线的 Agent。",
+    "liveDiscoveryError": "无法获取附近的实时语音 Agent，请检查服务器连接。",
+    "liveUnconfigured": "附近的 Agent 暂不可用，请在控制台检查聊天权限和实时语音服务设置。"
   },
   "console": {
     "eyebrow": "WORLD CONSOLE",
@@ -239,7 +253,24 @@
       "providers": "模型服务",
       "voice": "文本转语音（TTS）",
       "asr": "语音识别（ASR）",
+      "liveVoice": "实时语音对话",
       "asrInput": "识别服务分配"
+    },
+    "liveVoice": {
+      "title": "实时语音对话",
+      "add": "添加实时语音服务",
+      "edit": "编辑实时语音服务",
+      "description": "配置 Agent 使用的双向实时语音模型和音色。",
+      "name": "服务名称",
+      "provider": "服务商",
+      "model": "对话模型",
+      "voice": "音色",
+      "save": "保存服务",
+      "delete": "删除服务",
+      "error": "无法操作实时语音服务。",
+      "character": "实时语音对话服务",
+      "disabled": "不启用",
+      "hint": "启用后，附近玩家在实时语音模式下说话时，此 Agent 可以听到。"
     },
     "asrInput": {
       "title": "分配语音识别服务",
@@ -258,7 +289,9 @@
       "clipHelp": "通过聊天框中的“发语音”发送语音消息后，将语音识别为文字，供 AI 角色理解。",
       "missing": "原服务已不存在，请重新选择。",
       "serverScope": "保存到服务器，对所有浏览器生效。",
-      "browserScope": "浏览器自带识别的分配仅对当前浏览器生效。"
+      "browserScope": "浏览器自带识别的分配仅对当前浏览器生效。",
+      "modeHelp": "此设置仅在当前浏览器生效。切换模式会关闭麦克风，请重新开启。",
+      "spatialLiveHelp": "附近启用实时语音的 Agent 将通过配置的服务直接对话。"
     },
     "gateway": {
       "title": "控制台访问授权",

@@ -31,6 +31,7 @@ export function characterSettings(
     skills: view.skills,
     voiceReplies: view.voiceReplies,
     voiceServiceId: view.voiceServiceId,
+    liveVoiceServiceId: view.liveVoiceServiceId,
     thinking: view.thinking,
     reasoningEffort: view.reasoningEffort,
   };

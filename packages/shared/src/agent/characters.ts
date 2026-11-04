@@ -29,6 +29,8 @@ export type AICharacterSettings = {
   skills?: AICharacterSkillId[];
   voiceReplies?: boolean;
   voiceServiceId?: string;
+  /** Optional native speech-to-speech service for direct live conversations. */
+  liveVoiceServiceId?: string;
   thinking: 'enabled' | 'disabled';
   reasoningEffort: 'none' | 'low' | 'high' | 'max';
 };

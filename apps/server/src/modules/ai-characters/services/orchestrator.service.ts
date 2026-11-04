@@ -47,6 +47,7 @@ import {
 } from './character-job';
 import { executionState } from './task-execution-adapter';
 import { CharacterVoiceCoordinator } from './voice-coordinator.service';
+import type { LiveVoiceStore } from '../../live-voice';
 
 export class AICharacterOrchestrator {
   readonly jobs = new AICharacterRegistry();
@@ -70,6 +71,7 @@ export class AICharacterOrchestrator {
     private dependencies: AICharacterDependencies,
     readonly voiceServices: VoiceServicePort | undefined,
     private archive: ArchivePort,
+    private readonly liveVoiceServices?: LiveVoiceStore,
   ) {
     const characters = new CharacterSnapshots();
     const tasks = new TaskSnapshots();
@@ -243,6 +245,8 @@ export class AICharacterOrchestrator {
 
   private checkVoice(settings: AICharacterSettings) {
     this.voiceCoordinator.checkVoice(settings);
+    if (settings.liveVoiceServiceId)
+      this.liveVoiceServices?.get(settings.liveVoiceServiceId);
   }
 
   private bindVoice(job: Job) {

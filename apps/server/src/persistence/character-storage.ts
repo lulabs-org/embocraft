@@ -51,6 +51,7 @@ function configuration(record: CharacterRecord, position: number) {
     skills: json(record.skills),
     voiceReplies: record.voiceReplies ?? null,
     voiceServiceId: record.voiceServiceId || null,
+    liveVoiceServiceId: record.liveVoiceServiceId || null,
     thinking: record.thinking ?? null,
     reasoningEffort: record.reasoningEffort ?? null,
     createdAt:

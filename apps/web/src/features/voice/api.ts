@@ -36,6 +36,24 @@ async function asrRequest<T>(
 }
 
 export const voiceApi = {
+  async liveAgents(
+    token: string,
+    signal: AbortSignal,
+  ): Promise<{ id: string; name: string }[]> {
+    const response = await fetch(`${serverHttpUrl()}/chat/live/agents`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    });
+    if (!response.ok) {
+      const value = await response.json().catch(() => null);
+      throw Error(
+        typeof value?.error === 'string'
+          ? value.error
+          : '无法读取附近的实时语音 Agent，请检查服务器版本。',
+      );
+    }
+    return response.json();
+  },
   speachesDefaults: (signal?: AbortSignal) =>
     managementRequest<{ baseUrl: string }>(
       `${serverHttpUrl()}/voice/asr/defaults`,

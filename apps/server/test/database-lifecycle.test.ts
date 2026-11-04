@@ -16,6 +16,7 @@ const loadWorld = vi.fn();
 const findProviders = vi.fn().mockResolvedValue([]);
 const findTtsProviders = vi.fn().mockResolvedValue([]);
 const findAsrProviders = vi.fn().mockResolvedValue([]);
+const findLiveVoiceProviders = vi.fn().mockResolvedValue([]);
 const findAssignments = vi.fn().mockResolvedValue([]);
 const findCharacters = vi.fn().mockResolvedValue([]);
 const findPlans = vi.fn().mockResolvedValue([]);
@@ -28,6 +29,7 @@ const db = {
   agentProvider: { findMany: findProviders },
   ttsProvider: { findMany: findTtsProviders },
   asrProvider: { findMany: findAsrProviders },
+  liveVoiceProvider: { findMany: findLiveVoiceProviders },
   asrAssignment: { findMany: findAssignments },
   agentCharacter: { findMany: findCharacters },
   agentPlan: { findMany: findPlans },
@@ -48,6 +50,7 @@ beforeEach(async () => {
     findProviders,
     findTtsProviders,
     findAsrProviders,
+    findLiveVoiceProviders,
     findAssignments,
     findCharacters,
     findPlans,

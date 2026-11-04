@@ -7,11 +7,34 @@ export function CharacterVoiceSettings({
   agent,
   setAgent,
   voiceServices,
-}: Pick<AICharacterFormProps, 'agent' | 'setAgent' | 'voiceServices'>) {
+  liveVoiceServices = [],
+}: Pick<
+  AICharacterFormProps,
+  'agent' | 'setAgent' | 'voiceServices' | 'liveVoiceServices'
+>) {
   const { t } = useI18n();
   const permissions = aiCharacterPermissions(agent);
   return (
     <div className="agents-form-section agents-voice-settings">
+      <label className="agents-voice-service">
+        {t('console.liveVoice.character')}
+        <select
+          value={agent.liveVoiceServiceId || ''}
+          disabled={!permissions.chat}
+          onChange={(event) =>
+            setAgent({ ...agent, liveVoiceServiceId: event.target.value })
+          }
+        >
+          <option value="">{t('console.liveVoice.disabled')}</option>
+          {liveVoiceServices.map((service) => (
+            <option key={service.id} value={service.id}>
+              {service.name} · {service.model}
+            </option>
+          ))}
+        </select>
+        <small>{t('console.liveVoice.hint')}</small>
+      </label>
+
       <div className="agents-toggle-card">
         <div className="agents-toggle-info">
           <strong>

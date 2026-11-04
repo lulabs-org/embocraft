@@ -7,3 +7,5 @@ export {
 } from './asr-selection';
 export type { AsrUse } from './asr-selection';
 export { useAsrServices } from './useAsrServices';
+export { setSpatialVoiceMode, useSpatialVoiceMode } from './spatial-mode';
+export type { SpatialVoiceMode } from './spatial-mode';

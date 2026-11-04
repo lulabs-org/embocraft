@@ -57,6 +57,9 @@ export class WorldRoom extends Room<WorldState> {
   private budget = new Map<string, { at: number; count: number }>();
   private signalBudget = new Map<string, { at: number; count: number }>();
   private events: WorldEvent[] = [];
+  private liveVoiceChatListeners = new Set<
+    (actor: string, data: ChatData) => boolean
+  >();
   private seq = 0;
   private ownsActive = false;
   private spatialSignal = createSpatialSignaling(
@@ -331,6 +334,7 @@ export class WorldRoom extends Room<WorldState> {
     this.releaseVoiceServices?.();
     this.agentSpeech.close();
     this.chat.clear();
+    this.liveVoiceChatListeners.clear();
     await this.queue;
     await this.store?.close();
     if (this.ownsActive) activeRoom = false;
@@ -388,7 +392,29 @@ export class WorldRoom extends Room<WorldState> {
     if (this.events.length > 100) this.events.shift();
     this.broadcast('event', event);
   }
-  private chatEvent(actor: string, data: ChatData) {
+  /** Subscribe to live conversation replies; a consumed reply is spoken by the live session. */
+  onLiveVoiceChat(listener: (actor: string, data: ChatData) => boolean) {
+    this.liveVoiceChatListeners.add(listener);
+    return () => this.liveVoiceChatListeners.delete(listener);
+  }
+  /** Show live transcripts to the player without synthesizing or routing them again. */
+  publishLiveVoiceTranscript(actor: string, recipient: string, text: string) {
+    const speaker = this.state.players.get(actor);
+    if (!speaker?.connected || !this.state.players.get(recipient)?.connected)
+      return;
+    this.chatEvent(
+      actor,
+      {
+        scope: actor === recipient ? 'nearby' : 'private',
+        recipients: actor === recipient ? [] : [recipient],
+        kind: 'text',
+        name: speaker.name,
+        text,
+      },
+      true,
+    );
+  }
+  private chatEvent(actor: string, data: ChatData, liveTranscript = false) {
     const event = {
       actorKind: this.state.players.get(actor)?.kind,
       seq: ++this.seq,
@@ -401,7 +427,11 @@ export class WorldRoom extends Room<WorldState> {
     if (this.events.length > 100) this.events.shift();
     for (const client of this.clients)
       if (visibleEvent(event, client.sessionId)) client.send('event', event);
-    this.agentSpeech.enqueue(actor, data);
+    if (liveTranscript) return;
+    let consumed = false;
+    for (const listener of this.liveVoiceChatListeners)
+      if (listener(actor, data)) consumed = true;
+    if (!consumed) this.agentSpeech.enqueue(actor, data);
   }
   private observe(client: Client, id: string) {
     const self = this.state.players.get(client.sessionId)!;

@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type WebSocket from 'ws';
-import { bridgeOpenAIAsr, Pcm16Upsampler } from './openai.adapter';
+import { bridgeOpenAIAsr } from './openai.adapter';
+import { Pcm16Upsampler } from '../../../../core/audio/pcm-resample';
 
 class Socket extends EventEmitter {
   readyState = 1;

@@ -15,10 +15,20 @@ const mount = installReactMount();
 
 let draft: AICharacterSettings;
 
-import { aiCharacterPermissions, type VoiceServiceView } from '@voxel/shared';
+import {
+  aiCharacterPermissions,
+  type LiveVoiceView,
+  type VoiceServiceView,
+} from '@voxel/shared';
 
 let change!: React.Dispatch<React.SetStateAction<AICharacterSettings>>;
-function Harness({ services = [] }: { services?: VoiceServiceView[] }) {
+function Harness({
+  services = [],
+  liveServices = [],
+}: {
+  services?: VoiceServiceView[];
+  liveServices?: LiveVoiceView[];
+}) {
   const [agent, setAgent] = useState<AICharacterSettings>(initialAICharacter);
   change = setAgent;
   draft = agent;
@@ -27,6 +37,7 @@ function Harness({ services = [] }: { services?: VoiceServiceView[] }) {
       agent={agent}
       setAgent={setAgent}
       voiceServices={services}
+      liveVoiceServices={liveServices}
     />
   );
 }
@@ -55,4 +66,25 @@ it('requires chat permission and a service for voice, retaining the selected ser
     })),
   );
   expect(toggle.disabled).toBe(true);
+});
+
+it('binds a live conversation service independently of TTS voice replies', async () => {
+  const liveServices = [
+    {
+      id: 'live-a',
+      name: 'Live',
+      model: 'gpt-live-1',
+      voice: 'marin',
+      provider: 'openai',
+      hasApiKey: true,
+    },
+  ] as LiveVoiceView[];
+  await mount.render(<Harness liveServices={liveServices} />);
+  const select = mount.host.querySelector('select')!;
+  await act(async () => {
+    select.value = 'live-a';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(draft.liveVoiceServiceId).toBe('live-a');
+  expect(draft.voiceReplies).toBe(false);
 });
