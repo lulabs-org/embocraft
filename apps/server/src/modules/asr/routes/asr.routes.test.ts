@@ -36,7 +36,10 @@ beforeEach(async () => {
     available: true,
     reason: 'local',
   });
-  installCapabilitiesRoutes(app, speech, store);
+  installCapabilitiesRoutes(app, speech, store, async () => ({
+    available: true,
+    reason: 'fixture',
+  }));
   installAsrRoutes(app, store);
   server = createServer(app);
   transport = new RoutedWebSocketTransport(

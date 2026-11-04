@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { DatabaseAsrServicePersistence } from './database-asr-services';
-import type { SavedService } from './asr-settings-store';
+import type { SavedService } from '../domain';
 
 describe('DatabaseAsrServicePersistence', () => {
   it('returns empty array if asrProvider table is empty', async () => {

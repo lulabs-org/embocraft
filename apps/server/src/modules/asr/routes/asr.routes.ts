@@ -8,7 +8,7 @@ import {
 import { assertJsonRequest } from '../../../core/http/middleware/require-json';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Express, type Request, type Response } from 'express';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
+import type { AsrSettingsStore } from '../services/asr-settings-store';
 import { AppError } from '../../../core/errors/app-error';
 
 export function installAsrRoutes(

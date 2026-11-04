@@ -27,7 +27,11 @@ import {
 } from './modules/tasks';
 import { errorHandler } from './core/http/middleware/error-handler';
 import { installAsrHttp, type AsrRouteDependencies } from './modules/asr';
-import { installTtsHttp, type TtsRouteDependencies } from './modules/tts';
+import {
+  installTtsHttp,
+  PiperModels,
+  type TtsRouteDependencies,
+} from './modules/tts';
 import { installChatRoutes } from './modules/chat';
 import { installWorldRoutes, installPresenceRoutes } from './modules/world';
 
@@ -41,7 +45,7 @@ export type AppDependencies = {
     providers: ProviderService;
     tasks: TaskPort;
   };
-  asr: Omit<AsrRouteDependencies, 'origin'>;
+  asr: Omit<AsrRouteDependencies, 'origin' | 'ttsStatus'>;
   tts: TtsRouteDependencies;
   world: {
     roomId: () => string;
@@ -77,7 +81,11 @@ export function createApp(deps: AppDependencies) {
   installTaskRoutes(app, deps.management.tasks, consoleSync);
   installConsoleSyncRoutes(app, consoleSync);
   managementScope.close();
-  installAsrHttp(app, { ...deps.asr, origin: deps.origin });
+  installAsrHttp(app, {
+    ...deps.asr,
+    origin: deps.origin,
+    ttsStatus: () => new PiperModels().status(),
+  });
   installTtsHttp(app, deps.tts);
   installWorldRoutes(app, deps.world.roomId);
   installChatRoutes(

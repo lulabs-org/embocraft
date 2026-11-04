@@ -1,7 +1,3 @@
-import { bailianAsrEndpoint } from '../../domain';
-
-export { bailianAsrEndpoint };
-
 /** 映射 HTTP 握手阶段失败原因 */
 export function handshakeFailure(status: number | undefined): string {
   if (status === 401)

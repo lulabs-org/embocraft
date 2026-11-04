@@ -16,7 +16,7 @@ import {
   AICharacterManager,
   CharacterQueries,
 } from '../src/modules/ai-characters';
-import { AsrSettingsStore } from '../src/modules/asr/persistence/asr-settings-store';
+import { AsrSettingsStore } from '../src/modules/asr/services/asr-settings-store';
 import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/database-asr-services';
 import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/database-voice-services';
 import { VoiceServiceStore } from '../src/modules/tts/persistence/voice-service-store';

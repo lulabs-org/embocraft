@@ -5,15 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
 
 import { WhisperAdapter as LocalSpeech } from '../engines';
-import { PiperModels } from '../../tts/services/piper-models.service';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
 describe('audio capabilities HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore;
   const status = vi.fn();
+  const ttsStatus = vi.fn();
   const origin = 'http://127.0.0.1:5187';
   beforeEach(async () => {
-    vi.spyOn(PiperModels.prototype, 'status').mockResolvedValue({
+    ttsStatus.mockReset().mockResolvedValue({
       available: false,
       reason: '请安装 Piper 模型。',
     });
@@ -23,7 +23,7 @@ describe('audio capabilities HTTP boundary', () => {
     store = new AsrSettingsStore();
     await store.load();
     const app = express();
-    installCapabilitiesRoutes(app, speech, store, origin);
+    installCapabilitiesRoutes(app, speech, store, ttsStatus, origin);
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
@@ -40,10 +40,11 @@ describe('audio capabilities HTTP boundary', () => {
   it('advertises ASR and TTS readiness without requiring an admin token', async () => {
     const response = await fetch(url);
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      local: { available: true },
-      agentSpeech: { available: false },
+    expect(await response.json()).toEqual({
+      local: { available: true, reason: 'ready' },
+      agentSpeech: { available: false, reason: '请安装 Piper 模型。' },
     });
+    expect(ttsStatus).toHaveBeenCalledTimes(1);
   });
 
   it('retains preflight, origin and cross-site policies after separation', async () => {
@@ -62,6 +63,7 @@ describe('audio capabilities HTTP boundary', () => {
       expect((await fetch(url, { headers })).status).toBe(403);
     }
     expect(status).not.toHaveBeenCalled();
+    expect(ttsStatus).not.toHaveBeenCalled();
   });
 
   it('uses the selected Whisper profile and rejects wrong or deleted services', async () => {
@@ -89,10 +91,19 @@ describe('audio capabilities HTTP boundary', () => {
     await store.remove(whisper.id);
     expect((await fetch(`${url}?serviceId=${whisper.id}`)).status).toBe(404);
     expect(status).toHaveBeenCalledTimes(1);
+    expect(ttsStatus).toHaveBeenCalledTimes(1);
   });
 
   it('keeps unexpected capability failures private', async () => {
     status.mockRejectedValueOnce(new Error('private upstream error'));
+    const response = await fetch(url);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: '无法检查识别服务。' });
+    expect(ttsStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps unexpected TTS status failures private', async () => {
+    ttsStatus.mockRejectedValueOnce(new Error('private TTS error'));
     const response = await fetch(url);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: '无法检查识别服务。' });

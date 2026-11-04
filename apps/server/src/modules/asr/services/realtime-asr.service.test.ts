@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import EventEmitter from 'node:events';
 import type WebSocket from 'ws';
 import { RealtimeAsrService } from './realtime-asr.service';
-import type { AsrSettingsStore } from '../persistence/asr-settings-store';
+import type { AsrSettingsStore } from './asr-settings-store';
 import { AppError } from '../../../core/errors/app-error';
 import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 

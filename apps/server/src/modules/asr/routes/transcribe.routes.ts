@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { AsrSettingsStore } from '../persistence/asr-settings-store';
+import type { AsrSettingsStore } from '../services/asr-settings-store';
 import { WhisperAdapter as LocalSpeech } from '../engines';
 import { scheduleSpeech } from '../services/speech-scheduler.service';
 import { MAX_AUDIO_BYTES } from '../../../core/audio/normalize';

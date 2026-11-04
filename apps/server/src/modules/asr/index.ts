@@ -1,5 +1,5 @@
 export { installAsrHttp, type AsrRouteDependencies } from './routes/asr.http';
-export { AsrSettingsStore } from './persistence/asr-settings-store';
+export { AsrSettingsStore } from './services/asr-settings-store';
 export { DatabaseAsrServicePersistence } from './persistence/database-asr-services';
 export { installAsrSocket } from './sockets/asr.socket';
 export {

@@ -1,6 +1,7 @@
 import { type AsrAssignments, type AsrUse } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import { SpeachesModels } from '../../../core/audio/speaches-models';
+import { listWhisperModels } from '../engines/whisper/whisper.models';
+import type { AsrRepositoryPort } from '../ports';
 import {
   ASR_USES,
   toAsrServiceView,
@@ -11,17 +12,12 @@ import {
 
 export type { SavedService };
 
-export interface AsrServicePersistence {
-  load(): Promise<SavedService[]>;
-  save(values: SavedService[]): Promise<void>;
-}
-
 export class AsrSettingsStore {
   private values: SavedService[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
-  constructor(private readonly storage: AsrServicePersistence) {}
+  constructor(private readonly storage: AsrRepositoryPort) {}
   async load() {
     const saved = await this.storage.load();
     if (
@@ -77,10 +73,7 @@ export class AsrSettingsStore {
       input,
       previous?.provider === 'whisper' ? previous : undefined,
     );
-    return new SpeachesModels(connection).list(
-      signal,
-      'automatic-speech-recognition',
-    );
+    return listWhisperModels(connection, signal);
   }
   assignments(): AsrAssignments {
     // Older databases need no console visit or name-based client initialization.
