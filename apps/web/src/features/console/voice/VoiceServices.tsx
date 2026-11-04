@@ -396,6 +396,17 @@ export function VoiceServices({
             {draft.type === 'bailian' && (
               <p className="agent-hint">{t('console.voice.hintBailian')}</p>
             )}
+          </fieldset>
+          {dirty && (
+            <p className="agent-hint">{t('console.voice.previewDirtyHint')}</p>
+          )}
+          <VoicePreview
+            serviceId={selected ?? undefined}
+            service={saved}
+            active={active}
+            disabled={dirty || busy}
+          />
+          <fieldset disabled={busy}>
             <div className="voice-service-actions console-form-actions">
               <button
                 className="primary"
@@ -416,15 +427,6 @@ export function VoiceServices({
             </div>
           </fieldset>
         </form>
-        {dirty && (
-          <p className="agent-hint">{t('console.voice.previewDirtyHint')}</p>
-        )}
-        <VoicePreview
-          serviceId={selected ?? undefined}
-          service={saved}
-          active={active}
-          disabled={dirty || busy}
-        />
       </div>
     </div>
   );

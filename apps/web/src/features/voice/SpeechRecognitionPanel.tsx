@@ -1,17 +1,15 @@
 import { ConsoleFeedbackRelay } from '../../components/ui/ConsoleFeedbackRelay';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BailianSpeechSession,
   BrowserRecognitionSession,
   LiveRecorder,
   LiveSpeechSession,
-  LocalRecorder,
   speechTransport,
-  type SpeechCapabilities,
 } from '../../audio';
 import { useI18n } from '../../i18n/context';
 import type { Connection } from '../../network/connection';
-import { voiceApi } from './api';
+import { voiceApi, type SpeechCapabilities } from './api';
 import { BailianAsrConfig } from './BailianAsrConfig';
 import { browserLanguages } from './browser-asr-languages';
 import { useAsrServices } from './useAsrServices';
@@ -29,7 +27,6 @@ export function SpeechRecognitionPanel({
     ['en-US', t('console.asr.langEnglish')],
   ] as const;
 
-  const [recorder] = useState(() => new LocalRecorder());
   const [live] = useState(() => new LiveRecorder());
   const [browser] = useState(() => new BrowserRecognitionSession());
   const asr = useAsrServices(active);
@@ -42,59 +39,57 @@ export function SpeechRecognitionPanel({
     asr.selected && asr.selected.provider !== 'browser'
       ? asr.selected.model
       : undefined;
-  const fileTestId = useId();
-  const [showFileTest, setShowFileTest] = useState(false);
   const [partial, setPartial] = useState('');
   const [capabilities, setCapabilities] = useState<SpeechCapabilities>();
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState('');
-  const [checkedAt, setCheckedAt] = useState<Date>();
   const [retry, setRetry] = useState(0);
   const [serverLanguage, setServerLanguage] = useState('zh-CN');
   const language =
     asr.draft.provider === 'browser' ? asr.draft.language : serverLanguage;
   const [state, setState] = useState<'idle' | 'listening' | 'thinking'>('idle');
-  const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [text, setText] = useState('');
+  const resultText = [text, partial]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ');
+  const resultRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const result = resultRef.current;
+    if (result) result.scrollLeft = result.scrollWidth;
+  }, [resultText]);
   const ownsMicrophone = useRef(false);
   const release = useCallback(() => {
     if (ownsMicrophone.current) connection.voiceLabRecording = false;
     ownsMicrophone.current = false;
   }, [connection]);
   const stop = () => {
-    recorder.cancel();
     live.cancel();
     browser.cancel();
     setPartial('');
     release();
     setState('idle');
-    setStatus('');
   };
   useEffect(() => {
-    setShowFileTest(false);
     setState('idle');
-    setStatus('');
     return () => {
-      recorder.cancel();
       live.cancel();
       browser.cancel();
       setPartial('');
       release();
     };
-  }, [active, connection, recorder, live, browser, service, release]);
+  }, [active, connection, live, browser, service, release]);
   useEffect(() => {
     if (!active || !isWhisper) return;
     const abort = new AbortController();
     setChecking(true);
     setCheckError('');
-    setCheckedAt(undefined);
     setCapabilities(undefined);
     const timeout = setTimeout(() => {
       abort.abort();
       setChecking(false);
       setCheckError(t('console.asr.serviceFailed'));
-      setCheckedAt(new Date());
     }, 10000);
     void voiceApi
       .capabilities(abort.signal, whisperServiceId)
@@ -109,7 +104,6 @@ export function SpeechRecognitionPanel({
         clearTimeout(timeout);
         if (!abort.signal.aborted) {
           setChecking(false);
-          setCheckedAt(new Date());
         }
       });
     return () => {
@@ -143,44 +137,33 @@ export function SpeechRecognitionPanel({
     stop();
     asr.choose(id);
     setError('');
-    setStatus('');
     setText('');
   };
-  const start = (file?: File) => {
+  const start = () => {
     if (!ready || busy) return;
     setError('');
-    if (!file) {
-      if (connection.chatRecording || connection.voiceLabRecording) {
-        setError(t('console.asr.browserCannotRecordError'));
-        return;
-      }
-      connection.stopSpatialInput();
-      connection.voiceLabRecording = true;
-      ownsMicrophone.current = true;
+    if (connection.chatRecording || connection.voiceLabRecording) {
+      setError(t('console.asr.browserCannotRecordError'));
+      return;
     }
+    connection.stopSpatialInput();
+    connection.voiceLabRecording = true;
+    ownsMicrophone.current = true;
     setText('');
     const callbacks = {
-      onState: (next: 'listening' | 'thinking', message: string) => {
+      onState: (next: 'listening' | 'thinking') => {
         setState(next);
-        setStatus(message);
-      },
-      onText: (value: string) => {
-        release();
-        setText(value);
-        setState('idle');
-        setStatus(t('console.asr.checkFinished'));
       },
       onError: (message: string) => {
         release();
         setState('idle');
-        setStatus('');
         setError(message);
       },
     };
     if (isBrowser) {
       setState('listening');
       browser.start(language, {
-        onStatus: setStatus,
+        onStatus: () => {},
         onPartial: setPartial,
         onFinal: (value) => {
           setPartial('');
@@ -190,17 +173,14 @@ export function SpeechRecognitionPanel({
         onEnd: () => {
           release();
           setState('idle');
-          setStatus(t('console.asr.checkFinished'));
         },
       });
-    } else if (file)
-      void recorder.transcribeFile(file, language, callbacks, whisperServiceId);
-    else
+    } else
       void live.start(
         language,
         {
           onState: callbacks.onState,
-          onStatus: setStatus,
+          onStatus: () => {},
           onPartial: setPartial,
           onFinal: (value) => {
             setPartial('');
@@ -212,7 +192,6 @@ export function SpeechRecognitionPanel({
           onEnd: () => {
             release();
             setState('idle');
-            setStatus(t('console.asr.checkFinished'));
           },
         },
         undefined,
@@ -294,159 +273,113 @@ export function SpeechRecognitionPanel({
               {asr.notice}
             </p>
           )}
-          <BailianAsrConfig manager={asr} disabled={busy} />
-          {!isBrowser && asr.selected?.provider === 'whisper' && (
-            <section className="console-panel-section">
-              <h4>{t('console.asr.whisperStatusHeading')}</h4>
-              <p role="status" aria-live="polite" aria-atomic="true">
-                {checking
-                  ? t('console.asr.checkingService')
-                  : checkError
-                    ? t('console.asr.serviceFailed')
-                    : capabilities?.local.available
-                      ? t('console.asr.serviceReady')
-                      : t('console.asr.serviceNotReady')}
-                {!checking && checkedAt && (
-                  <small className="asr-help">
-                    {checkError
-                      ? t('console.asr.serviceFailed')
-                      : t('console.asr.checkFinished')}{' '}
-                    · {checkedAt.toLocaleTimeString('zh-CN', { hour12: false })}
-                  </small>
-                )}
-              </p>
-              <ConsoleFeedbackRelay error={checkError} active={active} />
-              {capabilities && (
-                <p className="agent-hint">{capabilities.local.reason}</p>
-              )}
-              <div>
-                <button
-                  type="button"
-                  disabled={checking || busy}
-                  onClick={() => {
-                    setChecking(true);
-                    setRetry((value) => value + 1);
-                  }}
-                >
-                  {checking ? t('common.loading') : t('console.asr.recheck')}
-                </button>
-              </div>
-              <p className="agent-hint">{t('console.asr.whisperServerNote')}</p>
-            </section>
-          )}
-          <section
-            className="voice-preview"
-            aria-label={t('console.asr.tryAsrHeading')}
-          >
-            <h4>{t('console.asr.tryAsrHeading')}</h4>
-            {!isBrowser && (
-              <label>
-                {t('console.asr.primaryLanguage')}
-                <select
-                  value={language}
-                  disabled={busy}
-                  onChange={(event) => setServerLanguage(event.target.value)}
-                >
-                  {serverLanguages.map(([code, label]) => (
-                    <option key={code} value={code}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <div className="voice-service-actions">
-              <button
-                type="button"
-                disabled={
-                  state === 'idle'
-                    ? !ready || (!isBrowser && !live.canRecord)
-                    : state === 'thinking'
-                }
-                onClick={() => {
-                  if (state === 'idle') {
-                    start();
-                  } else if (state === 'listening') {
-                    if (isBrowser) {
-                      setState('thinking');
-                      browser.finish();
-                    } else void live.finish();
-                  } else {
-                    stop();
-                  }
-                }}
-              >
-                {state === 'idle'
-                  ? t('console.asr.startRecording')
-                  : state === 'listening'
-                    ? t('console.asr.finishRecording')
-                    : t('console.asr.recording')}
-              </button>
-              {!isBrowser && asr.selected?.provider === 'whisper' && (
-                <button
-                  type="button"
-                  className="asr-file-toggle"
-                  aria-expanded={showFileTest}
-                  aria-controls={fileTestId}
-                  disabled={busy}
-                  onClick={() => setShowFileTest((value) => !value)}
-                >
-                  {showFileTest
-                    ? t('console.asr.toggleFileTestHide')
-                    : t('console.asr.toggleFileTestShow')}
-                </button>
-              )}
-            </div>
-            {isBrowser && !browser.available && (
-              <p role="alert" className="agent-error">
-                {t('console.asr.browserNotSupportedError')}
-              </p>
-            )}
-            {!isBrowser && !live.canRecord && (
-              <p className="agent-hint">
-                {t('console.asr.browserCannotRecordError')}
-              </p>
-            )}
+          <BailianAsrConfig manager={asr} disabled={busy}>
             {!isBrowser && asr.selected?.provider === 'whisper' && (
-              <div
-                id={fileTestId}
-                hidden={!showFileTest}
-                className="asr-file-test"
-              >
-                <label>
-                  {t('console.asr.fileInputLabel')}
-                  <input
-                    type="file"
-                    accept=".wav,.webm,.mp4,.m4a,.ogg"
-                    disabled={!ready || busy}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = '';
-                      if (file) start(file);
+              <section className="console-panel-section asr-service-status">
+                <div className="asr-service-status-row">
+                  <h4>{t('console.asr.whisperStatusHeading')}</h4>
+                  <span role="status" aria-live="polite">
+                    {checking
+                      ? t('console.asr.checkingService')
+                      : checkError
+                        ? t('console.asr.serviceFailed')
+                        : capabilities?.local.available
+                          ? t('console.asr.serviceReady')
+                          : t('console.asr.serviceNotReady')}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={checking || busy}
+                    onClick={() => {
+                      setChecking(true);
+                      setRetry((value) => value + 1);
                     }}
-                  />
-                </label>
-              </div>
-            )}
-            {status && <p role="status">{status}</p>}
-            <ConsoleFeedbackRelay error={error} active={active} />
-            <label>
-              {t('console.asr.confirmedTextLabel')}
-              <textarea
-                rows={4}
-                readOnly
-                aria-live="polite"
-                value={
-                  partial ? (text ? `${text}\n${partial}` : partial) : text
-                }
-                placeholder={t(
-                  state === 'listening'
-                    ? 'console.asr.listeningInterim'
-                    : 'console.asr.confirmedTextPlaceholder',
+                  >
+                    {t('console.asr.recheck')}
+                  </button>
+                </div>
+                {capabilities && !capabilities.local.available && (
+                  <p className="agent-hint">{capabilities.local.reason}</p>
                 )}
-              />
-            </label>
-          </section>
+              </section>
+            )}
+            <section
+              className="voice-preview asr-preview"
+              aria-label={t('console.asr.tryAsrHeading')}
+            >
+              <h4>{t('console.asr.tryAsrHeading')}</h4>
+              {!isBrowser && (
+                <label>
+                  {t('console.asr.primaryLanguage')}
+                  <select
+                    value={language}
+                    disabled={busy}
+                    onChange={(event) => setServerLanguage(event.target.value)}
+                  >
+                    {serverLanguages.map(([code, label]) => (
+                      <option key={code} value={code}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div className="asr-preview-row">
+                <div className="voice-service-actions">
+                  <button
+                    type="button"
+                    disabled={
+                      state === 'idle'
+                        ? !ready || (!isBrowser && !live.canRecord)
+                        : state === 'thinking'
+                    }
+                    onClick={() => {
+                      if (state === 'idle') {
+                        start();
+                      } else if (state === 'listening') {
+                        if (isBrowser) {
+                          setState('thinking');
+                          browser.finish();
+                        } else void live.finish();
+                      } else {
+                        stop();
+                      }
+                    }}
+                  >
+                    {state === 'idle'
+                      ? t('console.asr.startRecording')
+                      : state === 'listening'
+                        ? t('console.asr.finishRecording')
+                        : t('console.asr.recording')}
+                  </button>
+                </div>
+                <textarea
+                  ref={resultRef}
+                  rows={1}
+                  readOnly
+                  aria-label={t('console.asr.confirmedTextLabel')}
+                  aria-live="polite"
+                  value={resultText}
+                  placeholder={t(
+                    state === 'listening'
+                      ? 'console.asr.listeningInterim'
+                      : 'console.asr.confirmedTextPlaceholder',
+                  )}
+                />
+              </div>
+              {isBrowser && !browser.available && (
+                <p role="alert" className="agent-error">
+                  {t('console.asr.browserNotSupportedError')}
+                </p>
+              )}
+              {!isBrowser && !live.canRecord && (
+                <p className="agent-hint">
+                  {t('console.asr.browserCannotRecordError')}
+                </p>
+              )}
+              <ConsoleFeedbackRelay error={error} active={active} />
+            </section>
+          </BailianAsrConfig>
         </div>
       </div>
     </section>

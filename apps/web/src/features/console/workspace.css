@@ -203,6 +203,53 @@
   font-size: 13px;
   line-height: 20px;
 }
+.console-panel .asr-preview {
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.console-panel .asr-service-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.console-panel .asr-service-status-row h4 {
+  margin: 0;
+}
+.console-panel .asr-service-status-row button {
+  margin-left: auto;
+}
+.console-panel .asr-service-status .agent-hint {
+  margin-bottom: 0;
+}
+.console-panel .asr-preview h4 {
+  margin-bottom: 8px;
+}
+.console-panel .asr-preview-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.console-panel .asr-preview .voice-service-actions {
+  margin: 0;
+}
+.console-panel .asr-preview textarea {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 9px;
+  resize: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .console-panel .asr-preview-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .console-panel .console-form-actions,
 .console-panel .agents-form-footer {
   display: flex;

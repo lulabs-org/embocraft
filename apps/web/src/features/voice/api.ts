@@ -7,9 +7,12 @@ import type {
   SpeachesConnectionDraft,
   SpeachesModel,
 } from '@voxel/shared';
-import type { SpeechCapabilities } from '../../audio';
 import { serverHttpUrl } from '../../network/endpoints';
 import { managementRequest } from '@voxel/shared/management';
+
+export type SpeechCapabilities = {
+  local: { available: boolean; reason: string };
+};
 
 async function asrRequest<T>(
   path: string,

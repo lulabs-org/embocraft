@@ -1,10 +1,6 @@
 export { audioDuration, audioProgress } from './core/audio-timeline';
 export { ClipRecorder } from './recording/clip-recorder';
 export { LiveRecorder, SpeechCapture } from './recording/live-recorder';
-export {
-  LocalRecorder,
-  type SpeechCapabilities,
-} from './recording/local-recorder';
 export { BailianSpeechSession } from './services/bailian-speech';
 export { BrowserRecognitionSession } from './services/browser-recognition';
 export { speakBrowserText } from './services/browser-tts';
