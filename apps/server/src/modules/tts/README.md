@@ -25,7 +25,7 @@ TTS 模块不负责：
 1. **已初步拆分**：`services/tts.service.ts` 原先同时处理配置 CRUD、供应商校验、模型发现、合成、并发控制和跨模块通知。现在配置规则、配置管理、模型发现和语音执行分别位于 `domain/voice-service-validation.ts`、`services/voice-service-management.service.ts`、`services/speech-models.service.ts` 和 `services/speech.service.ts`；`TtsService` 暂时作为兼容门面和默认实现装配入口。
 2. **已初步处理**：World 通过 TTS 门面的 `createDefaultSpeechSynthesizer()` 获取未绑定时的默认语音，不再直接创建 `PiperTts`。默认语音仍不经过 `ttsService` 的进程内并发限制；是否统一限额需另行评估。
 3. `SpeechSynthesizer` 同时包含浏览器朗读参数与服务端合成方法，但浏览器模式实际上不能在服务端合成。
-4. `RemoteTts` 同时处理百炼和 OpenAI 兼容接口；供应商规则分散在配置校验、工厂和客户端中。
+4. **已初步处理**：服务端供应商协议已拆分到 `adapters/`，由工厂选择 Speaches、百炼或 OpenAI 兼容实现；配置规则仍位于领域校验中。
 5. 删除前检查借助同步事件和监听器抛错实现，检查条件不容易从删除流程中看出；数据库外键另行保护持久化引用。
 6. `PiperModels` 与 `core/audio/speaches-models.ts` 重复访问 Speaches 模型列表；前者用于默认模型状态，不代表所有已配置服务的状态。
 
@@ -202,8 +202,8 @@ World 保留自己的队列、收听范围、片段缓存与访问检查。TTS �
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `services/tts.service.ts`                | 配置规则迁入 `domain/`；CRUD、模型发现和合成分别迁入对应 `services/`；默认实现装配移至 `composition.ts` |
 | `services/speech-synthesizer.ts`         | 播放方式放入领域模型；服务端合成能力放入端口或公开类型                                                  |
-| `services/piper.service.ts`              | 迁至 `adapters/speaches-tts.adapter.ts`，保留请求、超时、响应大小和 WAV 校验行为                        |
-| `services/remote.service.ts`             | 分离百炼与 OpenAI 兼容协议，保留百炼音频 URL 的限制和音频标准化                                         |
+| `services/piper.service.ts`              | 兼容导出；实现与测试已迁至 `adapters/speaches-tts.adapter.ts`，保留请求、超时、响应大小和 WAV 校验行为  |
+| `services/remote.service.ts`             | 已拆分为百炼与 OpenAI 兼容协议适配器，保留百炼音频 URL 的限制和音频标准化                               |
 | `services/piper-models.service.ts`       | 就绪判断迁入模型用例；按第 6.3 节复用 Speaches 查询或其底层能力，保留默认检查的解析和错误契约           |
 | `persistence/voice-service-types.ts`     | 领域配置归 `domain/`，仓储与事务契约归应用端口                                                          |
 | `persistence/database-voice-services.ts` | 保留 Prisma、加密、事务锁与外键错误映射，改为实现应用层定义的端口                                       |
