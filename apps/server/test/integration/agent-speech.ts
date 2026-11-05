@@ -27,11 +27,14 @@ try {
       throw Error(message);
     },
     {
-      async synthesize(text, signal) {
-        synthesisCount++;
-        return real
-          ? tts.synthesize(text, signal)
-          : { bytes: Buffer.from('fixture-pcm'), durationMs: 1000 };
+      kind: 'server',
+      synthesizer: {
+        async synthesize(text, signal) {
+          synthesisCount++;
+          return real
+            ? tts.synthesize(text, signal)
+            : { bytes: Buffer.from('fixture-pcm'), durationMs: 1000 };
+        },
       },
     },
   );

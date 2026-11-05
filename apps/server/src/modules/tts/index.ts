@@ -10,4 +10,7 @@ export {
   createDefaultSpeechSynthesizer,
   PiperTts,
 } from './services/piper.service';
-export type { SpeechSynthesizer } from './services/speech-synthesizer';
+export type {
+  ResolvedSpeech,
+  SpeechSynthesizer,
+} from './services/speech-synthesizer';

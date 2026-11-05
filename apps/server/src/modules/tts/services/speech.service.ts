@@ -1,6 +1,6 @@
 import { AppError } from '../../../core/errors/app-error';
 import type { SavedVoice } from '../domain/voice-service-validation';
-import type { SpeechSynthesizer } from './speech-synthesizer';
+import type { ResolvedSpeech, SpeechSynthesizer } from './speech-synthesizer';
 
 export class SpeechService {
   private running = 0;
@@ -10,19 +10,23 @@ export class SpeechService {
     private readonly factory: (value: SavedVoice) => SpeechSynthesizer,
   ) {}
 
-  async synthesizer(id: string): Promise<SpeechSynthesizer> {
+  async synthesizer(id: string): Promise<ResolvedSpeech> {
     const entry = await this.getVoice(id);
+    if (entry.type === 'browser') {
+      return {
+        kind: 'browser',
+        voice: {
+          voice: entry.voice,
+          speed: entry.speed,
+          voiceLanguage: entry.voiceLanguage,
+        },
+      };
+    }
     return {
-      ...(entry.type === 'browser'
-        ? {
-            browserVoice: {
-              voice: entry.voice,
-              speed: entry.speed,
-              voiceLanguage: entry.voiceLanguage,
-            },
-          }
-        : {}),
-      synthesize: (text, signal) => this.synthesize(id, text, signal),
+      kind: 'server',
+      synthesizer: {
+        synthesize: (text, signal) => this.synthesize(id, text, signal),
+      },
     };
   }
 

@@ -160,9 +160,9 @@ it('persists the Speaches endpoint and uses it for both previews and synthesizer
     'Preview',
     new AbortController().signal,
   );
-  await (
-    await restored.synthesizer(selected.id)
-  ).synthesize('Agent', new AbortController().signal);
+  const resolved = await restored.synthesizer(selected.id);
+  if (resolved.kind !== 'server') throw new Error('expected server speech');
+  await resolved.synthesizer.synthesize('Agent', new AbortController().signal);
   expect(request).toHaveBeenCalledTimes(2);
   for (const [url, init] of request.mock.calls) {
     expect(url).toBe('http://custom-speech:8000/v1/audio/speech');
@@ -270,12 +270,12 @@ it('routes previews and synthesizers through the saved voice and speed', async (
   const a = await service.save({ ...local('A', 'Tingting'), speed: 0.8 });
   const b = await service.save(local('B', 'Samantha'));
   await service.synthesize(a.id, 'Preview', new AbortController().signal);
-  await (
-    await service.synthesizer(a.id)
-  ).synthesize('Agent A', new AbortController().signal);
-  await (
-    await service.synthesizer(b.id)
-  ).synthesize('Agent B', new AbortController().signal);
+  const voiceA = await service.synthesizer(a.id);
+  const voiceB = await service.synthesizer(b.id);
+  if (voiceA.kind !== 'server' || voiceB.kind !== 'server')
+    throw new Error('expected server speech');
+  await voiceA.synthesizer.synthesize('Agent A', new AbortController().signal);
+  await voiceB.synthesizer.synthesize('Agent B', new AbortController().signal);
   expect(calls).toEqual([
     `${DEFAULT_PIPER_MODEL}:0.8:Preview`,
     `${DEFAULT_PIPER_MODEL}:0.8:Agent A`,
@@ -358,10 +358,9 @@ it('persists browser profiles without credentials and never runs server synthesi
     model: '',
     hasApiKey: false,
   });
-  expect((await service.synthesizer(saved.id)).browserVoice).toEqual({
-    voice: saved.voice,
-    speed: 1,
-    voiceLanguage: 'zh-CN',
+  expect(await service.synthesizer(saved.id)).toEqual({
+    kind: 'browser',
+    voice: { voice: saved.voice, speed: 1, voiceLanguage: 'zh-CN' },
   });
   await expect(
     service.synthesize(saved.id, '你好', new AbortController().signal),
