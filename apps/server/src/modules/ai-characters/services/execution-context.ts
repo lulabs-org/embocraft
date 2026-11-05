@@ -21,7 +21,7 @@ export type ExecutionContext = {
   };
   voiceServices?: VoiceServiceStore;
   closing: () => boolean;
-  bindVoice: (job: Job) => void;
+  bindVoice: (job: Job) => Promise<void>;
   controlMessage: (
     id: string,
     op: 'pause' | 'cancel',

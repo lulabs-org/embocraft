@@ -35,7 +35,7 @@ export function createAsrSocket(
       ? storeOrService
       : new RealtimeAsrService(storeOrService, { bridge });
 
-  return (client: WebSocket, req: IncomingMessage) => {
+  return async (client: WebSocket, req: IncomingMessage) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     client.on('error', () => {});
     const reject = (message: string) => {
@@ -51,7 +51,7 @@ export function createAsrSocket(
         throw new AppError('不支持的识别语言。');
       if (!serviceId) throw new AppError('请先选择已保存的识别服务。');
 
-      service.startSession(client, serviceId, language);
+      await service.startSession(client, serviceId, language);
     } catch (error) {
       reject(
         error instanceof AppError
@@ -75,8 +75,8 @@ export function installAsrSocket(
   const service =
     deps.service ??
     new RealtimeAsrService(deps.settings, { bridge: deps.bridge });
-  routes.set(
-    '/voice/asr/realtime',
-    createAsrSocket(service, undefined, deps.origin),
-  );
+  const socket = createAsrSocket(service, undefined, deps.origin);
+  routes.set('/voice/asr/realtime', (client, req) => {
+    void socket(client, req);
+  });
 }

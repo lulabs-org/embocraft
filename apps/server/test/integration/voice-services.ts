@@ -54,7 +54,7 @@ await new Promise<void>((resolve) =>
 );
 const providerUrl = `http://127.0.0.1:${(providerHttp.address() as { port: number }).port}/v1`;
 const voices = new VoiceServiceStore();
-await voices.load();
+
 const providers = new MemoryProviderRepository();
 await bootstrapProviders(providers);
 await providers.save(
@@ -197,7 +197,7 @@ try {
     ],
   );
   assert.equal(first.voiceServiceId, a.id);
-  assert.equal(second.voiceServiceName, 'Builder');
+  assert.equal((await (await api(`/ai-characters/${second.id}`, 'GET')).json() as AICharacterView).voiceServiceName, 'Builder');
   assert.equal(
     (await api(`/voice/tts/services/${a.id}`, 'DELETE')).status,
     409,
@@ -265,9 +265,9 @@ try {
   const count = calls;
   await manager.close();
   const restoredVoices = new VoiceServiceStore(voices.persistence);
-  await restoredVoices.load();
-  assert.equal(restoredVoices.get(b.id).voice, 'beta');
-  await voices.load();
+
+  assert.equal((await restoredVoices.get(b.id)).voice, 'beta');
+
   const restored = new AICharacterManager(
     providers,
     url.replace('http', 'ws'),

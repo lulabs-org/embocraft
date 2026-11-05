@@ -13,8 +13,9 @@ export function memoryCharacterQueries(
 ): CharacterQueryPort {
   const list: CharacterQueryPort['list'] = async () => {
     const saved = await archive.load();
-    return (saved?.characters ?? [])
-      .map((record) => {
+    const voicesList = await voices.list();
+    return (await Promise.all((saved?.characters ?? [])
+      .map(async (record) => {
         const { runtime, currentRunId, logEntries, ...config } = record;
         const state = runtime ? runtimeView(runtime) : undefined;
         const run = saved?.runs.find((run) => run.id === currentRunId);
@@ -31,10 +32,9 @@ export function memoryCharacterQueries(
           }));
         return {
           ...config,
-          providerName: providers.getRuntime(record.providerId).name,
+          providerName: (await providers.getRuntime(record.providerId)).name,
           voiceServiceId: record.voiceServiceId ?? '',
-          voiceServiceName: voices
-            .list()
+          voiceServiceName: voicesList
             .find((voice) => voice.id === record.voiceServiceId)?.name,
           task: state?.task,
           taskIdentity: state?.identity ?? null,
@@ -51,7 +51,7 @@ export function memoryCharacterQueries(
           lastResponse: state?.lastResponse,
           taskRequiresReassignment: state?.requiresReassignment ?? false,
         };
-      })
+      })))
       .reverse();
   };
   return {

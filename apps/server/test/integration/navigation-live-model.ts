@@ -100,7 +100,7 @@ try {
     url = server.url;
   human = await new Session(url).join('Explorer4', 'human');
   observer = await new Session(url).join('Explorer', 'human');
-  const managed = manager.create({
+  const managed = await manager.create({
     providerId: provider.id,
     name: 'AI',
     intervalMs: 60000,

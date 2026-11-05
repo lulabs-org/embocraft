@@ -29,7 +29,9 @@ export class AgentSpeech {
     private report: (actor: string, message: string) => void,
     private tts:
       | SpeechSynthesizer
-      | ((actor: string) => SpeechSynthesizer) = new PiperTts(),
+      | ((
+          actor: string,
+        ) => SpeechSynthesizer | Promise<SpeechSynthesizer>) = new PiperTts(),
   ) {}
   private speaker(actor: string) {
     return [...this.players()].find(
@@ -95,8 +97,15 @@ export class AgentSpeech {
     try {
       if (!this.speaker(pending.actor) || Date.now() - pending.at > 30000)
         return;
-      const tts =
-        typeof this.tts === 'function' ? this.tts(pending.actor) : this.tts;
+      const tts = await (typeof this.tts === 'function'
+        ? this.tts(pending.actor)
+        : this.tts);
+      if (
+        pending.controller.signal.aborted ||
+        this.closed ||
+        !this.speaker(pending.actor)
+      )
+        return;
       if (tts.browserVoice) {
         const event: AgentSpeechEvent = {
           id: randomUUID(),

@@ -72,7 +72,7 @@ export function installCapabilitiesRoutes(
         const selected =
           req.query.serviceId === undefined
             ? undefined
-            : asrSettings.get(String(req.query.serviceId));
+            : await asrSettings.get(String(req.query.serviceId));
         if (selected && selected.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
         res.json({

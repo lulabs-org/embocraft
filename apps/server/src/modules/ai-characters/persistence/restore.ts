@@ -9,20 +9,21 @@ import { createCharacterJob, type Job } from '../services/character-job';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
 import { executionState } from '../services/task-execution-adapter';
 
-export function restoreAICharacterJob(
+export async function restoreAICharacterJob(
   view: CharacterRecord,
   providers: ProviderRuntimePort,
-  checkVoice: (settings: AICharacterSettings) => void,
+  checkVoice: (settings: AICharacterSettings) => void | Promise<void>,
   ledger: PlanService,
-): { job: Job; voiceWarning?: string; shouldAutoJoin: boolean } {
-  const provider = providers.getRuntime(view.providerId);
+): Promise<{ job: Job; voiceWarning?: string; shouldAutoJoin: boolean }> {
+  const provider = await providers.getRuntime(view.providerId);
   const settings = validateAICharacter(view, provider, {
     allowMissingApiKey: true,
   });
   let voiceWarning = '';
   try {
-    checkVoice(settings);
-  } catch {
+    await checkVoice(settings);
+  } catch (error) {
+    if (!(error instanceof AppError) || error.status >= 500) throw error;
     settings.voiceReplies = false;
     settings.voiceServiceId = '';
     voiceWarning = '原语音服务不可用，已保留文字回复；请重新选择语音服务。';

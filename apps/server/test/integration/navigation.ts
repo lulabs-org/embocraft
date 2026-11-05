@@ -196,7 +196,7 @@ try {
   );
   await reset();
   manager = server.characters;
-  const managed = manager.create({
+  const managed = await manager.create({
     providerId: 'deepseek',
     name: 'Managed navigator',
     intervalMs: 60000,

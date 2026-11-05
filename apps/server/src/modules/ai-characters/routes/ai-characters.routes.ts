@@ -292,7 +292,7 @@ export function createAICharacterRouter(
     route(async (req, res) => {
       const id = String(req.params.id);
       const result = await write(req, async () => {
-        const value = manager.join(id);
+        const value = await manager.join(id);
         await manager.settled(id);
         return value;
       });

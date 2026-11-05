@@ -20,7 +20,7 @@ export class ProviderHealthChecker {
   ) {}
 
   async check(id: string): Promise<ProviderHealth> {
-    const provider = this.providers.getRuntime(id);
+    const provider = await this.providers.getRuntime(id);
     if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
       throw new AppError('请先配置 API Key。');
 

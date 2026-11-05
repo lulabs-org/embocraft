@@ -14,6 +14,7 @@ import {
 } from './helpers/memory-storage';
 
 import { AgentRuntimeError, type Session } from '@voxel/agent-runtime';
+import { AppError } from '../src/core/errors/app-error';
 
 import type { WorldEvent } from '@voxel/shared';
 let store: MemoryProviderRepository, manager: AICharacterManager | undefined;
@@ -109,7 +110,7 @@ async function createWithTask(
   value: Record<string, unknown>,
 ) {
   const { goal = 'Wait', ...profile } = value;
-  const created = m.create(profile);
+  const created = await m.create(profile);
   await m.settled(created.id);
   await m.tasks.createTaskPlan(created.id, {
     name: String(goal).slice(0, 80),
@@ -169,7 +170,7 @@ it('saves task heartbeat independently without resetting or resuming progress', 
 });
 it('protects a new voice binding while an Agent update is waiting for the world', async () => {
   const voices = new VoiceServiceStore();
-  await voices.load();
+
   const next = await voices.save({ name: 'Next', type: 'piper' });
   const session = fakeSession();
   const m = setup(session, undefined, voices);
@@ -187,6 +188,7 @@ it('protects a new voice binding while an Agent update is waiting for the world'
     voiceReplies: false,
   });
   await expect(m.removeVoiceService(next.id)).rejects.toThrow();
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
   release();
   await updating;
   expect(m.list()[0].voiceServiceId).toBe(next.id);
@@ -196,7 +198,7 @@ it('protects a new voice binding while an Agent update is waiting for the world'
 });
 it('restores a missing voice service as text-only without model calls', async () => {
   const voices = new VoiceServiceStore();
-  await voices.load();
+
   const m = setup(fakeSession(), undefined, voices);
   await createWithTask(m, { ...settings, voiceReplies: true });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
@@ -214,6 +216,21 @@ it('restores a missing voice service as text-only without model calls', async ()
       .join('\n'),
   ).toContain('原语音服务不可用');
   expect(decide).not.toHaveBeenCalled();
+});
+
+it('does not erase voice settings when storage fails during restoration', async () => {
+  const voices = new VoiceServiceStore();
+  const originalManager = setup(fakeSession(), undefined, voices);
+  await createWithTask(originalManager, { ...settings, voiceReplies: true });
+  await originalManager.close();
+  const original = store.archive.json;
+  vi.spyOn(voices, 'get').mockRejectedValue(
+    new AppError('无法读取语音服务数据库配置。', 500),
+  );
+  const restored = setup(fakeSession(), undefined, voices);
+  await expect(restored.load()).rejects.toMatchObject({ status: 500 });
+  await restored.close();
+  expect(store.archive.json).toBe(original);
 });
 it('toggles voice during inference without restarting the agent or making another model call', async () => {
   let release!: () => void;
@@ -312,7 +329,7 @@ it('closing while join is pending cannot leave an orphan player or start inferen
       > => [{ name: 'complete_task', arguments: { summary: '测试决策' } }],
     );
   const m = setup(s, decide),
-    job = m.create(settings);
+    job = await m.create(settings);
   await vi.waitFor(() => expect(s.join).toHaveBeenCalled());
   m.stop(job.id);
   resolve();
@@ -320,6 +337,41 @@ it('closing while join is pending cannot leave an orphan player or start inferen
   expect(m.list()[0]?.sessionId).toBeUndefined();
   expect(decide).not.toHaveBeenCalled();
   expect(s.close.mock.calls.length).toBeGreaterThanOrEqual(2);
+});
+
+it('stops a pending join while the provider is being queried', async () => {
+  const session = fakeSession();
+  let waitForProvider = false;
+  let release!: () => void;
+  manager = new AICharacterManager(
+    {
+      getRuntime: async (id) => {
+        if (waitForProvider)
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        return store.getRuntime(id);
+      },
+    },
+    'ws://fixture',
+    store.archive,
+    {
+      session: () => session as unknown as Session,
+      model: scriptedModelFactory(() => ({ respond: vi.fn() })),
+    },
+  );
+  const m = manager;
+  const created = await m.create({ ...settings, joinWorld: false });
+  waitForProvider = true;
+  const joining = m.join(created.id);
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+  expect(m.list()[0].status).toBe('joining');
+  m.stop(created.id);
+  release();
+  await expect(joining).rejects.toMatchObject({ status: 409 });
+  await m.settled(created.id);
+  expect(m.list()[0].status).toBe('stopped');
+  expect(session.join).not.toHaveBeenCalled();
 });
 it('unexpected disconnect releases identity and allows rejoining the same saved agent', async () => {
   const s = fakeSession(),
@@ -329,7 +381,7 @@ it('unexpected disconnect releases identity and allows rejoining the same saved 
   await s.close();
   expect(m.list()[0]?.status).toBe('failed');
   expect(m.list()[0]?.sessionId).toBeUndefined();
-  m.join(job.id);
+  await m.join(job.id);
   await m.settled(job.id);
   await startTask(m, job.id, { goal: 'New goal' });
   await vi.waitFor(() => expect(m.list()[0]?.status).toBe('idle'));
@@ -602,7 +654,7 @@ it('creates and restores a standby character with no task or automatic model cal
   const session = fakeSession(),
     decide = vi.fn();
   const m = setup(session, decide);
-  const created = m.create({
+  const created = await m.create({
     ...settings,
     roleDescription: '你是一名建筑师，负责建造房屋。',
   });
@@ -616,7 +668,7 @@ it('creates and restores a standby character with no task or automatic model cal
   expect(m.list()[0].task).toBeUndefined();
   expect(decide).not.toHaveBeenCalled();
   expect(m.currentRunId(created.id)).toBeUndefined();
-  expect(() => m.join(created.id)).toThrow('已在线');
+  await expect(m.join(created.id)).rejects.toThrow('已在线');
   await m.update(created.id, {
     name: 'Renamed standby',
     model: 'deepseek-chat',
@@ -687,8 +739,8 @@ it('joining a stopped character preserves the task without executing or resettin
     summary: 'Half done',
     calls: 1,
   });
-  m.join(created.id);
-  expect(() => m.join(created.id)).toThrow('已在线');
+  await m.join(created.id);
+  await expect(m.join(created.id)).rejects.toThrow('已在线');
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   expect(decide).toHaveBeenCalledTimes(1);
   expect(m.list()[0].task).toMatchObject({
@@ -708,11 +760,18 @@ it('joining a stopped character preserves the task without executing or resettin
 
 it('standby creation rejects task input and still enforces online capacity', async () => {
   const m = setup(fakeSession(), vi.fn());
-  expect(() => m.create({ ...settings, goal: 'A task' })).toThrow('Tasks');
-  expect(() => m.create({ ...settings, startTask: true })).toThrow('Tasks');
-  expect(() => m.create({ ...settings, joinWorld: 'no' })).toThrow('开关');
-  for (let i = 0; i < 4; i++) m.create({ ...settings, name: `Standby ${i}` });
-  expect(() => m.create(settings)).toThrow('最多同时在线');
+  await expect(m.create({ ...settings, goal: 'A task' })).rejects.toThrow(
+    'Tasks',
+  );
+  await expect(m.create({ ...settings, startTask: true })).rejects.toThrow(
+    'Tasks',
+  );
+  await expect(m.create({ ...settings, joinWorld: 'no' })).rejects.toThrow(
+    '开关',
+  );
+  for (let i = 0; i < 4; i++)
+    await m.create({ ...settings, name: `Standby ${i}` });
+  await expect(m.create(settings)).rejects.toThrow('最多同时在线');
 });
 
 it('retains capability settings and construction progress across edits, reload and resume', async () => {
@@ -828,7 +887,7 @@ it.each(['completed', 'cancelled'] as const)(
 
 it('suppresses voice bindings and direct pause receipts while retaining the saved voice preference', async () => {
   const voices = new VoiceServiceStore();
-  await voices.load();
+
   const bind = vi.spyOn(voices, 'bind');
   const s = fakeSession();
   const decide = vi.fn<ModelResponder>(async () => [
@@ -879,7 +938,7 @@ it('applies task budgets on assignment and renewal, rejecting invalid budgets be
   const s = fakeSession();
   const decide = vi.fn(async () => [{ name: 'observe', arguments: {} }]);
   const m = setup(s, decide);
-  const job = m.create(settings);
+  const job = await m.create(settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   await startTask(m, job.id, {
     goal: '测试任务',
@@ -932,7 +991,7 @@ it('uses newly saved provider configuration on the next decision without resetti
       };
     }),
   });
-  const job = manager.create({ ...settings, maxTokens: 777 });
+  const job = await manager.create({ ...settings, maxTokens: 777 });
   await vi.waitFor(() => expect(manager!.list()[0].status).toBe('idle'));
   await store.save(
     { ...store.get('deepseek'), apiKey: 'updated-key' },
@@ -953,7 +1012,7 @@ it('uses newly saved provider configuration on the next decision without resetti
 
 it('reloads 500 timestamped activity records and truncates excess entries', async () => {
   const m = setup(fakeSession());
-  const created = m.create(settings);
+  const created = await m.create(settings);
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   const logged = m.list()[0];
   expect(logged.logEntries.length).toBeGreaterThan(0);
@@ -1015,7 +1074,7 @@ it('aborts an active decision and blocks concurrent join/delete before removal c
   await vi.waitFor(() => expect(decide).toHaveBeenCalled());
   const removing = m.remove(job.id);
   expect(signal?.aborted).toBe(true);
-  expect(() => m.join(job.id)).toThrow();
+  await expect(m.join(job.id)).rejects.toThrow();
   await expect(m.remove(job.id)).rejects.toMatchObject({ status: 409 });
   release();
   await removing;
@@ -1125,9 +1184,9 @@ it.each([
     const plans = structuredClone(m.plans.plans),
       runs = structuredClone(m.plans.runs);
     const calls = decide.mock.calls.length;
-    expect(() =>
+    await expect(
       m.create({ providerId: 'deepseek', name: 'Rejected', ...input }),
-    ).toThrow('Tasks');
+    ).rejects.toThrow('Tasks');
     await expect(
       m.update(job.id, { name: 'Rejected rename', ...input }),
     ).rejects.toThrow('Tasks');
@@ -1149,7 +1208,7 @@ it('creates an offline profile without joining or allocating a plan, then joins 
   const session = fakeSession(),
     decide = vi.fn();
   const m = setup(session, decide);
-  const job = m.create({
+  const job = await m.create({
     providerId: 'deepseek',
     name: 'Offline',
     joinWorld: false,
@@ -1165,7 +1224,7 @@ it('creates an offline profile without joining or allocating a plan, then joins 
   await restored.load();
   expect(restored.list()[0].status).toBe('stopped');
   expect(session.join).not.toHaveBeenCalled();
-  restored.join(job.id);
+  await restored.join(job.id);
   await restored.settled(job.id);
   expect(restored.list()[0].status).toBe('idle');
   expect(restored.list()[0].task).toBeUndefined();
@@ -1177,7 +1236,7 @@ it('creates an offline profile without joining or allocating a plan, then joins 
 it('restores the live task adapter and full profile after a failed task reservation, without launching a runner', async () => {
   const decide = vi.fn();
   const m = setup(fakeSession(), decide);
-  const job = m.create({
+  const job = await m.create({
     providerId: 'deepseek',
     name: 'Standby',
     roleDescription: 'Keep identity',
@@ -1237,7 +1296,7 @@ it('forwards the task lease, stable command ID and player event through the real
 
 it('rejects old runtime archives without overwriting them on shutdown', async () => {
   const originalManager = setup(fakeSession());
-  const created = originalManager.create(settings);
+  const created = await originalManager.create(settings);
   await originalManager.settled(created.id);
   await originalManager.close();
   const archive = JSON.parse(store.archive.json!);

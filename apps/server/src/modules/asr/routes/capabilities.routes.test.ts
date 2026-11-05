@@ -21,7 +21,7 @@ describe('audio capabilities HTTP boundary', () => {
     const speech = new LocalSpeech();
     vi.spyOn(speech, 'status').mockImplementation(status);
     store = new AsrSettingsStore();
-    await store.load();
+
     const app = express();
     installCapabilitiesRoutes(app, speech, store, ttsStatus, origin);
     server = createServer(app);

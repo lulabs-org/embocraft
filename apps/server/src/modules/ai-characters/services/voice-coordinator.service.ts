@@ -26,11 +26,11 @@ export class CharacterVoiceCoordinator {
    * @param settings The character settings to validate
    * @throws {AppError} When voice service is missing or not registered
    */
-  checkVoice(settings: AICharacterSettings) {
+  async checkVoice(settings: AICharacterSettings) {
     if (settings.voiceReplies && !settings.voiceServiceId)
       throw new AppError('请先选择语音服务。');
     if (settings.voiceServiceId)
-      this.voiceServices?.get(settings.voiceServiceId);
+      await this.voiceServices?.get(settings.voiceServiceId);
   }
 
   /**
@@ -40,26 +40,15 @@ export class CharacterVoiceCoordinator {
    *
    * @param job The runtime character job entity
    */
-  bindVoice(job: Job) {
+  async bindVoice(job: Job, settings: AICharacterSettings = job.view) {
     if (job.view.sessionId) {
-      this.voiceServices?.bind(
+      await this.voiceServices?.bind(
         job.view.sessionId,
-        job.view.voiceReplies && aiCharacterPermissions(job.view).chat
-          ? job.view.voiceServiceId || 'local-default'
+        settings.voiceReplies && aiCharacterPermissions(settings).chat
+          ? settings.voiceServiceId || 'local-default'
           : '',
       );
     }
-  }
-
-  /**
-   * Retrieves the human-readable display name of a voice service by its ID.
-   *
-   * @param voiceServiceId The voice service ID
-   * @returns The display name of the service, or undefined if not found or unspecified
-   */
-  getServiceName(voiceServiceId?: string): string | undefined {
-    return this.voiceServices?.list().find((s) => s.id === voiceServiceId)
-      ?.name;
   }
 
   /**

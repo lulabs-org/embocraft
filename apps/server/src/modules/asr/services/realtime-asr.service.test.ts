@@ -11,8 +11,8 @@ function createMockClient() {
   return emitter as unknown as WebSocket;
 }
 
-describe('RealtimeAsrService', () => {
-  it('acquires store lease and invokes bridge for valid session', () => {
+describe('RealtimeAsrService', async () => {
+  it('acquires store lease and invokes bridge for valid session', async () => {
     const release = vi.fn();
     const mockStore = {
       acquire: vi.fn().mockReturnValue({
@@ -25,7 +25,7 @@ describe('RealtimeAsrService', () => {
     const service = new RealtimeAsrService(mockStore, { bridge });
 
     const client = createMockClient();
-    service.startSession(client, 'service-1', 'zh');
+    await service.startSession(client, 'service-1', 'zh');
 
     expect(mockStore.acquire).toHaveBeenCalledWith('service-1');
     expect(bridge).toHaveBeenCalledWith(
@@ -42,7 +42,7 @@ describe('RealtimeAsrService', () => {
 
   it.each(['openai', 'gemini'] as const)(
     'routes %s sessions through the live bridge and releases their lease',
-    (provider) => {
+    async (provider) => {
       const release = vi.fn();
       const settings = {
         provider,
@@ -60,7 +60,7 @@ describe('RealtimeAsrService', () => {
         liveBridge,
       });
       const client = createMockClient();
-      service.startSession(client, 'live-service', 'en');
+      await service.startSession(client, 'live-service', 'en');
       expect(liveBridge).toHaveBeenCalledWith(client, settings, 'en');
       expect(bailianBridge).not.toHaveBeenCalled();
       expect(service.runningSessions).toBe(1);
@@ -70,7 +70,7 @@ describe('RealtimeAsrService', () => {
     },
   );
 
-  it('rejects Whisper provider and releases acquired lease', () => {
+  it('rejects Whisper provider and releases acquired lease', async () => {
     const release = vi.fn();
     const mockStore = {
       acquire: vi.fn().mockReturnValue({
@@ -83,15 +83,15 @@ describe('RealtimeAsrService', () => {
     const service = new RealtimeAsrService(mockStore, { bridge });
     const client = createMockClient();
 
-    expect(() => service.startSession(client, 'whisper-service', 'zh')).toThrow(
-      new AppError('Whisper 服务请使用服务器音频识别接口。'),
-    );
+    await expect(
+      service.startSession(client, 'whisper-service', 'zh'),
+    ).rejects.toThrow(new AppError('Whisper 服务请使用服务器音频识别接口。'));
     expect(release).toHaveBeenCalledOnce();
     expect(bridge).not.toHaveBeenCalled();
     expect(service.runningSessions).toBe(0);
   });
 
-  it('rejects requests when maxConcurrency is exceeded', () => {
+  it('rejects requests when maxConcurrency is exceeded', async () => {
     const release1 = vi.fn();
     const release2 = vi.fn();
     const release3 = vi.fn();
@@ -122,11 +122,11 @@ describe('RealtimeAsrService', () => {
     const client2 = createMockClient();
     const client3 = createMockClient();
 
-    service.startSession(client1, 's1', 'zh');
-    service.startSession(client2, 's2', 'zh');
+    await service.startSession(client1, 's1', 'zh');
+    await service.startSession(client2, 's2', 'zh');
     expect(service.runningSessions).toBe(2);
 
-    expect(() => service.startSession(client3, 's3', 'zh')).toThrow(
+    await expect(service.startSession(client3, 's3', 'zh')).rejects.toThrow(
       new AppError('实时识别服务繁忙，请稍后重试。'),
     );
 
@@ -134,7 +134,34 @@ describe('RealtimeAsrService', () => {
     (client1 as unknown as EventEmitter).emit('close');
     expect(service.runningSessions).toBe(1);
 
-    service.startSession(client3, 's3', 'zh');
+    await service.startSession(client3, 's3', 'zh');
     expect(service.runningSessions).toBe(2);
+  });
+  it('releases a lease acquired after the client closes', async () => {
+    let resolve!: (value: {
+      settings: typeof DEFAULT_BAILIAN_ASR;
+      release: () => void;
+    }) => void;
+    const release = vi.fn();
+    const store = {
+      acquire: () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    } as unknown as AsrSettingsStore;
+    const bridge = vi.fn();
+    const service = new RealtimeAsrService(store, {
+      bridge,
+      maxConcurrency: 1,
+    });
+    const client = createMockClient();
+    const starting = service.startSession(client, 'service', 'zh');
+    expect(service.runningSessions).toBe(1);
+    (client as unknown as EventEmitter).emit('close');
+    resolve({ settings: DEFAULT_BAILIAN_ASR, release });
+    await starting;
+    expect(release).toHaveBeenCalledOnce();
+    expect(bridge).not.toHaveBeenCalled();
+    expect(service.runningSessions).toBe(0);
   });
 });

@@ -50,7 +50,7 @@ export class ChatSpeechService {
       let text = '';
       try {
         const selected = serviceId
-          ? this.asrSettings.acquire(serviceId)
+          ? await this.asrSettings.acquire(serviceId)
           : undefined;
         try {
           if (selected && selected.settings.provider !== 'whisper')
@@ -98,7 +98,7 @@ export class ChatSpeechService {
     signal: requestSignal,
   }: SpatialInput) {
     const selected = serviceId
-      ? this.asrSettings.acquire(serviceId)
+      ? await this.asrSettings.acquire(serviceId)
       : undefined;
     try {
       if (selected && selected.settings.provider !== 'whisper')

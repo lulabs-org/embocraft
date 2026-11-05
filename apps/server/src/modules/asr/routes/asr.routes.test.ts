@@ -29,7 +29,7 @@ beforeEach(async () => {
   vi.stubEnv('WEB_ORIGIN', origin);
   bridge.mockClear();
   store = new AsrSettingsStore();
-  await store.load();
+
   const app = express();
   const speech = new LocalSpeech();
   vi.spyOn(speech, 'status').mockResolvedValue({
@@ -175,7 +175,7 @@ it('releases all ASR service references when the shared transport closes connect
     expect(bridge.mock.calls[2][0].readyState).toBe(WebSocket.CLOSED),
   );
   await store.remove(service.id);
-  expect(store.list()).toEqual([]);
+  expect(await store.list()).toEqual([]);
 });
 it('routes each selected service to its own model and key, rejects missing or deleted IDs, and guards deletion', async () => {
   const a = await store.save({
@@ -220,7 +220,7 @@ it('routes each selected service to its own model and key, rejects missing or de
       .status,
   ).toBe(204);
   expect((await socket(a.id)).message.type).toBe('error');
-  expect(store.list()).toEqual([b]);
+  expect(await store.list()).toEqual([b]);
   expect(sb.client.readyState).toBe(WebSocket.OPEN);
 });
 it('supports separate create, edit and delete HTTP resources and cross-origin preflight', async () => {
@@ -245,8 +245,8 @@ it('supports separate create, edit and delete HTTP resources and cross-origin pr
     body: JSON.stringify({ ...a, name: 'A renamed', apiKey: '' }),
   });
   expect(edited.status).toBe(200);
-  expect(store.get(a.id)).toMatchObject({ apiKey: 'key-A' });
-  expect(store.get(b.id).model).toBe('paraformer-realtime-v2');
+  expect(await store.get(a.id)).toMatchObject({ apiKey: 'key-A' });
+  expect((await store.get(b.id)).model).toBe('paraformer-realtime-v2');
   expect(
     (
       await fetch(`${url}/voice/asr/services/missing`, {

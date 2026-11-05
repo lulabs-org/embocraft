@@ -42,9 +42,9 @@ it('cancels old synthesis and private clips when a service binding changes', asy
       });
     },
   }));
-  await store.load();
+
   const second = await store.save(local('second'));
-  store.bind('ai', 'local-default');
+  await store.bind('ai', 'local-default');
   const players: Player[] = [
     {
       id: 'ai',
@@ -84,7 +84,8 @@ it('cancels old synthesis and private clips when a service binding changes', asy
     text: 'Hello',
     name: 'AI',
   });
-  store.bind('ai', second.id);
+  await vi.waitFor(() => expect(signal).toBeDefined());
+  await store.bind('ai', second.id);
   expect(signal.aborted).toBe(true);
   finish({ bytes: wav(), durationMs: 1000 });
   await new Promise((resolve) => setTimeout(resolve, 0));

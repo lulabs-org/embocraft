@@ -81,7 +81,7 @@ async function idle(timeout = 5000) {
   });
 }
 async function role() {
-  const j = manager.create({
+  const j = await manager.create({
     providerId: 'deepseek',
     name: '隔离角色',
   });

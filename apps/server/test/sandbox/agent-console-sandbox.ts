@@ -32,7 +32,7 @@ try {
     'deepseek',
   );
   const voices = new VoiceServiceStore();
-  await voices.load();
+
   server = await createTestServer({
     directory: dir,
     providers,
@@ -83,12 +83,12 @@ try {
   app.get('/fixture-status', (_req, res) =>
     res.json({ calls, characters: manager!.list() }),
   );
-  const a = manager.create({
+  const a = await manager.create({
     providerId: 'deepseek',
     model: 'fixture-model',
     name: '林间向导',
   });
-  const b = manager.create({
+  const b = await manager.create({
     providerId: 'deepseek',
     model: 'fixture-model',
     name: '营地建筑师',

@@ -63,25 +63,44 @@ export class RealtimeAsrService {
     return this.running;
   }
 
-  startSession(client: WebSocket, serviceId: string, language: string): void {
+  async startSession(
+    client: WebSocket,
+    serviceId: string,
+    language: string,
+  ): Promise<void> {
     if (this.running >= this.maxConcurrency) {
       throw new AppError('实时识别服务繁忙，请稍后重试。');
     }
 
-    const { settings, release } = this.store.acquire(serviceId);
-    if (settings.provider === 'whisper') {
-      release();
-      throw new AppError('Whisper 服务请使用服务器音频识别接口。');
-    }
-
     this.running++;
-    client.once('close', () => {
+    let closed = false;
+    let release: (() => void) | undefined;
+    const onClose = () => {
+      closed = true;
       this.running--;
-      release();
-    });
-
-    if (settings.provider === 'openai' || settings.provider === 'gemini')
-      this.liveBridge(client, settings, language);
-    else this.bridge(client, settings, language);
+      release?.();
+    };
+    client.once('close', onClose);
+    try {
+      const acquired = await this.store.acquire(serviceId);
+      release = acquired.release;
+      if (closed) {
+        release();
+        return;
+      }
+      const { settings } = acquired;
+      if (settings.provider === 'whisper')
+        throw new AppError('Whisper 服务请使用服务器音频识别接口。');
+      if (settings.provider === 'openai' || settings.provider === 'gemini')
+        this.liveBridge(client, settings, language);
+      else this.bridge(client, settings, language);
+    } catch (error) {
+      if (!closed) {
+        client.off('close', onClose);
+        this.running--;
+        release?.();
+      }
+      if (!closed) throw error;
+    }
   }
 }

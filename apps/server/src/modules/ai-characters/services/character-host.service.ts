@@ -100,7 +100,7 @@ export class AICharacterHost {
         enabled:
           !!job.view.voiceReplies && aiCharacterPermissions(job.view).chat,
       });
-      ctx.bindVoice(job);
+      await ctx.bindVoice(job);
       if (!voiceResult.ok) log('语音回复开关未生效，请检查服务器版本。');
 
       if (!job.abort.signal.aborted && run) {

@@ -72,6 +72,10 @@ import { ChatStore, createChatRouter } from './modules/chat';
 export async function createServer() {
   const config = env.readServer();
   await checkStartupDatabase(config.databaseUrl);
+  const gatewayAuth = await GatewayAuth.load({
+    ...config.gateway,
+    isProduction: config.isProduction,
+  });
 
   const db = createDatabaseClient(config.databaseUrl);
   const providers = new DatabaseProviderRepository(db);
@@ -79,18 +83,6 @@ export async function createServer() {
     new DatabaseVoiceServicePersistence(db),
   );
   const asrSettings = new AsrSettingsStore(new DatabaseAsrServicePersistence(db));
-  const loads = [
-    GatewayAuth.load({ ...config.gateway, isProduction: config.isProduction }),
-    providers.load(),
-    voiceServices.load(),
-    asrSettings.load(),
-  ] as const;
-
-  const [gatewayAuth] = await Promise.all(loads).catch(async (error) => {
-    await Promise.allSettled(loads);
-    await db.$disconnect();
-    throw error;
-  });
   const store = new WorldStore(config.databaseUrl, db);
   let world: WorldRoom | undefined;
   let serverUrls: ServerUrls | undefined;

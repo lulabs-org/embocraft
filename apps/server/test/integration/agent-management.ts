@@ -681,7 +681,7 @@ try {
   assert.equal(manager.list().filter((j) => j.status === 'idle').length, 3);
   const stopped = manager.list().find((j) => j.id === created[0])!;
   assert.equal(stopped.status, 'stopped');
-  manager.join(stopped.id);
+  await manager.join(stopped.id);
   await manager.settled(stopped.id);
   const priorPlan = manager.tasks.taskPlans(stopped.id)[0];
   await manager.tasks.controlTaskPlan(stopped.id, priorPlan.id, 'run', {
@@ -696,8 +696,8 @@ try {
     () => manager!.list().find((j) => j.id === stopped.id)?.status === 'idle',
   );
   assert.equal(room.state.players.size, 4);
-  assert.throws(
-    () => manager!.create({ providerId: 'deepseek', name: 'overflow' }),
+  await assert.rejects(
+    manager!.create({ providerId: 'deepseek', name: 'overflow' }),
     /最多同时在线/,
   );
   await manager.remove(stopped.id);

@@ -56,5 +56,7 @@ export interface ModelCatalogPort {
  */
 export interface AsrRepositoryPort {
   load(): Promise<SavedService[]>;
-  save(values: SavedService[]): Promise<void>;
+  update<T>(
+    change: (values: SavedService[]) => { values: SavedService[]; result: T },
+  ): Promise<T>;
 }
