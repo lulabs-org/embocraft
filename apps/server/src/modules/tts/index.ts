@@ -1,10 +1,7 @@
 export { createTtsRouter } from './routes/tts.routes';
 export { DatabaseVoiceServicePersistence } from './persistence/database-voice-services';
-export {
-  TtsService,
-  ttsService,
-  validateVoiceService,
-} from './services/tts.service';
+export { TtsService, ttsService } from './composition';
+export { validateVoiceService } from './domain/voice-service-validation';
 export { PiperModels } from './services/piper-models.service';
 export {
   createDefaultSpeechSynthesizer,

@@ -13,11 +13,11 @@ import {
 import {
   validateVoiceService,
   type SavedVoice,
-} from '../../src/modules/tts/services/tts.service';
+} from '../../src/modules/tts/domain/voice-service-validation';
 import type {
   VoiceServicePersistence,
   VoiceServiceTransaction,
-} from '../../src/modules/tts/persistence/voice-service-types';
+} from '../../src/modules/tts/ports';
 import type {
   ArchivePort,
   ManagementArchive,

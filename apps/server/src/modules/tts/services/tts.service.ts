@@ -1,35 +1,32 @@
-import { DatabaseVoiceServicePersistence } from '../persistence/database-voice-services';
 import type {
-  SavedVoice,
+  SpeechAdapterFactory,
+  SpeechModelQuery,
   VoiceServicePersistence,
-} from '../persistence/voice-service-types';
-import { createSpeechAdapter } from '../adapters/speech-adapter-factory';
+} from '../ports';
 import { SpeechModelsService } from './speech-models.service';
 import { SpeechService } from './speech.service';
-import { createDefaultSpeechSynthesizer } from './piper.service';
 import type { ResolvedSpeech, SpeechSynthesizer } from './speech-synthesizer';
 import { VoiceServiceManagement } from './voice-service-management.service';
 
 export { validateVoiceService } from '../domain/voice-service-validation';
-export type {
-  SavedVoice,
-  VoiceServicePersistence,
-} from '../persistence/voice-service-types';
+export type { SavedVoice } from '../domain/voice-service-validation';
+export type { VoiceServicePersistence } from '../ports';
 
-/** Compatibility facade for the existing TTS module consumers. */
+/** Application facade for the existing TTS module consumers. */
 export class TtsService {
   private readonly management: VoiceServiceManagement;
   private readonly modelDiscovery: SpeechModelsService;
   private readonly speech: SpeechService;
 
   constructor(
-    storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
-    factory: (value: SavedVoice) => SpeechSynthesizer = createSpeechAdapter,
-    private readonly defaultSpeech: () => SpeechSynthesizer = createDefaultSpeechSynthesizer,
+    storage: VoiceServicePersistence,
+    factory: SpeechAdapterFactory,
+    private readonly defaultSpeech: () => SpeechSynthesizer,
+    queryModels: SpeechModelQuery,
   ) {
     this.management = new VoiceServiceManagement(storage);
     const getVoice = (id: string) => this.get(id);
-    this.modelDiscovery = new SpeechModelsService(getVoice);
+    this.modelDiscovery = new SpeechModelsService(getVoice, queryModels);
     this.speech = new SpeechService(getVoice, factory);
   }
 
@@ -78,5 +75,3 @@ export class TtsService {
     return this.speech.synthesize(id, text, signal);
   }
 }
-
-export const ttsService = new TtsService();

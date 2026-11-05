@@ -1,6 +1,6 @@
-import type { SavedVoice } from '../domain/voice-service-validation';
-
-export type { SavedVoice } from '../domain/voice-service-validation';
+import type { SpeachesModel, VoiceServiceDraft } from '@voxel/shared';
+import type { SpeechSynthesizer } from './services/speech-synthesizer';
+import type { SavedVoice } from './domain/voice-service-validation';
 
 export interface VoiceServiceTransaction {
   get(id: string): Promise<SavedVoice | undefined>;
@@ -15,3 +15,10 @@ export interface VoiceServicePersistence {
   get(id: string): Promise<SavedVoice | undefined>;
   transaction<T>(run: (tx: VoiceServiceTransaction) => Promise<T>): Promise<T>;
 }
+
+export type SpeechAdapterFactory = (value: SavedVoice) => SpeechSynthesizer;
+
+export type SpeechModelQuery = (
+  connection: Pick<VoiceServiceDraft, 'baseUrl' | 'apiKey'>,
+  signal?: AbortSignal,
+) => Promise<SpeachesModel[]>;

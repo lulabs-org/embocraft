@@ -6,7 +6,8 @@ import {
   MemoryVoicePersistence,
   voicePersistence,
 } from '../../../../test/helpers/memory-storage';
-import { TtsService, validateVoiceService } from './tts.service';
+import { TtsService } from '../composition';
+import { validateVoiceService } from '../domain/voice-service-validation';
 
 const mocked = vi.hoisted(() => ({
   persistence: undefined as unknown as MemoryVoicePersistence,

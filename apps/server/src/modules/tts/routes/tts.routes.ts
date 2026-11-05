@@ -1,5 +1,5 @@
 import express, { type Router } from 'express';
-import { ttsService } from '../services/tts.service';
+import { ttsService } from '../composition';
 import { env } from '../../../core/config/env';
 import {
   asyncAbortableRoute,

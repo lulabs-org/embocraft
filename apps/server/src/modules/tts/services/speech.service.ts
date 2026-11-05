@@ -1,13 +1,14 @@
 import { AppError } from '../../../core/errors/app-error';
 import type { SavedVoice } from '../domain/voice-service-validation';
-import type { ResolvedSpeech, SpeechSynthesizer } from './speech-synthesizer';
+import type { SpeechAdapterFactory } from '../ports';
+import type { ResolvedSpeech } from './speech-synthesizer';
 
 export class SpeechService {
   private running = 0;
 
   constructor(
     private readonly getVoice: (id: string) => Promise<SavedVoice>,
-    private readonly factory: (value: SavedVoice) => SpeechSynthesizer,
+    private readonly factory: SpeechAdapterFactory,
   ) {}
 
   async synthesizer(id: string): Promise<ResolvedSpeech> {

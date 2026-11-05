@@ -22,7 +22,7 @@ TTS 模块不负责：
 
 ## 2. 当前问题
 
-1. **已初步拆分**：`services/tts.service.ts` 原先同时处理配置 CRUD、供应商校验、模型发现、合成、并发控制和跨模块通知。现在配置规则、配置管理、模型发现和语音执行分别位于 `domain/voice-service-validation.ts`、`services/voice-service-management.service.ts`、`services/speech-models.service.ts` 和 `services/speech.service.ts`；`TtsService` 暂时作为兼容门面和默认实现装配入口。
+1. **已初步拆分**：`services/tts.service.ts` 原先同时处理配置 CRUD、供应商校验、模型发现、合成、并发控制和跨模块通知。现在配置规则、配置管理、模型发现和语音执行分别位于 `domain/voice-service-validation.ts`、`services/voice-service-management.service.ts`、`services/speech-models.service.ts` 和 `services/speech.service.ts`；`TtsService` 仍是兼容门面，默认实现改由 `composition.ts` 装配。
 2. **已初步处理**：World 通过 `ttsService.resolveSpeech()` 统一解析未绑定、空绑定和已保存服务。未绑定默认语音仍不经过已保存服务的进程内并发限制；是否统一限额需另行评估。
 3. **已初步处理**：`ResolvedSpeech` 区分浏览器朗读和服务端合成；World 根据分支播放。配置变更仍依赖进程内通知取消相关任务，不提供跨进程或提交与通知之间的原子保证。
 4. **已初步处理**：服务端供应商协议已拆分到 `adapters/`，由工厂选择 Speaches、百炼或 OpenAI 兼容实现；配置规则仍位于领域校验中。
@@ -51,8 +51,8 @@ apps/server/src/modules/tts/
 │   ├── voice-service-management.service.test.ts  # 配置管理、删除保护与通知用例单元测试
 │   ├── speech.service.ts                         # 解析播放方式、合成、取消、超时和并发控制
 │   ├── speech.service.test.ts                    # 播放解析、合成调度、超时取消与并发控制单元测试
-│   ├── speech-models.service.ts                  # 模型发现及默认服务就绪状态用例
-│   └── speech-models.service.test.ts             # 模型发现与默认语音就绪状态单元测试
+│   ├── speech-models.service.ts                  # 模型发现；目标还包括默认服务就绪状态用例
+│   └── speech-models.service.test.ts             # 模型发现测试；目标还包括默认语音就绪状态
 │
 ├── adapters/                                     # 外部服务和技术能力的适配
 │   ├── speech-adapter-factory.ts                 # 根据已校验的类型创建服务端合成适配器
@@ -189,23 +189,23 @@ World 保留自己的队列、收听范围、片段缓存与访问检查。TTS �
 
 ## 7. 从现有文件迁移
 
-| 当前文件                                 | 建议归属                                                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `services/tts.service.ts`                | 配置规则迁入 `domain/`；CRUD、模型发现和合成分别迁入对应 `services/`；默认实现装配移至 `composition.ts` |
-| `services/speech-synthesizer.ts`         | 播放方式放入领域模型；服务端合成能力放入端口或公开类型                                                  |
-| `services/piper.service.ts`              | 兼容导出；实现与测试已迁至 `adapters/speaches-tts.adapter.ts`，保留请求、超时、响应大小和 WAV 校验行为  |
-| `services/remote.service.ts`             | 已拆分为百炼与 OpenAI 兼容协议适配器，保留百炼音频 URL 的限制和音频标准化                               |
-| `services/piper-models.service.ts`       | 就绪判断迁入模型用例；按第 6.3 节复用 Speaches 查询或其底层能力，保留默认检查的解析和错误契约           |
-| `persistence/voice-service-types.ts`     | 领域配置归 `domain/`，仓储与事务契约归应用端口                                                          |
-| `persistence/database-voice-services.ts` | 保留 Prisma、加密、事务锁与外键错误映射，改为实现应用层定义的端口                                       |
-| `routes/tts.routes.ts`                   | 保留现有路由与 HTTP 行为，改为调用拆分后的应用用例                                                      |
-| `index.ts`                               | 收窄为其他模块需要的能力；按调用方迁移进度移除具体适配器导出                                            |
+| 当前文件                                 | 建议归属                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `services/tts.service.ts`                | 保留应用门面；默认实现已由 `composition.ts` 装配                                                       |
+| `services/speech-synthesizer.ts`         | 播放方式放入领域模型；服务端合成能力放入端口或公开类型                                                 |
+| `services/piper.service.ts`              | 兼容导出；实现与测试已迁至 `adapters/speaches-tts.adapter.ts`，保留请求、超时、响应大小和 WAV 校验行为 |
+| `services/remote.service.ts`             | 已拆分为百炼与 OpenAI 兼容协议适配器，保留百炼音频 URL 的限制和音频标准化                              |
+| `services/piper-models.service.ts`       | 就绪判断迁入模型用例；按第 6.3 节复用 Speaches 查询或其底层能力，保留默认检查的解析和错误契约          |
+| `persistence/voice-service-types.ts`     | 已移除；领域配置归 `domain/`，仓储与事务契约归 `ports.ts`                                              |
+| `persistence/database-voice-services.ts` | 保留 Prisma、加密、事务锁与外键错误映射，实现应用层定义的端口                                          |
+| `routes/tts.routes.ts`                   | 保留现有路由与 HTTP 行为，改为调用拆分后的应用用例                                                     |
+| `index.ts`                               | 收窄为其他模块需要的能力；按调用方迁移进度移除具体适配器导出                                           |
 
 ## 8. 分阶段实施和验收
 
 1. **固定现有行为**：梳理配置 CRUD、默认语音、浏览器模式、模型发现、取消和删除保护的调用链；补足能够覆盖关键边界的测试。
 2. **统一调用入口**：World 已通过公开解析能力处理默认语音、空绑定和配置语音，保持原有默认路径及并发差异；Agent 配置存在性检查等窄接口仍待整理。
-3. **拆分用例与模型**：已区分浏览器和服务端播放方式，初步拆出配置管理、语音执行及模型发现；应用端口与装配仍需整理，并保留现有 HTTP 和数据格式。
+3. **拆分用例与模型**：已区分浏览器和服务端播放方式，拆出配置管理、语音执行及模型发现，仓储与模型查询通过端口注入，并保留现有 HTTP 和数据格式；默认就绪检查与删除协作仍待后续整理。
 4. **整理适配器**：拆分供应商协议，复用模型查询，保持密钥、URL、响应大小、超时、取消与音频格式限制。
 5. **明确删除协作**：验证并发时序后引入显式检查和提交后通知；保留数据库外键、事务与运行时取消保护。
 6. **收窄模块门面**：移除外部对具体实现的依赖，并检查跨模块引用和依赖方向。
