@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { AlertCircle, Lock, X } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
+import { AlertCircle, HelpCircle, Lock, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { useI18n } from '../../i18n';
 import { clearGatewayToken, saveGatewayToken } from '../../network/gateway';
-import { TokenHelpPopover } from './TokenHelpPopover';
 
 export function GatewayAccess({
   open,
@@ -73,6 +73,7 @@ export function GatewayAccess({
                 autoFocus
                 required
                 aria-label={t('console.gateway.adminTokenAria')}
+                aria-describedby="console-token-storage"
                 aria-invalid={!!error}
               />
               <Button
@@ -92,10 +93,31 @@ export function GatewayAccess({
             )}
 
             <div className="console-access-meta">
-              <span className="console-access-hint">
+              <p id="console-token-storage" className="console-access-hint">
                 {t('console.gateway.tabOnlyHint')}
-              </span>
-              <TokenHelpPopover />
+              </p>
+              <Popover.Root>
+                <Popover.Trigger
+                  className="console-token-help-button"
+                  aria-label={t('console.gateway.tokenHelpLabel')}
+                >
+                  <HelpCircle size={16} aria-hidden="true" />
+                </Popover.Trigger>
+                <Popover.Content
+                  className="console-token-help"
+                  aria-label={t('console.gateway.tokenHelpLabel')}
+                  aria-describedby="console-token-source"
+                  side="top"
+                  align="end"
+                  sideOffset={6}
+                  collisionPadding={12}
+                >
+                  <p id="console-token-source" className="console-access-hint">
+                    {t('console.gateway.tokenSourceHint')}
+                  </p>
+                  <Popover.Arrow />
+                </Popover.Content>
+              </Popover.Root>
             </div>
           </form>
         )}

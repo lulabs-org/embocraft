@@ -26,7 +26,7 @@
 cp -n .env.example .env
 ```
 
-按示例中的通用、本地开发、Docker Compose 分组配置。Docker 部署前设置数据库密码；详细默认值和覆盖方式见 [统一配置入口](docs/guide/getting-started.md#统一配置入口)。
+按示例中的通用、本地开发、Docker Compose 分组配置。Docker 部署前设置数据库密码和独立的 `AGENT_GATEWAY_TOKEN`，可用 `openssl rand -base64 32` 生成令牌。详细默认值和覆盖方式见 [统一配置入口](docs/guide/getting-started.md#统一配置入口)。
 
 ### 1. 本地开发环境
 

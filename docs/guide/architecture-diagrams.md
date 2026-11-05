@@ -33,7 +33,7 @@ graph LR
     Web -->|反向代理| Server
     CLI -->|WS Gateway + HTTP| Server
     Server -->|Prisma + pg| DB
-    Server -->|令牌 / 模型文件| Vol
+    Server -->|模型文件| Vol
     Server -->|ASR / TTS| Speech
     Server -->|LLM 推理| DeepSeek
     Server -->|LLM 推理| Ollama
@@ -82,25 +82,24 @@ graph LR
 
 ## 3. 服务端装配（`apps/server/src/server.ts`）
 
-`createServer()` 负责数据库探活、存储加载和服务装配；`createApp()` 负责 HTTP 装配。`listen()` 才绑定端口、创建房间并恢复角色。存储加载失败时会等待并行任务结束，再释放共享数据库客户端。
+`createServer()` 负责校验环境配置、检查数据库连接，并装配服务、HTTP 和 WebSocket 路由。`listen()` 才绑定端口、创建房间并恢复角色。
 
 ```mermaid
 graph TD
     Index["index.ts<br/>读取 env · 启动/停止"] --> Create["createServer()"]
 
     Create --> Startup["core/database/health.ts<br/>checkStartupDatabase"]
-    Create --> Stores["loadStores()（并行）"]
-    Stores --> GA["GatewayAuth<br/>gateway/auth.service"]
-    Stores --> PS["DatabaseProviderRepository<br/>providers/persistence（默认）"]
-    Stores --> VS["VoiceServiceStore<br/>audio/persistence"]
-    Stores --> AS["AsrSettingsStore<br/>audio/persistence"]
+    Create --> GA["GatewayAuth<br/>gateway/auth.service"]
+    Create --> PS["DatabaseProviderRepository<br/>providers/persistence（默认）"]
+    Create --> VS["VoiceServiceStore<br/>audio/persistence"]
+    Create --> AS["AsrSettingsStore<br/>audio/persistence"]
 
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
     Create --> MC["ModelCatalog<br/>providers/adapters/model-catalog"]
     Create --> LS["LocalSpeech<br/>audio/services/asr"]
 
-    Create --> App["createApp()<br/>app.ts（Express）"]
+    Create --> App["Express 中间件与路由"]
     Create --> Sockets["SocketRoutes Map"]
     Sockets --> GWS["installGatewaySocket<br/>/ai-characters/gateway"]
     Sockets --> ASRS["installAsrSocket<br/>/voice/asr/realtime"]
@@ -460,8 +459,8 @@ graph LR
         ASRF["ASR 服务配置"]
     end
 
-    subgraph Files["本地配置路径"]
-        Token["gateway token"]
+    subgraph Env["环境变量"]
+        Token["AGENT_GATEWAY_TOKEN"]
     end
 
     subgraph Memory["内存（不持久化）"]
@@ -475,7 +474,7 @@ graph LR
     DatabaseProviderRepoN["DatabaseProviderRepository"] --> Prov
     VSN["VoiceServiceStore"] --> VDB["DatabaseVoiceServicePersistence"] --> VoiceF
     ASN["AsrSettingsStore"] --> ADB["DatabaseAsrServicePersistence"] --> ASRF
-    GAN["GatewayAuth"] --> Token
+    Token -->|env.readServer| GAN["GatewayAuth"]
     MP["management-persistence / archive"] --> Chars
     MP --> TaskF
     ChatN["chat / agent-speech"] --> Rec
@@ -483,4 +482,4 @@ graph LR
     RoomN --> EvBuf
 ```
 
-> 服务需要 PostgreSQL。模型供应商、Agent 与 TTS/ASR 服务配置保存在数据库；网关令牌及本地语音模型文件仍保存在 `server_data` 卷（容器内 `/app/.data`）。旧语音配置文件不会自动导入。
+> 服务需要 PostgreSQL。模型供应商、Agent 与 TTS/ASR 服务配置保存在数据库。网关令牌来自环境变量，本地语音模型文件保存在 `server_data` 卷（容器内 `/app/.data`）。旧语音配置文件不会自动导入。

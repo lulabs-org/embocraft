@@ -270,8 +270,9 @@
       "adminTokenPlaceholder": "Enter admin token…",
       "adminTokenAria": "Admin token",
       "unlock": "Unlock",
-      "tabOnlyHint": "Valid for this tab only",
-      "devTerminalHint": "The terminal running pnpm dev already prints the admin token — copy and paste it."
+      "tabOnlyHint": "The token is stored only in this tab.",
+      "tokenHelpLabel": "Where can I find the admin token?",
+      "tokenSourceHint": "If you run the server, use the value of AGENT_GATEWAY_TOKEN. Otherwise, ask the server administrator for the token."
     },
     "taskStatus": {
       "running": "Executing task",
@@ -329,15 +330,7 @@
       "ttsTitle": "Text-to-Speech (TTS)",
       "ttsDesc": "Synthesizes replies into speech. Configure voices and test previews to attach to AI characters.",
       "asrTitle": "Speech Recognition (ASR)",
-      "asrDesc": "View interim captions while speaking and automatically confirm full sentences on pauses.",
-      "tokenTriggerTitle": "How to get admin token?",
-      "tokenTitle": "Get Admin Token",
-      "tokenClose": "Close tip",
-      "tokenLocalEnv": "Local Development Environment",
-      "tokenCmdLabel": "Or run this command:",
-      "tokenCopied": "Copied",
-      "tokenCopy": "Copy",
-      "tokenRemoteHint": "If running on a remote server, please contact your administrator for the token."
+      "asrDesc": "View interim captions while speaking and automatically confirm full sentences on pauses."
     },
     "characters": {
       "title": "AI Characters",

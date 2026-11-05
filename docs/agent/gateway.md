@@ -40,15 +40,11 @@ flowchart TD
 
 ## 认证授权与跨域安全
 
-所有管理接口均受到管理员 Bearer 令牌保护，严格限制跨域访问。
+HTTP 管理接口和管理 WebSocket 共用管理员令牌与浏览器来源白名单。
 
 ### 1. 令牌配置策略
 
-服务按以下优先级读取管理员令牌：
-
-1. **环境变量**：`AGENT_GATEWAY_TOKEN`
-2. **文件读取**：`AGENT_GATEWAY_TOKEN_FILE`（未设置时默认使用 `.data/agent-gateway-token`）
-3. **自动生成**：若文件不存在，服务端在启动时自动随机生成高强度令牌并写入文件（权限限定为 `0600`）
+服务端启动时从 `AGENT_GATEWAY_TOKEN` 读取令牌，去除首尾空白后须为 24–4096 个无空白字符。生产环境必须设置令牌。开发环境留空时允许免密访问，浏览器来源仍受白名单限制。修改令牌后重启服务生效。
 
 ::: tip 查看本地令牌
 在本地开发时，可直接通过 CLI 命令显式查看当前令牌：
@@ -65,13 +61,13 @@ pnpm agent:ctl auth show
 
 - **严格白名单**：浏览器请求的 `Origin` 必须包含在 `AGENT_GATEWAY_ALLOWED_ORIGINS`（逗号分隔）中，**严禁使用 `*` 通配符**。
 - **默认规则**：Docker 部署环境下默认放行 `http://localhost` 与 `http://127.0.0.1`。
-- **免 Origin 鉴权**：本地 CLI 命令行工具无需携带 Origin 头，但必须提供合法 Bearer 令牌。
+- **免 Origin 鉴权**：CLI 可省略 Origin 头。服务端配置了令牌时，CLI 仍须提供有效令牌。
 
 ---
 
 ## HTTP 管理命令集
 
-所有资源读写均通过标准 HTTP 请求完成，必须在 Header 中携带 `Authorization: Bearer <token>`：
+所有资源读写均通过 HTTP 请求完成。启用令牌鉴权时，请求头须携带 `Authorization: Bearer <token>`。
 
 | 业务领域     | HTTP 路由                  |           方法           | 功能说明                                |
 | ------------ | -------------------------- | :----------------------: | --------------------------------------- |
@@ -153,7 +149,7 @@ pnpm agent:ctl watch <characterId>    # 实时监听角色的事件与执行日�
 ```
 
 ::: tip 通用参数支持
-所有 `agent:ctl` 命令均支持 `--url <服务端地址>`、`--token-file <令牌路径>` 与 `--json` 输出控制。
+CLI 从环境变量 `AGENT_GATEWAY_TOKEN` 读取管理员令牌。使用 `--url <服务端地址>` 指定目标服务器，使用 `--json` 请求 JSON 输出。
 :::
 
 ---

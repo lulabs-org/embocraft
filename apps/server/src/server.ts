@@ -72,10 +72,7 @@ import { ChatStore, createChatRouter } from './modules/chat';
 export async function createServer() {
   const config = env.readServer();
   await checkStartupDatabase(config.databaseUrl);
-  const gatewayAuth = await GatewayAuth.load({
-    ...config.gateway,
-    isProduction: config.isProduction,
-  });
+  const gatewayAuth = new GatewayAuth(config.gateway);
 
   const db = createDatabaseClient(config.databaseUrl);
   const providers = new DatabaseProviderRepository(db);
