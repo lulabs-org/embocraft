@@ -1,6 +1,6 @@
 import express, { type Router, type RequestHandler } from 'express';
 import { createManagementRouter } from '../../../core/http/middleware/management-policy';
-import type { VoiceServiceStore } from '../persistence/voice-service-store';
+import type { VoiceServiceStore } from '../services/voice-service-store';
 import { installVoiceServiceRoutes } from './voice-services.routes';
 
 export type TtsRouteDependencies = {
@@ -19,7 +19,7 @@ export function createTtsRouter(deps: TtsRouteDependencies): Router {
       (management) => {
         installVoiceServiceRoutes(
           management,
-          () => deps.voiceServices,
+          deps.voiceServices,
           deps.removeVoiceService,
         );
       },

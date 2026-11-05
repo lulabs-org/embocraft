@@ -1,6 +1,5 @@
 import type { Router } from 'express';
-import type { VoiceServiceStore } from '../persistence/voice-service-store';
-import { AppError } from '../../../core/errors/app-error';
+import type { VoiceServiceStore } from '../services/voice-service-store';
 import { env } from '../../../core/config/env';
 import {
   asyncAbortableRoute,
@@ -8,15 +7,9 @@ import {
 } from '../../../core/http/middleware/async-route';
 export function installVoiceServiceRoutes(
   router: Router,
-  getVoices: () => VoiceServiceStore | undefined,
+  voices: VoiceServiceStore,
   removeVoice: (id: string) => Promise<unknown>,
 ) {
-  const voices = () => {
-    const value = getVoices();
-    if (!value) throw new AppError('语音服务未就绪。', 503);
-    return value;
-  };
-
   /**
    * @openapi
    * /voice/tts/defaults:
@@ -76,7 +69,7 @@ export function installVoiceServiceRoutes(
     '/voice/tts/models',
     asyncAbortableRoute(async (req, res, signal) => {
       res.setHeader('Cache-Control', 'no-store');
-      const models = await voices().models(req.body, signal);
+      const models = await voices.models(req.body, signal);
       if (!signal.aborted) res.json({ models });
     }),
   );
@@ -96,7 +89,7 @@ export function installVoiceServiceRoutes(
    */
   router.get(
     '/voice/tts/services',
-    route(async (_req, res) => res.json(await voices().list())),
+    route(async (_req, res) => res.json(await voices.list())),
   );
 
   /**
@@ -121,7 +114,7 @@ export function installVoiceServiceRoutes(
   router.post(
     '/voice/tts/services',
     route(async (req, res) =>
-      res.status(201).json(await voices().save(req.body)),
+      res.status(201).json(await voices.save(req.body)),
     ),
   );
 
@@ -153,7 +146,7 @@ export function installVoiceServiceRoutes(
   router.put(
     '/voice/tts/services/:id',
     route(async (req, res) =>
-      res.json(await voices().save(req.body, String(req.params.id))),
+      res.json(await voices.save(req.body, String(req.params.id))),
     ),
   );
 
@@ -227,7 +220,7 @@ export function installVoiceServiceRoutes(
       };
       res.on('close', cancel);
       try {
-        const audio = await voices().synthesize(
+        const audio = await voices.synthesize(
           String(req.params.id),
           req.body?.text,
           abort.signal,
