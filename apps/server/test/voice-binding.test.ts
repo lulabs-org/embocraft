@@ -4,7 +4,7 @@ import { domainEvents } from '../src/core/events/domain-events';
 import { CharacterVoiceCoordinator } from '../src/modules/ai-characters/services/voice-coordinator.service';
 import type { Job } from '../src/modules/ai-characters/services/character-job';
 import {
-  PiperTts,
+  createDefaultSpeechSynthesizer,
   ttsService,
   type SpeechSynthesizer,
 } from '../src/modules/tts';
@@ -15,6 +15,7 @@ vi.mock('../src/modules/tts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/modules/tts')>();
   return {
     ...actual,
+    createDefaultSpeechSynthesizer: vi.fn(),
     ttsService: {
       list: vi.fn(),
       get: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock('../src/modules/tts', async (importOriginal) => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 const wav = () => {
@@ -173,12 +174,58 @@ it('does not bind a session that closes while its configuration is being read', 
 });
 
 it('keeps unmanaged world clients on local TTS without reading cloud profiles', async () => {
+  const defaultVoice: SpeechSynthesizer = { synthesize: vi.fn() };
+  vi.mocked(createDefaultSpeechSynthesizer).mockReturnValueOnce(defaultVoice);
   const room = Object.create(WorldRoom.prototype) as {
     actorVoices: Map<string, string>;
     resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
   };
   room.actorVoices = new Map();
   const synthesizer = await room.resolveActorSpeech('unmanaged-client');
-  expect(synthesizer).toBeInstanceOf(PiperTts);
+  expect(synthesizer).toBe(defaultVoice);
+  expect(createDefaultSpeechSynthesizer).toHaveBeenCalledOnce();
   expect(ttsService.synthesizer).not.toHaveBeenCalled();
+});
+
+it('resolves saved voice bindings and preserves the empty binding fallback', async () => {
+  const room = Object.create(WorldRoom.prototype) as {
+    actorVoices: Map<string, string>;
+    resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
+  };
+  const savedVoice: SpeechSynthesizer = { synthesize: vi.fn() };
+  vi.mocked(ttsService.synthesizer).mockResolvedValueOnce(savedVoice);
+  room.actorVoices = new Map([
+    ['managed', 'service-id'],
+    ['disabled', ''],
+  ]);
+
+  expect(await room.resolveActorSpeech('managed')).toBe(savedVoice);
+  expect(ttsService.synthesizer).toHaveBeenCalledExactlyOnceWith('service-id');
+  const disabled = await room.resolveActorSpeech('disabled');
+  const signal = new AbortController().signal;
+  await disabled.synthesize('text', signal);
+  expect(ttsService.synthesize).toHaveBeenCalledExactlyOnceWith(
+    '',
+    'text',
+    signal,
+  );
+  expect(createDefaultSpeechSynthesizer).not.toHaveBeenCalled();
+});
+
+it('rejects a saved voice resolved after its actor binding changes', async () => {
+  const room = Object.create(WorldRoom.prototype) as {
+    actorVoices: Map<string, string>;
+    resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
+  };
+  room.actorVoices = new Map([['managed', 'old']]);
+  let finish!: (voice: SpeechSynthesizer) => void;
+  vi.mocked(ttsService.synthesizer).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const resolving = room.resolveActorSpeech('managed');
+  room.actorVoices.set('managed', 'new');
+  finish({ synthesize: vi.fn() });
+  await expect(resolving).rejects.toMatchObject({ status: 409 });
 });

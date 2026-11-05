@@ -1,6 +1,6 @@
-import type { SavedVoice } from '../domain/voice-service';
+import type { SavedVoice } from '../domain/voice-service-validation';
 
-export type { SavedVoice } from '../domain/voice-service';
+export type { SavedVoice } from '../domain/voice-service-validation';
 
 export interface VoiceServiceTransaction {
   get(id: string): Promise<SavedVoice | undefined>;

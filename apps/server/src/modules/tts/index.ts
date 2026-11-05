@@ -6,5 +6,8 @@ export {
   validateVoiceService,
 } from './services/tts.service';
 export { PiperModels } from './services/piper-models.service';
-export { PiperTts } from './services/piper.service';
+export {
+  createDefaultSpeechSynthesizer,
+  PiperTts,
+} from './services/piper.service';
 export type { SpeechSynthesizer } from './services/speech-synthesizer';

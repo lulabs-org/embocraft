@@ -7,6 +7,7 @@ import {
   voicePersistence,
 } from '../../../../test/helpers/memory-storage';
 import { TtsService, validateVoiceService } from './tts.service';
+import { createDefaultSpeechSynthesizer } from './piper.service';
 
 const mocked = vi.hoisted(() => ({
   persistence: undefined as unknown as MemoryVoicePersistence,
@@ -305,6 +306,40 @@ it('cancels previews and bounds concurrent synthesis', async () => {
   pending.forEach((resolve) => resolve());
   await expect(first).rejects.toThrow();
   await second;
+});
+
+it('keeps the unmanaged default voice independent of saved-service concurrency', async () => {
+  const pending: (() => void)[] = [];
+  const service = new TtsService(undefined, () => ({
+    synthesize: async () => {
+      await new Promise<void>((resolve) => pending.push(resolve));
+      return { bytes: wav(), durationMs: 1000 };
+    },
+  }));
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(wav()));
+  vi.stubGlobal('fetch', fetch);
+  vi.stubEnv('SPEECH_API_URL', 'http://default-speech:8000/v1');
+  const signal = new AbortController().signal;
+  const first = service.synthesize('local-default', 'one', signal);
+  const second = service.synthesize('local-default', 'two', signal);
+  try {
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    await expect(
+      service.synthesize('local-default', 'three', signal),
+    ).rejects.toMatchObject({
+      status: 429,
+    });
+    await expect(
+      createDefaultSpeechSynthesizer().synthesize('default', signal),
+    ).resolves.toMatchObject({ durationMs: 1000 });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0][0]).toBe(
+      'http://default-speech:8000/v1/audio/speech',
+    );
+  } finally {
+    pending.forEach((resolve) => resolve());
+    await Promise.all([first, second]);
+  }
 });
 
 it('persists browser profiles without credentials and never runs server synthesis', async () => {
