@@ -34,6 +34,22 @@ export class DomainEventBus {
     this.emitter.emit(event, payload);
   }
 
+  /** Deliver post-commit notifications to every listener without propagating failures. */
+  emitSettled<K extends keyof DomainEventMap>(
+    event: K,
+    payload: DomainEventMap[K],
+  ): boolean {
+    let failed = false;
+    for (const listener of this.emitter.rawListeners(event)) {
+      try {
+        listener.call(this.emitter, payload);
+      } catch {
+        failed = true;
+      }
+    }
+    return !failed;
+  }
+
   clear(): void {
     this.emitter.removeAllListeners();
   }

@@ -92,13 +92,19 @@ export function validateAICharacter(
     ),
     intervalMs: integer(input.intervalMs, '轮次间隔', 3000, 1000, 60000),
     voiceReplies: boolean(input.voiceReplies, false),
-    voiceServiceId: text(
-      input.voiceProviderId ?? input.voiceServiceId,
-      '语音服务',
-      80,
-      input.voiceReplies ? 'local-default' : '',
-    ),
+    voiceServiceId: voiceServiceIdFromInput(input),
   };
+}
+
+/** Apply the same legacy alias and default when reserving a voice reference. */
+export function voiceServiceIdFromInput(value: unknown): string {
+  const input = object(value);
+  return text(
+    input.voiceProviderId ?? input.voiceServiceId,
+    '语音服务',
+    80,
+    input.voiceReplies ? 'local-default' : '',
+  );
 }
 
 /** Public profile writes cannot create or replace task execution. */

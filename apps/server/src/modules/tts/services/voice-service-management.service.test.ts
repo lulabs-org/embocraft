@@ -3,6 +3,7 @@ import { domainEvents } from '../../../core/events/domain-events';
 import { validateVoiceService } from '../domain/voice-service-validation';
 import type { VoiceServicePersistence } from '../ports';
 import { VoiceServiceManagement } from './voice-service-management.service';
+import { voiceServiceCoordination } from '../voice-service-coordination';
 
 it('checks deletion again inside the transaction before removing the voice', async () => {
   const voice = validateVoiceService({ name: 'Voice', type: 'speaches' });
@@ -35,7 +36,9 @@ it('checks deletion again inside the transaction before removing the voice', asy
   const releaseChanged = domainEvents.on('tts.service.changed', changed);
   try {
     await expect(
-      new VoiceServiceManagement(storage).remove(voice.id),
+      new VoiceServiceManagement(storage, voiceServiceCoordination).remove(
+        voice.id,
+      ),
     ).rejects.toThrow('voice became referenced');
     expect(checks).toEqual([false, true]);
     expect(remove).not.toHaveBeenCalled();

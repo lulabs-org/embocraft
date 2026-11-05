@@ -1,8 +1,10 @@
 import type { VoiceServiceView } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import { domainEvents } from '../../../core/events/domain-events';
 import type { SavedVoice } from '../domain/voice-service-validation';
-import type { VoiceServicePersistence } from '../ports';
+import type {
+  VoiceServiceCoordination,
+  VoiceServicePersistence,
+} from '../ports';
 import { validateVoiceService } from '../domain/voice-service-validation';
 
 const publicView = ({ apiKey, ...value }: SavedVoice): VoiceServiceView => ({
@@ -12,7 +14,10 @@ const publicView = ({ apiKey, ...value }: SavedVoice): VoiceServiceView => ({
 });
 
 export class VoiceServiceManagement {
-  constructor(private readonly storage: VoiceServicePersistence) {}
+  constructor(
+    private readonly storage: VoiceServicePersistence,
+    private readonly coordination: VoiceServiceCoordination,
+  ) {}
 
   private find(voice?: SavedVoice): SavedVoice {
     if (!voice) throw new AppError('语音服务不存在，请重新选择。', 404);
@@ -36,6 +41,16 @@ export class VoiceServiceManagement {
     return this.find(await this.storage.get(id));
   }
 
+  private notifyChanged(id: string) {
+    let failed: boolean;
+    try {
+      failed = !this.coordination.notifyChanged(id);
+    } catch {
+      failed = true;
+    }
+    if (failed) console.error('[tts] 语音配置已提交，但变更通知失败。');
+  }
+
   async save(value: unknown, id?: string) {
     const result = await this.storage.transaction(async (tx) => {
       if (!id && (await tx.count()) >= 20)
@@ -48,17 +63,19 @@ export class VoiceServiceManagement {
       else await tx.create(entry);
       return publicView(entry);
     });
-    if (id) domainEvents.emit('tts.service.changed', { serviceId: id });
+    if (id) this.notifyChanged(id);
     return result;
   }
 
   async remove(id: string) {
-    domainEvents.emit('tts.service.removing', { serviceId: id });
-    await this.storage.transaction(async (tx) => {
-      this.find(await tx.get(id));
-      domainEvents.emit('tts.service.removing', { serviceId: id });
-      await tx.remove(id);
+    this.coordination.assertRemovable(id);
+    await this.coordination.withRemoval(id, async () => {
+      await this.storage.transaction(async (tx) => {
+        this.find(await tx.get(id));
+        this.coordination.assertRemovable(id);
+        await tx.remove(id);
+      });
     });
-    domainEvents.emit('tts.service.changed', { serviceId: id });
+    this.notifyChanged(id);
   }
 }

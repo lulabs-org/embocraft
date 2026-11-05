@@ -26,6 +26,7 @@ import { boolean, object, text } from '../../../core/http/validation';
 import {
   aiCharacterProfileInput,
   validateAICharacter,
+  voiceServiceIdFromInput,
 } from '../domain/validation';
 
 import {
@@ -40,6 +41,7 @@ import {
 import { restoreAICharacterJob } from '../persistence/restore';
 import { CharacterSnapshots } from '../persistence/snapshots';
 import { domainEvents } from '../../../core/events/domain-events';
+import { withVoiceServiceReference } from '../../tts';
 import { AICharacterHost } from './character-host.service';
 import type { ExecutionContext } from './execution-context';
 import {
@@ -246,15 +248,21 @@ export class AICharacterOrchestrator {
     this.persistence.tasks.restore(this.plans, saved);
     const autoJoin: Job[] = [];
     for (const view of saved.characters) {
-      const { job, voiceWarning, shouldAutoJoin } = await restoreAICharacterJob(
-        view,
-        this.providers,
-        (settings) => this.checkVoice(settings),
-        this.plans,
+      await withVoiceServiceReference(
+        voiceServiceIdFromInput(view),
+        async () => {
+          const { job, voiceWarning, shouldAutoJoin } =
+            await restoreAICharacterJob(
+              view,
+              this.providers,
+              (settings) => this.checkVoice(settings),
+              this.plans,
+            );
+          this.jobs.set(view.id, job);
+          if (voiceWarning) appendAICharacterLog(job.view, voiceWarning);
+          if (shouldAutoJoin) autoJoin.push(job);
+        },
       );
-      this.jobs.set(view.id, job);
-      if (voiceWarning) appendAICharacterLog(job.view, voiceWarning);
-      if (shouldAutoJoin) autoJoin.push(job);
     }
     await this.save();
     for (const job of autoJoin.slice(0, 4)) {
@@ -350,34 +358,39 @@ export class AICharacterOrchestrator {
     );
     const settings = validateAICharacter(input, provider);
     const joinWorld = boolean(input.joinWorld, true);
-    await this.checkVoice(settings);
-    if (this.closing) throw new AppError('世界服务正在关闭。', 503);
-    if (joinWorld && [...this.jobs.values()].filter(resident).length >= 4)
-      throw new AppError(
-        '最多同时在线 4 个受管理的 Agent（含待命），请先关闭一个。',
-        409,
-      );
-    if (this.jobs.size >= 50)
-      throw new AppError(
-        '最多保存 50 个 Agent；为保留任务历史，不能自动删除旧角色。',
-        409,
-      );
-    const job = createCharacterJob({
-      view: {
-        ...settings,
-        id: randomUUID(),
-        providerName: provider.name,
-        status: joinWorld ? 'joining' : 'stopped',
-        createdAt: Date.now(),
-        logEntries: [],
+    return withVoiceServiceReference(
+      settings.voiceServiceId ?? '',
+      async () => {
+        await this.checkVoice(settings);
+        if (this.closing) throw new AppError('世界服务正在关闭。', 503);
+        if (joinWorld && [...this.jobs.values()].filter(resident).length >= 4)
+          throw new AppError(
+            '最多同时在线 4 个受管理的 Agent（含待命），请先关闭一个。',
+            409,
+          );
+        if (this.jobs.size >= 50)
+          throw new AppError(
+            '最多保存 50 个 Agent；为保留任务历史，不能自动删除旧角色。',
+            409,
+          );
+        const job = createCharacterJob({
+          view: {
+            ...settings,
+            id: randomUUID(),
+            providerName: provider.name,
+            status: joinWorld ? 'joining' : 'stopped',
+            createdAt: Date.now(),
+            logEntries: [],
+          },
+          abort: new AbortController(),
+          ledger: this.plans,
+        });
+        this.jobs.set(job.view.id, job);
+        if (joinWorld) job.done = this.execute(job, provider, false);
+        void this.persist();
+        return this.list().find((v) => v.id === job.view.id)!;
       },
-      abort: new AbortController(),
-      ledger: this.plans,
-    });
-    this.jobs.set(job.view.id, job);
-    if (joinWorld) job.done = this.execute(job, provider, false);
-    void this.persist();
-    return this.list().find((v) => v.id === job.view.id)!;
+    );
   }
 
   async join(id: string) {
@@ -461,61 +474,84 @@ export class AICharacterOrchestrator {
         },
         provider,
       );
-      await this.checkVoice(settings);
-      if (this.closing || this.jobs.get(id) !== job || active(job.view.status))
-        throw new AppError('角色状态已变化，请刷新后重试。', 409);
-      const session = job.session;
-      if (
-        session &&
-        (!!settings.voiceReplies && aiCharacterPermissions(settings).chat) !==
-          (!!job.view.voiceReplies && aiCharacterPermissions(job.view).chat)
-      ) {
-        const result = await this.voiceCoordinator.syncSessionVoice(
-          session,
-          !!settings.voiceReplies && aiCharacterPermissions(settings).chat,
-        );
-        if (!result.ok || job.session !== session || active(job.view.status))
-          throw new AppError('语音开关未保存，请刷新后重试。', 409);
-      }
-      if (session && settings.name !== job.view.name) {
-        const result = await session.request('rename', { name: settings.name });
-        if (!result.ok || job.session !== session || active(job.view.status))
-          throw new AppError('角色状态已变化，未保存参数，请刷新后重试。', 409);
-      }
-      await this.bindVoice(job, settings);
-      if (
-        this.closing ||
-        this.jobs.get(id) !== job ||
-        job.session !== session ||
-        active(job.view.status)
-      )
-        throw new AppError('角色状态已变化，请刷新后重试。', 409);
-      if (
-        settings.providerId !== job.view.providerId ||
-        settings.model !== job.view.model
-      ) {
-        this.taskScheduler.cancel(job.view.id);
-        modelChanged(executionState(job));
-        job.runtime.clearMessages();
-      } else if (
-        JSON.stringify(aiCharacterPermissions(settings)) !==
-          JSON.stringify(aiCharacterPermissions(job.view)) ||
-        JSON.stringify(settings.skills) !== JSON.stringify(job.view.skills)
-      ) {
-        this.taskScheduler.cancel(job.view.id);
-        job.runtime.clearMessages();
-        pauseTaskForHost(
-          executionState(job),
-          '角色技能或动作权限已修改，进度已保留，请确认后继续。',
-        );
-        appendAICharacterLog(
-          job.view,
-          '角色能力已更新；后续按新权限重新规划，已有进度保留。',
-        );
-      }
-      Object.assign(job.view, settings, { providerName: provider.name });
-      await this.save();
-      return this.list().find((v) => v.id === job.view.id)!;
+      return await withVoiceServiceReference(
+        settings.voiceServiceId ?? '',
+        async () => {
+          await this.checkVoice(settings);
+          if (
+            this.closing ||
+            this.jobs.get(id) !== job ||
+            active(job.view.status)
+          )
+            throw new AppError('角色状态已变化，请刷新后重试。', 409);
+          const session = job.session;
+          if (
+            session &&
+            (!!settings.voiceReplies &&
+              aiCharacterPermissions(settings).chat) !==
+              (!!job.view.voiceReplies && aiCharacterPermissions(job.view).chat)
+          ) {
+            const result = await this.voiceCoordinator.syncSessionVoice(
+              session,
+              !!settings.voiceReplies && aiCharacterPermissions(settings).chat,
+            );
+            if (
+              !result.ok ||
+              job.session !== session ||
+              active(job.view.status)
+            )
+              throw new AppError('语音开关未保存，请刷新后重试。', 409);
+          }
+          if (session && settings.name !== job.view.name) {
+            const result = await session.request('rename', {
+              name: settings.name,
+            });
+            if (
+              !result.ok ||
+              job.session !== session ||
+              active(job.view.status)
+            )
+              throw new AppError(
+                '角色状态已变化，未保存参数，请刷新后重试。',
+                409,
+              );
+          }
+          await this.bindVoice(job, settings);
+          if (
+            this.closing ||
+            this.jobs.get(id) !== job ||
+            job.session !== session ||
+            active(job.view.status)
+          )
+            throw new AppError('角色状态已变化，请刷新后重试。', 409);
+          if (
+            settings.providerId !== job.view.providerId ||
+            settings.model !== job.view.model
+          ) {
+            this.taskScheduler.cancel(job.view.id);
+            modelChanged(executionState(job));
+            job.runtime.clearMessages();
+          } else if (
+            JSON.stringify(aiCharacterPermissions(settings)) !==
+              JSON.stringify(aiCharacterPermissions(job.view)) ||
+            JSON.stringify(settings.skills) !== JSON.stringify(job.view.skills)
+          ) {
+            this.taskScheduler.cancel(job.view.id);
+            job.runtime.clearMessages();
+            pauseTaskForHost(
+              executionState(job),
+              '角色技能或动作权限已修改，进度已保留，请确认后继续。',
+            );
+            appendAICharacterLog(
+              job.view,
+              '角色能力已更新；后续按新权限重新规划，已有进度保留。',
+            );
+          }
+          Object.assign(job.view, settings, { providerName: provider.name });
+          await this.save();
+          return this.list().find((v) => v.id === job.view.id)!;
+        },
+      );
     } finally {
       job.updating = false;
       this.schedule(job);

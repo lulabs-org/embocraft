@@ -15,3 +15,5 @@ export type {
   ResolvedSpeech,
   SpeechSynthesizer,
 } from './services/speech-synthesizer';
+
+export { withVoiceServiceReference } from './voice-service-coordination';

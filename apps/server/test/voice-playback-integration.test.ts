@@ -76,3 +76,32 @@ it('cancels a pending browser resolution after a saved voice changes', async () 
     await server.close();
   }
 });
+
+it('blocks deletion while a World binding exists and releases its guard on unbind', async () => {
+  const server = await createTestServer();
+  const room = server.world;
+  try {
+    const saved = await ttsService.save({
+      name: 'World voice',
+      type: 'speaches',
+    });
+    const actor = Object.assign(new Avatar(), {
+      id: 'ai',
+      kind: 'ai-agent',
+      voiceReplies: true,
+    });
+    room.state.players.set(actor.id, actor);
+    domainEvents.emit('agent.voice.bound', {
+      sessionId: actor.id,
+      serviceId: saved.id,
+    });
+    await expect(ttsService.remove(saved.id)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(await ttsService.get(saved.id)).toMatchObject({ id: saved.id });
+    domainEvents.emit('agent.voice.unbound', { sessionId: actor.id });
+    await expect(ttsService.remove(saved.id)).resolves.toBeUndefined();
+  } finally {
+    await server.close();
+  }
+});
