@@ -1,6 +1,6 @@
-import type { VoiceServiceDraft } from '@voxel/shared';
+import type { SavedVoice } from '../domain/voice-service';
 
-export type SavedVoice = VoiceServiceDraft & { id: string };
+export type { SavedVoice } from '../domain/voice-service';
 
 export interface VoiceServiceTransaction {
   get(id: string): Promise<SavedVoice | undefined>;
