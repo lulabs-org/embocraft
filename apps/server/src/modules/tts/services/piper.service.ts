@@ -4,6 +4,11 @@ import { AppError } from '../../../core/errors/app-error';
 import { env } from '../../../core/config/env';
 import type { SpeechSynthesizer } from './speech-synthesizer';
 
+/** Default voice for actors without a managed voice-service binding. */
+export function createDefaultSpeechSynthesizer(): SpeechSynthesizer {
+  return new PiperTts();
+}
+
 export class PiperTts implements SpeechSynthesizer {
   constructor(
     private options: {

@@ -1,7 +1,7 @@
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
 import { SpeachesModels } from '../../../core/audio/speaches-models';
-import type { SavedVoice } from '../domain/voice-service';
+import type { SavedVoice } from '../domain/voice-service-validation';
 
 export class SpeechModelsService {
   constructor(private readonly getVoice: (id: string) => Promise<SavedVoice>) {}

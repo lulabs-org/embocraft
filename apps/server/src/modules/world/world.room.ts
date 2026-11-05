@@ -1,5 +1,9 @@
 import { bindChatRuntime, ChatStore, WorldChat, visibleEvent } from '../chat';
-import { PiperTts, ttsService, type SpeechSynthesizer } from '../tts';
+import {
+  createDefaultSpeechSynthesizer,
+  ttsService,
+  type SpeechSynthesizer,
+} from '../tts';
 import { peekDatabaseClient } from '../../core/database/client';
 import { AppError } from '../../core/errors/app-error';
 import { domainEvents } from '../../core/events/domain-events';
@@ -81,7 +85,7 @@ export class WorldRoom extends Room<WorldState> {
   private async resolveActorSpeech(actor: string): Promise<SpeechSynthesizer> {
     // Only trusted Agent management binds cloud services; raw world actions cannot select them.
     const id = this.actorVoices.get(actor);
-    if (id === undefined) return new PiperTts();
+    if (id === undefined) return createDefaultSpeechSynthesizer();
     const synth = id ? await ttsService.synthesizer(id) : undefined;
     if (this.actorVoices.get(actor) !== id)
       throw new AppError('语音服务绑定已变更。', 409);

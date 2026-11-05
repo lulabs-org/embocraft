@@ -7,7 +7,10 @@ import {
   type Player,
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import { PiperTts, type SpeechSynthesizer } from '../../tts';
+import {
+  createDefaultSpeechSynthesizer,
+  type SpeechSynthesizer,
+} from '../../tts';
 
 type Pending = {
   actor: string;
@@ -31,7 +34,9 @@ export class AgentSpeech {
       | SpeechSynthesizer
       | ((
           actor: string,
-        ) => SpeechSynthesizer | Promise<SpeechSynthesizer>) = new PiperTts(),
+        ) =>
+          | SpeechSynthesizer
+          | Promise<SpeechSynthesizer>) = createDefaultSpeechSynthesizer(),
   ) {}
   private speaker(actor: string) {
     return [...this.players()].find(

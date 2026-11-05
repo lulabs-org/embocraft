@@ -1,8 +1,13 @@
-import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
+import {
+  DEFAULT_PIPER_MODEL,
+  PIPER_MODELS,
+  type VoiceServiceDraft,
+} from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
-import type { SavedVoice } from './voice-service';
+
+export type SavedVoice = VoiceServiceDraft & { id: string };
 
 export function validateVoiceService(
   value: unknown,

@@ -1,5 +1,5 @@
 import { AppError } from '../../../core/errors/app-error';
-import type { SavedVoice } from '../domain/voice-service';
+import type { SavedVoice } from '../domain/voice-service-validation';
 import type { SpeechSynthesizer } from './speech-synthesizer';
 
 export class SpeechService {

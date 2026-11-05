@@ -1,7 +1,7 @@
 import type { VoiceServiceView } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
-import type { SavedVoice } from '../domain/voice-service';
+import type { SavedVoice } from '../domain/voice-service-validation';
 import type { VoiceServicePersistence } from '../persistence/voice-service-types';
 import { validateVoiceService } from '../domain/voice-service-validation';
 
