@@ -1,6 +1,7 @@
 import type { SpeachesModel, SpeachesVoice } from '@voxel/shared';
 import { AppError } from '../errors/app-error';
 import { env } from '../config/env';
+import { readSpeachesResponse } from './speaches-response';
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -56,25 +57,9 @@ export class SpeachesModels {
           502,
         );
       }
-      if (!response.body) throw Error('shape');
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let size = 0;
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.length;
-          if (size > 1024 * 1024) throw Error('size');
-          chunks.push(value);
-        }
-      } finally {
-        await reader.cancel().catch(() => {});
-      }
+      const bytes = await readSpeachesResponse(response);
       bounded.throwIfAborted();
-      const data = record(
-        JSON.parse(Buffer.concat(chunks).toString('utf8')),
-      ).data;
+      const data = record(JSON.parse(bytes.toString('utf8'))).data;
       if (!Array.isArray(data)) throw Error('shape');
       const models = new Map<string, SpeachesModel>();
       for (const item of data) {

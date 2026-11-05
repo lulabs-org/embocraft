@@ -1,6 +1,7 @@
 import { DEFAULT_PIPER_MODEL } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { env } from '../../../core/config/env';
+import { readSpeachesResponse } from '../../../core/audio/speaches-response';
 
 /** Read-only readiness checks; Docker startup owns model installation. */
 export class PiperModels {
@@ -10,18 +11,21 @@ export class PiperModels {
   ) {}
   private async installed(signal?: AbortSignal): Promise<Set<string>> {
     try {
+      const bounded = AbortSignal.any([
+        AbortSignal.timeout(5000),
+        ...(signal ? [signal] : []),
+      ]);
       const response = await this.request(
         `${this.endpoint}/models?task=text-to-speech`,
-        {
-          signal: AbortSignal.any([
-            AbortSignal.timeout(5000),
-            ...(signal ? [signal] : []),
-          ]),
-          redirect: 'error',
-        },
+        { signal: bounded, redirect: 'error' },
       );
-      if (!response.ok) throw Error('status');
-      const data = await response.json();
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        throw Error('status');
+      }
+      const bytes = await readSpeachesResponse(response);
+      bounded.throwIfAborted();
+      const data = JSON.parse(new TextDecoder().decode(bytes));
       if (!Array.isArray(data.data)) throw Error('shape');
       return new Set(data.data.map((model: { id: string }) => model.id));
     } catch (error) {
