@@ -6,6 +6,7 @@ import type { Job } from '../src/modules/ai-characters/services/character-job';
 import {
   createDefaultSpeechSynthesizer,
   ttsService,
+  type ResolvedSpeech,
   type SpeechSynthesizer,
 } from '../src/modules/tts';
 import { AgentSpeech } from '../src/modules/world/services/agent-speech.service';
@@ -56,12 +57,15 @@ it('cancels old synthesis and private clips when a service binding changes via d
   let signal!: AbortSignal;
   const actorVoices = new Map<string, string>([['ai', 'local-default']]);
   vi.mocked(ttsService.synthesizer).mockImplementation(
-    async (): Promise<SpeechSynthesizer> => ({
-      synthesize: async (_text: string, abort: AbortSignal) => {
-        signal = abort;
-        return new Promise((resolve) => {
-          finish = resolve;
-        });
+    async (): Promise<ResolvedSpeech> => ({
+      kind: 'server',
+      synthesizer: {
+        synthesize: async (_text: string, abort: AbortSignal) => {
+          signal = abort;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        },
       },
     }),
   );
@@ -178,11 +182,11 @@ it('keeps unmanaged world clients on local TTS without reading cloud profiles', 
   vi.mocked(createDefaultSpeechSynthesizer).mockReturnValueOnce(defaultVoice);
   const room = Object.create(WorldRoom.prototype) as {
     actorVoices: Map<string, string>;
-    resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
+    resolveActorSpeech(actor: string): Promise<ResolvedSpeech>;
   };
   room.actorVoices = new Map();
   const synthesizer = await room.resolveActorSpeech('unmanaged-client');
-  expect(synthesizer).toBe(defaultVoice);
+  expect(synthesizer).toEqual({ kind: 'server', synthesizer: defaultVoice });
   expect(createDefaultSpeechSynthesizer).toHaveBeenCalledOnce();
   expect(ttsService.synthesizer).not.toHaveBeenCalled();
 });
@@ -190,9 +194,12 @@ it('keeps unmanaged world clients on local TTS without reading cloud profiles', 
 it('resolves saved voice bindings and preserves the empty binding fallback', async () => {
   const room = Object.create(WorldRoom.prototype) as {
     actorVoices: Map<string, string>;
-    resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
+    resolveActorSpeech(actor: string): Promise<ResolvedSpeech>;
   };
-  const savedVoice: SpeechSynthesizer = { synthesize: vi.fn() };
+  const savedVoice: ResolvedSpeech = {
+    kind: 'server',
+    synthesizer: { synthesize: vi.fn() },
+  };
   vi.mocked(ttsService.synthesizer).mockResolvedValueOnce(savedVoice);
   room.actorVoices = new Map([
     ['managed', 'service-id'],
@@ -203,7 +210,8 @@ it('resolves saved voice bindings and preserves the empty binding fallback', asy
   expect(ttsService.synthesizer).toHaveBeenCalledExactlyOnceWith('service-id');
   const disabled = await room.resolveActorSpeech('disabled');
   const signal = new AbortController().signal;
-  await disabled.synthesize('text', signal);
+  if (disabled.kind !== 'server') throw new Error('expected server speech');
+  await disabled.synthesizer.synthesize('text', signal);
   expect(ttsService.synthesize).toHaveBeenCalledExactlyOnceWith(
     '',
     'text',
@@ -215,10 +223,10 @@ it('resolves saved voice bindings and preserves the empty binding fallback', asy
 it('rejects a saved voice resolved after its actor binding changes', async () => {
   const room = Object.create(WorldRoom.prototype) as {
     actorVoices: Map<string, string>;
-    resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
+    resolveActorSpeech(actor: string): Promise<ResolvedSpeech>;
   };
   room.actorVoices = new Map([['managed', 'old']]);
-  let finish!: (voice: SpeechSynthesizer) => void;
+  let finish!: (voice: ResolvedSpeech) => void;
   vi.mocked(ttsService.synthesizer).mockReturnValueOnce(
     new Promise((resolve) => {
       finish = resolve;
@@ -226,6 +234,6 @@ it('rejects a saved voice resolved after its actor binding changes', async () =>
   );
   const resolving = room.resolveActorSpeech('managed');
   room.actorVoices.set('managed', 'new');
-  finish({ synthesize: vi.fn() });
+  finish({ kind: 'server', synthesizer: { synthesize: vi.fn() } });
   await expect(resolving).rejects.toMatchObject({ status: 409 });
 });

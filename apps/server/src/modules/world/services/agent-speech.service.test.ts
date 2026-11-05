@@ -40,7 +40,8 @@ function setup() {
   const notify = vi.fn<(id: string, event: AgentSpeechEvent) => void>(),
     report = vi.fn();
   const service = new AgentSpeech(() => players, notify, report, {
-    synthesize,
+    kind: 'server',
+    synthesizer: { synthesize },
   });
   return { players, synthesize, notify, report, service };
 }
@@ -126,11 +127,10 @@ it('delivers browser speech only to authorized listeners without synthesizing or
     { ...person('far'), z: 100 },
   ];
   const notify = vi.fn(),
-    synthesize = vi.fn(),
     report = vi.fn();
   const service = new AgentSpeech(() => players, notify, report, {
-    browserVoice: { voice: 'Test', speed: 1, voiceLanguage: 'zh-CN' },
-    synthesize,
+    kind: 'browser',
+    voice: { voice: 'Test', speed: 1, voiceLanguage: 'zh-CN' },
   });
   service.enqueue('ai', message('private'));
   await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
@@ -145,7 +145,6 @@ it('delivers browser speech only to authorized listeners without synthesizing or
   service.enqueue('ai', message());
   await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(3));
   expect(notify.mock.calls.slice(1).map((c) => c[0])).toEqual(['a', 'b']);
-  expect(synthesize).not.toHaveBeenCalled();
   expect(report).not.toHaveBeenCalled();
   service.close();
 });

@@ -2,7 +2,7 @@ import { bindChatRuntime, ChatStore, WorldChat, visibleEvent } from '../chat';
 import {
   createDefaultSpeechSynthesizer,
   ttsService,
-  type SpeechSynthesizer,
+  type ResolvedSpeech,
 } from '../tts';
 import { peekDatabaseClient } from '../../core/database/client';
 import { AppError } from '../../core/errors/app-error';
@@ -82,16 +82,20 @@ export class WorldRoom extends Room<WorldState> {
   private queue: Promise<void> = Promise.resolve();
   autoDispose = false;
   maxClients = 16;
-  private async resolveActorSpeech(actor: string): Promise<SpeechSynthesizer> {
+  private async resolveActorSpeech(actor: string): Promise<ResolvedSpeech> {
     // Only trusted Agent management binds cloud services; raw world actions cannot select them.
     const id = this.actorVoices.get(actor);
-    if (id === undefined) return createDefaultSpeechSynthesizer();
+    if (id === undefined)
+      return { kind: 'server', synthesizer: createDefaultSpeechSynthesizer() };
     const synth = id ? await ttsService.synthesizer(id) : undefined;
     if (this.actorVoices.get(actor) !== id)
       throw new AppError('语音服务绑定已变更。', 409);
     return (
       synth ?? {
-        synthesize: (text, signal) => ttsService.synthesize(id, text, signal),
+        kind: 'server',
+        synthesizer: {
+          synthesize: (text, signal) => ttsService.synthesize(id, text, signal),
+        },
       }
     );
   }

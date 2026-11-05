@@ -7,10 +7,7 @@ import {
   type Player,
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import {
-  createDefaultSpeechSynthesizer,
-  type SpeechSynthesizer,
-} from '../../tts';
+import { createDefaultSpeechSynthesizer, type ResolvedSpeech } from '../../tts';
 
 type Pending = {
   actor: string;
@@ -31,12 +28,11 @@ export class AgentSpeech {
     private notify: (recipient: string, event: AgentSpeechEvent) => void,
     private report: (actor: string, message: string) => void,
     private tts:
-      | SpeechSynthesizer
-      | ((
-          actor: string,
-        ) =>
-          | SpeechSynthesizer
-          | Promise<SpeechSynthesizer>) = createDefaultSpeechSynthesizer(),
+      | ResolvedSpeech
+      | ((actor: string) => ResolvedSpeech | Promise<ResolvedSpeech>) = {
+      kind: 'server',
+      synthesizer: createDefaultSpeechSynthesizer(),
+    },
   ) {}
   private speaker(actor: string) {
     return [...this.players()].find(
@@ -111,7 +107,7 @@ export class AgentSpeech {
         !this.speaker(pending.actor)
       )
         return;
-      if (tts.browserVoice) {
+      if (tts.kind === 'browser') {
         const event: AgentSpeechEvent = {
           id: randomUUID(),
           actor: pending.actor,
@@ -119,14 +115,14 @@ export class AgentSpeech {
           scope: pending.data.scope === 'private' ? 'private' : 'public',
           durationMs: 0,
           expiresAt: Date.now() + 30000,
-          browserVoice: { ...tts.browserVoice },
+          browserVoice: { ...tts.voice },
         };
         for (const recipient of pending.recipients)
           if (this.canHear(recipient, pending.actor))
             this.notify(recipient, event);
         return;
       }
-      const audio = await tts.synthesize(
+      const audio = await tts.synthesizer.synthesize(
         pending.data.text,
         pending.controller.signal,
       );
