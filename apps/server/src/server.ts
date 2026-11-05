@@ -15,7 +15,11 @@ import {
 } from './core/http/middleware/management-policy';
 import { errorHandler } from './core/http/middleware/error-handler';
 import { resolveServerUrls, type ServerUrls } from './core/http/address';
-import { createDatabaseClient } from './core/database/client';
+import {
+  createDatabaseClient,
+  resetDatabaseClient,
+  setDatabaseClient,
+} from './core/database/client';
 import { checkStartupDatabase } from './core/database/health';
 import { DatabaseManagementArchive } from './persistence/database-management-archive';
 
@@ -36,11 +40,7 @@ import {
   createAsrRouter,
 } from './modules/asr';
 
-import {
-  DatabaseVoiceServicePersistence,
-  VoiceServiceStore,
-  createTtsRouter,
-} from './modules/tts';
+import { createTtsRouter, ttsService } from './modules/tts';
 
 import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 
@@ -75,12 +75,8 @@ export async function createServer() {
   const gatewayAuth = new GatewayAuth(config.gateway);
 
   const db = createDatabaseClient(config.databaseUrl);
+  setDatabaseClient(db);
   const providers = new DatabaseProviderRepository(db);
-  const voiceServices: VoiceServiceStore = new VoiceServiceStore(
-    new DatabaseVoiceServicePersistence(db),
-    undefined,
-    (id) => characters.hasVoiceServiceReference(id),
-  );
   const asrSettings = new AsrSettingsStore(
     new DatabaseAsrServicePersistence(db),
   );
@@ -92,8 +88,6 @@ export async function createServer() {
     providers,
     () => serverUrls?.wsUrl ?? '',
     archive,
-    undefined,
-    voiceServices,
   );
   const providerService = new ProviderService(
     providers,
@@ -140,7 +134,7 @@ export async function createServer() {
       '/voice/tts',
       gatewayAuth.middleware,
       (management) => {
-        management.use(createTtsRouter(voiceServices));
+        management.use(createTtsRouter());
       },
     ),
   );
@@ -178,7 +172,6 @@ export async function createServer() {
   });
   const chatStore = new ChatStore(db);
   server.define('world', WorldRoom, {
-    voiceServices,
     store,
     chatStore,
   });
@@ -200,6 +193,7 @@ export async function createServer() {
         try {
           if (!world) await store.close();
         } finally {
+          resetDatabaseClient(db);
           await db?.$disconnect();
           world = undefined;
         }
@@ -242,7 +236,7 @@ export async function createServer() {
       server,
       characters,
       providers,
-      voiceServices,
+      voiceServices: ttsService,
       asrSettings,
       get world() {
         return world!;

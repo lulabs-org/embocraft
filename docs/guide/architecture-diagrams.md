@@ -91,7 +91,7 @@ graph TD
     Create --> Startup["core/database/health.ts<br/>checkStartupDatabase"]
     Create --> GA["GatewayAuth<br/>gateway/auth.service"]
     Create --> PS["DatabaseProviderRepository<br/>providers/persistence（默认）"]
-    Create --> VS["VoiceServiceStore<br/>audio/persistence"]
+    Create --> VS["ttsService<br/>tts/services/tts.service"]
     Create --> AS["AsrSettingsStore<br/>audio/persistence"]
 
     Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
@@ -472,7 +472,7 @@ graph LR
     WorldStoreN["WorldStore"] --> WorldT
     WorldStoreN --> EditT
     DatabaseProviderRepoN["DatabaseProviderRepository"] --> Prov
-    VSN["VoiceServiceStore"] --> VDB["DatabaseVoiceServicePersistence"] --> VoiceF
+    VSN["TtsService"] --> VDB["DatabaseVoiceServicePersistence"] --> VoiceF
     ASN["AsrSettingsStore"] --> ADB["DatabaseAsrServicePersistence"] --> ASRF
     Token -->|env.readServer| GAN["GatewayAuth"]
     MP["management-persistence / archive"] --> Chars

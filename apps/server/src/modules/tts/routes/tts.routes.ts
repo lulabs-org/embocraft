@@ -1,5 +1,5 @@
 import express, { type Router } from 'express';
-import type { VoiceServiceStore } from '../services/voice-service-store';
+import { ttsService } from '../services/tts.service';
 import { env } from '../../../core/config/env';
 import {
   asyncAbortableRoute,
@@ -7,7 +7,7 @@ import {
 } from '../../../core/http/middleware/async-route';
 
 /** 创建独立的 TTS 路由 Router 实例 */
-export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
+export function createTtsRouter(): Router {
   const router = express.Router();
 
   /**
@@ -69,7 +69,7 @@ export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
     '/voice/tts/models',
     asyncAbortableRoute(async (req, res, signal) => {
       res.setHeader('Cache-Control', 'no-store');
-      const models = await voiceServices.models(req.body, signal);
+      const models = await ttsService.models(req.body, signal);
       if (!signal.aborted) res.json({ models });
     }),
   );
@@ -89,7 +89,7 @@ export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
    */
   router.get(
     '/voice/tts/services',
-    route(async (_req, res) => res.json(await voiceServices.list())),
+    route(async (_req, res) => res.json(await ttsService.list())),
   );
 
   /**
@@ -114,7 +114,7 @@ export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
   router.post(
     '/voice/tts/services',
     route(async (req, res) =>
-      res.status(201).json(await voiceServices.save(req.body)),
+      res.status(201).json(await ttsService.save(req.body)),
     ),
   );
 
@@ -146,7 +146,7 @@ export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
   router.put(
     '/voice/tts/services/:id',
     route(async (req, res) =>
-      res.json(await voiceServices.save(req.body, String(req.params.id))),
+      res.json(await ttsService.save(req.body, String(req.params.id))),
     ),
   );
 
@@ -172,7 +172,7 @@ export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
   router.delete(
     '/voice/tts/services/:id',
     route(async (req, res) => {
-      await voiceServices.remove(String(req.params.id));
+      await ttsService.remove(String(req.params.id));
       res.sendStatus(204);
     }),
   );
@@ -220,7 +220,7 @@ export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
       };
       res.on('close', cancel);
       try {
-        const audio = await voiceServices.synthesize(
+        const audio = await ttsService.synthesize(
           String(req.params.id),
           req.body?.text,
           abort.signal,

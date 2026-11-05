@@ -3,13 +3,13 @@ import { AppError } from '../../src/core/errors/app-error';
 import type { ArchivePort } from '../../src/persistence/management-archive';
 import type { CharacterQueryPort } from '../../src/modules/ai-characters';
 import type { ProviderRepository } from '../../src/modules/providers';
-import type { VoiceServiceStore } from '../../src/modules/tts';
+import type { TtsService } from '../../src/modules/tts';
 
 /** Read the saved test archive, never the manager's live jobs or snapshot cache. */
 export function memoryCharacterQueries(
   archive: ArchivePort,
   providers: ProviderRepository,
-  voices: VoiceServiceStore,
+  voices: Pick<TtsService, 'list'>,
 ): CharacterQueryPort {
   const list: CharacterQueryPort['list'] = async () => {
     const saved = await archive.load();

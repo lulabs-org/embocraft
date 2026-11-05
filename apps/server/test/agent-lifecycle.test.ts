@@ -7,18 +7,44 @@ import {
   type ModelResponder,
 } from '../../../tests/support/model-fixture';
 import { AICharacterManager } from '../src/modules/ai-characters';
+import { TtsService, ttsService } from '../src/modules/tts';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
-  TestVoiceServiceStore as VoiceServiceStore,
+  voicePersistence,
 } from './helpers/memory-storage';
 
 import { AgentRuntimeError, type Session } from '@voxel/agent-runtime';
 import { AppError } from '../src/core/errors/app-error';
+import { domainEvents } from '../src/core/events/domain-events';
 
 import type { WorldEvent } from '@voxel/shared';
+
+let mockTts: TtsService;
+
+vi.mock('../src/modules/tts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/modules/tts')>();
+  return {
+    ...actual,
+    ttsService: {
+      list: (...args: Parameters<TtsService['list']>) => mockTts.list(...args),
+      get: (...args: Parameters<TtsService['get']>) => mockTts.get(...args),
+      save: (...args: Parameters<TtsService['save']>) => mockTts.save(...args),
+      remove: (...args: Parameters<TtsService['remove']>) =>
+        mockTts.remove(...args),
+      synthesizer: (...args: Parameters<TtsService['synthesizer']>) =>
+        mockTts.synthesizer(...args),
+      synthesize: (...args: Parameters<TtsService['synthesize']>) =>
+        mockTts.synthesize(...args),
+      models: (...args: Parameters<TtsService['models']>) =>
+        mockTts.models(...args),
+    },
+  };
+});
+
 let store: MemoryProviderRepository, manager: AICharacterManager | undefined;
 beforeEach(async () => {
+  mockTts = new TtsService(voicePersistence());
   store = new MemoryProviderRepository();
   await bootstrapProviders(store);
   await store.save(
@@ -34,6 +60,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await manager?.close();
   manager = undefined;
+  vi.restoreAllMocks();
 });
 function fakeSession(wait = Promise.resolve()) {
   let open = false;
@@ -67,18 +94,11 @@ function setup(
   decide: ModelResponder = vi.fn(async () => [
     { name: 'complete_task', arguments: { summary: '测试决策' } },
   ]),
-  voices?: VoiceServiceStore,
 ) {
-  manager = new AICharacterManager(
-    store,
-    'ws://fixture',
-    store.archive,
-    {
-      session: () => s as unknown as Session,
-      model: scriptedModelFactory(() => ({ respond: decide })),
-    },
-    voices,
-  );
+  manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
+    session: () => s as unknown as Session,
+    model: scriptedModelFactory(() => ({ respond: decide })),
+  });
   return manager;
 }
 
@@ -169,11 +189,9 @@ it('saves task heartbeat independently without resetting or resuming progress', 
   expect(decide).toHaveBeenCalledTimes(1);
 });
 it('protects a new voice binding while an Agent update is waiting for the world', async () => {
-  const voices = new VoiceServiceStore();
-
-  const next = await voices.save({ name: 'Next', type: 'piper' });
+  const next = await ttsService.save({ name: 'Next', type: 'piper' });
   const session = fakeSession();
-  const m = setup(session, undefined, voices);
+  const m = setup(session);
   const job = await createWithTask(m, { ...settings, voiceReplies: true });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   let release!: () => void;
@@ -187,25 +205,23 @@ it('protects a new voice binding while an Agent update is waiting for the world'
     voiceServiceId: next.id,
     voiceReplies: false,
   });
-  await expect(m.removeVoiceService(next.id)).rejects.toThrow();
+  await expect(ttsService.remove(next.id)).rejects.toThrow();
   await vi.waitFor(() => expect(release).toBeTypeOf('function'));
   release();
   await updating;
   expect(m.list()[0].voiceServiceId).toBe(next.id);
-  await expect(m.removeVoiceService(next.id)).rejects.toThrow();
+  await expect(ttsService.remove(next.id)).rejects.toThrow();
   await m.update(job.id, { voiceServiceId: '', voiceReplies: false });
-  await m.removeVoiceService(next.id);
+  await ttsService.remove(next.id);
 });
 it('restores a missing voice service as text-only without model calls', async () => {
-  const voices = new VoiceServiceStore();
-
-  const m = setup(fakeSession(), undefined, voices);
+  const m = setup(fakeSession());
   await createWithTask(m, { ...settings, voiceReplies: true });
   await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
   await m.close();
-  await voices.remove('local-default', () => false);
+  await ttsService.remove('local-default');
   const decide = vi.fn();
-  const restored = setup(fakeSession(), decide, voices);
+  const restored = setup(fakeSession(), decide);
   await restored.load();
   expect(restored.list()[0].voiceReplies).toBe(false);
   expect(restored.list()[0].voiceServiceId).toBe('');
@@ -219,15 +235,14 @@ it('restores a missing voice service as text-only without model calls', async ()
 });
 
 it('does not erase voice settings when storage fails during restoration', async () => {
-  const voices = new VoiceServiceStore();
-  const originalManager = setup(fakeSession(), undefined, voices);
+  const originalManager = setup(fakeSession());
   await createWithTask(originalManager, { ...settings, voiceReplies: true });
   await originalManager.close();
   const original = store.archive.json;
-  vi.spyOn(voices, 'get').mockRejectedValue(
+  vi.spyOn(ttsService, 'get').mockRejectedValue(
     new AppError('无法读取语音服务数据库配置。', 500),
   );
-  const restored = setup(fakeSession(), undefined, voices);
+  const restored = setup(fakeSession());
   await expect(restored.load()).rejects.toMatchObject({ status: 500 });
   await restored.close();
   expect(store.archive.json).toBe(original);
@@ -886,52 +901,62 @@ it.each(['completed', 'cancelled'] as const)(
 );
 
 it('suppresses voice bindings and direct pause receipts while retaining the saved voice preference', async () => {
-  const voices = new VoiceServiceStore();
-
-  const bind = vi.spyOn(voices, 'bind');
+  const bound: Array<{ sessionId: string; serviceId: string }> = [];
+  const off = domainEvents.on('agent.voice.bound', (payload) =>
+    bound.push(payload),
+  );
   const s = fakeSession();
   const decide = vi.fn<ModelResponder>(async () => [
     { name: 'request_input', arguments: { question: '等待确认' } },
   ]);
-  const m = setup(s, decide, voices);
-  const job = await createWithTask(m, {
-    ...settings,
-    maxTurns: 30,
-    voiceReplies: true,
-  });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  await m.update(job.id, {
-    skills: ['guide'],
-    permissions: { move: true, chat: false, place: false, remove: false },
-  });
-  expect(m.list()[0].voiceReplies).toBe(true);
-  expect(s.request).toHaveBeenCalledWith('agent.voice', { enabled: false });
-  expect(bind).toHaveBeenLastCalledWith('player-1', '');
-  await expect(m.setVoice(job.id, { enabled: true })).rejects.toThrow(
-    '聊天权限',
-  );
-  s.request.mockClear();
-  s.onEvent!({
-    seq: 5,
-    at: Date.now(),
-    type: 'chat',
-    actor: 'human',
-    actorKind: 'human',
-    data: {
-      scope: 'private',
-      recipients: ['player-1'],
-      kind: 'text',
-      text: '取消任务',
-      name: 'Person',
-    },
-  });
-  await vi.waitFor(() => expect(m.list()[0].task!.status).toBe('cancelled'));
-  expect(s.request.mock.calls.filter(([type]) => type === 'chat')).toEqual([]);
-  await m.update(job.id, {
-    permissions: { move: true, chat: true, place: false, remove: false },
-  });
-  expect(s.request).toHaveBeenCalledWith('agent.voice', { enabled: true });
-  expect(bind).toHaveBeenLastCalledWith('player-1', 'local-default');
+  const m = setup(s, decide);
+  try {
+    const job = await createWithTask(m, {
+      ...settings,
+      maxTurns: 30,
+      voiceReplies: true,
+    });
+    await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+    await m.update(job.id, {
+      skills: ['guide'],
+      permissions: { move: true, chat: false, place: false, remove: false },
+    });
+    expect(m.list()[0].voiceReplies).toBe(true);
+    expect(s.request).toHaveBeenCalledWith('agent.voice', { enabled: false });
+    expect(bound.at(-1)).toEqual({ sessionId: 'player-1', serviceId: '' });
+    await expect(m.setVoice(job.id, { enabled: true })).rejects.toThrow(
+      '聊天权限',
+    );
+    s.request.mockClear();
+    s.onEvent!({
+      seq: 5,
+      at: Date.now(),
+      type: 'chat',
+      actor: 'human',
+      actorKind: 'human',
+      data: {
+        scope: 'private',
+        recipients: ['player-1'],
+        kind: 'text',
+        text: '取消任务',
+        name: 'Person',
+      },
+    });
+    await vi.waitFor(() => expect(m.list()[0].task!.status).toBe('cancelled'));
+    expect(s.request.mock.calls.filter(([type]) => type === 'chat')).toEqual(
+      [],
+    );
+    await m.update(job.id, {
+      permissions: { move: true, chat: true, place: false, remove: false },
+    });
+    expect(s.request).toHaveBeenCalledWith('agent.voice', { enabled: true });
+    expect(bound.at(-1)).toEqual({
+      sessionId: 'player-1',
+      serviceId: 'local-default',
+    });
+  } finally {
+    off();
+  }
 });
 
 it('applies task budgets on assignment and renewal, rejecting invalid budgets before pausing', async () => {

@@ -1,16 +1,35 @@
-import { expect, it, vi } from 'vitest';
-import { TestVoiceServiceStore as VoiceServiceStore } from './helpers/memory-storage';
-
+import { afterEach, expect, it, vi } from 'vitest';
+import type { Player } from '@voxel/shared';
+import { domainEvents } from '../src/core/events/domain-events';
+import { CharacterVoiceCoordinator } from '../src/modules/ai-characters/services/voice-coordinator.service';
+import type { Job } from '../src/modules/ai-characters/services/character-job';
+import {
+  PiperTts,
+  ttsService,
+  type SpeechSynthesizer,
+} from '../src/modules/tts';
 import { AgentSpeech } from '../src/modules/world/services/agent-speech.service';
+import { WorldRoom } from '../src/modules/world/world.room';
 
-import { DEFAULT_PIPER_MODEL, PIPER_MODELS, type Player } from '@voxel/shared';
+vi.mock('../src/modules/tts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/modules/tts')>();
+  return {
+    ...actual,
+    ttsService: {
+      list: vi.fn(),
+      get: vi.fn(),
+      save: vi.fn(),
+      remove: vi.fn(),
+      synthesizer: vi.fn(),
+      synthesize: vi.fn(),
+      models: vi.fn(),
+    },
+  };
+});
 
-const local = (name = 'Local', voice = '') => ({
-  name,
-  type: 'piper',
-  model: voice === 'Samantha' ? PIPER_MODELS[1].id : DEFAULT_PIPER_MODEL,
-  voice: '',
-  speed: 1,
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
 const wav = () => {
@@ -31,20 +50,21 @@ const wav = () => {
   return b;
 };
 
-it('cancels old synthesis and private clips when a service binding changes', async () => {
+it('cancels old synthesis and private clips when a service binding changes via domainEvents', async () => {
   let finish!: (value: { bytes: Buffer; durationMs: number }) => void;
   let signal!: AbortSignal;
-  const store = new VoiceServiceStore(undefined, () => ({
-    synthesize: async (_text, abort) => {
-      signal = abort;
-      return new Promise((resolve) => {
-        finish = resolve;
-      });
-    },
-  }));
+  const actorVoices = new Map<string, string>([['ai', 'local-default']]);
+  vi.mocked(ttsService.synthesizer).mockImplementation(
+    async (): Promise<SpeechSynthesizer> => ({
+      synthesize: async (_text: string, abort: AbortSignal) => {
+        signal = abort;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    }),
+  );
 
-  const second = await store.save(local('second'));
-  await store.bind('ai', 'local-default');
   const players: Player[] = [
     {
       id: 'ai',
@@ -74,22 +94,91 @@ it('cancels old synthesis and private clips when a service binding changes', asy
     () => players,
     notify,
     vi.fn(),
-    (actor) => store.forActor(actor),
+    (actor) => ttsService.synthesizer(actorVoices.get(actor)!),
   );
-  const unsubscribe = store.onChange((actor) => speech.cancel(actor));
-  speech.enqueue('ai', {
-    kind: 'text',
-    scope: 'private',
-    recipients: ['human'],
-    text: 'Hello',
-    name: 'AI',
+  const unsubscribe = domainEvents.on(
+    'agent.voice.bound',
+    ({ sessionId, serviceId }) => {
+      if (actorVoices.get(sessionId) === serviceId) return;
+      speech.cancel(sessionId);
+      actorVoices.set(sessionId, serviceId);
+    },
+  );
+  try {
+    speech.enqueue('ai', {
+      kind: 'text',
+      scope: 'private',
+      recipients: ['human'],
+      text: 'Hello',
+      name: 'AI',
+    });
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    domainEvents.emit('agent.voice.bound', {
+      sessionId: 'ai',
+      serviceId: 'second-voice',
+    });
+    expect(signal.aborted).toBe(true);
+    finish({ bytes: wav(), durationMs: 1000 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(notify).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+    speech.close();
+  }
+});
+
+it('does not bind a session that closes while its configuration is being read', async () => {
+  const coordinator = new CharacterVoiceCoordinator();
+  let release!: () => void;
+  vi.mocked(ttsService.get).mockImplementationOnce(async () => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return {
+      id: 'local-default',
+      name: 'Local',
+      type: 'speaches',
+      baseUrl: '',
+      apiKey: '',
+      model: 'piper',
+      voice: 'default',
+      speed: 1,
+    };
   });
-  await vi.waitFor(() => expect(signal).toBeDefined());
-  await store.bind('ai', second.id);
-  expect(signal.aborted).toBe(true);
-  finish({ bytes: wav(), durationMs: 1000 });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(notify).not.toHaveBeenCalled();
-  unsubscribe();
-  speech.close();
+
+  const bound: Array<{ sessionId: string; serviceId: string }> = [];
+  const off = domainEvents.on('agent.voice.bound', (payload) =>
+    bound.push(payload),
+  );
+  try {
+    const job = {
+      view: {
+        sessionId: 'agent-session' as string | undefined,
+        voiceReplies: true,
+        voiceServiceId: 'local-default',
+        permissions: { move: true, chat: true, place: false, remove: false },
+      },
+    } as unknown as Job;
+
+    const pending = coordinator.bindVoice(job);
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    delete job.view.sessionId;
+    coordinator.unbindVoice('agent-session');
+    release();
+    await pending;
+    expect(bound).toEqual([]);
+  } finally {
+    off();
+  }
+});
+
+it('keeps unmanaged world clients on local TTS without reading cloud profiles', async () => {
+  const room = Object.create(WorldRoom.prototype) as {
+    actorVoices: Map<string, string>;
+    resolveActorSpeech(actor: string): Promise<SpeechSynthesizer>;
+  };
+  room.actorVoices = new Map();
+  const synthesizer = await room.resolveActorSpeech('unmanaged-client');
+  expect(synthesizer).toBeInstanceOf(PiperTts);
+  expect(ttsService.synthesizer).not.toHaveBeenCalled();
 });

@@ -80,7 +80,7 @@ export class AICharacterHost {
         );
 
         session.room.onLeave(() => {
-          ctx.voiceServices?.unbind(session.room.sessionId);
+          ctx.unbindVoice(session.room.sessionId);
           if (job.session !== session) return;
           job.session = undefined;
           job.runtime.disconnect();

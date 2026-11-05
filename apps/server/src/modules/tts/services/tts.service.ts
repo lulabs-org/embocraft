@@ -2,9 +2,11 @@ import type { VoiceServiceView } from '@voxel/shared';
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
+import { domainEvents } from '../../../core/events/domain-events';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
 import { SpeachesModels } from '../../../core/audio/speaches-models';
-import { VoiceRuntime } from './voice-runtime';
+import { PiperTts } from './piper.service';
+import { RemoteTts } from './remote.service';
 import type { SpeechSynthesizer } from './speech-synthesizer';
 import { DatabaseVoiceServicePersistence } from '../persistence/database-voice-services';
 import type {
@@ -21,6 +23,7 @@ const publicView = ({ apiKey, ...value }: SavedVoice): VoiceServiceView => ({
   capability: 'tts',
   hasApiKey: !!apiKey,
 });
+
 export function validateVoiceService(
   value: unknown,
   previous?: SavedVoice,
@@ -95,20 +98,16 @@ export function validateVoiceService(
   };
 }
 
-export class VoiceServiceStore {
-  private queue: Promise<unknown> = Promise.resolve();
-  private readonly runtime: VoiceRuntime;
+export class TtsService {
+  private running = 0;
 
   constructor(
     private readonly storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
-    factory?: (value: SavedVoice) => SpeechSynthesizer,
-    private readonly hasReference: (id: string) => boolean = () => false,
-  ) {
-    this.runtime = new VoiceRuntime(
-      async (id) => this.find(await this.storage.get(id)),
-      factory,
-    );
-  }
+    private readonly factory: (value: SavedVoice) => SpeechSynthesizer = (
+      value,
+    ) =>
+      value.type === 'speaches' ? new PiperTts(value) : new RemoteTts(value),
+  ) {}
 
   private validateSaved(saved: SavedVoice[]): SavedVoice[] {
     if (
@@ -148,63 +147,80 @@ export class VoiceServiceStore {
     return this.validateSaved(await this.storage.load()).map(publicView);
   }
 
-  get(id: string) {
-    return this.runtime.get(id);
+  async get(id: string) {
+    return this.find(await this.storage.get(id));
   }
 
-  private mutate<T>(fn: () => Promise<T>) {
-    const operation = this.queue.then(fn);
-    this.queue = operation.catch(() => {});
-    return operation;
-  }
-
-  save(value: unknown, id?: string) {
-    return this.mutate(async () => {
-      const result = await this.storage.transaction(async (tx) => {
-        if (!id && (await tx.count()) >= 20)
-          throw new AppError('最多保存 20 个语音服务。');
-        const entry = validateVoiceService(
-          value,
-          id ? this.find(await tx.get(id)) : undefined,
-        );
-        if (id) await tx.update(entry);
-        else await tx.create(entry);
-        return publicView(entry);
-      });
-      if (id) this.runtime.serviceChanged(id);
-      return result;
+  async save(value: unknown, id?: string) {
+    const result = await this.storage.transaction(async (tx) => {
+      if (!id && (await tx.count()) >= 20)
+        throw new AppError('最多保存 20 个语音服务。');
+      const entry = validateVoiceService(
+        value,
+        id ? this.find(await tx.get(id)) : undefined,
+      );
+      if (id) await tx.update(entry);
+      else await tx.create(entry);
+      return publicView(entry);
     });
+    if (id) domainEvents.emit('tts.service.changed', { serviceId: id });
+    return result;
   }
 
-  remove(id: string, isUsed: () => boolean = () => false) {
-    return this.mutate(() =>
-      this.runtime.remove(
-        id,
-        () => isUsed() || this.hasReference(id),
-        async (assertUnused) => {
-          await this.storage.transaction(async (tx) => {
-            this.find(await tx.get(id));
-            assertUnused();
-            await tx.remove(id);
-          });
-        },
-      ),
-    );
+  async remove(id: string) {
+    domainEvents.emit('tts.service.removing', { serviceId: id });
+    await this.storage.transaction(async (tx) => {
+      this.find(await tx.get(id));
+      domainEvents.emit('tts.service.removing', { serviceId: id });
+      await tx.remove(id);
+    });
+    domainEvents.emit('tts.service.changed', { serviceId: id });
   }
 
-  onChange(listener: (actor: string) => void) {
-    return this.runtime.onChange(listener);
+  async synthesizer(id: string): Promise<SpeechSynthesizer> {
+    const entry = await this.get(id);
+    return {
+      ...(entry.type === 'browser'
+        ? {
+            browserVoice: {
+              voice: entry.voice,
+              speed: entry.speed,
+              voiceLanguage: entry.voiceLanguage,
+            },
+          }
+        : {}),
+      synthesize: (text, signal) => this.synthesize(id, text, signal),
+    };
   }
-  bind(actor: string, id: string) {
-    return this.runtime.bind(actor, id);
-  }
-  unbind(actor: string) {
-    this.runtime.unbind(actor);
-  }
-  forActor(actor: string) {
-    return this.runtime.forActor(actor);
-  }
-  synthesize(id: string, text: string, signal: AbortSignal) {
-    return this.runtime.synthesize(id, text, signal);
+
+  async synthesize(id: string, text: string, signal: AbortSignal) {
+    if (typeof text !== 'string' || !text.trim() || text.length > 240)
+      throw new AppError('试听文字需为 1–240 字。');
+    if (this.running >= 2)
+      throw new AppError('语音服务繁忙，请稍后重试。', 429);
+    this.running++;
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(60000)]);
+    try {
+      bounded.throwIfAborted();
+      const entry = await this.get(id);
+      bounded.throwIfAborted();
+      if (entry.type === 'browser')
+        throw new AppError('此服务由浏览器朗读，请在浏览器中试听。');
+      const result = await this.factory(entry).synthesize(text, bounded);
+      bounded.throwIfAborted();
+      return result;
+    } catch (error) {
+      if (signal.aborted || error instanceof AppError) throw error;
+      throw new AppError(
+        bounded.aborted
+          ? '语音合成超时，请重试。'
+          : '语音合成失败，请检查服务配置和音频转换工具。',
+        502,
+      );
+    } finally {
+      this.running--;
+    }
   }
 }
+
+export const ttsService = new TtsService();
