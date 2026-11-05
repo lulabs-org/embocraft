@@ -1,8 +1,6 @@
 import { expect, it, vi } from 'vitest';
-
-import { validateVoiceService } from './tts.service';
-
-import { RemoteTts } from './remote.service';
+import { validateVoiceService } from '../domain/voice-service-validation';
+import { BailianTts } from './bailian-tts.adapter';
 
 const remote = {
   name: 'Cloud',
@@ -32,30 +30,6 @@ const wav = () => {
   return b;
 };
 
-it('sends compatible TTS parameters and handles real WAV response without exposing keys', async () => {
-  const request = vi.fn<typeof fetch>(
-    async () => new Response(new Uint8Array(wav())),
-  );
-  const config = validateVoiceService(remote);
-  const audio = await new RemoteTts(config, request).synthesize(
-    'hello',
-    new AbortController().signal,
-  );
-  expect(audio.durationMs).toBe(1000);
-  expect(request.mock.calls[0][0]).toBe(
-    'https://speech.example/v1/audio/speech',
-  );
-  const init = request.mock.calls[0][1]!;
-  expect(init.redirect).toBe('error');
-  expect(JSON.parse(init.body as string)).toEqual({
-    model: 'test-tts',
-    input: 'hello',
-    voice: 'alloy',
-    speed: 1,
-    response_format: 'wav',
-  });
-});
-
 it('fetches Bailian audio only from its output hosts and never forwards the API key to storage', async () => {
   const request = vi
     .fn<typeof fetch>()
@@ -76,7 +50,7 @@ it('fetches Bailian audio only from its output hosts and never forwards the API 
     model: 'qwen3-tts-flash',
     voice: 'Cherry',
   });
-  await new RemoteTts(config, request).synthesize(
+  await new BailianTts(config, request).synthesize(
     '你好',
     new AbortController().signal,
   );
@@ -93,7 +67,7 @@ it('fetches Bailian audio only from its output hosts and never forwards the API 
       Response.json({ output: { audio: { url: 'http://127.0.0.1/private' } } }),
     );
   await expect(
-    new RemoteTts(config, request).synthesize(
+    new BailianTts(config, request).synthesize(
       'hi',
       new AbortController().signal,
     ),
@@ -125,7 +99,7 @@ it.each([
     model,
     voice: 'longanhuan_v3.1',
   });
-  const result = await new RemoteTts(config, request).synthesize(
+  const result = await new BailianTts(config, request).synthesize(
     '你好',
     new AbortController().signal,
   );
@@ -145,43 +119,6 @@ it.each([
   expect(result.durationMs).toBe(1000);
 });
 
-it.each([
-  [
-    400,
-    { code: 'InvalidParameter', message: 'Unsupported voice' },
-    '音色不可用',
-  ],
-  [
-    400,
-    { error: { code: 'InvalidModel', message: 'model not supported' } },
-    '模型不可用',
-  ],
-  [401, { message: 'secret-for-test' }, 'API Key 无效'],
-  [403, {}, '无权调用'],
-  [429, {}, '调用额度'],
-  [400, '<html>secret-for-test</html>', '请求参数'],
-  [500, 'x'.repeat(65537), '服务暂不可用'],
-])(
-  'reports safe actionable errors for HTTP %s without retries',
-  async (status, body, hint) => {
-    const request = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        typeof body === 'string'
-          ? new Response(body, { status })
-          : Response.json(body, { status }),
-      );
-    const result = new RemoteTts(
-      validateVoiceService(remote),
-      request,
-    ).synthesize('private preview', new AbortController().signal);
-    await expect(result).rejects.toThrow(hint);
-    await expect(result).rejects.not.toThrow('secret-for-test');
-    await expect(result).rejects.not.toThrow('private preview');
-    expect(request).toHaveBeenCalledOnce();
-  },
-);
-
 it('rejects missing Bailian output before requesting any audio URL', async () => {
   const request = vi
     .fn<typeof fetch>()
@@ -194,10 +131,51 @@ it('rejects missing Bailian output before requesting any audio URL', async () =>
     voice: 'longanhuan_v3.1',
   });
   await expect(
-    new RemoteTts(config, request).synthesize(
+    new BailianTts(config, request).synthesize(
       'hello',
       new AbortController().signal,
     ),
   ).rejects.toThrow('未返回有效的音频地址');
+  expect(request).toHaveBeenCalledOnce();
+});
+
+it.each([
+  'https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com.evil.example/audio',
+  'https://user:pass@dashscope-result-bj.oss-cn-beijing.aliyuncs.com/audio',
+  'https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com:444/audio',
+  'file://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/audio',
+])('rejects untrusted audio URL %s', async (url) => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ output: { audio: { url } } }));
+  const config = validateVoiceService({
+    ...remote,
+    type: 'bailian',
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+  });
+  await expect(
+    new BailianTts(config, request).synthesize(
+      'hello',
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow('音频地址');
+  expect(request).toHaveBeenCalledOnce();
+});
+
+it('limits the provider JSON response before requesting the audio', async () => {
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response('x'.repeat(64 * 1024 + 1)));
+  const config = validateVoiceService({
+    ...remote,
+    type: 'bailian',
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+  });
+  await expect(
+    new BailianTts(config, request).synthesize(
+      'hello',
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow('响应过大');
   expect(request).toHaveBeenCalledOnce();
 });

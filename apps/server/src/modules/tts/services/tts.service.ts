@@ -3,8 +3,7 @@ import type {
   SavedVoice,
   VoiceServicePersistence,
 } from '../persistence/voice-service-types';
-import { PiperTts } from './piper.service';
-import { RemoteTts } from './remote.service';
+import { createSpeechAdapter } from '../adapters/speech-adapter-factory';
 import { SpeechModelsService } from './speech-models.service';
 import { SpeechService } from './speech.service';
 import type { SpeechSynthesizer } from './speech-synthesizer';
@@ -24,8 +23,7 @@ export class TtsService {
 
   constructor(
     storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
-    factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
-      value.type === 'speaches' ? new PiperTts(value) : new RemoteTts(value),
+    factory: (value: SavedVoice) => SpeechSynthesizer = createSpeechAdapter,
   ) {
     this.management = new VoiceServiceManagement(storage);
     const getVoice = (id: string) => this.get(id);
