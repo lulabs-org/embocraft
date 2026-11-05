@@ -137,9 +137,8 @@ apps/server/
         │   │   ├── voice-service-store.ts # VoiceServiceStore：配置、绑定与合成协调
         │   │   └── database-voice-services.ts
         │   ├── routes/
-        │   │   ├── tts.http.ts          # installTtsHttp：经 management 管线挂载 /voice/tts
-        │   │   └── voice-services.routes.ts # /voice/tts/services 管理与试听
-        │   └── index.ts                 # installTtsHttp、VoiceServiceStore、PiperTts 等
+        │   │   └── tts.routes.ts        # createTtsRouter：经 management 管线挂载 /voice/tts 及管理与试听路由
+        │   └── index.ts                 # createTtsRouter、VoiceServiceStore、PiperTts 等
         │
         ├── chat/                        # ── 3. 世界聊天与空间语音中继 ──
         │   ├── domain/
@@ -464,7 +463,7 @@ graph LR
 - **ASR 模块（`modules/asr/`）**：
   `services/` 保留 `LocalSpeech` 的 Whisper 识别、`bridgeBailianAsr` 的百炼流式协议与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责 `AsrSettingsStore` 与数据库适配；`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权和 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
 - **TTS 模块（`modules/tts/`）**：
-  `services/` 保留 `PiperTts`、`RemoteTts`、`PiperModels` 与 `SpeechSynthesizer` 契约；`persistence/` 负责 `VoiceServiceStore` 与数据库适配；`routes/tts.http.ts` 的 `installTtsHttp` 经 management 管线挂载 `/voice/tts`，删除音色时通过注入回调检查 Agent 绑定。
+  `services/` 保留 `PiperTts`、`RemoteTts`、`PiperModels` 与 `SpeechSynthesizer` 契约，`VoiceServiceStore` 在删除音色时通过注入回调检查 Agent 绑定；`persistence/` 负责数据库适配；`routes/tts.routes.ts` 的 `createTtsRouter` 只接收 `VoiceServiceStore`，由 `server.ts` 经 management 管线挂载 `/voice/tts`。
 - **世界内语音协作（`modules/world/services/`）**：
   `agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存，由 `WorldRoom` 装配；聊天路由只依赖本地声明的 `AgentSpeechClips` 读取契约，避免 `chat → world` 循环依赖。`spatial-signaling.service.ts` 提供 WebRTC 信令校验与转发。
 - 两个 Store 仍包含原有校验与运行时协调职责；鉴权、Origin 策略、JSON/原始音频限制、装配顺序、识别占用、音色绑定、删除保护及连接生命周期保持不变。

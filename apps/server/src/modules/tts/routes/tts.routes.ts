@@ -1,15 +1,15 @@
-import type { Router } from 'express';
+import express, { type Router } from 'express';
 import type { VoiceServiceStore } from '../services/voice-service-store';
 import { env } from '../../../core/config/env';
 import {
   asyncAbortableRoute,
   asyncRoute as route,
 } from '../../../core/http/middleware/async-route';
-export function installVoiceServiceRoutes(
-  router: Router,
-  voices: VoiceServiceStore,
-  removeVoice: (id: string) => Promise<unknown>,
-) {
+
+/** 创建独立的 TTS 路由 Router 实例 */
+export function createTtsRouter(voiceServices: VoiceServiceStore): Router {
+  const router = express.Router();
+
   /**
    * @openapi
    * /voice/tts/defaults:
@@ -69,7 +69,7 @@ export function installVoiceServiceRoutes(
     '/voice/tts/models',
     asyncAbortableRoute(async (req, res, signal) => {
       res.setHeader('Cache-Control', 'no-store');
-      const models = await voices.models(req.body, signal);
+      const models = await voiceServices.models(req.body, signal);
       if (!signal.aborted) res.json({ models });
     }),
   );
@@ -89,7 +89,7 @@ export function installVoiceServiceRoutes(
    */
   router.get(
     '/voice/tts/services',
-    route(async (_req, res) => res.json(await voices.list())),
+    route(async (_req, res) => res.json(await voiceServices.list())),
   );
 
   /**
@@ -114,7 +114,7 @@ export function installVoiceServiceRoutes(
   router.post(
     '/voice/tts/services',
     route(async (req, res) =>
-      res.status(201).json(await voices.save(req.body)),
+      res.status(201).json(await voiceServices.save(req.body)),
     ),
   );
 
@@ -146,7 +146,7 @@ export function installVoiceServiceRoutes(
   router.put(
     '/voice/tts/services/:id',
     route(async (req, res) =>
-      res.json(await voices.save(req.body, String(req.params.id))),
+      res.json(await voiceServices.save(req.body, String(req.params.id))),
     ),
   );
 
@@ -172,7 +172,7 @@ export function installVoiceServiceRoutes(
   router.delete(
     '/voice/tts/services/:id',
     route(async (req, res) => {
-      await removeVoice(String(req.params.id));
+      await voiceServices.remove(String(req.params.id));
       res.sendStatus(204);
     }),
   );
@@ -220,7 +220,7 @@ export function installVoiceServiceRoutes(
       };
       res.on('close', cancel);
       try {
-        const audio = await voices.synthesize(
+        const audio = await voiceServices.synthesize(
           String(req.params.id),
           req.body?.text,
           abort.signal,
@@ -233,4 +233,6 @@ export function installVoiceServiceRoutes(
       }
     }),
   );
+
+  return router;
 }

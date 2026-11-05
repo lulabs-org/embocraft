@@ -29,4 +29,3 @@ export function resolveServerUrls(
     wsUrl: `ws://${host}:${port}`,
   };
 }
-

@@ -14,45 +14,48 @@ export function memoryCharacterQueries(
   const list: CharacterQueryPort['list'] = async () => {
     const saved = await archive.load();
     const voicesList = await voices.list();
-    return (await Promise.all((saved?.characters ?? [])
-      .map(async (record) => {
-        const { runtime, currentRunId, logEntries, ...config } = record;
-        const state = runtime ? runtimeView(runtime) : undefined;
-        const run = saved?.runs.find((run) => run.id === currentRunId);
-        const queuedTasks = (saved?.runs ?? [])
-          .filter(
-            (run) => run.characterId === record.id && run.status === 'queued',
-          )
-          .sort((a, b) => a.scheduledAt - b.scheduledAt)
-          .map((run) => ({
-            id: run.id,
-            goal: run.snapshot.goal,
-            scheduledAt: run.scheduledAt,
-            coalescedTriggers: run.coalescedTriggers ?? 0,
-          }));
-        return {
-          ...config,
-          providerName: (await providers.getRuntime(record.providerId)).name,
-          voiceServiceId: record.voiceServiceId ?? '',
-          voiceServiceName: voicesList
-            .find((voice) => voice.id === record.voiceServiceId)?.name,
-          task: state?.task,
-          taskIdentity: state?.identity ?? null,
-          taskExecution: run
-            ? {
-                runId: run.id,
-                limits: run.snapshot.limits,
-                source: run.source,
-                action: state?.action,
-              }
-            : undefined,
-          ...(queuedTasks.length ? { queuedTasks } : {}),
-          usage: state?.usage,
-          lastResponse: state?.lastResponse,
-          taskRequiresReassignment: state?.requiresReassignment ?? false,
-        };
-      })))
-      .reverse();
+    return (
+      await Promise.all(
+        (saved?.characters ?? []).map(async (record) => {
+          const { runtime, currentRunId, logEntries, ...config } = record;
+          const state = runtime ? runtimeView(runtime) : undefined;
+          const run = saved?.runs.find((run) => run.id === currentRunId);
+          const queuedTasks = (saved?.runs ?? [])
+            .filter(
+              (run) => run.characterId === record.id && run.status === 'queued',
+            )
+            .sort((a, b) => a.scheduledAt - b.scheduledAt)
+            .map((run) => ({
+              id: run.id,
+              goal: run.snapshot.goal,
+              scheduledAt: run.scheduledAt,
+              coalescedTriggers: run.coalescedTriggers ?? 0,
+            }));
+          return {
+            ...config,
+            providerName: (await providers.getRuntime(record.providerId)).name,
+            voiceServiceId: record.voiceServiceId ?? '',
+            voiceServiceName: voicesList.find(
+              (voice) => voice.id === record.voiceServiceId,
+            )?.name,
+            task: state?.task,
+            taskIdentity: state?.identity ?? null,
+            taskExecution: run
+              ? {
+                  runId: run.id,
+                  limits: run.snapshot.limits,
+                  source: run.source,
+                  action: state?.action,
+                }
+              : undefined,
+            ...(queuedTasks.length ? { queuedTasks } : {}),
+            usage: state?.usage,
+            lastResponse: state?.lastResponse,
+            taskRequiresReassignment: state?.requiresReassignment ?? false,
+          };
+        }),
+      )
+    ).reverse();
   };
   return {
     list,

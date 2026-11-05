@@ -23,13 +23,16 @@ export class ProviderService {
       'list' | 'save' | 'remove'
     >,
     catalog?: Pick<ModelCatalog, 'models'>,
-    private readonly hasCharacterReference: (id: string) => boolean = () => false,
+    private readonly hasCharacterReference: (id: string) => boolean = () =>
+      false,
     private readonly changed: ProviderEventPublisher = () => {},
     healthChecker?: Pick<ProviderHealthChecker, 'check'>,
   ) {
-    this.catalog = catalog ?? new ModelCatalog(store as unknown as ProviderRuntimePort);
+    this.catalog =
+      catalog ?? new ModelCatalog(store as unknown as ProviderRuntimePort);
     this.healthChecker =
-      healthChecker ?? new ProviderHealthChecker(store as unknown as ProviderRuntimePort);
+      healthChecker ??
+      new ProviderHealthChecker(store as unknown as ProviderRuntimePort);
   }
 
   list() {

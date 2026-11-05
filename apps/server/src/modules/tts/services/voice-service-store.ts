@@ -102,6 +102,7 @@ export class VoiceServiceStore {
   constructor(
     private readonly storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
     factory?: (value: SavedVoice) => SpeechSynthesizer,
+    private readonly hasReference: (id: string) => boolean = () => false,
   ) {
     this.runtime = new VoiceRuntime(
       async (id) => this.find(await this.storage.get(id)),
@@ -175,15 +176,19 @@ export class VoiceServiceStore {
     });
   }
 
-  remove(id: string, isUsed: () => boolean) {
+  remove(id: string, isUsed: () => boolean = () => false) {
     return this.mutate(() =>
-      this.runtime.remove(id, isUsed, async (assertUnused) => {
-        await this.storage.transaction(async (tx) => {
-          this.find(await tx.get(id));
-          assertUnused();
-          await tx.remove(id);
-        });
-      }),
+      this.runtime.remove(
+        id,
+        () => isUsed() || this.hasReference(id),
+        async (assertUnused) => {
+          await this.storage.transaction(async (tx) => {
+            this.find(await tx.get(id));
+            assertUnused();
+            await tx.remove(id);
+          });
+        },
+      ),
     );
   }
 

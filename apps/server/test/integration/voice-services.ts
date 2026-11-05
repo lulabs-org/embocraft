@@ -197,7 +197,14 @@ try {
     ],
   );
   assert.equal(first.voiceServiceId, a.id);
-  assert.equal((await (await api(`/ai-characters/${second.id}`, 'GET')).json() as AICharacterView).voiceServiceName, 'Builder');
+  assert.equal(
+    (
+      (await (
+        await api(`/ai-characters/${second.id}`, 'GET')
+      ).json()) as AICharacterView
+    ).voiceServiceName,
+    'Builder',
+  );
   assert.equal(
     (await api(`/voice/tts/services/${a.id}`, 'DELETE')).status,
     409,

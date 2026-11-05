@@ -150,7 +150,9 @@ describe('server assembly and lifecycle', () => {
         type: 'connected',
         version: MANAGEMENT_EVENTS_VERSION,
       });
-      await new Promise<void>((resolve) => gateway!.once('ping', () => resolve()));
+      await new Promise<void>((resolve) =>
+        gateway!.once('ping', () => resolve()),
+      );
       const gatewayClosed = new Promise<void>((resolve) =>
         gateway!.once('close', () => resolve()),
       );
