@@ -79,15 +79,16 @@ export async function createServer() {
   const voiceServices = new VoiceServiceStore(
     new DatabaseVoiceServicePersistence(db),
   );
-  const asrSettings = new AsrSettingsStore(new DatabaseAsrServicePersistence(db));
+  const asrSettings = new AsrSettingsStore(
+    new DatabaseAsrServicePersistence(db),
+  );
   const store = new WorldStore(config.databaseUrl, db);
   let world: WorldRoom | undefined;
   let serverUrls: ServerUrls | undefined;
-  let url = '';
   const archive = new DatabaseManagementArchive(db);
   const characters = new AICharacterManager(
     providers,
-    () => url,
+    () => serverUrls?.wsUrl ?? '',
     archive,
     undefined,
     voiceServices,
@@ -181,25 +182,25 @@ export async function createServer() {
   let closing: Promise<void> | undefined;
   let listening = false;
   const close = () =>
-  (closing ??= (async () => {
-    try {
-      await server.gracefullyShutdown(false);
-    } finally {
-      // Colyseus closes its players; explicitly close ASR upgrades and HTTP/SSE too.
-      transport.closeConnections();
-      if (http.listening) {
-        http.close();
-        http.closeAllConnections();
-        await once(http, 'close');
-      }
+    (closing ??= (async () => {
       try {
-        if (!world) await store.close();
+        await server.gracefullyShutdown(false);
       } finally {
-        await db?.$disconnect();
-        world = undefined;
+        // Colyseus closes its players; explicitly close ASR upgrades and HTTP/SSE too.
+        transport.closeConnections();
+        if (http.listening) {
+          http.close();
+          http.closeAllConnections();
+          await once(http, 'close');
+        }
+        try {
+          if (!world) await store.close();
+        } finally {
+          await db?.$disconnect();
+          world = undefined;
+        }
       }
-    }
-  })());
+    })());
   const listen = async () => {
     if (closing || listening) throw Error('服务器已经启动或关闭。');
     listening = true;
@@ -209,7 +210,6 @@ export async function createServer() {
         http.address() as AddressInfo,
         config.host,
       );
-      url = serverUrls.wsUrl;
       const listing = await matchMaker.createRoom('world', {});
       world = matchMaker.getLocalRoomById(listing.roomId) as WorldRoom;
       await characters.load();
@@ -223,9 +223,15 @@ export async function createServer() {
   return {
     listen,
     close,
-    get httpUrl() { return serverUrls?.httpUrl ?? ''; },
-    get wsUrl() { return serverUrls?.wsUrl ?? ''; },
-    get url() { return url; },
+    get httpUrl() {
+      return serverUrls?.httpUrl ?? '';
+    },
+    get wsUrl() {
+      return serverUrls?.wsUrl ?? '';
+    },
+    get url() {
+      return serverUrls?.wsUrl ?? '';
+    },
     _internals: {
       app,
       http,
@@ -234,7 +240,9 @@ export async function createServer() {
       providers,
       voiceServices,
       asrSettings,
-      get world() { return world!; },
+      get world() {
+        return world!;
+      },
     },
   };
 }
