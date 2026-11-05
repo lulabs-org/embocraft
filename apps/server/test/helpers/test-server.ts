@@ -96,7 +96,7 @@ export async function createTestServer(options: TestServerOptions = {}) {
         return running._internals.world;
       },
       directory,
-      httpUrl: running.url.replace(/^ws:/, 'http:'),
+      httpUrl: running.httpUrl,
       close: () =>
         (closing ??= (async () => {
           try {
