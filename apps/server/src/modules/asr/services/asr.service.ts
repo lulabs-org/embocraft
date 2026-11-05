@@ -13,7 +13,7 @@ import {
 
 export type { SavedService };
 
-export class AsrSettingsStore {
+export class AsrService {
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
@@ -195,3 +195,5 @@ export class AsrSettingsStore {
     });
   }
 }
+
+export const asrService = new AsrService();

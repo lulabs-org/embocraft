@@ -1,7 +1,7 @@
 import type WebSocket from 'ws';
 import type { BailianAsrDraft, LiveAsrDraft } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import type { AsrSettingsStore } from './asr-settings-store';
+import { asrService, type AsrService } from './asr.service';
 import { bridgeOpenAIAsr } from '../engines/openai/openai.adapter';
 import { bridgeGeminiAsr } from '../engines/gemini/gemini.adapter';
 import { bridgeBailianAsr } from '../engines/bailian/bailian.adapter';
@@ -45,7 +45,7 @@ export class RealtimeAsrService {
   private readonly liveBridge: LiveAsrBridge;
 
   constructor(
-    private readonly store: AsrSettingsStore,
+    private readonly store: AsrService = asrService,
     options?: RealtimeAsrServiceOptions | AsrBridge,
   ) {
     if (typeof options === 'function') {

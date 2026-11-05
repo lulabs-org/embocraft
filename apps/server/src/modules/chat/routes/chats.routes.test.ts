@@ -1,20 +1,47 @@
 import type { Player } from '@voxel/shared';
+import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  TestAsrSettingsStore as AsrSettingsStore,
-  TestAsrSettingsStore,
-} from '../../../../test/helpers/memory-storage';
+import { TestAsrService } from '../../../../test/helpers/memory-storage';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
-import type { LocalSpeech } from '../../asr';
+import type { AsrService, LocalSpeech } from '../../asr';
+
+const mocked = vi.hoisted(() => ({
+  speech: undefined as unknown as LocalSpeech,
+  asrService: undefined as unknown as AsrService,
+}));
+
+vi.mock('../../asr', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../asr')>();
+  return {
+    ...actual,
+    localSpeech: {
+      normalize: (...args: Parameters<LocalSpeech['normalize']>) =>
+        (mocked.speech ?? actual.localSpeech).normalize(...args),
+      transcribe: (...args: Parameters<LocalSpeech['transcribe']>) =>
+        (mocked.speech ?? actual.localSpeech).transcribe(...args),
+    },
+    asrService: {
+      acquire: (id: string) =>
+        (mocked.asrService ?? new TestAsrService()).acquire(id),
+    },
+  };
+});
+
+import { bindChatRuntime } from '../services/chat-runtime.service';
 import { WorldChat } from '../services/chat.service';
 import { createChatRouter } from './chats.routes';
 
-import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
-
 let server: Server | undefined;
+let releaseChat: (() => void) | undefined;
+
 afterEach(async () => {
+  releaseChat?.();
+  releaseChat = undefined;
+  mocked.speech = undefined as unknown as LocalSpeech;
+  mocked.asrService = undefined as unknown as AsrService;
+  vi.unstubAllEnvs();
   if (server) {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server!.close(() => resolve()));
@@ -36,18 +63,13 @@ it('publishes confirmed external recognition only with the speaker’s live tick
   };
   const emit = vi.fn();
   const chat = new WorldChat(() => [speaker], emit);
+  releaseChat = bindChatRuntime(chat);
   const token = chat.issue('speaker');
   const origin = 'http://127.0.0.1:5173';
+  vi.stubEnv('WEB_ORIGIN', origin);
+  mocked.asrService = new TestAsrService();
   const app = express();
-  app.use(
-    createChatRouter(
-      () => chat,
-      undefined,
-      undefined,
-      origin,
-      new TestAsrSettingsStore(),
-    ),
-  );
+  app.use(createChatRouter());
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
@@ -117,6 +139,7 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
     yaw: 0,
   };
   const chat = new WorldChat(() => [speaker], vi.fn());
+  releaseChat = bindChatRuntime(chat);
   const token = chat.issue('speaker');
   const bytes = Buffer.from('audio');
   const transcribe = vi.fn().mockResolvedValue('hello');
@@ -133,10 +156,13 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   };
   const store = {
     acquire: vi.fn(() => ({ settings, release })),
-  } as unknown as AsrSettingsStore;
+  } as unknown as AsrService;
+  mocked.speech = speech;
+  mocked.asrService = store;
   const app = express();
   const origin = 'http://127.0.0.1:5173';
-  app.use(createChatRouter(() => chat, speech, undefined, origin, store));
+  vi.stubEnv('WEB_ORIGIN', origin);
+  app.use(createChatRouter());
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

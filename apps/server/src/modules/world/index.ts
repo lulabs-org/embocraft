@@ -1,6 +1,3 @@
-export { WorldRoom } from './world.room';
+export { WorldRoom, getActiveWorld } from './world.room';
 export { WorldStore } from './persistence/store';
-export {
-  createWorldRouter,
-  createPresenceRouter,
-} from './routes/worlds.routes';
+export { createWorldRouter } from './routes/worlds.routes';

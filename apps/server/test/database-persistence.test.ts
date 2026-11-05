@@ -15,7 +15,7 @@ import {
   AICharacterManager,
   CharacterQueries,
 } from '../src/modules/ai-characters';
-import { AsrSettingsStore } from '../src/modules/asr/services/asr-settings-store';
+import { AsrService } from '../src/modules/asr/services/asr.service';
 import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/database-asr-services';
 import { AppError } from '../src/core/errors/app-error';
 import { domainEvents } from '../src/core/events/domain-events';
@@ -493,7 +493,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
 
   it('persists one ASR assignment per use and rolls back conflicting assignments with profile changes', async () => {
     const persistence = new DatabaseAsrServicePersistence(db!);
-    const store = new AsrSettingsStore(persistence);
+    const store = new AsrService(persistence);
 
     const a = await store.save({
       ...DEFAULT_WHISPER_ASR,
@@ -508,7 +508,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await store.assign('chat', a.id);
     await store.assign('clip', a.id);
     await store.assign('chat', b.id);
-    const restored = new AsrSettingsStore(persistence);
+    const restored = new AsrService(persistence);
 
     expect((await restored.assignments()).chat?.id).toBe(b.id);
     expect((await restored.assignments()).clip?.id).toBe(a.id);
@@ -540,15 +540,15 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await db!.asrAssignment.findUnique({ where: { use: 'clip' } }),
     ).toBeNull();
     // Unassigned uses retain the existing Whisper fallback after deletion/restart.
-    const after = new AsrSettingsStore(persistence);
+    const after = new AsrService(persistence);
 
     expect((await after.assignments()).clip?.id).toBe(b.id);
     expect((await after.assignments()).chat?.id).toBe(b.id);
   });
 
   it('keeps concurrent catalog writes from independent instances and reads later database changes', async () => {
-    const asrA = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
-    const asrB = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
+    const asrA = new AsrService(new DatabaseAsrServicePersistence(db!));
+    const asrB = new AsrService(new DatabaseAsrServicePersistence(db!));
     const [first, second] = await Promise.all([
       asrA.save({
         ...DEFAULT_WHISPER_ASR,
@@ -1128,9 +1128,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   ] as const)(
     'round-trips %s realtime ASR profiles through PostgreSQL',
     async (provider, model) => {
-      const store = new AsrSettingsStore(
-        new DatabaseAsrServicePersistence(db!),
-      );
+      const store = new AsrService(new DatabaseAsrServicePersistence(db!));
 
       const service = await store.save({
         provider,
@@ -1139,9 +1137,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         apiKey: 'test-private-key',
       });
       await store.assign('chat', service.id);
-      const restored = new AsrSettingsStore(
-        new DatabaseAsrServicePersistence(db!),
-      );
+      const restored = new AsrService(new DatabaseAsrServicePersistence(db!));
 
       expect(await restored.get(service.id)).toMatchObject({
         provider,
@@ -1159,7 +1155,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   );
 
   it('persists ASR profiles, masks credentials, and protects active recognition', async () => {
-    const store = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
+    const store = new AsrService(new DatabaseAsrServicePersistence(db!));
 
     expect(await store.list()).toEqual([]);
     const whisper = await store.save({
@@ -1177,9 +1173,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       { ...DEFAULT_BAILIAN_ASR, name: 'Bailian Updated', apiKey: '' },
       cloud.id,
     );
-    const restored = new AsrSettingsStore(
-      new DatabaseAsrServicePersistence(db!),
-    );
+    const restored = new AsrService(new DatabaseAsrServicePersistence(db!));
 
     expect((await restored.list()).map((service) => service.id)).toEqual([
       whisper.id,
@@ -1216,7 +1210,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       );
     expect(voiceError?.message).toBe('无法保存语音服务数据库配置。');
 
-    const asr = new AsrSettingsStore({
+    const asr = new AsrService({
       load: async () => [],
       update: async (change) => {
         const { values, result } = change([]);

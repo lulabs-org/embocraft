@@ -112,20 +112,20 @@ apps/server/
         │   ├── engines/                 # 外部语音识别引擎适配器
         │   │   ├── whisper/             # Whisper 批处理适配器与模型目录探测
         │   │   └── bailian/             # 阿里云百炼实时流式识别适配器与端点管理
-        │   ├── services/                # 识别调度服务
+        │   ├── services/                # 识别与配置调度服务
+        │   │   ├── asr.service.ts       # AsrService / asrService：配置与识别占用
+        │   │   ├── realtime-asr.service.ts # 实时流识别并发与引擎桥接
         │   │   ├── speech-scheduler.service.ts # 识别队列、超时与取消
         │   │   └── transcript.ts        # Whisper 转写结果解析
-        │   ├── persistence/             # ASR 配置存储及数据库适配
-        │   │   ├── asr-settings-store.ts # AsrSettingsStore：配置与识别占用
+        │   ├── persistence/             # ASR 数据库适配
         │   │   └── database-asr-services.ts
         │   ├── routes/
-        │   │   ├── asr.http.ts          # installAsrHttp：保留鉴权与路由安装顺序
-        │   │   ├── asr.routes.ts        # /voice/asr/* 识别服务管理
+        │   │   ├── asr.routes.ts        # createAsrRouter()：零参挂载 capabilities/transcribe 与 /voice/asr/*
         │   │   ├── transcribe.routes.ts # /voice/transcribe 音频转写
         │   │   └── capabilities.routes.ts # /voice/capabilities 运行时能力探针
         │   ├── sockets/
         │   │   └── asr.socket.ts        # /voice/asr/realtime 实时流式识别
-        │   └── index.ts                 # installAsrHttp、installAsrSocket、LocalSpeech、领域模型等
+        │   └── index.ts                 # createAsrRouter、AsrService、asrService、installAsrSocket、LocalSpeech 等
         │
         ├── tts/                         # ── 2b. 语音合成（TTS）与音色服务 ──
         │   ├── services/
@@ -250,24 +250,24 @@ apps/server/
 
 ```typescript
 // apps/server/src/modules/world/index.ts
-export { WorldRoom } from './world.room';
+export { WorldRoom, getActiveWorld } from './world.room';
 export { WorldStore } from './persistence/store';
-export {
-  installWorldRoutes,
-  installPresenceRoutes,
-} from './routes/worlds.routes';
+export { createWorldRouter } from './routes/worlds.routes';
 ```
 
-### 2.3 统一的路由安装契约
+### 2.3 统一的零参路由工厂契约
 
-所有模块的 HTTP 路由统一提供带有命名空间的安装函数，由 `src/app.ts` 声明式挂载：
+所有模块的 HTTP 路由统一提供无参 `create*Router(): Router` 工厂函数，由 `src/server.ts` 声明式挂载，不再通过装配层透传跨模块状态回调：
 
 ```typescript
 // apps/server/src/modules/world/routes/worlds.routes.ts
-export function installWorldRoutes(app: Express, getRoomId: () => string) {
-  app.get('/world', (req, res) => {
-    res.json({ roomId: getRoomId() });
-  });
+export function createWorldRouter(): Router {
+  const router = express.Router();
+  router.get('/world', (_req, res) =>
+    res.json({ roomId: getActiveWorld()?.roomId ?? '' }),
+  );
+  // ...
+  return router;
 }
 ```
 
@@ -278,97 +278,45 @@ export function installWorldRoutes(app: Express, getRoomId: () => string) {
 ```typescript
 // apps/server/src/modules/gateway/gateway.socket.ts
 export function installGatewaySocket(
-  sockets: SocketRoutes,
-  deps: { events: ManagementEvents; auth: GatewayAuth },
+  routes: SocketRoutes,
+  auth = new GatewayAuth(env.readServer().gateway),
 ) {
-  sockets.set('/ai-characters/gateway', (socket, req) => {
-    // 鉴权与事件订阅逻辑
-  });
+  routes.set('/ai-characters/gateway', (socket, req) =>
+    gatewaySocket(getActiveConsoleSyncEvents(), auth, socket, req),
+  );
 }
 ```
 
 ---
 
-## 3. 核心装配流程（`app.ts` 与 `server.ts`）
+## 3. 核心装配流程（`server.ts`）
 
-服务装配层严格遵循分层依赖原则：
-
-### 3.1 HTTP 装配器（`src/app.ts`）
-
-`createApp` 创建 Express 实例并安装中间件和路由，不启动网络监听、连接数据库或加载 `.env`。下面省略依赖类型定义，安装参数与顺序与实现一致：
+服务装配层在单入口 `createServer()` 中完成环境读取、数据库共享连接设置与无参路由/Socket 挂载：
 
 ```typescript
 import express from 'express';
 import { publicCors } from './core/http/cors';
 import { installDocsRoutes } from './core/openapi/docs.routes';
 import { installHealthRoutes } from './core/http/routes/health.routes';
+import {
+  createManagementRouter,
+  DEFAULT_MANAGEMENT_PATHS,
+} from './core/http/middleware/management-policy';
 import { errorHandler } from './core/http/middleware/error-handler';
 
-// 各模块统一从 index.ts 引入
-import { installManagementHttp } from './modules/management';
-import { installAICharacterRoutes } from './modules/ai-characters';
-import { installProviderRoutes } from './modules/providers';
-import { installTaskRoutes, taskCommandBody } from './modules/tasks';
-import { installAsrHttp } from './modules/asr';
-import { installTtsHttp } from './modules/tts';
-import { installWorldRoutes, installPresenceRoutes } from './modules/world';
-import { installChatRoutes } from './modules/chat';
-
-export function createApp(deps: AppDependencies) {
-  const app = express();
-
-  // 1. 挂载基础设施能力与中间件
-  app.use(publicCors(deps.origin));
-  installDocsRoutes(app);
-  installHealthRoutes(app, deps.health);
-
-  // 2. 挂载各业务领域模块的 HTTP 路由
-  installManagementHttp(app, {
-    authenticate: deps.management.authenticate,
-    receiptBody: taskCommandBody,
-    installRoutes: (app, commands) => {
-      installAICharacterRoutes(app, deps.management.characters, commands);
-      installProviderRoutes(app, deps.management.providers, commands);
-      installTaskRoutes(app, deps.management.tasks, commands);
-    },
-  });
-  installAsrHttp(app, { ...deps.asr, origin: deps.origin });
-  installTtsHttp(app, deps.tts);
-  installWorldRoutes(app, deps.world.roomId);
-  installChatRoutes(
-    app,
-    deps.chat.getChat,
-    deps.chat.speech,
-    deps.chat.getAgentSpeech,
-    deps.origin,
-    deps.asr.asrSettings,
-  );
-  installPresenceRoutes(app, deps.world.presence, deps.origin);
-
-  // 3. 尾部统一全局错误管道
-  app.use(errorHandler());
-  return app;
-}
-```
-
-`installManagementHttp` 由 management 模块持有鉴权、请求解析、共享命令实例、回执路由和错误处理的安装顺序。角色、Provider、Tasks 的路由安装函数由 `app.ts` 通过回调注入，management 的 HTTP 层不反向导入这些模块。所有路由继续直接注册在 Express app 上，保留完整 `req.path` 命令指纹；TTS 通过 management 门面复用 32 KiB 请求策略，但不进入命令回执队列，ASR 继续使用独立的 8 KiB JSON 与原始音频处理策略。
-
-### 3.2 复合网络服务装配器（`src/server.ts`）
-
-```typescript
-// 1. 基础设施引入
-import { env } from './core/config';
-import { checkStartupDatabase } from './core/database/health';
-import type { SocketRoutes } from './core/transport/socket-routes';
-import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
-
-// 2. 业务模块统一从各自门面引入
-import { AICharacterManager } from './modules/ai-characters';
-import { ProviderService, bootstrapProviders } from './modules/providers';
-import { WorldRoom, WorldStore } from './modules/world';
-import { installGatewaySocket, GatewayAuth } from './modules/gateway';
-import { installAsrSocket, AsrSettingsStore, LocalSpeech } from './modules/asr';
-import { createTtsRouter, ttsService } from './modules/tts';
+// 各模块统一从 index.ts 引入零参路由工厂与 Socket 安装函数
+import {
+  AICharacterManager,
+  createAICharacterRouter,
+} from './modules/ai-characters';
+import { createProviderRouter } from './modules/providers';
+import { createTaskRouter } from './modules/tasks';
+import { createConsoleSyncRouter } from './modules/console-sync';
+import { createAsrRouter, installAsrSocket } from './modules/asr';
+import { createTtsRouter } from './modules/tts';
+import { createWorldRouter, WorldRoom } from './modules/world';
+import { createChatRouter } from './modules/chat';
+import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 ```
 
 ---
@@ -448,9 +396,9 @@ graph LR
 - **队列与契约归属**：
   通用排队、指纹计算和内部回执状态由 `core/concurrency/command-queue.ts` 负责；`CommandRouter` 注入管理错误策略，`ManagementCommands` 处理 HTTP 请求与执行前校验。公共 `CommandReceipt`、`ManagementErrorData` 和 `ManagementError` 继续由 `@voxel/shared/management` 定义，management 模块通过 `services/public-error.ts` 映射错误，不重复声明公共回执模型。
 - **命令指纹规整与输入校验**：
-  `tasks/domain/command-policy.ts` 的 `taskCommandBody` 仅从幂等指纹中剔除 `expectedTask`、`expectedPlanRevision`，使重试可以沿用原回执；它不修改实际请求体，也不执行字段白名单校验。输入合法性及执行前置条件仍由任务领域校验和服务层负责。
-- **全双工审计与通知总线（`ManagementEvents`）**：
-  任何领域状态发生跃迁（如模型创建、角色上线、任务推进），由 `ManagementEvents.publish()` 统一发布事件，并直推给连接到 `/ai-characters/gateway` 的管理客户端。**前端控制台通过事件流实时驱动界面更新，杜绝低效的 HTTP 短轮询**。
+  `console-sync/services/console-sync.service.ts` 的 `commandReceiptBody` 仅从幂等指纹中剔除 `expectedTask`、`expectedPlanRevision`，使重试可以沿用原回执；它不修改实际请求体，也不执行字段白名单校验。输入合法性及执行前置条件仍由任务领域校验和服务层负责。
+- **全双工审计与通知总线（`ConsoleSyncEvents`）**：
+  任何领域状态发生跃迁（如模型创建、角色上线、任务推进），由 `ConsoleSyncEvents.publish()`（以及 `core/events/domain-events.ts` 领域事件总线）统一发布事件，并直推给连接到 `/ai-characters/gateway` 的管理客户端。**前端控制台通过事件流实时驱动界面更新，杜绝低效的 HTTP 短轮询**。
 
 ---
 
@@ -461,7 +409,7 @@ graph LR
 - **共享音频基础设施（`core/audio/`）**：
   `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；`normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行；`speaches-models.ts` 与 `voice-service-connection.ts` 提供 Speaches 模型发现和连接参数校验。默认语音服务地址统一由 `core/config/env.ts` 解析。该目录只依赖 `core`。
 - **ASR 模块（`modules/asr/`）**：
-  `services/` 保留 `LocalSpeech` 的 Whisper 识别、`bridgeBailianAsr` 的百炼流式协议与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责 `AsrSettingsStore` 与数据库适配；`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权和 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
+  `engines/` 保留 `LocalSpeech`（`localSpeech`）的 Whisper 识别与 `bridgeBailianAsr`/OpenAI/Gemini 流式协议；`services/` 负责 `AsrService`（`asrService`）、`RealtimeAsrService` 与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责数据库适配；`routes/asr.routes.ts` 的零参 `createAsrRouter()` 挂载 `capabilities → transcribe → asr` 路由，管理鉴权由 `server.ts` 前置；`sockets/asr.socket.ts` 的 `installAsrSocket` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
 - **TTS 模块（`modules/tts/`）**：
   `services/` 保留 `TtsService`（`ttsService`）、`PiperTts`、`RemoteTts`、`PiperModels` 与 `SpeechSynthesizer` 契约，不在模块内持有世界会话绑定状态；删除保护与音色更新通知通过 `core/events/domain-events.ts` 事件总线及 PostgreSQL 外键约束完成；`persistence/` 负责数据库适配；`routes/tts.routes.ts` 的零参 `createTtsRouter()` 直接调用 `ttsService`，由 `server.ts` 经 management 管线挂载 `/voice/tts`。
 - **世界内语音协作（`modules/world/services/`）**：

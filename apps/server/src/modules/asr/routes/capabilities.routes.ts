@@ -4,21 +4,13 @@ import { env } from '../../../core/config/env';
 import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import type { AsrSettingsStore } from '../services/asr-settings-store';
-import { WhisperAdapter as LocalSpeech } from '../engines';
+import { PiperModels } from '../../tts';
+import { localSpeech } from '../engines';
+import { asrService } from '../services/asr.service';
 
-export type TtsStatusQuery = () => Promise<{
-  available: boolean;
-  reason: string;
-}>;
-
-export function installCapabilitiesRoutes(
-  router: Router,
-  speech = new LocalSpeech(),
-  asrSettings: AsrSettingsStore,
-  ttsStatus: TtsStatusQuery,
-  origin = env.webOrigin(),
-) {
+export function installCapabilitiesRoutes(router: Router) {
+  const origin = env.webOrigin();
+  const piperModels = new PiperModels();
   router.use(
     '/voice/capabilities',
     createOriginGuard({
@@ -72,14 +64,14 @@ export function installCapabilitiesRoutes(
         const selected =
           req.query.serviceId === undefined
             ? undefined
-            : await asrSettings.get(String(req.query.serviceId));
+            : await asrService.get(String(req.query.serviceId));
         if (selected && selected.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
         res.json({
-          local: await speech.status(
+          local: await localSpeech.status(
             selected?.provider === 'whisper' ? selected : undefined,
           ),
-          agentSpeech: await ttsStatus(),
+          agentSpeech: await piperModels.status(),
         });
       } catch (error) {
         res.status(error instanceof AppError ? error.status : 500).json({

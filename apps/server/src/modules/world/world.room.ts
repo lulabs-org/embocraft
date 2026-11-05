@@ -1,5 +1,6 @@
-import { ChatStore, WorldChat, visibleEvent } from '../chat';
+import { bindChatRuntime, ChatStore, WorldChat, visibleEvent } from '../chat';
 import { PiperTts, ttsService, type SpeechSynthesizer } from '../tts';
+import { peekDatabaseClient } from '../../core/database/client';
 import { AppError } from '../../core/errors/app-error';
 import { domainEvents } from '../../core/events/domain-events';
 import { AgentSpeech } from './services/agent-speech.service';
@@ -28,7 +29,13 @@ import {
 } from './domain/player-name';
 import { validateEdit, parseInput } from './domain/validation';
 const zero: Input = { x: 0, z: 0, jump: false, yaw: 0 };
-let activeRoom = false;
+let activeRoom: WorldRoom | undefined;
+function setActiveWorld(room: WorldRoom | undefined) {
+  activeRoom = room;
+}
+export function getActiveWorld(): WorldRoom | undefined {
+  return activeRoom;
+}
 export class WorldRoom extends Room<WorldState> {
   private actorVoices = new Map<string, string>();
   private releaseVoiceEvents?: () => void;
@@ -90,7 +97,7 @@ export class WorldRoom extends Room<WorldState> {
       chatStore?: ChatStore;
     } = {},
   ) {
-    this.chatStore = options.chatStore;
+    this.chatStore = options.chatStore ?? new ChatStore();
     this.chat = new WorldChat(
       () => this.state.players.values(),
       (actor, data) => this.chatEvent(actor, data),
@@ -98,17 +105,21 @@ export class WorldRoom extends Room<WorldState> {
     );
     if (activeRoom)
       throw new Error('Single world is full; join the existing room');
-    activeRoom = true;
+    setActiveWorld(this);
     this.ownsActive = true;
-    this.store = options.store ?? new WorldStore();
+    this.store =
+      options.store ?? new WorldStore(undefined, peekDatabaseClient());
     this.setState(new WorldState());
     try {
       this.state.revision = await this.store.load(this.blocks);
     } catch (error) {
-      activeRoom = false;
+      await this.store.close();
+      if (activeRoom === this) setActiveWorld(undefined);
+      this.ownsActive = false;
       throw error;
     }
     const unsubs = [
+      bindChatRuntime(this.chat, this.agentSpeech),
       domainEvents.on('agent.voice.bound', ({ sessionId, serviceId }) => {
         if (!this.state.players.has(sessionId)) return;
         if (this.actorVoices.get(sessionId) === serviceId) return;
@@ -372,7 +383,7 @@ export class WorldRoom extends Room<WorldState> {
     this.chat.clear();
     await this.queue;
     await this.store?.close();
-    if (this.ownsActive) activeRoom = false;
+    if (this.ownsActive && activeRoom === this) setActiveWorld(undefined);
   }
   getPresence(): WorldPresence {
     return {

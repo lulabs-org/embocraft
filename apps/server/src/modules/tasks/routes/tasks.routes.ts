@@ -1,16 +1,8 @@
 import express, { type Request, type Router } from 'express';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 import type { PlanQueryFilter } from '@voxel/shared/management';
-import type { TaskPort } from '../ports';
-
-type CommandExecutor = {
-  execute<T>(
-    request: Request,
-    lane: string,
-    action: (commandId: string) => Promise<T>,
-    validate?: () => void,
-  ): Promise<T>;
-};
+import { consoleSync } from '../../console-sync';
+import { getActiveTaskService } from '../services/task-runtime.service';
 
 /** 命令重试沿用首次请求的 requestId，缺省时注入本次命令 ID */
 function withRequestId(
@@ -26,11 +18,46 @@ function queryText(value: unknown): string | undefined {
 }
 
 /** 创建独立的 Task / Plan 路由 Router 实例 */
-export function createTaskRouter(
-  tasks: TaskPort,
-  consoleSync: CommandExecutor,
-): Router {
+export function createTaskRouter(): Router {
   const router = express.Router();
+  const tasks = {
+    planPage: (filter: PlanQueryFilter) =>
+      getActiveTaskService().planPage(filter),
+    publicPlan: (planId: string) => getActiveTaskService().publicPlan(planId),
+    createTaskPlan: (characterId: string, body: unknown) =>
+      getActiveTaskService().createTaskPlan(characterId, body),
+    updateTaskPlan: (
+      characterId: string | undefined,
+      planId: string,
+      body: unknown,
+    ) => getActiveTaskService().updateTaskPlan(characterId, planId, body),
+    controlTaskPlan: (
+      characterId: string | undefined,
+      planId: string,
+      op: string,
+      body: unknown,
+    ) => getActiveTaskService().controlTaskPlan(characterId, planId, op, body),
+    reassignPlan: (planId: string, targetId: string, body: unknown) =>
+      getActiveTaskService().reassignPlan(planId, targetId, body),
+    publicRuns: (
+      characterId: string | undefined,
+      planId: string,
+      offset: number,
+      includeMeta?: boolean,
+    ) =>
+      getActiveTaskService().publicRuns(
+        characterId,
+        planId,
+        offset,
+        includeMeta,
+      ),
+    controlTaskRun: (
+      characterId: string | undefined,
+      runId: string,
+      op: string,
+      body: unknown,
+    ) => getActiveTaskService().controlTaskRun(characterId, runId, op, body),
+  };
   // ---------------------------------------------------------------------------
   // 任务计划与执行运行的 HTTP 适配
   // ---------------------------------------------------------------------------

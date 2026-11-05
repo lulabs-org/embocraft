@@ -3,6 +3,8 @@ export type DomainEventMap = {
   'tts.service.changed': { serviceId: string };
   'agent.voice.bound': { sessionId: string; serviceId: string };
   'agent.voice.unbound': { sessionId: string };
+  'provider.removing': { providerId: string };
+  'provider.changed': { providerId: string };
 };
 
 type Listener<T> = (payload: T) => void;

@@ -7,9 +7,9 @@ import { validateProvider } from '../../src/modules/providers/domain/validation'
 import type { ProviderRepository } from '../../src/modules/providers';
 
 import {
-  AsrSettingsStore,
+  AsrService,
   type SavedService,
-} from '../../src/modules/asr/services/asr-settings-store';
+} from '../../src/modules/asr/services/asr.service';
 import {
   validateVoiceService,
   type SavedVoice,
@@ -193,7 +193,7 @@ export class MemoryProviderRepository implements ProviderRepository {
 }
 
 /** Test stores expose their backing state so a new instance can simulate restart. */
-export class TestAsrSettingsStore extends AsrSettingsStore {
+export class TestAsrService extends AsrService {
   constructor(readonly persistence = asrPersistence()) {
     super(persistence);
   }

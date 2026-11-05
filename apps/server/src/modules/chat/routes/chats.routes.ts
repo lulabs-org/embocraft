@@ -9,11 +9,13 @@ import {
 import { type WorldChat } from '../services/chat.service';
 
 import { AppError } from '../../../core/errors/app-error';
-import { AsrSettingsStore, LocalSpeech } from '../../asr';
+import {
+  getActiveChatRuntime,
+  type AgentSpeechClips,
+} from '../services/chat-runtime.service';
 import { ChatSpeechService } from '../services/speech.service';
 
-/** Read-only access to synthesized Agent speech clips owned by the world room. */
-export type AgentSpeechClips = { audio(id: string, viewer: string): Buffer };
+export type { AgentSpeechClips };
 
 type ChatLocals = {
   chat: WorldChat;
@@ -40,15 +42,10 @@ function parseChatRoute(query: express.Request['query']) {
 }
 
 /** 创建独立的 Chat 路由 Router 实例 */
-export function createChatRouter(
-  getChat: () => WorldChat | undefined,
-  speech = new LocalSpeech(),
-  getAgentSpeech: () => AgentSpeechClips | undefined = () => undefined,
-  origin = env.webOrigin(),
-  asrSettings: AsrSettingsStore,
-): Router {
+export function createChatRouter(): Router {
   const router = express.Router();
-  const speechService = new ChatSpeechService(speech, asrSettings);
+  const origin = env.webOrigin();
+  const speechService = new ChatSpeechService();
   router.use(
     '/chat',
     createOriginGuard({
@@ -67,7 +64,7 @@ export function createChatRouter(
     }),
     (req, res, next) => {
       try {
-        const chat = getChat();
+        const { chat } = getActiveChatRuntime();
         if (!chat) throw new AppError('世界服务尚未就绪。', 503);
         const token = (req.headers.authorization ?? '').replace(/^Bearer /, '');
         res.locals.chat = chat;
@@ -385,7 +382,7 @@ export function createChatRouter(
    */
   router.get('/chat/agent-speech/:id', (req, res, next) => {
     try {
-      const service = getAgentSpeech();
+      const { agentSpeech: service } = getActiveChatRuntime();
       if (!service) throw new AppError('Agent 语音服务未就绪。', 503);
       res
         .type('audio/wav')

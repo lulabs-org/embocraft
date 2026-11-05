@@ -1,7 +1,8 @@
 import { Session } from '@voxel/agent-runtime';
 
+import { DatabaseManagementArchive } from '../../../persistence/database-management-archive';
 import type { ArchivePort } from '../../../persistence/management-archive';
-import type { ProviderRuntimePort } from '../../providers';
+import { providerRepository, type ProviderRuntimePort } from '../../providers';
 import {
   AICharacterOrchestrator,
   type AICharacterDependencies,
@@ -10,9 +11,9 @@ import {
 /** Manager wrapper with explicit persistence supplied by the host. */
 export class AICharacterManager extends AICharacterOrchestrator {
   constructor(
-    providers: ProviderRuntimePort,
-    serverUrl: string | (() => string),
-    archive: ArchivePort,
+    providers: ProviderRuntimePort = providerRepository,
+    serverUrl: string | (() => string) = '',
+    archive: ArchivePort = new DatabaseManagementArchive(),
     dependencies: AICharacterDependencies = {
       session: (url) => new Session(url),
       model: (_config, provider) => ({

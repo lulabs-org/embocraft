@@ -89,3 +89,17 @@ export class ConsoleSyncEvents {
     this.listeners.clear();
   }
 }
+
+const fallbackEvents = new ConsoleSyncEvents();
+let activeEvents: ConsoleSyncEvents | undefined;
+
+export function bindConsoleSyncEvents(events: ConsoleSyncEvents): () => void {
+  activeEvents = events;
+  return () => {
+    if (activeEvents === events) activeEvents = undefined;
+  };
+}
+
+export function getActiveConsoleSyncEvents(): ConsoleSyncEvents {
+  return activeEvents ?? fallbackEvents;
+}

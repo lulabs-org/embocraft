@@ -1,12 +1,12 @@
-export { createAsrRouter, type AsrRouteDependencies } from './routes/asr.http';
-export { AsrSettingsStore } from './services/asr-settings-store';
+export { createAsrRouter } from './routes/asr.routes';
+export { AsrService, asrService } from './services/asr.service';
 export { DatabaseAsrServicePersistence } from './persistence/database-asr-services';
 export { installAsrSocket } from './sockets/asr.socket';
 export {
   RealtimeAsrService,
   type AsrBridge,
 } from './services/realtime-asr.service';
-export { WhisperAdapter as LocalSpeech } from './engines';
+export { WhisperAdapter as LocalSpeech, localSpeech } from './engines';
 export { scheduleSpeech } from './services/speech-scheduler.service';
 export {
   ASR_USES,

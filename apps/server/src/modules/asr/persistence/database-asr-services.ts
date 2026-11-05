@@ -42,12 +42,12 @@ function configuration(value: SavedService) {
   return JSON.stringify(common);
 }
 
-/** Persists ASR definitions; active recordings stay in AsrSettingsStore. */
+/** Persists ASR definitions; active recordings stay in AsrService. */
 export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
-  private readonly db: PrismaClient;
+  constructor(private readonly customDb?: PrismaClient) {}
 
-  constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+  private get db(): PrismaClient {
+    return this.customDb ?? getDatabaseClient();
   }
 
   private async read(

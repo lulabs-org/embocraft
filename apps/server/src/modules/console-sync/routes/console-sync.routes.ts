@@ -1,11 +1,9 @@
 import express, { type Router } from 'express';
 import { identifier } from '../../../core/http/validation';
-import type { ConsoleSyncCommands } from '../services/console-sync.service';
+import { consoleSync } from '../services/console-sync.service';
 
 /** 创建独立的控制台同步路由 Router 实例 */
-export function createConsoleSyncRouter(
-  consoleSync: ConsoleSyncCommands,
-): Router {
+export function createConsoleSyncRouter(): Router {
   const router = express.Router();
   /**
    * @openapi

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import EventEmitter from 'node:events';
 import type WebSocket from 'ws';
 import { RealtimeAsrService } from './realtime-asr.service';
-import type { AsrSettingsStore } from './asr-settings-store';
+import type { AsrService } from './asr.service';
 import { AppError } from '../../../core/errors/app-error';
 import { DEFAULT_BAILIAN_ASR } from '@voxel/shared';
 
@@ -19,7 +19,7 @@ describe('RealtimeAsrService', async () => {
         settings: { ...DEFAULT_BAILIAN_ASR, provider: 'bailian' },
         release,
       }),
-    } as unknown as AsrSettingsStore;
+    } as unknown as AsrService;
 
     const bridge = vi.fn();
     const service = new RealtimeAsrService(mockStore, { bridge });
@@ -52,7 +52,7 @@ describe('RealtimeAsrService', async () => {
       };
       const store = {
         acquire: vi.fn().mockReturnValue({ settings, release }),
-      } as unknown as AsrSettingsStore;
+      } as unknown as AsrService;
       const liveBridge = vi.fn();
       const bailianBridge = vi.fn();
       const service = new RealtimeAsrService(store, {
@@ -77,7 +77,7 @@ describe('RealtimeAsrService', async () => {
         settings: { provider: 'whisper' },
         release,
       }),
-    } as unknown as AsrSettingsStore;
+    } as unknown as AsrService;
 
     const bridge = vi.fn();
     const service = new RealtimeAsrService(mockStore, { bridge });
@@ -110,7 +110,7 @@ describe('RealtimeAsrService', async () => {
           settings: { ...DEFAULT_BAILIAN_ASR, provider: 'bailian' },
           release: release3,
         }),
-    } as unknown as AsrSettingsStore;
+    } as unknown as AsrService;
 
     const bridge = vi.fn();
     const service = new RealtimeAsrService(mockStore, {
@@ -148,7 +148,7 @@ describe('RealtimeAsrService', async () => {
         new Promise((done) => {
           resolve = done;
         }),
-    } as unknown as AsrSettingsStore;
+    } as unknown as AsrService;
     const bridge = vi.fn();
     const service = new RealtimeAsrService(store, {
       bridge,

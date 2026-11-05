@@ -1,12 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import { CommandRouter } from '../../../core/concurrency/command-router';
-import { taskCommandBody } from '../../tasks';
+
+/** Revision preconditions guard execution; retries retain the original receipt. */
+export function commandReceiptBody(value: unknown) {
+  const {
+    expectedTask: _task,
+    expectedPlanRevision: _plan,
+    ...body
+  } = (value ?? {}) as Record<string, unknown>;
+  return body;
+}
 
 /** Shared HTTP write receipts for console sync. Reads and event subscriptions never enter this queue. */
 export class ConsoleSyncCommands extends CommandRouter {
   constructor(
-    private receiptBody: (body: unknown) => unknown = taskCommandBody,
+    private receiptBody: (body: unknown) => unknown = commandReceiptBody,
   ) {
     super();
   }
@@ -32,3 +41,5 @@ export class ConsoleSyncCommands extends CommandRouter {
     ) as Promise<T>;
   }
 }
+
+export const consoleSync = new ConsoleSyncCommands();

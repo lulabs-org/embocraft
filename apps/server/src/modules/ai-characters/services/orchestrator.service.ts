@@ -8,11 +8,16 @@ import {
   type AICharacterSettings,
 } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
+import { DatabaseManagementArchive } from '../../../persistence/database-management-archive';
 import type { ArchivePort } from '../../../persistence/management-archive';
 import { ManagementPersistence } from '../../../persistence/management-persistence';
 import { migrateArchive } from '../../../persistence/migrate-archive';
-import { ConsoleSyncEvents } from '../../console-sync';
-import type { ProviderRuntimePort, SavedProvider } from '../../providers';
+import { bindConsoleSyncEvents, ConsoleSyncEvents } from '../../console-sync';
+import {
+  providerRepository,
+  type ProviderRuntimePort,
+  type SavedProvider,
+} from '../../providers';
 import { appendAICharacterLog } from '../domain/activity-log';
 import { AICharacterWakeScheduler } from './wake-scheduler.service';
 
@@ -24,6 +29,7 @@ import {
 } from '../domain/validation';
 
 import {
+  bindTaskService,
   markJoined,
   markOffline,
   modelChanged,
@@ -45,6 +51,7 @@ import {
   resident,
   type Job,
 } from './character-job';
+import { bindCharacterManager } from './character-runtime.service';
 import { executionState } from './task-execution-adapter';
 import { CharacterVoiceCoordinator } from './voice-coordinator.service';
 
@@ -59,17 +66,17 @@ export class AICharacterOrchestrator {
   readonly tasks: TaskCoordinator;
   readonly voiceCoordinator = new CharacterVoiceCoordinator();
 
-  private readonly releaseVoiceGuard: () => void;
+  private readonly releaseBindings: () => void;
   private closing = false;
   private restoreFailed = false;
   private closePromise?: Promise<void>;
   private shutdownPresence = new Map<string, Job['view']['status']>();
 
   constructor(
-    private readonly providers: ProviderRuntimePort,
-    private serverUrl: string | (() => string),
+    private readonly providers: ProviderRuntimePort = providerRepository,
+    private serverUrl: string | (() => string) = '',
     private dependencies: AICharacterDependencies,
-    private archive: ArchivePort,
+    private archive: ArchivePort = new DatabaseManagementArchive(),
   ) {
     const characters = new CharacterSnapshots();
     const tasks = new TaskSnapshots();
@@ -109,7 +116,7 @@ export class AICharacterOrchestrator {
           tasks.restore(this.committedPlans, snapshot),
       },
     );
-    this.releaseVoiceGuard = domainEvents.on(
+    const releaseVoiceGuard = domainEvents.on(
       'tts.service.removing',
       ({ serviceId }) => {
         if (this.hasVoiceServiceReference(serviceId))
@@ -119,6 +126,19 @@ export class AICharacterOrchestrator {
           );
       },
     );
+    const releaseProviderGuard = domainEvents.on(
+      'provider.removing',
+      ({ providerId }) => {
+        if (this.hasProviderReference(providerId))
+          throw new AppError(
+            '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
+            409,
+          );
+      },
+    );
+    const releaseProviderChanged = domainEvents.on('provider.changed', () => {
+      this.events.publish('providers');
+    });
     this.tasks = new TaskCoordinator({
       execution: (id) => executionState(this.taskJob(id)),
       findExecution: (id) => {
@@ -151,6 +171,17 @@ export class AICharacterOrchestrator {
       isClosing: () => this.closing,
       assertWritable: (id) => this.assertWritable(id),
     });
+    const releaseCharacterBinding = bindCharacterManager(this);
+    const releaseTaskBinding = bindTaskService(this.tasks);
+    const releaseSyncEvents = bindConsoleSyncEvents(this.events);
+    this.releaseBindings = () => {
+      releaseVoiceGuard();
+      releaseProviderGuard();
+      releaseProviderChanged();
+      releaseCharacterBinding();
+      releaseTaskBinding();
+      releaseSyncEvents();
+    };
   }
 
   get storageRevision() {
@@ -686,7 +717,7 @@ export class AICharacterOrchestrator {
   }
 
   private async shutdown() {
-    this.releaseVoiceGuard();
+    this.releaseBindings();
     this.taskScheduler.close();
     this.planScheduler.close();
     this.closing = true;

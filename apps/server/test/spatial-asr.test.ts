@@ -2,10 +2,34 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
-import { LocalSpeech } from '../src/modules/asr';
+import type { AsrService, LocalSpeech } from '../src/modules/asr';
+import { TestAsrService } from './helpers/memory-storage';
+
+const mocked = vi.hoisted(() => ({
+  speech: undefined as unknown as LocalSpeech,
+  asrService: undefined as unknown as AsrService,
+}));
+
+vi.mock('../src/modules/asr', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/modules/asr')>();
+  return {
+    ...actual,
+    localSpeech: {
+      normalize: (...args: Parameters<LocalSpeech['normalize']>) =>
+        mocked.speech.normalize(...args),
+      transcribe: (...args: Parameters<LocalSpeech['transcribe']>) =>
+        mocked.speech.transcribe(...args),
+    },
+    asrService: {
+      acquire: (id: string) => mocked.asrService.acquire(id),
+    },
+  };
+});
+
+import { LocalSpeech as WhisperSpeech } from '../src/modules/asr';
+import { bindChatRuntime } from '../src/modules/chat';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
 import { createChatRouter } from '../src/modules/chat/routes/chats.routes';
-import { TestAsrSettingsStore } from './helpers/memory-storage';
 import {
   pcmWav,
   speechTransport,
@@ -20,7 +44,12 @@ import {
 } from '../../web/src/audio/recording/live-recorder';
 
 let server: Server | undefined;
+let releaseChat: (() => void) | undefined;
+
 afterEach(async () => {
+  releaseChat?.();
+  releaseChat = undefined;
+  vi.unstubAllEnvs();
   server?.closeAllConnections();
   if (server)
     await new Promise<void>((resolve) => server!.close(() => resolve()));
@@ -41,6 +70,7 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
   };
   const emit = vi.fn();
   const chat = new WorldChat(() => [speaker], emit);
+  releaseChat = bindChatRuntime(chat);
   const token = chat.issue(speaker.id);
   let rejected = false;
   const upstream = vi.fn<typeof fetch>(async (_url, init) => {
@@ -71,16 +101,11 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
           },
     );
   });
+  vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5173');
+  mocked.speech = new WhisperSpeech('http://asr.test/v1', upstream);
+  mocked.asrService = new TestAsrService();
   const app = express();
-  app.use(
-    createChatRouter(
-      () => chat,
-      new LocalSpeech('http://asr.test/v1', upstream),
-      undefined,
-      'http://127.0.0.1:5173',
-      new TestAsrSettingsStore(),
-    ),
-  );
+  app.use(createChatRouter());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

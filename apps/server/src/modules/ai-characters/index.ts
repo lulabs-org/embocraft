@@ -5,8 +5,13 @@ export {
 export { AICharacterManager } from './services/character-manager.service';
 export {
   CharacterQueries,
+  characterQueries,
   type CharacterQueryPort,
 } from './persistence/queries';
+export {
+  bindCharacterManager,
+  getActiveCharacterManager,
+} from './services/character-runtime.service';
 export { CharacterVoiceCoordinator } from './services/voice-coordinator.service';
 export { validateAICharacter } from './domain/validation';
 export {

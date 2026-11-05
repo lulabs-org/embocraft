@@ -35,13 +35,12 @@ apps/server/src/modules/asr/
 ├── persistence/
 │   └── database-asr-services.ts  # DatabaseAsrServicePersistence：数据库加载与保存
 ├── services/
-│   ├── asr-settings-store.ts     # AsrSettingsStore：配置管理、内存缓存、使用中租约锁 (acquire/release)
+│   ├── asr.service.ts            # AsrService / asrService：配置管理、使用中租约锁 (acquire/release) 与模型探测
 │   ├── speech-scheduler.service.ts # SpeechScheduler：Whisper 串行执行，最多 4 个任务等待
 │   ├── realtime-asr.service.ts   # RealtimeAsrService：实时流识别会话限制与引擎调度 (默认最多 2 并发)
 │   └── transcript.ts             # Whisper JSON 响应解析
 ├── routes/
-│   ├── asr.http.ts               # HTTP 中间件与路由挂载入口
-│   ├── asr.routes.ts             # /voice/asr/* 配置管理与用途分配接口
+│   ├── asr.routes.ts             # createAsrRouter()：零参挂载 capabilities/transcribe 与 /voice/asr/* 接口
 │   ├── transcribe.routes.ts      # /voice/transcribe 文件音频转录
 │   └── capabilities.routes.ts    # /voice/capabilities 能力探测接口
 ├── sockets/
@@ -55,9 +54,9 @@ apps/server/src/modules/asr/
    - `LocalSpeech`：实际是 Speaches / OpenAI 兼容 Whisper HTTP 客户端，支持本地与远程地址，并非仅本地。
    - `speech-scheduler.service.ts`：实际仅是 Whisper 批处理请求的限流排队器，并非全局语音调度器。每个 `WhisperAdapter` 串行执行，最多等待 4 个最终转录任务；执行中不排队预览请求。
 2. **职责聚合过多**：
-   - `AsrSettingsStore` 兼具了数据库持久化、运行中租约锁控制（`acquire`/`release` 防止误删正在识别的配置）以及远程模型探测（`models()`）。
+   - `AsrService` 兼具了数据库持久化协调、运行中租约锁控制（`acquire`/`release` 防止误删正在识别的配置）以及远程模型探测（`models()`）。
 3. **跨域能力探针**：
-   - `capabilities.routes.ts` 位于 ASR 模块，通过注入的 `ttsStatus` 函数查询并返回 TTS 状态；该函数由 `app.ts` 提供，调用 `PiperModels.status()`。未来建议由顶层网关或组合层聚合返回。
+   - `capabilities.routes.ts` 位于 ASR 模块，经 `tts` 模块门面调用 `PiperModels.status()` 聚合返回 TTS 状态。未来建议由顶层网关或组合层聚合返回。
 
 ---
 

@@ -8,15 +8,43 @@ import {
 import { assertJsonRequest } from '../../../core/http/middleware/require-json';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import express, { type Request, type Response, type Router } from 'express';
-import type { AsrSettingsStore } from '../services/asr-settings-store';
+import { asrService } from '../services/asr.service';
 import { AppError } from '../../../core/errors/app-error';
+import { installCapabilitiesRoutes } from './capabilities.routes';
+import { installTranscribeRoutes } from './transcribe.routes';
 
-export function installAsrRoutes(
-  router: Router,
-  store: AsrSettingsStore,
-  origin = env.webOrigin(),
-  authenticatedManagement = false,
-) {
+/** 创建独立的 ASR 路由 Router 实例 */
+export function createAsrRouter(): Router {
+  const router = express.Router();
+  const origin = env.webOrigin();
+
+  installCapabilitiesRoutes(router);
+  installTranscribeRoutes(router);
+
+  const assignmentRead = [
+    createOriginGuard({ origin, required: false, crossSite: true }),
+    cors({ origin: true, methods: 'GET' }),
+  ];
+
+  /**
+   * @openapi
+   * /voice/asr/assignments:
+   *   get:
+   *     summary: 获取游戏使用的识别服务分配（仅 ID、名称、类型）
+   *     tags: [ASR]
+   *     responses:
+   *       200:
+   *         description: 附近语音、语音输入和语音消息转文字的服务分配
+   */
+  router.get(
+    '/voice/asr/assignments',
+    ...assignmentRead,
+    asyncRoute(async (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(await asrService.assignments());
+    }),
+  );
+
   const pageAccess = express.Router();
   pageAccess.use(
     createOriginGuard({
@@ -33,41 +61,22 @@ export function installAsrRoutes(
       methods: 'GET, POST, PUT, DELETE, OPTIONS',
     }),
   );
-  const assignmentRead = [
-    createOriginGuard({ origin, required: false, crossSite: true }),
-    cors({ origin: true, methods: 'GET' }),
-  ];
-  /**
-   * @openapi
-   * /voice/asr/assignments:
-   *   get:
-   *     summary: 获取游戏使用的识别服务分配（仅 ID、名称、类型）
-   *     tags: [ASR]
-   *     responses:
-   *       200:
-   *         description: 附近语音、语音输入和语音消息转文字的服务分配
-   */
-  router.get(
-    '/voice/asr/assignments',
-    ...assignmentRead,
-    asyncRoute(async (_req, res) => {
-      res.setHeader('Cache-Control', 'no-store');
-      res.json(await store.assignments());
-    }),
-  );
   router.use('/voice/asr', (req, res, next) => {
     if (
-      authenticatedManagement &&
-      (req.path === '/services' ||
-        req.path === '/defaults' ||
-        req.path === '/models' ||
-        req.path.startsWith('/services/') ||
-        req.path.startsWith('/assignments/'))
-    )
+      req.path === '/services' ||
+      req.path === '/defaults' ||
+      req.path === '/models' ||
+      req.path.startsWith('/services/') ||
+      req.path.startsWith('/assignments/')
+    ) {
+      res.setHeader('Cache-Control', 'no-store');
       next();
-    else pageAccess(req, res, next);
+    } else {
+      pageAccess(req, res, next);
+    }
   });
   router.use('/voice/asr', express.json({ limit: '8kb' }));
+
   const route = (fn: (req: Request, res: Response) => unknown) =>
     asyncRoute((req, res) => {
       try {
@@ -77,6 +86,7 @@ export function installAsrRoutes(
       }
       return fn(req, res);
     });
+
   /**
    * @openapi
    * /voice/asr/defaults:
@@ -93,6 +103,7 @@ export function installAsrRoutes(
     res.setHeader('Cache-Control', 'no-store');
     res.json({ baseUrl: env.speechEndpoint() });
   });
+
   /**
    * @openapi
    * /voice/asr/models:
@@ -124,10 +135,11 @@ export function installAsrRoutes(
     asyncAbortableRoute(async (req, res, signal) => {
       assertJsonRequest(req);
       res.setHeader('Cache-Control', 'no-store');
-      const models = await store.models(req.body, signal);
+      const models = await asrService.models(req.body, signal);
       if (!signal.aborted) res.json({ models });
     }),
   );
+
   /**
    * @openapi
    * /voice/asr/services:
@@ -149,8 +161,9 @@ export function installAsrRoutes(
    */
   router.get(
     '/voice/asr/services',
-    asyncRoute(async (_req, res) => res.json(await store.list())),
+    asyncRoute(async (_req, res) => res.json(await asrService.list())),
   );
+
   /**
    * @openapi
    * /voice/asr/assignments/{use}:
@@ -183,7 +196,7 @@ export function installAsrRoutes(
   router.put(
     '/voice/asr/assignments/:use',
     route(async (req, res) => {
-      res.json(await store.assign(req.params.use, req.body?.serviceId));
+      res.json(await asrService.assign(req.params.use, req.body?.serviceId));
     }),
   );
 
@@ -212,7 +225,9 @@ export function installAsrRoutes(
    */
   router.post(
     '/voice/asr/services',
-    route(async (req, res) => res.status(201).json(await store.save(req.body))),
+    route(async (req, res) =>
+      res.status(201).json(await asrService.save(req.body)),
+    ),
   );
 
   /**
@@ -246,7 +261,7 @@ export function installAsrRoutes(
   router.put(
     '/voice/asr/services/:id',
     route(async (req, res) =>
-      res.json(await store.save(req.body, String(req.params.id))),
+      res.json(await asrService.save(req.body, String(req.params.id))),
     ),
   );
 
@@ -273,10 +288,11 @@ export function installAsrRoutes(
   router.delete(
     '/voice/asr/services/:id',
     route(async (req, res) => {
-      await store.remove(String(req.params.id));
+      await asrService.remove(String(req.params.id));
       res.sendStatus(204);
     }),
   );
+
   router.use(
     '/voice/asr',
     errorHandler((error) => {
@@ -304,4 +320,6 @@ export function installAsrRoutes(
       };
     }),
   );
+
+  return router;
 }

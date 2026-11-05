@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import { env } from '../../../core/config/env';
 import { originAllowed } from '../../../core/http/origin-policy';
 import { AppError } from '../../../core/errors/app-error';
-import type { AsrSettingsStore } from '../services/asr-settings-store';
+import { asrService, type AsrService } from '../services/asr.service';
 import type { SocketRoutes } from '../../../core/transport/socket-routes';
 import {
   RealtimeAsrService,
@@ -26,7 +26,7 @@ import {
  *   - 服务端下行: AsrEvent JSON 格式 (ready, partial, final, finished, error)
  */
 export function createAsrSocket(
-  storeOrService: AsrSettingsStore | RealtimeAsrService,
+  storeOrService: AsrService | RealtimeAsrService = asrService,
   bridge?: AsrBridge,
   origin = env.webOrigin(),
 ) {
@@ -63,19 +63,8 @@ export function createAsrSocket(
 }
 
 /** Registers the realtime ASR socket on the shared Colyseus socket server. */
-export function installAsrSocket(
-  routes: SocketRoutes,
-  deps: {
-    settings: AsrSettingsStore;
-    bridge?: AsrBridge;
-    origin?: string;
-    service?: RealtimeAsrService;
-  },
-) {
-  const service =
-    deps.service ??
-    new RealtimeAsrService(deps.settings, { bridge: deps.bridge });
-  const socket = createAsrSocket(service, undefined, deps.origin);
+export function installAsrSocket(routes: SocketRoutes) {
+  const socket = createAsrSocket();
   routes.set('/voice/asr/realtime', (client, req) => {
     void socket(client, req);
   });
