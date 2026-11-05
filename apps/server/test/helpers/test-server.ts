@@ -69,9 +69,9 @@ export async function createTestServer(options: TestServerOptions = {}) {
   try {
     server = await createServer();
     await server.listen();
-    const current = (() => {
+    const current = await (async () => {
       try {
-        return server._internals.providers.getRuntime('deepseek');
+        return await server._internals.providers.getRuntime('deepseek');
       } catch {
         return undefined;
       }

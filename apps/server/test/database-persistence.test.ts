@@ -488,7 +488,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   it('persists one ASR assignment per use and rolls back conflicting assignments with profile changes', async () => {
     const persistence = new DatabaseAsrServicePersistence(db!);
     const store = new AsrSettingsStore(persistence);
-    await store.load();
+
     const a = await store.save({
       ...DEFAULT_WHISPER_ASR,
       provider: 'whisper',
@@ -503,9 +503,9 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await store.assign('clip', a.id);
     await store.assign('chat', b.id);
     const restored = new AsrSettingsStore(persistence);
-    await restored.load();
-    expect(restored.assignments().chat?.id).toBe(b.id);
-    expect(restored.assignments().clip?.id).toBe(a.id);
+
+    expect((await restored.assignments()).chat?.id).toBe(b.id);
+    expect((await restored.assignments()).clip?.id).toBe(a.id);
     await expect(
       db!.asrAssignment.create({ data: { use: 'chat', providerId: a.id } }),
     ).rejects.toThrow();
@@ -535,9 +535,96 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     ).toBeNull();
     // Unassigned uses retain the existing Whisper fallback after deletion/restart.
     const after = new AsrSettingsStore(persistence);
-    await after.load();
-    expect(after.assignments().clip?.id).toBe(b.id);
-    expect(after.assignments().chat?.id).toBe(b.id);
+
+    expect((await after.assignments()).clip?.id).toBe(b.id);
+    expect((await after.assignments()).chat?.id).toBe(b.id);
+  });
+
+  it('keeps concurrent catalog writes from independent instances and reads later database changes', async () => {
+    const asrA = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
+    const asrB = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
+    const [first, second] = await Promise.all([
+      asrA.save({
+        ...DEFAULT_WHISPER_ASR,
+        provider: 'whisper',
+        name: 'First ASR',
+      }),
+      asrB.save({
+        ...DEFAULT_WHISPER_ASR,
+        provider: 'whisper',
+        name: 'Second ASR',
+      }),
+    ]);
+    const asrBefore = await db!.asrProvider.findUniqueOrThrow({
+      where: { id: second.id },
+    });
+    await Promise.all([
+      asrA.assign('chat', first.id),
+      asrB.assign('clip', second.id),
+    ]);
+    expect(await asrA.list()).toHaveLength(2);
+    expect(
+      (await db!.asrProvider.findUniqueOrThrow({ where: { id: second.id } }))
+        .updatedAt,
+    ).toEqual(asrBefore.updatedAt);
+    expect(await asrB.assignments()).toMatchObject({
+      chat: { id: first.id },
+      clip: { id: second.id },
+    });
+    await db!.asrProvider.update({
+      where: { id: first.id },
+      data: { name: 'Changed in database' },
+    });
+    expect(await asrA.get(first.id)).toMatchObject({
+      name: 'Changed in database',
+    });
+
+    const ttsA = new VoiceServiceStore(
+      new DatabaseVoiceServicePersistence(db!),
+    );
+    const ttsB = new VoiceServiceStore(
+      new DatabaseVoiceServicePersistence(db!),
+    );
+    const [voiceA, voiceB] = await Promise.all([
+      ttsA.save({ name: 'First TTS', type: 'browser', voice: 'one' }),
+      ttsB.save({ name: 'Second TTS', type: 'browser', voice: 'two' }),
+    ]);
+    expect(new Set((await ttsA.list()).map((voice) => voice.id))).toEqual(
+      new Set([voiceA.id, voiceB.id]),
+    );
+    const voiceBefore = await db!.ttsProvider.findUniqueOrThrow({
+      where: { id: voiceB.id },
+    });
+    await ttsA.save({ ...voiceA, name: 'Renamed TTS' }, voiceA.id);
+    expect(
+      (await db!.ttsProvider.findUniqueOrThrow({ where: { id: voiceB.id } }))
+        .updatedAt,
+    ).toEqual(voiceBefore.updatedAt);
+    await db!.ttsProvider.update({
+      where: { id: voiceA.id },
+      data: { name: 'Changed TTS' },
+    });
+    expect(await ttsB.get(voiceA.id)).toMatchObject({ name: 'Changed TTS' });
+
+    const providersA = new DatabaseProviderRepository(db!);
+    const providersB = new DatabaseProviderRepository(db!);
+    const [providerA, providerB] = await Promise.all([
+      providersA.save({ name: 'First model', type: 'ollama' }),
+      providersB.save({ name: 'Second model', type: 'ollama' }),
+    ]);
+    expect(
+      new Set((await providersA.list()).map((provider) => provider.id)),
+    ).toEqual(new Set([providerA.id, providerB.id]));
+    await expect(
+      providersB.save({ id: providerA.id, name: 'Collision', type: 'ollama' }),
+    ).rejects.toMatchObject({ status: 409 });
+    await db!.agentProvider.update({
+      where: { id: providerA.id },
+      data: { name: 'Changed model' },
+    });
+    expect(await providersB.getRuntime(providerA.id)).toMatchObject({
+      name: 'Changed model',
+    });
   });
 
   it('queries structured tasks, clears optional values and preserves token accounting after restart', async () => {
@@ -883,12 +970,14 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     let id: string;
     try {
       await manager.load();
-      id = manager.create({
-        name: 'Restart',
-        providerId: 'ollama',
-        model: 'qwen2.5:3b',
-        joinWorld: false,
-      }).id;
+      id = (
+        await manager.create({
+          name: 'Restart',
+          providerId: 'ollama',
+          model: 'qwen2.5:3b',
+          joinWorld: false,
+        })
+      ).id;
       await manager.flush();
     } finally {
       await manager.close();
@@ -963,8 +1052,10 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const store = new VoiceServiceStore(
       new DatabaseVoiceServicePersistence(db!),
     );
-    await store.load();
-    expect(store.list().map((voice) => voice.id)).toEqual(['local-default']);
+
+    expect((await store.list()).map((voice) => voice.id)).toEqual([
+      'local-default',
+    ]);
     const cloud = await store.save({
       name: 'Cloud',
       type: 'compatible',
@@ -974,22 +1065,22 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       speed: 1,
       apiKey: 'tts-secret',
     });
-    expect(JSON.stringify(store.list())).not.toContain('tts-secret');
-    expect(store.get(cloud.id).apiKey).toBe('tts-secret');
+    expect(JSON.stringify(await store.list())).not.toContain('tts-secret');
+    expect((await store.get(cloud.id)).apiKey).toBe('tts-secret');
     await store.save({ ...cloud, name: 'Cloud Updated', apiKey: '' }, cloud.id);
     const restored = new VoiceServiceStore(
       new DatabaseVoiceServicePersistence(db!),
     );
-    await restored.load();
-    expect(restored.list().map((voice) => voice.id)).toEqual([
+
+    expect((await restored.list()).map((voice) => voice.id)).toEqual([
       'local-default',
       cloud.id,
     ]);
-    expect(restored.get(cloud.id)).toMatchObject({
+    expect(await restored.get(cloud.id)).toMatchObject({
       name: 'Cloud Updated',
       apiKey: 'tts-secret',
     });
-    restored.bind('actor', cloud.id);
+    await restored.bind('actor', cloud.id);
     await expect(restored.remove(cloud.id, () => false)).rejects.toMatchObject({
       status: 409,
     });
@@ -999,8 +1090,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const empty = new VoiceServiceStore(
       new DatabaseVoiceServicePersistence(db!),
     );
-    await empty.load();
-    expect(empty.list()).toEqual([]);
+
+    expect(await empty.list()).toEqual([]);
   });
 
   it.each([
@@ -1012,7 +1103,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       const store = new AsrSettingsStore(
         new DatabaseAsrServicePersistence(db!),
       );
-      await store.load();
+
       const service = await store.save({
         provider,
         model,
@@ -1023,24 +1114,26 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       const restored = new AsrSettingsStore(
         new DatabaseAsrServicePersistence(db!),
       );
-      await restored.load();
-      expect(restored.get(service.id)).toMatchObject({
+
+      expect(await restored.get(service.id)).toMatchObject({
         provider,
         model,
         apiKey: 'test-private-key',
       });
-      expect(restored.assignments().chat).toMatchObject({
+      expect((await restored.assignments()).chat).toMatchObject({
         id: service.id,
         provider,
       });
-      expect(JSON.stringify(restored.list())).not.toContain('test-private-key');
+      expect(JSON.stringify(await restored.list())).not.toContain(
+        'test-private-key',
+      );
     },
   );
 
   it('persists ASR profiles, masks credentials, and protects active recognition', async () => {
     const store = new AsrSettingsStore(new DatabaseAsrServicePersistence(db!));
-    await store.load();
-    expect(store.list()).toEqual([]);
+
+    expect(await store.list()).toEqual([]);
     const whisper = await store.save({
       ...DEFAULT_WHISPER_ASR,
       provider: 'whisper',
@@ -1051,7 +1144,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       name: 'Bailian',
       apiKey: 'asr-secret',
     });
-    expect(JSON.stringify(store.list())).not.toContain('asr-secret');
+    expect(JSON.stringify(await store.list())).not.toContain('asr-secret');
     await store.save(
       { ...DEFAULT_BAILIAN_ASR, name: 'Bailian Updated', apiKey: '' },
       cloud.id,
@@ -1059,22 +1152,24 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const restored = new AsrSettingsStore(
       new DatabaseAsrServicePersistence(db!),
     );
-    await restored.load();
-    expect(restored.list().map((service) => service.id)).toEqual([
+
+    expect((await restored.list()).map((service) => service.id)).toEqual([
       whisper.id,
       cloud.id,
     ]);
-    expect(restored.get(cloud.id)).toMatchObject({
+    expect(await restored.get(cloud.id)).toMatchObject({
       name: 'Bailian Updated',
       apiKey: 'asr-secret',
     });
-    const active = restored.acquire(cloud.id);
+    const active = await restored.acquire(cloud.id);
     await expect(restored.remove(cloud.id)).rejects.toMatchObject({
       status: 409,
     });
     active.release();
     await restored.remove(cloud.id);
-    expect(restored.list().map((service) => service.id)).toEqual([whisper.id]);
+    expect((await restored.list()).map((service) => service.id)).toEqual([
+      whisper.id,
+    ]);
   });
 
   it('keeps audio catalogs unchanged on database write failure without exposing details', async () => {
@@ -1085,10 +1180,13 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     } as unknown as PrismaClient;
     const tts = new VoiceServiceStore({
       load: async () => [],
-      save: (values) =>
-        new DatabaseVoiceServicePersistence(failingDb).save(values),
+      update: async (change) => {
+        const { values, result } = change([]);
+        await new DatabaseVoiceServicePersistence(failingDb).save(values);
+        return result;
+      },
     });
-    await tts.load();
+
     const voiceError = await tts
       .save({ name: 'Local', type: 'piper', speed: 1 })
       .then(
@@ -1096,14 +1194,17 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         (error: unknown) => error as Error,
       );
     expect(voiceError?.message).toBe('无法保存语音服务数据库配置。');
-    expect(tts.list()).toEqual([]);
+    expect(await tts.list()).toEqual([]);
 
     const asr = new AsrSettingsStore({
       load: async () => [],
-      save: (values) =>
-        new DatabaseAsrServicePersistence(failingDb).save(values),
+      update: async (change) => {
+        const { values, result } = change([]);
+        await new DatabaseAsrServicePersistence(failingDb).save(values);
+        return result;
+      },
     });
-    await asr.load();
+
     const asrError = await asr
       .save({
         ...DEFAULT_BAILIAN_ASR,
@@ -1115,7 +1216,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         (error: unknown) => error as Error,
       );
     expect(asrError?.message).toBe('无法保存 ASR 数据库配置。');
-    expect(asr.list()).toEqual([]);
+    expect(await asr.list()).toEqual([]);
   });
 
   it('seeds once, persists secrets privately, and preserves an intentionally empty catalog', async () => {
@@ -1130,19 +1231,20 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       },
       'deepseek',
     );
-    expect(providers.get('deepseek')).not.toHaveProperty('apiKey');
-    expect(providers.get('deepseek').hasApiKey).toBe(true);
+    expect(await providers.get('deepseek')).not.toHaveProperty('apiKey');
+    expect((await providers.get('deepseek')).hasApiKey).toBe(true);
     expect(
       (await db!.agentProvider.findUnique({ where: { id: 'deepseek' } }))
         ?.apiKey,
     ).toBe('database-only-key');
 
     const reloaded = new DatabaseProviderRepository(db!);
-    await reloaded.load();
-    expect(reloaded.getRuntime('deepseek').apiKey).toBe('database-only-key');
+    expect((await reloaded.getRuntime('deepseek')).apiKey).toBe(
+      'database-only-key',
+    );
     await reloaded.remove('deepseek');
     await reloaded.save({ id: 'custom', name: 'Custom', type: 'ollama' });
-    await new DatabaseProviderRepository(db!).load();
+    await new DatabaseProviderRepository(db!).list();
     expect(
       (await db!.agentProvider.findMany({ orderBy: { position: 'asc' } })).map(
         (row) => row.id,
@@ -1151,8 +1253,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await reloaded.remove('ollama');
     await reloaded.remove('custom');
     const empty = new DatabaseProviderRepository(db!);
-    await empty.load();
-    expect(empty.list()).toEqual([]);
+    expect(await empty.list()).toEqual([]);
   });
 
   it('commits ordered entity rows and checkpoints without rewriting unchanged history', async () => {
@@ -1284,16 +1385,14 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     manager.events.on((change) => changes.push(change.resource));
     const removed = await db!.agentProvider.delete({ where: { id: 'ollama' } });
     try {
-      const revision = manager.storageRevision;
-      manager.create({
-        name: 'Uncommitted',
-        providerId: 'ollama',
-        model: 'qwen2.5:3b',
-        joinWorld: false,
-      });
-      await expect(manager.flush(revision)).rejects.toThrow(
-        '无法保存 Agent 数据库记录',
-      );
+      await expect(
+        manager.create({
+          name: 'Uncommitted',
+          providerId: 'ollama',
+          model: 'qwen2.5:3b',
+          joinWorld: false,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
       expect(await new CharacterQueries(db!).list()).toEqual([]);
       expect(changes).toEqual([]);
       expect(await db!.agentCharacter.count()).toBe(0);
@@ -1315,17 +1414,19 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       server = await createServer();
       await server.listen();
       expect(await new CharacterQueries(db!).list()).toEqual([]);
-      expect(server._internals.providers.list()).toHaveLength(0);
+      expect(await server._internals.providers.list()).toHaveLength(0);
       expect(
-        server._internals.voiceServices.list().map((service) => service.id),
+        (await server._internals.voiceServices.list()).map(
+          (service) => service.id,
+        ),
       ).toEqual(['local-default']);
-      expect(server._internals.asrSettings.list()).toEqual([]);
+      expect(await server._internals.asrSettings.list()).toEqual([]);
       await server._internals.providers.save(
         { name: 'Ollama', type: 'ollama', defaultModel: 'qwen2.5:3b' },
         'ollama',
       );
       const revision = server._internals.characters.storageRevision;
-      const created = server._internals.characters.create({
+      const created = await server._internals.characters.create({
         name: 'Database Agent',
         providerId: 'ollama',
         joinWorld: false,
@@ -1343,9 +1444,9 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       await db!.ttsProvider.deleteMany();
       server = await createServer();
       await server.listen();
-      expect(server._internals.providers.list()).toHaveLength(1);
-      expect(server._internals.voiceServices.list()).toEqual([]);
-      expect(server._internals.asrSettings.list()).toEqual([]);
+      expect(await server._internals.providers.list()).toHaveLength(1);
+      expect(await server._internals.voiceServices.list()).toEqual([]);
+      expect(await server._internals.asrSettings.list()).toEqual([]);
       expect(await new CharacterQueries(db!).list()).toEqual([
         expect.objectContaining({
           id: created.id,

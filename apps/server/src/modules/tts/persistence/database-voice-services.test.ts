@@ -79,6 +79,7 @@ describe('DatabaseVoiceServicePersistence', () => {
     const upsertService = vi.fn().mockResolvedValue({});
 
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       ttsProvider: {
         findMany: findManyServices,
         delete: deleteService,

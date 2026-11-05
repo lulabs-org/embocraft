@@ -86,6 +86,7 @@ it('cancels in-flight synthesis, queued replies, and cached clips on disable/lea
   synthesize.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
   service.enqueue('ai', message());
   service.enqueue('ai', message());
+  await vi.waitFor(() => expect(synthesize).toHaveBeenCalledOnce());
   const signal = synthesize.mock.calls[0][1] as AbortSignal;
   service.cancel('ai');
   expect(signal.aborted).toBe(true);
@@ -105,6 +106,7 @@ it('uses the intersection of listeners before and after synthesis and reports fa
   let resolve!: (v: { bytes: Buffer; durationMs: number }) => void;
   synthesize.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
   service.enqueue('ai', message());
+  await vi.waitFor(() => expect(synthesize).toHaveBeenCalledOnce());
   players[1].voiceListening = false;
   players[3].z = -2;
   resolve({ bytes: Buffer.from('wav'), durationMs: 1000 });
@@ -116,7 +118,7 @@ it('uses the intersection of listeners before and after synthesis and reports fa
   service.close();
 });
 
-it('delivers browser speech only to authorized listeners without synthesizing or exposing an audio clip', () => {
+it('delivers browser speech only to authorized listeners without synthesizing or exposing an audio clip', async () => {
   const players = [
     person('ai', 'ai-agent'),
     person('a'),
@@ -131,6 +133,7 @@ it('delivers browser speech only to authorized listeners without synthesizing or
     synthesize,
   });
   service.enqueue('ai', message('private'));
+  await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
   expect(notify).toHaveBeenCalledTimes(1);
   expect(notify.mock.calls[0][0]).toBe('a');
   expect(notify.mock.calls[0][1]).toMatchObject({
@@ -140,6 +143,7 @@ it('delivers browser speech only to authorized listeners without synthesizing or
   });
   expect(() => service.audio(notify.mock.calls[0][1].id, 'a')).toThrow();
   service.enqueue('ai', message());
+  await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(3));
   expect(notify.mock.calls.slice(1).map((c) => c[0])).toEqual(['a', 'b']);
   expect(synthesize).not.toHaveBeenCalled();
   expect(report).not.toHaveBeenCalled();

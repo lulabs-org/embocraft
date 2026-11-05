@@ -96,7 +96,7 @@ export function installVoiceServiceRoutes(
    */
   router.get(
     '/voice/tts/services',
-    route((_req, res) => res.json(voices().list())),
+    route(async (_req, res) => res.json(await voices().list())),
   );
 
   /**

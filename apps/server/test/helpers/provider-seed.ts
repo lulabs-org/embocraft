@@ -13,11 +13,12 @@ export function createDefaultProviders(): SavedProvider[] {
 export async function bootstrapProviders(
   repository: ProviderRepository,
 ): Promise<void> {
-  if (repository.list().length > 0) {
+  if ((await repository.list()).length > 0) {
     return;
   }
-  await repository.load();
-  if (repository.list().length === 0) {
+  if ('load' in repository && typeof repository.load === 'function')
+    await repository.load();
+  if ((await repository.list()).length === 0) {
     const defaults = createDefaultProviders();
     if (
       'seed' in repository &&

@@ -67,7 +67,7 @@ export interface TaskHostPort {
   validateExecution(
     id: string,
     settings: Partial<AICharacterSettings>,
-  ): AICharacterSettings;
+  ): AICharacterSettings | Promise<AICharacterSettings>;
   storageFailed(): boolean;
   committedName(id: string): string | undefined;
   publicIdentity(id: string): RuntimeState['execution']['task']['identity'];

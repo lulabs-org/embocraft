@@ -376,7 +376,9 @@ export async function executeTaskRunControl(
   runId: string,
   operation: string,
   value: unknown,
-  validate: (settings: Partial<AICharacterSettings>) => AICharacterSettings,
+  validate: (
+    settings: Partial<AICharacterSettings>,
+  ) => AICharacterSettings | Promise<AICharacterSettings>,
   save: () => Promise<void>,
   schedule: (job: TaskExecutionState) => void,
   launch: (job: TaskExecutionState) => void,
@@ -452,10 +454,31 @@ export async function executeTaskRunControl(
   )
     throw new AppError('请先追加计划累计额度。');
   const enabled = run.snapshot.limits.enabled !== false;
-  const settings = validate({
+  const beforeValidation = JSON.stringify({
+    run,
+    plan,
+    currentRunId: job.currentRunId,
+    view: job.view,
+    epoch: job.runtime.stateEpoch,
+  });
+  const settings = await validate({
     ...run.snapshot.limits,
     ...taskLimits(object(value)),
   });
+  if (
+    !job.online ||
+    taskBusy(job) ||
+    job.ledger.runs.find((item) => item.id === runId) !== run ||
+    beforeValidation !==
+      JSON.stringify({
+        run,
+        plan,
+        currentRunId: job.currentRunId,
+        view: job.view,
+        epoch: job.runtime.stateEpoch,
+      })
+  )
+    throw new AppError('任务状态已变化，请刷新后重试。', 409);
   if (
     enabled &&
     (settings.maxTurns <= run.task!.calls ||

@@ -12,6 +12,7 @@ import {
 } from '../../src/modules/asr/services/asr-settings-store';
 import {
   VoiceServiceStore,
+  validateVoiceService,
   type SavedVoice,
 } from '../../src/modules/tts/persistence/voice-service-store';
 import type {
@@ -22,6 +23,7 @@ import type {
 /** Clone on both sides of the persistence boundary, including JSON's undefined semantics. */
 export class MemoryPersistence<T> {
   saveError?: Error;
+  private queue: Promise<unknown> = Promise.resolve();
   constructor(public value: T) {}
   async load(): Promise<T> {
     return this.value === undefined
@@ -32,9 +34,28 @@ export class MemoryPersistence<T> {
     if (this.saveError) throw this.saveError;
     this.value = JSON.parse(JSON.stringify(value));
   }
+  update<R>(change: (value: T) => { values: T; result: R }): Promise<R> {
+    const operation = this.queue.then(async () => {
+      const { values, result } = change(await this.load());
+      await this.save(values);
+      return result;
+    });
+    this.queue = operation.catch(() => {});
+    return operation;
+  }
 }
 export const voicePersistence = () =>
-  new MemoryPersistence<SavedVoice[] | undefined>(undefined);
+  new MemoryPersistence<SavedVoice[]>([
+    {
+      ...validateVoiceService({
+        name: 'Speaches 语音服务',
+        type: 'speaches',
+        voice: '',
+        speed: 1,
+      }),
+      id: 'local-default',
+    },
+  ]);
 export const asrPersistence = () => new MemoryPersistence<SavedService[]>([]);
 
 /** Serialized in memory so restart, corrupt data and failed commits remain testable. */

@@ -20,7 +20,7 @@ describe('transcription HTTP boundary', () => {
     });
     vi.spyOn(speech, 'transcribe').mockImplementation(transcribe);
     store = new AsrSettingsStore();
-    await store.load();
+
     const app = express();
     installTranscribeRoutes(app, speech, store);
     server = createServer(app);

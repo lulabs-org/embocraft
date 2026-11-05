@@ -98,10 +98,10 @@ export function validateVoiceService(
 }
 
 export class VoiceServiceStore {
-  private values: SavedVoice[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   private deleting = new Set<string>();
   private bindings = new Map<string, string>();
+  private pendingBindings = new Map<string, symbol>();
   private listeners = new Set<(actor: string) => void>();
   private running = 0;
   constructor(
@@ -109,38 +109,29 @@ export class VoiceServiceStore {
     private factory: (value: SavedVoice) => SpeechSynthesizer = (value) =>
       value.type === 'speaches' ? new PiperTts(value) : new RemoteTts(value),
   ) {}
-  async load() {
-    const saved = await this.storage.load();
-    if (saved === undefined) {
-      const defaultVoice: SavedVoice = {
-        ...validateVoiceService({
-          name: 'Speaches 语音服务',
-          type: 'speaches',
-          voice: '',
-          speed: 1,
-        }),
-        id: 'local-default',
-      };
-      await this.storage.save([defaultVoice]);
-      this.values = [defaultVoice];
-    } else {
-      if (
-        !Array.isArray(saved) ||
-        saved.length > 20 ||
-        new Set(saved.map((voice) => voice.id)).size !== saved.length ||
-        saved.some(
-          (voice) =>
-            typeof voice.id !== 'string' ||
-            !/^[a-zA-Z0-9-]{1,80}$/.test(voice.id),
-        )
+
+  private validateSaved(saved: SavedVoice[]): SavedVoice[] {
+    if (
+      !Array.isArray(saved) ||
+      saved.length > 20 ||
+      new Set(saved.map((voice) => voice.id)).size !== saved.length ||
+      saved.some(
+        (voice) =>
+          typeof voice.id !== 'string' ||
+          !/^[a-zA-Z0-9-]{1,80}$/.test(voice.id),
       )
-        throw new AppError('语音服务数据库配置格式无效。', 500);
-      this.values = saved.map((voice) => ({
-        ...validateVoiceService(voice),
-        id: voice.id,
-      }));
-    }
+    )
+      throw new AppError('语音服务数据库配置格式无效。', 500);
+    return saved.map((voice) => ({
+      ...validateVoiceService(voice),
+      id: voice.id,
+    }));
   }
+
+  private async readValues(): Promise<SavedVoice[]> {
+    return this.validateSaved(await this.storage.load());
+  }
+
   async models(value: unknown, signal?: AbortSignal) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new AppError('语音服务连接配置无效。');
@@ -150,62 +141,86 @@ export class VoiceServiceStore {
     const previous =
       input.serviceId === undefined
         ? undefined
-        : this.get(input.serviceId as string);
+        : await this.get(input.serviceId as string);
     if (previous && previous.type !== 'speaches')
       throw new AppError('请选择 Speaches 服务。');
     const connection = validateVoiceConnection(input, 'speaches', previous);
     return new SpeachesModels(connection).list(signal);
   }
-  list() {
-    return this.values.map(publicView);
+
+  async list() {
+    return (await this.readValues()).map(publicView);
   }
-  get(id: string) {
-    const value = this.values.find((v) => v.id === id);
-    if (!value || this.deleting.has(id))
-      throw new AppError('语音服务不存在，请重新选择。', 404);
+
+  private find(values: SavedVoice[], id: string) {
+    const value = values.find((v) => v.id === id);
+    if (!value) throw new AppError('语音服务不存在，请重新选择。', 404);
     return { ...value };
   }
-  private async persist(values: SavedVoice[]) {
-    await this.storage.save(values);
+
+  async get(id: string) {
+    if (this.deleting.has(id))
+      throw new AppError('语音服务不存在，请重新选择。', 404);
+    const value = this.find(await this.readValues(), id);
+    if (this.deleting.has(id))
+      throw new AppError('语音服务不存在，请重新选择。', 404);
+    return value;
   }
+
   private mutate<T>(fn: () => Promise<T>) {
     const operation = this.queue.then(fn);
     this.queue = operation.catch(() => {});
     return operation;
   }
+
   save(value: unknown, id?: string) {
     return this.mutate(async () => {
-      if (!id && this.values.length >= 20)
-        throw new AppError('最多保存 20 个语音服务。');
-      const entry = validateVoiceService(value, id ? this.get(id) : undefined);
-      const next = id
-        ? this.values.map((v) => (v.id === id ? entry : v))
-        : [...this.values, entry];
-      await this.persist(next);
-      this.values = next;
+      const result = await this.storage.update((saved) => {
+        const values = this.validateSaved(saved);
+        if (!id && values.length >= 20)
+          throw new AppError('最多保存 20 个语音服务。');
+        const entry = validateVoiceService(
+          value,
+          id ? this.find(values, id) : undefined,
+        );
+        const next = id
+          ? values.map((v) => (v.id === id ? entry : v))
+          : [...values, entry];
+        return { values: next, result: publicView(entry) };
+      });
       for (const [actor, service] of this.bindings)
         if (service === id) this.changed(actor);
-      return publicView(entry);
+      return result;
     });
   }
+
   remove(id: string, isUsed: () => boolean) {
     return this.mutate(async () => {
-      this.get(id);
-      if (isUsed() || [...this.bindings.values()].includes(id))
-        throw new AppError(
-          '有 Agent 正在引用此服务或保存参数，请先完成更新，并在编辑参数中更换或移除语音服务。',
-          409,
-        );
+      const assertUnused = () => {
+        if (isUsed() || [...this.bindings.values()].includes(id))
+          throw new AppError(
+            '有 Agent 正在引用此服务或保存参数，请先完成更新，并在编辑参数中更换或移除语音服务。',
+            409,
+          );
+      };
+      assertUnused();
       this.deleting.add(id);
       try {
-        const next = this.values.filter((v) => v.id !== id);
-        await this.persist(next);
-        this.values = next;
+        await this.storage.update((saved) => {
+          const values = this.validateSaved(saved);
+          this.find(values, id);
+          assertUnused();
+          return {
+            values: values.filter((v) => v.id !== id),
+            result: undefined,
+          };
+        });
       } finally {
         this.deleting.delete(id);
       }
     });
   }
+
   onChange(listener: (actor: string) => void) {
     this.listeners.add(listener);
     return () => {
@@ -215,21 +230,36 @@ export class VoiceServiceStore {
   private changed(actor: string) {
     for (const listener of this.listeners) listener(actor);
   }
-  bind(actor: string, id: string) {
-    if (id) this.get(id);
-    if (this.bindings.get(actor) === id) return;
-    this.changed(actor);
-    this.bindings.set(actor, id);
+
+  async bind(actor: string, id: string) {
+    const pending = Symbol();
+    this.pendingBindings.set(actor, pending);
+    try {
+      if (id) await this.get(id);
+      if (this.pendingBindings.get(actor) !== pending) return;
+      if (id && this.deleting.has(id))
+        throw new AppError('语音服务不存在，请重新选择。', 404);
+      if (this.bindings.get(actor) === id) return;
+      this.changed(actor);
+      this.bindings.set(actor, id);
+    } finally {
+      if (this.pendingBindings.get(actor) === pending)
+        this.pendingBindings.delete(actor);
+    }
   }
   unbind(actor: string) {
+    this.pendingBindings.delete(actor);
     this.changed(actor);
     this.bindings.delete(actor);
   }
-  forActor(actor: string): SpeechSynthesizer {
+
+  async forActor(actor: string): Promise<SpeechSynthesizer> {
     // Only trusted Agent management binds cloud services; raw world actions cannot select them.
     const id = this.bindings.get(actor);
     if (id === undefined) return new PiperTts();
-    const entry = id ? this.get(id) : undefined;
+    const entry = id ? await this.get(id) : undefined;
+    if (this.bindings.get(actor) !== id)
+      throw new AppError('语音服务绑定已变更。', 409);
     return {
       ...(entry?.type === 'browser'
         ? {
@@ -243,24 +273,25 @@ export class VoiceServiceStore {
       synthesize: (text, signal) => this.synthesize(id, text, signal),
     };
   }
+
   async synthesize(id: string, text: string, signal: AbortSignal) {
     if (typeof text !== 'string' || !text.trim() || text.length > 240)
       throw new AppError('试听文字需为 1–240 字。');
-    const entry = this.get(id);
-    if (entry.type === 'browser')
-      throw new AppError('此服务由浏览器朗读，请在浏览器中试听。');
     if (this.running >= 2)
       throw new AppError('语音服务繁忙，请稍后重试。', 429);
     this.running++;
     const bounded = AbortSignal.any([signal, AbortSignal.timeout(60000)]);
     try {
       bounded.throwIfAborted();
+      const entry = await this.get(id);
+      bounded.throwIfAborted();
+      if (entry.type === 'browser')
+        throw new AppError('此服务由浏览器朗读，请在浏览器中试听。');
       const result = await this.factory(entry).synthesize(text, bounded);
       bounded.throwIfAborted();
       return result;
     } catch (error) {
-      if (signal.aborted) throw error;
-      if (error instanceof AppError) throw error;
+      if (signal.aborted || error instanceof AppError) throw error;
       throw new AppError(
         bounded.aborted
           ? '语音合成超时，请重试。'

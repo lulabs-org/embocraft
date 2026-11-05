@@ -47,7 +47,7 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
       model: 'vendor/dynamic-tts',
       voice: 'speaker:2',
     });
-    const before = voices.list();
+    const before = (await voices.list());
     const discover = (
       body: unknown,
       token = 'fixture-gateway-token-for-tests',
@@ -89,8 +89,8 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
       200,
     );
     expect(calls.at(-1)).toBe('Bearer new-draft-key');
-    expect(voices.list()).toEqual(before);
-    expect(JSON.stringify(voices.list())).not.toContain('fixture-secret');
+    expect((await voices.list())).toEqual(before);
+    expect(JSON.stringify((await voices.list()))).not.toContain('fixture-secret');
   } finally {
     vi.unstubAllEnvs();
     await server.close();

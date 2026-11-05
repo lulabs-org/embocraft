@@ -47,10 +47,14 @@ export function installAsrRoutes(
    *       200:
    *         description: 附近语音、语音输入和语音消息转文字的服务分配
    */
-  router.get('/voice/asr/assignments', ...assignmentRead, (_req, res) => {
-    res.setHeader('Cache-Control', 'no-store');
-    res.json(store.assignments());
-  });
+  router.get(
+    '/voice/asr/assignments',
+    ...assignmentRead,
+    asyncRoute(async (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(await store.assignments());
+    }),
+  );
   router.use('/voice/asr', (req, res, next) => {
     if (
       authenticatedManagement &&
@@ -143,7 +147,10 @@ export function installAsrRoutes(
    *               items:
    *                 type: object
    */
-  router.get('/voice/asr/services', (_req, res) => res.json(store.list()));
+  router.get(
+    '/voice/asr/services',
+    asyncRoute(async (_req, res) => res.json(await store.list())),
+  );
   /**
    * @openapi
    * /voice/asr/assignments/{use}:

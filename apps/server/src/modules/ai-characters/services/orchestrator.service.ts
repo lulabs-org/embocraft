@@ -125,13 +125,13 @@ export class AICharacterOrchestrator {
       launch: (id) => this.launchReserved(this.taskJob(id)),
       withStoppedExecution: (id, change) =>
         this.withStoppedExecution(id, change),
-      validateExecution: (id, overrides) => {
+      validateExecution: async (id, overrides) => {
         const job = this.taskJob(id);
         const settings = validateAICharacter(
           { ...job.view, ...overrides },
-          this.providers.getRuntime(job.view.providerId),
+          await this.providers.getRuntime(job.view.providerId),
         );
-        this.checkVoice(settings);
+        await this.checkVoice(settings);
         return settings;
       },
       storageFailed: () => this.persistence.tasks.storageFailed,
@@ -206,7 +206,7 @@ export class AICharacterOrchestrator {
     this.persistence.tasks.restore(this.plans, saved);
     const autoJoin: Job[] = [];
     for (const view of saved.characters) {
-      const { job, voiceWarning, shouldAutoJoin } = restoreAICharacterJob(
+      const { job, voiceWarning, shouldAutoJoin } = await restoreAICharacterJob(
         view,
         this.providers,
         (settings) => this.checkVoice(settings),
@@ -221,7 +221,7 @@ export class AICharacterOrchestrator {
       job.view.status = 'joining';
       job.done = this.execute(
         job,
-        this.providers.getRuntime(job.view.providerId),
+        await this.providers.getRuntime(job.view.providerId),
         false,
       );
       await job.done;
@@ -242,11 +242,11 @@ export class AICharacterOrchestrator {
   }
 
   private checkVoice(settings: AICharacterSettings) {
-    this.voiceCoordinator.checkVoice(settings);
+    return this.voiceCoordinator.checkVoice(settings);
   }
 
-  private bindVoice(job: Job) {
-    this.voiceCoordinator.bindVoice(job);
+  private bindVoice(job: Job, settings?: AICharacterSettings) {
+    return this.voiceCoordinator.bindVoice(job, settings);
   }
 
   list() {
@@ -256,9 +256,6 @@ export class AICharacterOrchestrator {
         const run = this.plans.runs.find((run) => run.id === currentRunId);
         return structuredClone({
           ...view,
-          voiceServiceName: this.voiceCoordinator.getServiceName(
-            view.voiceServiceId,
-          ),
           task: state.task,
           taskExecution: run
             ? {
@@ -302,21 +299,19 @@ export class AICharacterOrchestrator {
     this.taskScheduler.cancel(job.view.id);
     job.view.status = 'running';
     job.abort = new AbortController();
-    job.done = this.execute(
-      job,
-      this.providers.getRuntime(job.view.providerId),
-    );
+    job.done = this.execute(job);
   }
 
-  create(value: unknown) {
+  async create(value: unknown) {
     if (this.closing) throw new AppError('世界服务正在关闭。', 503);
     const input = aiCharacterProfileInput(value);
-    const provider = this.providers.getRuntime(
+    const provider = await this.providers.getRuntime(
       text(input.providerId, '模型服务', 80),
     );
     const settings = validateAICharacter(input, provider);
     const joinWorld = boolean(input.joinWorld, true);
-    this.checkVoice(settings);
+    await this.checkVoice(settings);
+    if (this.closing) throw new AppError('世界服务正在关闭。', 503);
     if (joinWorld && [...this.jobs.values()].filter(resident).length >= 4)
       throw new AppError(
         '最多同时在线 4 个受管理的 Agent（含待命），请先关闭一个。',
@@ -345,7 +340,7 @@ export class AICharacterOrchestrator {
     return this.list().find((v) => v.id === job.view.id)!;
   }
 
-  join(id: string) {
+  async join(id: string) {
     if (this.closing) throw new AppError('世界服务正在关闭。', 503);
     const job = this.jobs.get(id);
     if (!job) throw new AppError('Agent 不存在。', 404);
@@ -356,20 +351,49 @@ export class AICharacterOrchestrator {
         '最多同时在线 4 个 Agent，请先让一个角色离开世界。',
         409,
       );
-    const provider = this.providers.getRuntime(job.view.providerId);
-    const settings = validateAICharacter(job.view, provider);
-    this.checkVoice(settings);
-    this.taskScheduler.cancel(job.view.id);
-    markJoined(executionState(job));
-    Object.assign(job.view, settings, {
-      providerName: provider.name,
-      status: 'joining',
-    });
-    job.runtime.clearMessages();
+    const previousStatus = job.view.status;
+    job.updating = true;
+    job.view.status = 'joining';
     job.abort = new AbortController();
-    job.done = this.execute(job, provider, false);
-    void this.persist();
-    return this.list().find((v) => v.id === id)!;
+    try {
+      const provider = await this.providers.getRuntime(job.view.providerId);
+      if (
+        this.closing ||
+        this.jobs.get(id) !== job ||
+        job.abort.signal.aborted ||
+        job.view.status !== 'joining'
+      )
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
+      const settings = validateAICharacter(job.view, provider);
+      await this.checkVoice(settings);
+      if (
+        this.closing ||
+        this.jobs.get(id) !== job ||
+        job.abort.signal.aborted ||
+        job.view.status !== 'joining'
+      )
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
+      if ([...this.jobs.values()].filter(resident).length > 4)
+        throw new AppError(
+          '最多同时在线 4 个 Agent，请先让一个角色离开世界。',
+          409,
+        );
+      this.taskScheduler.cancel(job.view.id);
+      markJoined(executionState(job));
+      Object.assign(job.view, settings, {
+        providerName: provider.name,
+        status: 'joining',
+      });
+      job.runtime.clearMessages();
+      job.done = this.execute(job, provider, false);
+      void this.persist();
+      return this.list().find((v) => v.id === id)!;
+    } catch (error) {
+      if (job.view.status === 'joining') job.view.status = previousStatus;
+      throw error;
+    } finally {
+      job.updating = false;
+    }
   }
 
   async update(id: string, value: unknown) {
@@ -379,23 +403,27 @@ export class AICharacterOrchestrator {
     const input = aiCharacterProfileInput(value);
     if (active(job.view.status) || isJobBusy(job))
       throw new AppError('请等待 Agent 待命，或关闭后再修改参数。', 409);
-    const provider = this.providers.getRuntime(
-      text(input.providerId, '模型服务', 80, job.view.providerId),
-    );
-    const settings = validateAICharacter(
-      {
-        ...job.view,
-        ...input,
-        permissions:
-          input.permissions !== undefined
-            ? input.permissions
-            : job.view.permissions,
-      },
-      provider,
-    );
-    this.checkVoice(settings);
     job.updating = true;
     try {
+      const provider = await this.providers.getRuntime(
+        text(input.providerId, '模型服务', 80, job.view.providerId),
+      );
+      if (this.closing || this.jobs.get(id) !== job || active(job.view.status))
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
+      const settings = validateAICharacter(
+        {
+          ...job.view,
+          ...input,
+          permissions:
+            input.permissions !== undefined
+              ? input.permissions
+              : job.view.permissions,
+        },
+        provider,
+      );
+      await this.checkVoice(settings);
+      if (this.closing || this.jobs.get(id) !== job || active(job.view.status))
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
       const session = job.session;
       if (
         session &&
@@ -414,6 +442,14 @@ export class AICharacterOrchestrator {
         if (!result.ok || job.session !== session || active(job.view.status))
           throw new AppError('角色状态已变化，未保存参数，请刷新后重试。', 409);
       }
+      await this.bindVoice(job, settings);
+      if (
+        this.closing ||
+        this.jobs.get(id) !== job ||
+        job.session !== session ||
+        active(job.view.status)
+      )
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
       if (
         settings.providerId !== job.view.providerId ||
         settings.model !== job.view.model
@@ -438,7 +474,6 @@ export class AICharacterOrchestrator {
         );
       }
       Object.assign(job.view, settings, { providerName: provider.name });
-      this.bindVoice(job);
       await this.save();
       return this.list().find((v) => v.id === job.view.id)!;
     } finally {
@@ -459,18 +494,29 @@ export class AICharacterOrchestrator {
     const enabled = boolean(object(value).enabled, false);
     if (enabled && !aiCharacterPermissions(job.view).chat)
       throw new AppError('发送聊天权限已关闭，不能开启语音回复。');
-    this.checkVoice({ ...job.view, voiceReplies: enabled });
     job.updating = true;
     try {
-      if (job.session?.room) {
+      await this.checkVoice({ ...job.view, voiceReplies: enabled });
+      if (this.closing || this.jobs.get(id) !== job)
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
+      const session = job.session;
+      if (session?.room) {
         const result = await this.voiceCoordinator.syncSessionVoice(
-          job.session,
+          session,
           enabled,
         );
-        if (!result.ok) throw new AppError('语音开关未生效，请重试。', 409);
+        if (!result.ok || job.session !== session)
+          throw new AppError('语音开关未生效，请重试。', 409);
       }
+      await this.bindVoice(job, { ...job.view, voiceReplies: enabled });
+      if (
+        this.closing ||
+        this.jobs.get(id) !== job ||
+        job.session !== session ||
+        ['joining', 'stopping'].includes(job.view.status)
+      )
+        throw new AppError('角色状态已变化，请刷新后重试。', 409);
       job.view.voiceReplies = enabled;
-      this.bindVoice(job);
       await this.save();
       return this.list().find((v) => v.id === job.view.id)!;
     } finally {
@@ -484,10 +530,7 @@ export class AICharacterOrchestrator {
     this.taskScheduler.cancel(job.view.id);
     job.view.status = 'running';
     job.abort = new AbortController();
-    job.done = this.execute(
-      job,
-      this.providers.getRuntime(job.view.providerId),
-    );
+    job.done = this.execute(job);
   }
 
   private schedule(job: Job) {
@@ -520,10 +563,28 @@ export class AICharacterOrchestrator {
     }
   }
 
-  private async execute(job: Job, provider: SavedProvider, run = true) {
+  private async execute(job: Job, provider?: SavedProvider, run = true) {
     if (job.storageFailed) {
       job.view.status = 'failed';
       return;
+    }
+    if (!provider) {
+      try {
+        provider = await this.providers.getRuntime(job.view.providerId);
+      } catch (error) {
+        if (!job.abort.signal.aborted && !this.closing) {
+          job.view.status = 'failed';
+          appendAICharacterLog(
+            job.view,
+            error instanceof AppError
+              ? error.message
+              : '无法读取模型服务配置。',
+          );
+          void this.persist();
+        }
+        return;
+      }
+      if (job.abort.signal.aborted || this.closing) return;
     }
     const ctx: ExecutionContext = {
       serverUrl:

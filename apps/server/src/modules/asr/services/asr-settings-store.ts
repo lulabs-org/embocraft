@@ -14,15 +14,16 @@ import {
 export type { SavedService };
 
 export class AsrSettingsStore {
-  private values: SavedService[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   private active = new Map<string, number>();
   private deleting = new Set<string>();
   constructor(
     private readonly storage: AsrRepositoryPort = new DatabaseAsrServicePersistence(),
   ) {}
-  async load() {
-    const saved = await this.storage.load();
+  private async readValues(): Promise<SavedService[]> {
+    return this.validateSaved(await this.storage.load());
+  }
+  private validateSaved(saved: SavedService[]): SavedService[] {
     if (
       !Array.isArray(saved) ||
       saved.length > 20 ||
@@ -35,13 +36,13 @@ export class AsrSettingsStore {
       )
     )
       throw new AppError('ASR 数据库配置格式无效。', 500);
-    this.values = saved.map((service) => ({
+    const values = saved.map((service) => ({
       ...validateAsrService(service),
       id: service.id,
       ...(service.uses ? { uses: service.uses } : {}),
     }));
     if (
-      this.values.some(
+      values.some(
         (service) =>
           service.uses &&
           (!Array.isArray(service.uses) ||
@@ -51,14 +52,13 @@ export class AsrSettingsStore {
     )
       throw new AppError('ASR 服务分配格式无效。', 500);
     for (const use of ASR_USES) {
-      if (
-        this.values.filter((service) => service.uses?.includes(use)).length > 1
-      )
+      if (values.filter((service) => service.uses?.includes(use)).length > 1)
         throw new AppError('ASR 服务分配重复。', 500);
     }
+    return values;
   }
-  list() {
-    return this.values.map(toAsrServiceView);
+  async list() {
+    return (await this.readValues()).map(toAsrServiceView);
   }
   async models(value: unknown, signal?: AbortSignal) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -69,7 +69,7 @@ export class AsrSettingsStore {
     const previous =
       input.serviceId === undefined
         ? undefined
-        : this.get(input.serviceId as string);
+        : await this.get(input.serviceId as string);
     if (previous && previous.provider !== 'whisper')
       throw new AppError('请选择 Speaches 识别服务。');
     const connection = validateWhisperConnection(
@@ -78,16 +78,17 @@ export class AsrSettingsStore {
     );
     return listWhisperModels(connection, signal);
   }
-  assignments(): AsrAssignments {
+  async assignments(): Promise<AsrAssignments> {
+    return this.assignmentsFor(await this.readValues());
+  }
+  private assignmentsFor(values: SavedService[]): AsrAssignments {
     // Older databases need no console visit or name-based client initialization.
-    const whisper = this.values.find(
-      (service) => service.provider === 'whisper',
-    );
+    const whisper = values.find((service) => service.provider === 'whisper');
     const choice = (use: AsrUse) => {
       const selected =
-        this.values.find((service) => service.uses?.includes(use)) ??
+        values.find((service) => service.uses?.includes(use)) ??
         whisper ??
-        (use === 'clip' ? undefined : this.values[0]);
+        (use === 'clip' ? undefined : values[0]);
       return selected
         ? {
             id: selected.id,
@@ -106,44 +107,52 @@ export class AsrSettingsStore {
     return this.mutate(async () => {
       if (!ASR_USES.includes(use as AsrUse) || typeof id !== 'string')
         throw new AppError('识别服务分配无效。');
-      const selected = this.get(id);
-      if (use === 'clip' && selected.provider !== 'whisper')
-        throw new AppError('语音消息转文字需要 Whisper 服务。');
-      const next = this.values.map((service) => ({
-        ...service,
-        uses: [
-          ...(service.uses ?? []).filter((item) => item !== use),
-          ...(service.id === id ? [use as AsrUse] : []),
-        ],
-      }));
-      await this.persist(next);
-      this.values = next;
-      return this.assignments();
+      return this.storage.update((saved) => {
+        const values = this.validateSaved(saved);
+        const selected = this.find(values, id);
+        if (use === 'clip' && selected.provider !== 'whisper')
+          throw new AppError('语音消息转文字需要 Whisper 服务。');
+        const next = values.map((service) => ({
+          ...service,
+          uses: [
+            ...(service.uses ?? []).filter((item) => item !== use),
+            ...(service.id === id ? [use as AsrUse] : []),
+          ],
+        }));
+        return { values: next, result: this.assignmentsFor(next) };
+      });
     });
   }
-  get(id: string) {
-    const value = this.values.find((value) => value.id === id);
-    if (!value || this.deleting.has(id))
+  async get(id: string) {
+    if (this.deleting.has(id))
+      throw new AppError('识别服务不存在，请重新选择或添加服务。', 404);
+    return this.find(await this.readValues(), id);
+  }
+  private find(values: SavedService[], id: string) {
+    const value = values.find((value) => value.id === id);
+    if (!value)
       throw new AppError('识别服务不存在，请重新选择或添加服务。', 404);
     return { ...value };
   }
-  acquire(id: string) {
-    const settings = this.get(id);
+  async acquire(id: string) {
+    if (this.deleting.has(id))
+      throw new AppError('识别服务不存在，请重新选择或添加服务。', 404);
     this.active.set(id, (this.active.get(id) ?? 0) + 1);
     let released = false;
-    return {
-      settings,
-      release: () => {
-        if (released) return;
-        released = true;
-        const count = (this.active.get(id) ?? 1) - 1;
-        if (count) this.active.set(id, count);
-        else this.active.delete(id);
-      },
+    const release = () => {
+      if (released) return;
+      released = true;
+      const count = (this.active.get(id) ?? 1) - 1;
+      if (count) this.active.set(id, count);
+      else this.active.delete(id);
     };
-  }
-  private async persist(values: SavedService[]) {
-    await this.storage.save(values);
+    try {
+      const settings = await this.get(id);
+      return { settings, release };
+    } catch (error) {
+      release();
+      throw error;
+    }
   }
   private mutate<T>(fn: () => Promise<T>) {
     const operation = this.queue.then(fn);
@@ -151,30 +160,35 @@ export class AsrSettingsStore {
     return operation;
   }
   save(input: unknown, id?: string) {
-    return this.mutate(async () => {
-      if (!id && this.values.length >= 20)
-        throw new AppError('最多保存 20 个识别服务。');
-      const previous = id ? this.get(id) : undefined;
-      const entry = validateAsrService(input, previous);
-      if (previous?.uses) entry.uses = previous.uses;
-      const next = id
-        ? this.values.map((v) => (v.id === id ? entry : v))
-        : [...this.values, entry];
-      await this.persist(next);
-      this.values = next;
-      return toAsrServiceView(entry);
-    });
+    return this.mutate(() =>
+      this.storage.update((saved) => {
+        const values = this.validateSaved(saved);
+        if (!id && values.length >= 20)
+          throw new AppError('最多保存 20 个识别服务。');
+        const previous = id ? this.find(values, id) : undefined;
+        const entry = validateAsrService(input, previous);
+        if (previous?.uses) entry.uses = previous.uses;
+        const next = id
+          ? values.map((v) => (v.id === id ? entry : v))
+          : [...values, entry];
+        return { values: next, result: toAsrServiceView(entry) };
+      }),
+    );
   }
   remove(id: string) {
     return this.mutate(async () => {
-      this.get(id);
       if (this.active.has(id))
         throw new AppError('此服务正在识别，请先结束录音后再删除。', 409);
       this.deleting.add(id);
       try {
-        const next = this.values.filter((v) => v.id !== id);
-        await this.persist(next);
-        this.values = next;
+        await this.storage.update((saved) => {
+          const values = this.validateSaved(saved);
+          this.find(values, id);
+          return {
+            values: values.filter((v) => v.id !== id),
+            result: undefined,
+          };
+        });
       } finally {
         this.deleting.delete(id);
       }

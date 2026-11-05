@@ -85,6 +85,7 @@ describe('DatabaseAsrServicePersistence', () => {
     const deleteAssignments = vi.fn().mockResolvedValue({ count: 0 });
     const createAssignments = vi.fn().mockResolvedValue({ count: 1 });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       asrAssignment: {
         deleteMany: deleteAssignments,
         createMany: createAssignments,
@@ -204,23 +205,22 @@ describe('DatabaseAsrServicePersistence', () => {
       const upsert = vi.fn().mockResolvedValue({});
       const createMany = vi.fn().mockResolvedValue({});
       const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
         asrAssignment: { deleteMany: vi.fn(), createMany },
         asrProvider: { findMany: vi.fn().mockResolvedValue([]), upsert },
       };
       const db = {
         asrProvider: {
-          findMany: vi
-            .fn()
-            .mockResolvedValue([
-              {
-                id: 'live-1',
-                name: 'Live',
-                provider,
-                model,
-                apiKey: 'key',
-                assignments: [{ use: 'chat' }],
-              },
-            ]),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: 'live-1',
+              name: 'Live',
+              provider,
+              model,
+              apiKey: 'key',
+              assignments: [{ use: 'chat' }],
+            },
+          ]),
         },
         $transaction: vi.fn(
           async (cb: (value: typeof tx) => Promise<unknown>) => cb(tx),

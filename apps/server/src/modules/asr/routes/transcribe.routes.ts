@@ -92,7 +92,7 @@ export function installTranscribeRoutes(
         const selected =
           req.query.serviceId === undefined
             ? undefined
-            : asrSettings.acquire(String(req.query.serviceId));
+            : await asrSettings.acquire(String(req.query.serviceId));
         release = selected?.release;
         if (selected && selected.settings.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');

@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { getDatabaseClient } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
@@ -8,119 +8,117 @@ import type { ProviderRepository } from '../ports';
 
 const MAX_PROVIDERS = 20;
 
-/** Provider repository with synchronous in-memory runtime reads and database persistence. */
+type ProviderRow = {
+  id: string;
+  name: string;
+  type: string;
+  baseUrl: string;
+  apiKey: string;
+  defaultModel: string;
+};
+
+function fromRow(row: ProviderRow): SavedProvider {
+  return validateProvider({ ...row, apiKey: decryptSecret(row.apiKey) });
+}
+
+/** Reads model-service configuration directly from PostgreSQL. */
 export class DatabaseProviderRepository implements ProviderRepository {
-  private values: SavedProvider[] = [];
-  private nextPosition = 0;
-  private queue: Promise<unknown> = Promise.resolve();
   private readonly db: PrismaClient;
 
   constructor(db?: PrismaClient) {
     this.db = db ?? getDatabaseClient();
   }
 
-  async load(): Promise<void> {
+  async list() {
     try {
       const rows = await this.db.agentProvider.findMany({
         orderBy: { position: 'asc' },
       });
-      if (rows.length > MAX_PROVIDERS) {
+      if (rows.length > MAX_PROVIDERS)
         throw new AppError('模型服务配置格式错误。', 500);
-      }
-      this.values = rows.map((row) =>
-        validateProvider({
-          ...row,
-          apiKey: decryptSecret(row.apiKey),
-        }),
-      );
-      this.nextPosition = rows.reduce(
-        (max, row) => Math.max(max, row.position + 1),
-        0,
-      );
+      return rows.map((row) => toProviderView(fromRow(row)));
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError('无法读取模型服务数据库配置。', 500);
     }
   }
 
-  list() {
-    return this.values.map(toProviderView);
+  async get(id: string) {
+    return toProviderView(await this.getRuntime(id));
   }
 
-  get(id: string) {
-    return toProviderView(this.getRuntime(id));
+  async getRuntime(id: string): Promise<SavedProvider> {
+    try {
+      const row = await this.db.agentProvider.findUnique({ where: { id } });
+      if (!row) throw new AppError('模型服务不存在。', 404);
+      return fromRow(row);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('无法读取模型服务数据库配置。', 500);
+    }
   }
 
-  getRuntime(id: string) {
-    const provider = this.values.find((p) => p.id === id);
-    if (!provider) throw new AppError('模型服务不存在。', 404);
-    return { ...provider };
-  }
-
-  save(value: unknown, id?: string) {
-    return this.mutate(async () => {
-      const existing = id ? this.values.find((p) => p.id === id) : undefined;
-      const raw =
-        id && !existing && typeof value === 'object' && value !== null
-          ? { ...(value as Record<string, unknown>), id }
-          : value;
-      const provider = validateProvider(raw, existing);
-      if (
-        !existing &&
-        (this.values.length >= MAX_PROVIDERS ||
-          this.nextPosition >= MAX_PROVIDERS)
-      ) {
-        throw new AppError(`最多保存 ${MAX_PROVIDERS} 个模型服务。`);
-      }
-
-      const { id: _, ...payload } = provider;
-      const dbPayload = {
-        ...payload,
-        apiKey: encryptSecret(payload.apiKey),
-      };
-      try {
-        await this.db.agentProvider.upsert({
-          where: { id: provider.id },
-          create: {
-            ...dbPayload,
-            id: provider.id,
-            position: this.nextPosition++,
-          },
-          update: dbPayload,
-        });
-      } catch {
-        throw new AppError('无法保存模型服务数据库配置。', 500);
-      }
-
-      this.values = existing
-        ? this.values.map((p) => (p.id === provider.id ? provider : p))
-        : [...this.values, provider];
-
-      return toProviderView(provider);
-    });
-  }
-
-  remove(id: string) {
-    return this.mutate(async () => {
-      this.getRuntime(id);
-      try {
-        await this.db.agentProvider.delete({ where: { id } });
-      } catch (error) {
-        if ((error as { code?: string }).code === 'P2003') {
-          throw new AppError(
-            '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
-            409,
+  async save(value: unknown, id?: string) {
+    try {
+      return await this.db.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext('embocraft.providers.settings'))) AS held`;
+          const rows = await tx.agentProvider.findMany({
+            orderBy: { position: 'asc' },
+          });
+          const row = id ? rows.find((item) => item.id === id) : undefined;
+          const existing = row ? fromRow(row) : undefined;
+          const raw =
+            id && !existing && typeof value === 'object' && value !== null
+              ? { ...(value as Record<string, unknown>), id }
+              : value;
+          const provider = validateProvider(raw, existing);
+          if (!existing && rows.some((item) => item.id === provider.id))
+            throw new AppError('已存在相同 ID 的模型服务。', 409);
+          if (!existing && rows.length >= MAX_PROVIDERS)
+            throw new AppError(`最多保存 ${MAX_PROVIDERS} 个模型服务。`);
+          const { id: providerId, ...payload } = provider;
+          const dbPayload = {
+            ...payload,
+            apiKey: encryptSecret(payload.apiKey),
+          };
+          const position = rows.reduce(
+            (max, item) => Math.max(max, item.position + 1),
+            0,
           );
-        }
-        throw new AppError('无法从数据库删除模型服务。', 500);
-      }
-      this.values = this.values.filter((p) => p.id !== id);
-    });
+          await tx.agentProvider.upsert({
+            where: { id: providerId },
+            create: { ...dbPayload, id: providerId, position },
+            update: dbPayload,
+          });
+          return toProviderView(provider);
+        },
+      );
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('无法保存模型服务数据库配置。', 500);
+    }
   }
 
-  private mutate<T>(fn: () => Promise<T>): Promise<T> {
-    const operation = this.queue.then(fn);
-    this.queue = operation.catch(() => {});
-    return operation;
+  async remove(id: string) {
+    try {
+      await this.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext('embocraft.providers.settings'))) AS held`;
+        const existing = await tx.agentProvider.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+        if (!existing) throw new AppError('模型服务不存在。', 404);
+        await tx.agentProvider.delete({ where: { id } });
+      });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      if ((error as { code?: string }).code === 'P2003')
+        throw new AppError(
+          '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
+          409,
+        );
+      throw new AppError('无法从数据库删除模型服务。', 500);
+    }
   }
 }

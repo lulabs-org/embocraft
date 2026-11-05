@@ -48,7 +48,7 @@ try {
     },
     'ollama',
   );
-  const role = server.characters.create({
+  const role = await server.characters.create({
     providerId: 'ollama',
     name: '验收角色',
     intervalMs: 1000,

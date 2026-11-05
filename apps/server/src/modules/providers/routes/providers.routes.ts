@@ -24,8 +24,8 @@ export function createProviderRouter(
    */
   router.get(
     '/providers',
-    route((_req, res) => {
-      res.json(providers.list());
+    route(async (_req, res) => {
+      res.json(await providers.list());
     }),
   );
 
