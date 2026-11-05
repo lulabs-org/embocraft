@@ -33,7 +33,7 @@ import {
 } from '../../tasks';
 import { restoreAICharacterJob } from '../persistence/restore';
 import { CharacterSnapshots } from '../persistence/snapshots';
-import type { VoiceServicePort } from '../ports';
+import { domainEvents } from '../../../core/events/domain-events';
 import { AICharacterHost } from './character-host.service';
 import type { ExecutionContext } from './execution-context';
 import {
@@ -57,8 +57,9 @@ export class AICharacterOrchestrator {
     TaskSnapshots
   >;
   readonly tasks: TaskCoordinator;
-  readonly voiceCoordinator: CharacterVoiceCoordinator;
+  readonly voiceCoordinator = new CharacterVoiceCoordinator();
 
+  private readonly releaseVoiceGuard: () => void;
   private closing = false;
   private restoreFailed = false;
   private closePromise?: Promise<void>;
@@ -68,7 +69,6 @@ export class AICharacterOrchestrator {
     private readonly providers: ProviderRuntimePort,
     private serverUrl: string | (() => string),
     private dependencies: AICharacterDependencies,
-    readonly voiceServices: VoiceServicePort | undefined,
     private archive: ArchivePort,
   ) {
     const characters = new CharacterSnapshots();
@@ -109,7 +109,16 @@ export class AICharacterOrchestrator {
           tasks.restore(this.committedPlans, snapshot),
       },
     );
-    this.voiceCoordinator = new CharacterVoiceCoordinator(this.voiceServices);
+    this.releaseVoiceGuard = domainEvents.on(
+      'tts.service.removing',
+      ({ serviceId }) => {
+        if (this.hasVoiceServiceReference(serviceId))
+          throw new AppError(
+            '有 Agent 正在引用此服务或保存参数，请先完成更新，并在编辑参数中更换或移除语音服务。',
+            409,
+          );
+      },
+    );
     this.tasks = new TaskCoordinator({
       execution: (id) => executionState(this.taskJob(id)),
       findExecution: (id) => {
@@ -590,7 +599,7 @@ export class AICharacterOrchestrator {
       serverUrl:
         typeof this.serverUrl === 'string' ? this.serverUrl : this.serverUrl(),
       dependencies: this.dependencies,
-      voiceServices: this.voiceServices,
+      unbindVoice: (sessionId) => this.voiceCoordinator.unbindVoice(sessionId),
       closing: () => this.closing,
       bindVoice: (j) => this.bindVoice(j),
       controlMessage: (targetId, op, identity, commandId, message) =>
@@ -672,17 +681,12 @@ export class AICharacterOrchestrator {
     );
   }
 
-  async removeVoiceService(id: string) {
-    await this.voiceCoordinator.removeVoiceService(id, () =>
-      this.hasVoiceServiceReference(id),
-    );
-  }
-
   close(): Promise<void> {
     return (this.closePromise ??= this.shutdown());
   }
 
   private async shutdown() {
+    this.releaseVoiceGuard();
     this.taskScheduler.close();
     this.planScheduler.close();
     this.closing = true;

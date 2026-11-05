@@ -17,8 +17,10 @@ import {
 } from '../src/modules/ai-characters';
 import { AsrSettingsStore } from '../src/modules/asr/services/asr-settings-store';
 import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/database-asr-services';
+import { AppError } from '../src/core/errors/app-error';
+import { domainEvents } from '../src/core/events/domain-events';
 import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/database-voice-services';
-import { VoiceServiceStore } from '../src/modules/tts/services/voice-service-store';
+import { TtsService } from '../src/modules/tts/services/tts.service';
 import { bootstrapProviders } from './helpers/provider-seed';
 import { DatabaseProviderRepository } from '../src/modules/providers';
 import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
@@ -583,12 +585,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       name: 'Changed in database',
     });
 
-    const ttsA = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
-    );
-    const ttsB = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
-    );
+    const ttsA = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const ttsB = new TtsService(new DatabaseVoiceServicePersistence(db!));
     const [voiceA, voiceB] = await Promise.all([
       ttsA.save({ name: 'First TTS', type: 'browser', voice: 'one' }),
       ttsB.save({ name: 'Second TTS', type: 'browser', voice: 'two' }),
@@ -639,12 +637,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         position: index,
       })),
     });
-    const first = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
-    );
-    const second = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
-    );
+    const first = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const second = new TtsService(new DatabaseVoiceServicePersistence(db!));
     const results = await Promise.allSettled([
       first.save({ name: 'First', type: 'browser', voice: 'one' }),
       second.save({ name: 'Second', type: 'browser', voice: 'two' }),
@@ -1080,9 +1074,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
 
   it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
     await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
-    const store = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
-    );
+    const store = new TtsService(new DatabaseVoiceServicePersistence(db!));
 
     expect((await store.list()).map((voice) => voice.id)).toEqual([
       'local-default',
@@ -1099,9 +1091,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(JSON.stringify(await store.list())).not.toContain('tts-secret');
     expect((await store.get(cloud.id)).apiKey).toBe('tts-secret');
     await store.save({ ...cloud, name: 'Cloud Updated', apiKey: '' }, cloud.id);
-    const restored = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
-    );
+    const restored = new TtsService(new DatabaseVoiceServicePersistence(db!));
 
     expect((await restored.list()).map((voice) => voice.id)).toEqual([
       'local-default',
@@ -1111,16 +1101,23 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       name: 'Cloud Updated',
       apiKey: 'tts-secret',
     });
-    await restored.bind('actor', cloud.id);
-    await expect(restored.remove(cloud.id, () => false)).rejects.toMatchObject({
-      status: 409,
-    });
-    restored.unbind('actor');
-    await restored.remove(cloud.id, () => false);
-    await restored.remove('local-default', () => false);
-    const empty = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(db!),
+    const offGuard = domainEvents.on(
+      'tts.service.removing',
+      ({ serviceId }) => {
+        if (serviceId === cloud.id)
+          throw new AppError('语音服务仍被引用。', 409);
+      },
     );
+    try {
+      await expect(restored.remove(cloud.id)).rejects.toMatchObject({
+        status: 409,
+      });
+    } finally {
+      offGuard();
+    }
+    await restored.remove(cloud.id);
+    await restored.remove('local-default');
+    const empty = new TtsService(new DatabaseVoiceServicePersistence(db!));
 
     expect(await empty.list()).toEqual([]);
   });
@@ -1209,9 +1206,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         throw new Error('postgresql://user:secret@localhost/test');
       },
     } as unknown as PrismaClient;
-    const tts = new VoiceServiceStore(
-      new DatabaseVoiceServicePersistence(failingDb),
-    );
+    const tts = new TtsService(new DatabaseVoiceServicePersistence(failingDb));
 
     const voiceError = await tts
       .save({ name: 'Local', type: 'piper', speed: 1 })

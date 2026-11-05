@@ -11,10 +11,9 @@ import {
   type SavedService,
 } from '../../src/modules/asr/services/asr-settings-store';
 import {
-  VoiceServiceStore,
   validateVoiceService,
   type SavedVoice,
-} from '../../src/modules/tts/services/voice-service-store';
+} from '../../src/modules/tts/services/tts.service';
 import type {
   VoiceServicePersistence,
   VoiceServiceTransaction,
@@ -194,15 +193,6 @@ export class MemoryProviderRepository implements ProviderRepository {
 }
 
 /** Test stores expose their backing state so a new instance can simulate restart. */
-export class TestVoiceServiceStore extends VoiceServiceStore {
-  constructor(
-    readonly persistence = voicePersistence(),
-    factory?: ConstructorParameters<typeof VoiceServiceStore>[1],
-    hasReference?: ConstructorParameters<typeof VoiceServiceStore>[2],
-  ) {
-    super(persistence, factory, hasReference);
-  }
-}
 export class TestAsrSettingsStore extends AsrSettingsStore {
   constructor(readonly persistence = asrPersistence()) {
     super(persistence);

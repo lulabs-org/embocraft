@@ -69,7 +69,11 @@ function repository(
 export class DatabaseVoiceServicePersistence
   implements VoiceServicePersistence
 {
-  constructor(private readonly db: PrismaClient = getDatabaseClient()) {}
+  constructor(private readonly customDb?: PrismaClient) {}
+
+  private get db(): PrismaClient {
+    return this.customDb ?? getDatabaseClient();
+  }
 
   async load(): Promise<SavedVoice[]> {
     try {

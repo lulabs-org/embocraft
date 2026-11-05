@@ -3,7 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createDatabaseClient } from '../src/core/database/client';
 import { createServer } from '../src/server';
 
-vi.mock('../src/core/database/client', () => ({
+vi.mock('../src/core/database/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/core/database/client')>()),
   createDatabaseClient: vi.fn(),
 }));
 

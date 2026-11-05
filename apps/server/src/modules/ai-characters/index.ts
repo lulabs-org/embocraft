@@ -22,7 +22,6 @@ export {
   isJobBusy,
   canWakeJob,
 } from './services/character-job';
-export type { VoiceServicePort } from './ports';
 export type { CharacterRecord } from './persistence/record';
 export {
   taskExecutionState,

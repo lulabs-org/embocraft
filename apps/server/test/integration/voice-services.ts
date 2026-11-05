@@ -16,7 +16,6 @@ import { AICharacterManager } from '../../src/modules/ai-characters';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
-  TestVoiceServiceStore as VoiceServiceStore,
 } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 
@@ -53,7 +52,6 @@ await new Promise<void>((resolve) =>
   providerHttp.listen(0, '127.0.0.1', resolve),
 );
 const providerUrl = `http://127.0.0.1:${(providerHttp.address() as { port: number }).port}/v1`;
-const voices = new VoiceServiceStore();
 
 const providers = new MemoryProviderRepository();
 await bootstrapProviders(providers);
@@ -100,7 +98,6 @@ try {
   server = await createTestServer({
     directory: dir,
     providers,
-    voiceServices: voices,
     origin: process.env.WEB_ORIGIN,
     agentDependencies: dependencies,
   });
@@ -271,16 +268,14 @@ try {
   }
   const count = calls;
   await manager.close();
-  const restoredVoices = new VoiceServiceStore(voices.persistence);
 
-  assert.equal((await restoredVoices.get(b.id)).voice, 'beta');
+  assert.equal((await server.voiceServices.get(b.id)).voice, 'beta');
 
   const restored = new AICharacterManager(
     providers,
     url.replace('http', 'ws'),
     providers.archive,
     dependencies,
-    voices,
   );
   await restored.load();
   assert.equal(

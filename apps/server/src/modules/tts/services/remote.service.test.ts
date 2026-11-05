@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 
-import { validateVoiceService } from '../services/voice-service-store';
+import { validateVoiceService } from './tts.service';
 
 import { RemoteTts } from './remote.service';
 

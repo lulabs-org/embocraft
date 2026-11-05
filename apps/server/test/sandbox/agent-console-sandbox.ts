@@ -2,7 +2,6 @@ import { toolResponse } from '../../../../tests/support/pi-response';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
-  TestVoiceServiceStore as VoiceServiceStore,
 } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
 /** Isolated UI acceptance world: no dotenv, no production config and no paid model calls. */
@@ -31,12 +30,10 @@ try {
     },
     'deepseek',
   );
-  const voices = new VoiceServiceStore();
 
   server = await createTestServer({
     directory: dir,
     providers,
-    voiceServices: voices,
     port: 2589,
     origin: process.env.WEB_ORIGIN,
     agentDependencies: {

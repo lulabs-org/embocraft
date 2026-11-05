@@ -1,7 +1,6 @@
 import { Session } from '@voxel/agent-runtime';
 
 import type { ArchivePort } from '../../../persistence/management-archive';
-import type { VoiceServiceStore } from '../../tts';
 import type { ProviderRuntimePort } from '../../providers';
 import {
   AICharacterOrchestrator,
@@ -10,8 +9,6 @@ import {
 
 /** Manager wrapper with explicit persistence supplied by the host. */
 export class AICharacterManager extends AICharacterOrchestrator {
-  declare readonly voiceServices: VoiceServiceStore | undefined;
-
   constructor(
     providers: ProviderRuntimePort,
     serverUrl: string | (() => string),
@@ -23,8 +20,7 @@ export class AICharacterManager extends AICharacterOrchestrator {
         request: fetch,
       }),
     },
-    voiceServices?: VoiceServiceStore,
   ) {
-    super(providers, serverUrl, dependencies, voiceServices, archive);
+    super(providers, serverUrl, dependencies, archive);
   }
 }

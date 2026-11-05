@@ -1,5 +1,7 @@
 import { ChatStore, WorldChat, visibleEvent } from '../chat';
-import { PiperTts, type VoiceServiceStore } from '../tts';
+import { PiperTts, ttsService, type SpeechSynthesizer } from '../tts';
+import { AppError } from '../../core/errors/app-error';
+import { domainEvents } from '../../core/events/domain-events';
 import { AgentSpeech } from './services/agent-speech.service';
 import { createSpatialSignaling } from './services/spatial-signaling.service';
 import { WorldStore } from './persistence/store';
@@ -28,8 +30,8 @@ import { validateEdit, parseInput } from './domain/validation';
 const zero: Input = { x: 0, z: 0, jump: false, yaw: 0 };
 let activeRoom = false;
 export class WorldRoom extends Room<WorldState> {
-  private voiceServices?: VoiceServiceStore;
-  private releaseVoiceServices?: () => void;
+  private actorVoices = new Map<string, string>();
+  private releaseVoiceEvents?: () => void;
   agentSpeech = new AgentSpeech(
     () => this.state.players.values(),
     (recipient, event) =>
@@ -40,7 +42,7 @@ export class WorldRoom extends Room<WorldState> {
       this.clients
         .find((c) => c.sessionId === actor)
         ?.send('agent.speech.error', { message }),
-    (actor) => this.voiceServices?.forActor(actor) ?? new PiperTts(),
+    (actor) => this.resolveActorSpeech(actor),
   );
   private chatStore?: ChatStore;
   chat = new WorldChat(
@@ -69,22 +71,30 @@ export class WorldRoom extends Room<WorldState> {
   private queue: Promise<void> = Promise.resolve();
   autoDispose = false;
   maxClients = 16;
+  private async resolveActorSpeech(actor: string): Promise<SpeechSynthesizer> {
+    // Only trusted Agent management binds cloud services; raw world actions cannot select them.
+    const id = this.actorVoices.get(actor);
+    if (id === undefined) return new PiperTts();
+    const synth = id ? await ttsService.synthesizer(id) : undefined;
+    if (this.actorVoices.get(actor) !== id)
+      throw new AppError('语音服务绑定已变更。', 409);
+    return (
+      synth ?? {
+        synthesize: (text, signal) => ttsService.synthesize(id, text, signal),
+      }
+    );
+  }
   async onCreate(
     options: {
-      voiceServices?: VoiceServiceStore;
       store?: WorldStore;
       chatStore?: ChatStore;
     } = {},
   ) {
-    this.voiceServices = options.voiceServices;
     this.chatStore = options.chatStore;
     this.chat = new WorldChat(
       () => this.state.players.values(),
       (actor, data) => this.chatEvent(actor, data),
       this.chatStore,
-    );
-    this.releaseVoiceServices = this.voiceServices?.onChange((actor) =>
-      this.agentSpeech.cancel(actor),
     );
     if (activeRoom)
       throw new Error('Single world is full; join the existing room');
@@ -98,6 +108,33 @@ export class WorldRoom extends Room<WorldState> {
       activeRoom = false;
       throw error;
     }
+    const unsubs = [
+      domainEvents.on('agent.voice.bound', ({ sessionId, serviceId }) => {
+        if (!this.state.players.has(sessionId)) return;
+        if (this.actorVoices.get(sessionId) === serviceId) return;
+        this.agentSpeech.cancel(sessionId);
+        this.actorVoices.set(sessionId, serviceId);
+      }),
+      domainEvents.on('agent.voice.unbound', ({ sessionId }) => {
+        this.agentSpeech.cancel(sessionId);
+        this.actorVoices.delete(sessionId);
+      }),
+      domainEvents.on('tts.service.changed', ({ serviceId }) => {
+        for (const [actor, boundId] of this.actorVoices) {
+          if (boundId === serviceId) this.agentSpeech.cancel(actor);
+        }
+      }),
+      domainEvents.on('tts.service.removing', ({ serviceId }) => {
+        if ([...this.actorVoices.values()].some((id) => id && id === serviceId))
+          throw new AppError(
+            '有 Agent 正在引用此服务或保存参数，请先完成更新，并在编辑参数中更换或移除语音服务。',
+            409,
+          );
+      }),
+    ];
+    this.releaseVoiceEvents = () => {
+      for (const unsub of unsubs) unsub();
+    };
     this.setPatchRate(50);
     this.onMessage('sync', (client) => {
       if (this.allow(client)) this.snapshot(client);
@@ -322,13 +359,15 @@ export class WorldRoom extends Room<WorldState> {
       }
     }
     this.state.players.delete(client.sessionId);
+    this.actorVoices.delete(client.sessionId);
     this.bodies.delete(client.sessionId);
     this.budget.delete(client.sessionId);
     this.signalBudget.delete(client.sessionId);
     this.event('left', client.sessionId, {});
   }
   async onDispose() {
-    this.releaseVoiceServices?.();
+    this.releaseVoiceEvents?.();
+    this.actorVoices.clear();
     this.agentSpeech.close();
     this.chat.clear();
     await this.queue;
