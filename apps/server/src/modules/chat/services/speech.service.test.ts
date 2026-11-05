@@ -2,8 +2,8 @@ import type { Player } from '@voxel/shared';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  TestAsrSettingsStore as AsrSettingsStore,
-  TestAsrSettingsStore,
+  TestAsrService as AsrService,
+  TestAsrService,
 } from '../../../../test/helpers/memory-storage';
 import type { LocalSpeech } from '../../asr';
 import { WorldChat } from './chat.service';
@@ -37,7 +37,7 @@ function setup() {
     normalize,
     transcribe,
     speech,
-    service: new ChatSpeechService(speech, new TestAsrSettingsStore()),
+    service: new ChatSpeechService(speech, new TestAsrService()),
   };
 }
 
@@ -121,7 +121,7 @@ describe('chat speech coordination', () => {
     };
     const store = {
       acquire: vi.fn(() => ({ settings, release })),
-    } as unknown as AsrSettingsStore;
+    } as unknown as AsrService;
     const service = new ChatSpeechService(speech, store);
     const id = chat.beginSpatial('actor');
     await service.transcribeSpatial({
@@ -158,7 +158,7 @@ describe('chat speech coordination', () => {
     };
     const store = {
       acquire: vi.fn(() => ({ settings, release })),
-    } as unknown as AsrSettingsStore;
+    } as unknown as AsrService;
     const service = new ChatSpeechService(speech, store);
     const data = await service.publishAudio({
       chat,

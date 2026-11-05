@@ -26,17 +26,14 @@ function toPlayerKind(kind?: string): PlayerKind {
 }
 
 export class ChatStore {
-  private readonly db?: PrismaClient;
+  constructor(private readonly customDb?: PrismaClient) {}
 
-  constructor(db?: PrismaClient) {
-    if (db !== undefined) {
-      this.db = db;
-    } else {
-      try {
-        this.db = getDatabaseClient();
-      } catch {
-        this.db = undefined;
-      }
+  private get db(): PrismaClient | undefined {
+    if (this.customDb !== undefined) return this.customDb;
+    try {
+      return getDatabaseClient();
+    } catch {
+      return undefined;
     }
   }
 

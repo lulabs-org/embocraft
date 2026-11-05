@@ -10,12 +10,10 @@ export type { InferenceSettings } from './domain/inference';
 export { toProviderView, PROVIDER_SPECS } from './domain/model';
 export type { SavedProvider } from './domain/model';
 export { validateProvider } from './domain/validation';
-export { DatabaseProviderRepository } from './persistence/database-repository';
+export {
+  DatabaseProviderRepository,
+  providerRepository,
+} from './persistence/database-repository';
 export type { ProviderRepository, ProviderRuntimePort } from './ports';
 export { createProviderRouter } from './routes/providers.routes';
-export {
-  PROVIDERS_CHANGED,
-  type ProviderChangedEvent,
-  type ProviderEventPublisher,
-  ProviderService,
-} from './services/provider.service';
+export { ProviderService, providerService } from './services/provider.service';

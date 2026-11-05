@@ -1,6 +1,6 @@
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import { expect, it } from 'vitest';
-import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+import { TestAsrService as AsrService } from '../../../../test/helpers/memory-storage';
 import { bailianAsrEndpoint, validateBailianSettings } from '../domain';
 const draft = {
   ...DEFAULT_BAILIAN_ASR,
@@ -8,7 +8,7 @@ const draft = {
   apiKey: 'secret-for-test',
 };
 it('persists private Speaches connections and preserves assignments without leaking or moving keys', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
 
   const config = {
     ...DEFAULT_WHISPER_ASR,
@@ -26,7 +26,7 @@ it('persists private Speaches connections and preserves assignments without leak
   expect(saved).not.toHaveProperty('apiKey');
   await store.assign('spatial', saved.id);
   await store.save({ ...config, apiKey: '' }, saved.id);
-  const restored = new AsrSettingsStore(store.persistence);
+  const restored = new AsrService(store.persistence);
 
   expect(await restored.get(saved.id)).toMatchObject({
     apiKey: config.apiKey,
@@ -45,7 +45,7 @@ it('persists private Speaches connections and preserves assignments without leak
   ).rejects.toThrow();
 });
 it('persists a private key server-side, masks it, reloads, and preserves blank keys', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
 
   expect(await store.list()).toEqual([]);
   await expect(store.get('missing')).rejects.toThrow('不存在');
@@ -59,7 +59,7 @@ it('persists a private key server-side, masks it, reloads, and preserves blank k
   expect(JSON.stringify(await store.list())).not.toContain(draft.apiKey);
   expect(JSON.stringify(await store.list())).not.toContain('second-key');
   await store.save({ ...draft, apiKey: '', name: '模型 A 改名' }, a.id);
-  const restored = new AsrSettingsStore(store.persistence);
+  const restored = new AsrService(store.persistence);
 
   expect(await restored.get(a.id)).toMatchObject({
     apiKey: draft.apiKey,
@@ -72,13 +72,13 @@ it('persists a private key server-side, masks it, reloads, and preserves blank k
     name: '模型 B',
   });
   await restored.remove(a.id);
-  const afterDelete = new AsrSettingsStore(store.persistence);
+  const afterDelete = new AsrService(store.persistence);
 
   expect(await afterDelete.list()).toEqual([b]);
   await expect(afterDelete.get(a.id)).rejects.toThrow('不存在');
 });
 it('protects active services and never inherits another service secret', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
 
   const a = await store.save(draft);
   await expect(
@@ -97,7 +97,7 @@ it('protects active services and never inherits another service secret', async (
   expect(await store.list()).toEqual([]);
 });
 it('serializes concurrent creates and enforces the service limit', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
 
   await Promise.all(
     Array.from({ length: 20 }, (_, i) =>
@@ -106,7 +106,7 @@ it('serializes concurrent creates and enforces the service limit', async () => {
   );
   expect(new Set((await store.list()).map((v) => v.id)).size).toBe(20);
   await expect(store.save(draft)).rejects.toThrow('20');
-  const reloaded = new AsrSettingsStore(store.persistence);
+  const reloaded = new AsrService(store.persistence);
 
   expect(await reloaded.list()).toEqual(await store.list());
 });
@@ -144,7 +144,7 @@ it('restricts endpoints, models, and cross-region credential reuse', () => {
 });
 
 it('persists multiple Whisper parameter profiles alongside cloud profiles', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
 
   const base = {
     ...DEFAULT_WHISPER_ASR,
@@ -161,7 +161,7 @@ it('persists multiple Whisper parameter profiles alongside cloud profiles', asyn
   });
   await store.save(draft);
   await store.save({ ...base, model: 'Systran/faster-whisper-small' }, a.id);
-  const restored = new AsrSettingsStore(store.persistence);
+  const restored = new AsrService(store.persistence);
 
   expect(await restored.get(a.id)).toMatchObject({
     provider: 'whisper',
@@ -191,7 +191,7 @@ it('persists multiple Whisper parameter profiles alongside cloud profiles', asyn
 });
 
 it('drops unused local engine fields and normalizes an existing default model without losing profiles', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
 
   const saved = await store.save({
     ...DEFAULT_WHISPER_ASR,
@@ -201,7 +201,7 @@ it('drops unused local engine fields and normalizes an existing default model wi
     threads: 8,
     beamSize: 7,
   });
-  const restored = new AsrSettingsStore(store.persistence);
+  const restored = new AsrService(store.persistence);
 
   expect(await restored.get(saved.id)).toMatchObject({
     id: saved.id,
@@ -213,7 +213,7 @@ it('drops unused local engine fields and normalizes an existing default model wi
 });
 
 it('persists independent global assignments across edits and restart, without exposing credentials', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
   const whisper = await store.save({
     ...DEFAULT_WHISPER_ASR,
     provider: 'whisper',
@@ -226,7 +226,7 @@ it('persists independent global assignments across edits and restart, without ex
     store.assign('spatial', ali.id),
   ]);
   await store.save({ ...draft, name: '改名', apiKey: '' }, ali.id);
-  const restored = new AsrSettingsStore(store.persistence);
+  const restored = new AsrService(store.persistence);
 
   expect(await restored.assignments()).toEqual({
     chat: { id: ali.id, name: '改名', provider: 'bailian' },
@@ -245,7 +245,7 @@ it('persists independent global assignments across edits and restart, without ex
 });
 
 it('rejects invalid assignments and does not publish failed writes or client-injected uses', async () => {
-  const store = new AsrSettingsStore();
+  const store = new AsrService();
   const whisper = await store.save({
     ...DEFAULT_WHISPER_ASR,
     provider: 'whisper',
@@ -267,7 +267,7 @@ it.each([
 ] as const)(
   'saves, reloads and assigns %s live transcription to realtime uses',
   async (provider, model) => {
-    const store = new AsrSettingsStore();
+    const store = new AsrService();
 
     const service = await store.save({
       provider,
@@ -278,7 +278,7 @@ it.each([
     await store.assign('chat', service.id);
     await store.assign('spatial', service.id);
     await expect(store.assign('clip', service.id)).rejects.toThrow('Whisper');
-    const restored = new AsrSettingsStore(store.persistence);
+    const restored = new AsrService(store.persistence);
 
     expect(await restored.assignments()).toMatchObject({
       chat: { id: service.id, provider },
@@ -290,8 +290,8 @@ it.each([
 );
 
 it('reads changes made by another store without reloading', async () => {
-  const first = new AsrSettingsStore();
-  const second = new AsrSettingsStore(first.persistence);
+  const first = new AsrService();
+  const second = new AsrService(first.persistence);
   const created = await first.save(draft);
   expect(await second.list()).toMatchObject([{ id: created.id }]);
   await second.save({ ...draft, name: 'Updated elsewhere' }, created.id);

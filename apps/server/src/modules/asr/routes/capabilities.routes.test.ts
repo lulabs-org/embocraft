@@ -2,28 +2,60 @@ import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+import { TestAsrService } from '../../../../test/helpers/memory-storage';
 
-import { WhisperAdapter as LocalSpeech } from '../engines';
+const mocked = vi.hoisted(() => ({
+  status: vi.fn(),
+  ttsStatus: vi.fn(),
+  store: undefined as unknown as TestAsrService,
+}));
+
+vi.mock('../../tts', () => ({
+  PiperModels: class {
+    status = mocked.ttsStatus;
+  },
+}));
+
+vi.mock('../engines', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../engines')>();
+  return {
+    ...actual,
+    localSpeech: {
+      status: (...args: Parameters<typeof actual.localSpeech.status>) =>
+        mocked.status(...args),
+    },
+  };
+});
+
+vi.mock('../services/asr.service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../services/asr.service')>();
+  return {
+    ...actual,
+    asrService: {
+      get: (id: string) => mocked.store.get(id),
+    },
+  };
+});
+
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
 describe('audio capabilities HTTP boundary', () => {
-  let server: Server, url: string, store: AsrSettingsStore;
-  const status = vi.fn();
-  const ttsStatus = vi.fn();
+  let server: Server, url: string, store: TestAsrService;
+  const { status, ttsStatus } = mocked;
   const origin = 'http://127.0.0.1:5187';
   beforeEach(async () => {
+    vi.stubEnv('WEB_ORIGIN', origin);
     ttsStatus.mockReset().mockResolvedValue({
       available: false,
       reason: '请安装 Piper 模型。',
     });
     status.mockReset().mockResolvedValue({ available: true, reason: 'ready' });
-    const speech = new LocalSpeech();
-    vi.spyOn(speech, 'status').mockImplementation(status);
-    store = new AsrSettingsStore();
+    store = new TestAsrService();
+    mocked.store = store;
 
     const app = express();
-    installCapabilitiesRoutes(app, speech, store, ttsStatus, origin);
+    installCapabilitiesRoutes(app);
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),

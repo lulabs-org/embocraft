@@ -23,10 +23,10 @@ function fromRow(row: ProviderRow): SavedProvider {
 
 /** Reads model-service configuration directly from PostgreSQL. */
 export class DatabaseProviderRepository implements ProviderRepository {
-  private readonly db: PrismaClient;
+  constructor(private readonly customDb?: PrismaClient) {}
 
-  constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+  private get db(): PrismaClient {
+    return this.customDb ?? getDatabaseClient();
   }
 
   async list() {
@@ -122,3 +122,5 @@ export class DatabaseProviderRepository implements ProviderRepository {
     }
   }
 }
+
+export const providerRepository = new DatabaseProviderRepository();

@@ -1,9 +1,12 @@
 // 1. 契约与业务服务
 export type { TaskPort } from './ports';
+export {
+  bindTaskService,
+  getActiveTaskService,
+} from './services/task-runtime.service';
 
 // 2. HTTP 路由
 export { createTaskRouter } from './routes/tasks.routes';
-export { taskCommandBody } from './domain/command-policy';
 
 // 3. 仓储与内存存储服务
 export { TaskPlanService, PlanService } from './persistence/plan-store';

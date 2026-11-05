@@ -7,17 +7,56 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
+import { TestAsrService } from '../../../../test/helpers/memory-storage';
 
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
-import { WhisperAdapter as LocalSpeech } from '../engines';
+import { GatewayAuth } from '../../gateway';
+
+const mocked = vi.hoisted(() => ({
+  store: undefined as unknown as TestAsrService,
+}));
+
+vi.mock('../../tts', () => ({
+  PiperModels: class {
+    status = async () => ({ available: true, reason: 'fixture' });
+  },
+}));
+
+vi.mock('../engines', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../engines')>();
+  const speech = new actual.WhisperAdapter();
+  return {
+    ...actual,
+    localSpeech: speech,
+  };
+});
+
+vi.mock('../services/asr.service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../services/asr.service')>();
+  return {
+    ...actual,
+    asrService: {
+      list: () => mocked.store.list(),
+      models: (value: unknown, signal?: AbortSignal) =>
+        mocked.store.models(value, signal),
+      assignments: () => mocked.store.assignments(),
+      assign: (use: unknown, id: unknown) => mocked.store.assign(use, id),
+      get: (id: string) => mocked.store.get(id),
+      acquire: (id: string) => mocked.store.acquire(id),
+      save: (input: unknown, id?: string) => mocked.store.save(input, id),
+      remove: (id: string) => mocked.store.remove(id),
+    },
+  };
+});
+
+import { localSpeech } from '../engines';
 import { createAsrSocket } from '../sockets/asr.socket';
-import { installAsrRoutes } from './asr.routes.ts';
-import { installCapabilitiesRoutes } from './capabilities.routes';
+import { createAsrRouter } from './asr.routes';
 
 let server: Server,
   transport: RoutedWebSocketTransport,
-  store: AsrSettingsStore,
+  store: TestAsrService,
   url: string;
 const clients: WebSocket[] = [];
 const bridge = vi.fn((client: WebSocket, _settings: BailianAsrDraft) => {
@@ -25,22 +64,33 @@ const bridge = vi.fn((client: WebSocket, _settings: BailianAsrDraft) => {
   return () => {};
 });
 const origin = 'http://127.0.0.1:5173';
+const authToken = 'fixture-gateway-token';
+const authHeaders = {
+  Origin: origin,
+  Authorization: `Bearer ${authToken}`,
+};
+
 beforeEach(async () => {
   vi.stubEnv('WEB_ORIGIN', origin);
   bridge.mockClear();
-  store = new AsrSettingsStore();
+  store = new TestAsrService();
+  mocked.store = store;
 
   const app = express();
-  const speech = new LocalSpeech();
-  vi.spyOn(speech, 'status').mockResolvedValue({
+  vi.spyOn(localSpeech, 'status').mockResolvedValue({
     available: true,
     reason: 'local',
   });
-  installCapabilitiesRoutes(app, speech, store, async () => ({
-    available: true,
-    reason: 'fixture',
-  }));
-  installAsrRoutes(app, store);
+  const gatewayAuth = new GatewayAuth({ token: authToken, origins: [origin] });
+  app.use(
+    ['/voice/asr/services', '/voice/asr/defaults', '/voice/asr/models'],
+    gatewayAuth.middleware,
+  );
+  app.use('/voice/asr/assignments', (req, res, next) => {
+    if (req.method === 'GET') next();
+    else gatewayAuth.middleware(req, res, next);
+  });
+  app.use(createAsrRouter());
   server = createServer(app);
   transport = new RoutedWebSocketTransport(
     server,
@@ -76,11 +126,18 @@ const socket = (serviceId = '', pageOrigin = origin) =>
       resolve({ client, message: JSON.parse(data.toString()) }),
     );
   });
-it('requires the page origin for reading and saving masked configuration', async () => {
-  expect((await fetch(`${url}/voice/asr/services`)).status).toBe(403);
+it('requires management auth and allowed origin for reading and saving masked configuration', async () => {
+  expect((await fetch(`${url}/voice/asr/services`)).status).toBe(401);
+  expect(
+    (
+      await fetch(`${url}/voice/asr/services`, {
+        headers: { Origin: 'https://foreign.test' },
+      })
+    ).status,
+  ).toBe(403);
   const response = await fetch(`${url}/voice/asr/services`, {
     method: 'POST',
-    headers: { Origin: origin, 'Content-Type': 'application/json' },
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...DEFAULT_BAILIAN_ASR,
       name: '测试服务',
@@ -93,12 +150,12 @@ it('requires the page origin for reading and saving masked configuration', async
   expect(JSON.stringify(value)).not.toContain('private-test-key');
   expect(
     (
-      await fetch(`${url}/voice/asr/services`, { headers: { Origin: origin } })
+      await fetch(`${url}/voice/asr/services`, { headers: authHeaders })
     ).headers.get('cache-control'),
   ).toBe('no-store');
   const invalid = await fetch(`${url}/voice/asr/services`, {
     method: 'POST',
-    headers: { Origin: origin, 'Content-Type': 'application/json' },
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...DEFAULT_BAILIAN_ASR,
       name: '测试服务',
@@ -124,7 +181,7 @@ it('rejects missing credentials and other origins before opening paid tasks', as
 it('does not echo malformed configuration bodies or secrets', async () => {
   const response = await fetch(`${url}/voice/asr/services`, {
     method: 'POST',
-    headers: { Origin: origin, 'Content-Type': 'application/json' },
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
     body: '{"apiKey":"secret-malformed",',
   });
   expect(response.status).toBe(400);
@@ -204,8 +261,7 @@ it('routes each selected service to its own model and key, rejects missing or de
   });
   const path = `${url}/voice/asr/services/${a.id}`;
   expect(
-    (await fetch(path, { method: 'DELETE', headers: { Origin: origin } }))
-      .status,
+    (await fetch(path, { method: 'DELETE', headers: authHeaders })).status,
   ).toBe(409);
   await new Promise<void>((resolve) => {
     sa.client.once('close', resolve);
@@ -216,15 +272,14 @@ it('routes each selected service to its own model and key, rejects missing or de
     expect(bridge.mock.calls[0][0].readyState).toBe(WebSocket.CLOSED),
   );
   expect(
-    (await fetch(path, { method: 'DELETE', headers: { Origin: origin } }))
-      .status,
+    (await fetch(path, { method: 'DELETE', headers: authHeaders })).status,
   ).toBe(204);
   expect((await socket(a.id)).message.type).toBe('error');
   expect(await store.list()).toEqual([b]);
   expect(sb.client.readyState).toBe(WebSocket.OPEN);
 });
 it('supports separate create, edit and delete HTTP resources and cross-origin preflight', async () => {
-  const headers = { Origin: origin, 'Content-Type': 'application/json' };
+  const headers = { ...authHeaders, 'Content-Type': 'application/json' };
   const create = (name: string, model = 'fun-asr-realtime') =>
     fetch(`${url}/voice/asr/services`, {
       method: 'POST',
@@ -296,7 +351,7 @@ it.each([
 ] as const)(
   'creates and assigns %s through the ASR API without exposing credentials',
   async (provider, model) => {
-    const headers = { Origin: origin, 'Content-Type': 'application/json' };
+    const headers = { ...authHeaders, 'Content-Type': 'application/json' };
     const response = await fetch(`${url}/voice/asr/services`, {
       method: 'POST',
       headers,

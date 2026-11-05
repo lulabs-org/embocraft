@@ -2,11 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import type { WorldPresence } from '@voxel/shared';
-import { createPresenceRouter } from './worlds.routes.ts';
+
+const mocked = vi.hoisted(() => ({
+  getActiveWorld:
+    vi.fn<
+      () =>
+        | { roomId: string; getPresence: () => WorldPresence | undefined }
+        | undefined
+    >(),
+}));
+
+vi.mock('../world.room', () => ({
+  getActiveWorld: () => mocked.getActiveWorld(),
+}));
+
+import { createWorldRouter } from './worlds.routes';
 
 describe('read-only world presence stream', () => {
   let server: Server, url: string, state: WorldPresence | undefined;
-  const read = vi.fn(() => state);
   beforeEach(async () => {
     vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5187');
     state = {
@@ -29,9 +42,13 @@ describe('read-only world presence stream', () => {
         },
       ],
     };
-    read.mockClear();
+    mocked.getActiveWorld
+      .mockReset()
+      .mockImplementation(() =>
+        state ? { roomId: state.roomId, getPresence: () => state } : undefined,
+      );
     const app = express();
-    app.use(createPresenceRouter(read));
+    app.use(createWorldRouter());
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
@@ -46,6 +63,8 @@ describe('read-only world presence stream', () => {
   it.each(['http://127.0.0.1:5187', 'http://localhost:5187'])(
     'streams current roster, movement and departures from %s without creating players',
     async (origin) => {
+      const worldRes = await fetch(`${url}/world`);
+      expect(await worldRes.json()).toEqual({ roomId: 'world' });
       const controller = new AbortController();
       const response = await fetch(`${url}/world/presence`, {
         headers: { Origin: origin },
@@ -81,6 +100,7 @@ describe('read-only world presence stream', () => {
     });
     expect(blocked.status).toBe(403);
     state = undefined;
+    expect(await (await fetch(`${url}/world`)).json()).toEqual({ roomId: '' });
     const unavailable = await fetch(`${url}/world/presence`);
     expect(unavailable.status).toBe(503);
   });

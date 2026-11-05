@@ -47,6 +47,10 @@ export class CommandQueue<ErrorData> {
       ? { state: r.state, result: r.result, error: r.error }
       : { state: 'unknown' };
   }
+  reset() {
+    this.receipts.clear();
+    this.lanes.clear();
+  }
   run(
     id: string,
     payload: unknown,

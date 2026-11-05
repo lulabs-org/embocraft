@@ -51,24 +51,24 @@ Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/a
 
 `env.readServer()` 校验网关令牌和来源配置。`gateway/auth.service.ts` 为 HTTP 管理路由和 WebSocket 握手提供令牌比对与来源检查，`gateway.socket.ts` 负责握手、事件订阅与连接清理。
 
-`providers` 保留现有 `domain/`、`adapters/`、`persistence/`、`services/` 和 `routes/` 分层。服务与就近测试统一命名为 `services/provider.service.ts` 和 `provider.service.test.ts`；模块门面继续导出 `ProviderService`，提供商读写、删除引用检查、模型查询、健康检测及变更事件行为保持不变。
+`providers` 保留现有 `domain/`、`adapters/`、`persistence/`、`services/` 和 `routes/` 分层。服务与就近测试统一命名为 `services/provider.service.ts` 和 `provider.service.test.ts`；模块门面导出 `ProviderService`、`providerService`、`providerRepository` 与零参 `createProviderRouter()`，删除引用检查与变更广播通过 `core/events/domain-events.ts` 事件总线协作。
 
-`ModelCatalog` 由 `createServer` 创建并直接注入 Provider 路由，角色编排器不再持有它。`agentDependencies` 仅配置角色的 session 与 runner。删除模型或音色服务仍经角色管理器检查关联约束。
+`ModelCatalog` 由 `ProviderService` 默认组装，`agentDependencies` 仅配置角色的 session 与 runner。删除模型或音色服务通过 `domainEvents` 事件守卫与数据库外键检查关联约束。
 
 Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端。每个 Job 持有一个 `AgentRuntime`，服务端通过其消息、执行、控制、查询和恢复方法操作角色；CLI 使用同一门面的 `runUntilSettled()`。宿主不再自行解析控制词、拼接事件标识或读写运行时分区；任务账本、连接、定时器和联合存档事务仍由服务端管理。已删除 `Job.memory/attention` 别名；运行时存档使用 version 4 的角色/执行双分区，旧运行时存档会明确报错，不自动迁移。
 
-`chat` 按 `domain/`、`services/` 与 `routes/` 分层：`domain/visibility.ts` 按消息范围、发送者与接收者判断可见性；`services/` 集中聊天、凭据、音频缓存、空间语音票据及 ASR 协调，统一使用 `*.service.ts` 命名；`routes/chats.routes.ts` 保留 `/chat` 的 HTTP 接口与 OpenAPI 注解。路由和语音协调测试与源码共置，跨包的 `test/chat.test.ts` 保留在集成测试目录。模块门面继续导出 `WorldChat`、`installChatRoutes` 与 `visibleEvent`，聊天鉴权、可见性、语音处理和票据生命周期保持不变。
+`chat` 按 `domain/`、`services/`、`persistence/` 与 `routes/` 分层：`domain/visibility.ts` 按消息范围、发送者与接收者判断可见性；`services/` 集中聊天、凭据、音频缓存、空间语音票据、运行期绑定及 ASR 协调，统一使用 `*.service.ts` 命名；`routes/chats.routes.ts` 通过零参 `createChatRouter()` 挂载 `/chat` 的 HTTP 接口与 OpenAPI 注解。路由和语音协调测试与源码共置，跨包的 `test/chat.test.ts` 保留在集成测试目录。模块门面导出 `WorldChat`、`createChatRouter`、`bindChatRuntime` 与 `visibleEvent`，聊天鉴权、可见性、语音处理和票据生命周期保持不变。
 
-`world` 的地形、玩家名称和输入/编辑校验规则归入 `domain/`，数据库存储与就近测试归入 `persistence/`，HTTP/SSE 路由与测试归入 `routes/worlds.routes.ts` 及同名测试文件。`world.room.ts` 与 `world.schema.ts` 留在模块根部，分别负责 Colyseus 房间生命周期与同步状态 Schema；Schema 依赖框架，不属于纯领域规则。模块门面保留 `WorldRoom`、`WorldStore`、`installWorldRoutes` 和 `installPresenceRoutes` 四个公开导出。Schema 字段与注册顺序、物理模拟、持久化、房间生命周期及 `/world`、`/world/presence` 行为保持不变。跨共享物理实现的世界规则测试与服务器生命周期测试保留在 `test/`。
+`world` 的地形、玩家名称和输入/编辑校验规则归入 `domain/`，数据库存储与就近测试归入 `persistence/`，HTTP/SSE 路由与测试归入 `routes/worlds.routes.ts` 及同名测试文件。`world.room.ts` 与 `world.schema.ts` 留在模块根部，分别负责 Colyseus 房间生命周期与同步状态 Schema；Schema 依赖框架，不属于纯领域规则。模块门面导出 `WorldRoom`、`getActiveWorld`、`WorldStore` 和零参 `createWorldRouter`（合并 `/world` 与 `/world/presence`）。Schema 字段与注册顺序、物理模拟、持久化、房间生命周期及 `/world`、`/world/presence` 行为保持不变。跨共享物理实现的世界规则测试与服务器生命周期测试保留在 `test/`。
 
 音频能力按职责拆为 `core/audio`、`modules/asr`、`modules/tts` 三部分，空间语音与 Agent 发声归入 `modules/world`：
 
 - `core/audio/` 只放无业务状态的共享基础设施：`pcm-wav.ts`（无 I/O 的 PCM WAV 格式、时长与音量校验）、`normalize.ts`/`command.ts`（FFmpeg、子进程与临时文件处理）、`speaches-models.ts`（Speaches 模型与音色发现）以及 `voice-service-connection.ts`（ASR/TTS 共用的连接参数校验）。该目录只依赖 `core`。
-- `modules/asr/` 按 `persistence/`、`services/`、`routes/`、`sockets/` 分层。`routes/asr.http.ts` 的 `installAsrHttp` 保留 ASR 管理鉴权与 `capabilities → transcribe → asr` 的安装顺序；`sockets/asr.socket.ts` 注册 `/voice/asr/realtime`。门面导出 `installAsrHttp`、`AsrSettingsStore`、`DatabaseAsrServicePersistence`、`installAsrSocket`、`AsrBridge`、`LocalSpeech` 与 `scheduleSpeech`。`/voice/capabilities` 同时报告 Whisper 与 Piper 状态，经 `tts` 门面读取 `PiperModels`。
+- `modules/asr/` 按 `persistence/`、`services/`、`routes/`、`sockets/` 分层。`routes/asr.routes.ts` 暴露零参 `createAsrRouter()`，挂载 `capabilities → transcribe → asr` 路由，管理鉴权由 `server.ts` 统一前置；`sockets/asr.socket.ts` 的 `installAsrSocket` 注册 `/voice/asr/realtime`。门面导出 `createAsrRouter`、`AsrService`、`asrService`、`DatabaseAsrServicePersistence`、`installAsrSocket`、`AsrBridge`、`LocalSpeech`、`localSpeech` 与 `scheduleSpeech`。`/voice/capabilities` 同时报告 Whisper 与 Piper 状态，经 `tts` 门面读取 `PiperModels`。
 - `modules/tts/` 按 `persistence/`、`services/`、`routes/` 分层，合成契约位于 `services/speech-synthesizer.ts`，无状态领域服务位于 `services/tts.service.ts`（`TtsService` / `ttsService`）。`routes/tts.routes.ts` 的零参 `createTtsRouter()` 通过 management 管线注册 `/voice/tts`。门面导出 `createTtsRouter`、`TtsService`、`ttsService`、`DatabaseVoiceServicePersistence`、`PiperTts`、`PiperModels` 与 `SpeechSynthesizer`。跨模块音色绑定与变更通过 `core/events/domain-events.ts` 事件总线协作，`tts` 不依赖 `asr`、`chat`、`ai-characters` 或 `world`。
-- 两个 Store 仍包含原有校验与运行时协调职责，显式接收持久化适配器；生产使用 PostgreSQL，测试使用内存实现。默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。
+- 两个服务仍包含原有校验与运行时协调职责，支持注入持久化适配器；生产使用 PostgreSQL，测试使用内存实现或 `vi.mock`。默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。
 
-`AgentSpeech` 位于 `modules/world/services/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理。聊天路由只依赖本地声明的 `AgentSpeechClips` 读取契约，由 `server.ts` 注入 `world.agentSpeech`，避免 `chat → world` 的循环依赖。空间信令由 `modules/world/services/spatial-signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。Agent 核心调度不依赖这些服务。
+`AgentSpeech` 位于 `modules/world/services/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它并通过 `bindChatRuntime` 单向绑定到 `chat` 模块，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理，避免 `chat → world` 的循环依赖。空间信令由 `modules/world/services/spatial-signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。Agent 核心调度不依赖这些服务。
 
 ## 结构验收
 
@@ -125,7 +125,7 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 任务计划、执行历史、预算与调度规则由 `modules/tasks/services/coordinator.service.ts` 的 `TaskCoordinator` 与 `execution.service.ts` 管理；计划调度器位于同目录的 `scheduler.service.ts`。`ai-characters/services/wake-scheduler.service.ts` 只推进 Agent 消息唤醒、等待检查和本地跟随。HTTP/WebSocket 共用同一份计划集合、执行历史和计划调度器。
 
-`persistence/plan-store.ts` 持有计划与执行历史的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。`domain/command-policy.ts` 的 `taskCommandBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有现有公共导出继续通过模块根部 `index.ts` 提供，目录调整不改变类名、函数签名或存档格式。
+`persistence/plan-store.ts` 持有计划与执行历史的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。`console-sync` 的 `commandReceiptBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 通过零参 `createTaskRouter()` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有公共导出通过模块根部 `index.ts` 提供。
 
 Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，嵌入的运行时状态为 version 4，Pi 检查点为 v3。存档恢复前经过结构校验，不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
 

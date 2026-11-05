@@ -1,48 +1,38 @@
-import { ConsoleSyncCommands } from '../../console-sync';
+import { consoleSync } from '../../console-sync';
 import express, { type Request, type Router } from 'express';
-import type { AICharacterOrchestrator } from '../services/orchestrator.service';
 import { CharacterLogService } from '../services/character-log.service';
-import type {
-  CharacterDetail,
-  CharacterQueryPort,
-} from '../persistence/queries';
+import {
+  getActiveCharacterManager,
+  type AICharacterRoutePort,
+} from '../services/character-runtime.service';
+import { characterQueries, type CharacterDetail } from '../persistence/queries';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
-export type AICharacterRoutePort = Pick<
-  AICharacterOrchestrator,
-  | 'assertWritable'
-  | 'create'
-  | 'flush'
-  | 'join'
-  | 'sessionId'
-  | 'remove'
-  | 'setVoice'
-  | 'settled'
-  | 'stop'
-  | 'storageRevision'
-  | 'update'
-> & { readonly events: Pick<AICharacterOrchestrator['events'], 'version'> };
+export type { AICharacterRoutePort };
 
 /** 创建独立的 AI 角色路由 Router 实例 */
-export function createAICharacterRouter(
-  manager: AICharacterRoutePort,
-  consoleSync: ConsoleSyncCommands,
-  queries: CharacterQueryPort,
-  logService: CharacterLogService = new CharacterLogService(queries),
-): Router {
+export function createAICharacterRouter(): Router {
   const router = express.Router();
-  const { events } = manager;
-  const response = (character: CharacterDetail, resourceVersion: number) => ({
+  const logService = new CharacterLogService(characterQueries);
+  const response = (
+    manager: AICharacterRoutePort,
+    character: CharacterDetail,
+    resourceVersion: number,
+  ) => ({
     ...character,
     sessionId: manager.sessionId(character.id),
     resourceVersion,
   });
 
-  const write = (req: Request, action: () => unknown | Promise<unknown>) =>
+  const write = (
+    req: Request,
+    action: (manager: AICharacterRoutePort) => unknown | Promise<unknown>,
+  ) =>
     consoleSync.execute(
       req,
       req.method === 'DELETE' ? 'plans' : String(req.params.id ?? 'registry'),
       async () => {
+        const manager = getActiveCharacterManager();
         const path = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
         manager.assertWritable(
           ['stop'].includes(String(path.split('/').at(-1))) ||
@@ -51,12 +41,16 @@ export function createAICharacterRouter(
             : req.params.id,
         );
         const since = manager.storageRevision;
-        const result = await action();
+        const result = await action(manager);
         await manager.flush(since);
         if (!result || typeof result !== 'object' || !('id' in result))
           return result;
-        const version = events.version;
-        return response(await queries.get(String(result.id)), version);
+        const version = manager.events.version;
+        return response(
+          manager,
+          await characterQueries.get(String(result.id)),
+          version,
+        );
       },
     );
 
@@ -86,9 +80,12 @@ export function createAICharacterRouter(
   router.get(
     '/ai-characters',
     route(async (_req, res) => {
-      const version = events.version;
+      const manager = getActiveCharacterManager();
+      const version = manager.events.version;
       res.json(
-        (await queries.list()).map((character) => response(character, version)),
+        (await characterQueries.list()).map((character) =>
+          response(manager, character, version),
+        ),
       );
     }),
   );
@@ -117,10 +114,11 @@ export function createAICharacterRouter(
   router.get(
     '/ai-characters/:id',
     route(async (req, res) => {
+      const manager = getActiveCharacterManager();
       // Capture before the async read: a concurrent commit must not be stamped as seen.
-      const version = events.version;
-      const character = await queries.get(String(req.params.id));
-      res.json(response(character, version));
+      const version = manager.events.version;
+      const character = await characterQueries.get(String(req.params.id));
+      res.json(response(manager, character, version));
     }),
   );
 
@@ -195,7 +193,7 @@ export function createAICharacterRouter(
   router.post(
     '/ai-characters',
     route(async (req, res) => {
-      const result = await write(req, () => manager.create(req.body));
+      const result = await write(req, (manager) => manager.create(req.body));
       res.status(201).json(result);
     }),
   );
@@ -231,7 +229,7 @@ export function createAICharacterRouter(
   router.put(
     '/ai-characters/:id',
     route(async (req, res) => {
-      const result = await write(req, () =>
+      const result = await write(req, (manager) =>
         manager.update(String(req.params.id), req.body),
       );
       res.json(result);
@@ -263,7 +261,7 @@ export function createAICharacterRouter(
   router.delete(
     '/ai-characters/:id',
     route(async (req, res) => {
-      await write(req, () => manager.remove(String(req.params.id)));
+      await write(req, (manager) => manager.remove(String(req.params.id)));
       res.sendStatus(204);
     }),
   );
@@ -291,7 +289,7 @@ export function createAICharacterRouter(
     '/ai-characters/:id/join',
     route(async (req, res) => {
       const id = String(req.params.id);
-      const result = await write(req, async () => {
+      const result = await write(req, async (manager) => {
         const value = await manager.join(id);
         await manager.settled(id);
         return value;
@@ -323,7 +321,7 @@ export function createAICharacterRouter(
     '/ai-characters/:id/stop',
     route(async (req, res) => {
       const id = String(req.params.id);
-      const result = await write(req, async () => {
+      const result = await write(req, async (manager) => {
         const value = manager.stop(id);
         await manager.settled(id);
         return value;
@@ -360,7 +358,7 @@ export function createAICharacterRouter(
   router.post(
     '/ai-characters/:id/voice',
     route(async (req, res) => {
-      const result = await write(req, () =>
+      const result = await write(req, (manager) =>
         manager.setVoice(String(req.params.id), req.body),
       );
       res.json(result);

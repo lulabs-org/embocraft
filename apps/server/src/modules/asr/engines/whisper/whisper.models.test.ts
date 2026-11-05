@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TestAsrSettingsStore } from '../../../../../test/helpers/memory-storage';
+import { TestAsrService } from '../../../../../test/helpers/memory-storage';
 import { WhisperModelCatalog, listWhisperModels } from './whisper.models';
 
 describe('WhisperModelCatalog', () => {
@@ -55,7 +55,7 @@ describe('WhisperModelCatalog', () => {
   });
 
   it('forwards cancellation through the store model discovery path', async () => {
-    const store = new TestAsrSettingsStore();
+    const store = new TestAsrService();
     const controller = new AbortController();
     const reason = new Error('discovery cancelled');
     const request = vi.spyOn(globalThis, 'fetch').mockImplementation(

@@ -1,28 +1,54 @@
-import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
-
 import { DEFAULT_BAILIAN_ASR, DEFAULT_WHISPER_ASR } from '@voxel/shared';
 import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestAsrService } from '../../../../test/helpers/memory-storage';
 import { AppError } from '../../../core/errors/app-error';
-import { WhisperAdapter as LocalSpeech } from '../engines';
+
+const mocked = vi.hoisted(() => ({
+  transcribe: vi.fn(),
+  store: undefined as unknown as TestAsrService,
+}));
+
+vi.mock('../engines', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../engines')>();
+  const speech = new actual.WhisperAdapter();
+  return {
+    ...actual,
+    localSpeech: speech,
+  };
+});
+
+vi.mock('../services/asr.service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../services/asr.service')>();
+  return {
+    ...actual,
+    asrService: {
+      acquire: (id: string) => mocked.store.acquire(id),
+    },
+  };
+});
+
+import { localSpeech } from '../engines';
 import { installTranscribeRoutes } from './transcribe.routes';
+
 describe('transcription HTTP boundary', () => {
-  let server: Server, url: string, store: AsrSettingsStore;
-  const transcribe = vi.fn();
+  let server: Server, url: string, store: TestAsrService;
+  const { transcribe } = mocked;
   beforeEach(async () => {
     vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5187');
     transcribe.mockReset().mockResolvedValue('hello');
-    const speech = new LocalSpeech();
-    vi.spyOn(speech, 'status').mockResolvedValue({
+    vi.spyOn(localSpeech, 'status').mockResolvedValue({
       available: true,
       reason: 'ready',
     });
-    vi.spyOn(speech, 'transcribe').mockImplementation(transcribe);
-    store = new AsrSettingsStore();
+    vi.spyOn(localSpeech, 'transcribe').mockImplementation(transcribe);
+    store = new TestAsrService();
+    mocked.store = store;
 
     const app = express();
-    installTranscribeRoutes(app, speech, store);
+    installTranscribeRoutes(app);
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),

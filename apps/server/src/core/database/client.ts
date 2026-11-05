@@ -20,6 +20,11 @@ export function getDatabaseClient(connectionString?: string): PrismaClient {
   return defaultClient;
 }
 
+/** 读取当前已注入的共享数据库客户端（未注入时返回 undefined） */
+export function peekDatabaseClient(): PrismaClient | undefined {
+  return defaultClient;
+}
+
 /** 注入自定义的客户端（例如测试或显式重置） */
 export function setDatabaseClient(client: PrismaClient | undefined): void {
   defaultClient = client;

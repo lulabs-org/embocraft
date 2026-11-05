@@ -21,13 +21,17 @@ export class WhisperAdapter implements BatchTranscriberPort {
   private busy = false;
 
   constructor(
-    private apiUrl = env.speechEndpoint(),
+    private apiUrl?: string,
     private fetcher: typeof fetch = fetch,
   ) {}
 
   private connection(settings?: WhisperAsrDraft) {
     return {
-      baseUrl: (settings?.baseUrl?.trim() || this.apiUrl).replace(/\/+$/, ''),
+      baseUrl: (
+        settings?.baseUrl?.trim() ||
+        this.apiUrl ||
+        env.speechEndpoint()
+      ).replace(/\/+$/, ''),
       headers: settings?.apiKey
         ? { Authorization: `Bearer ${settings.apiKey}` }
         : undefined,

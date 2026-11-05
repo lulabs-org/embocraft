@@ -2,64 +2,63 @@ import cors from 'cors';
 import express, { type Router } from 'express';
 import { env } from '../../../core/config/env';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import type { WorldPresence } from '@voxel/shared';
+import { getActiveWorld } from '../world.room';
 
-/**
- * @openapi
- * /world:
- *   get:
- *     summary: 获取当前世界房间 ID
- *     description: 获取 Colyseus 当前活动的 WorldRoom 实例房间 ID
- *     tags:
- *       - World
- *     responses:
- *       200:
- *         description: 返回世界房间信息
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 roomId:
- *                   type: string
- *                   example: 4xK9pL2
- */
-export function createWorldRouter(getRoomId: () => string): Router {
+/** 创建独立的世界路由 Router 实例 */
+export function createWorldRouter(): Router {
   const router = express.Router();
-  router.get('/world', (_req, res) => res.json({ roomId: getRoomId() }));
-  return router;
-}
+  const allowed = env.webOrigin();
 
-/**
- * @openapi
- * /world/presence:
- *   get:
- *     summary: 世界状态 SSE 长连接
- *     description: 监听世界的在线玩家与在线状态 (Server-Sent Events)
- *     tags:
- *       - World
- *     responses:
- *       200:
- *         description: 实时 SSE 事件流
- *         content:
- *           text/event-stream:
- *             schema:
- *               type: string
- *       403:
- *         description: Origin 不受信任
- *       503:
- *         description: 世界服务未就绪
- */
-export function createPresenceRouter(
-  read: () => WorldPresence | undefined,
-  allowed = env.webOrigin(),
-): Router {
-  const router = express.Router();
+  /**
+   * @openapi
+   * /world:
+   *   get:
+   *     summary: 获取当前世界房间 ID
+   *     description: 获取 Colyseus 当前活动的 WorldRoom 实例房间 ID
+   *     tags:
+   *       - World
+   *     responses:
+   *       200:
+   *         description: 返回世界房间信息
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 roomId:
+   *                   type: string
+   *                   example: 4xK9pL2
+   */
+  router.get('/world', (_req, res) =>
+    res.json({ roomId: getActiveWorld()?.roomId ?? '' }),
+  );
+
+  /**
+   * @openapi
+   * /world/presence:
+   *   get:
+   *     summary: 世界状态 SSE 长连接
+   *     description: 监听世界的在线玩家与在线状态 (Server-Sent Events)
+   *     tags:
+   *       - World
+   *     responses:
+   *       200:
+   *         description: 实时 SSE 事件流
+   *         content:
+   *           text/event-stream:
+   *             schema:
+   *               type: string
+   *       403:
+   *         description: Origin 不受信任
+   *       503:
+   *         description: 世界服务未就绪
+   */
   router.get(
     '/world/presence',
     createOriginGuard({ origin: allowed, required: false }),
     cors({ origin: true }),
     (_req, res) => {
+      const read = () => getActiveWorld()?.getPresence();
       if (!read()) {
         res.sendStatus(503);
         return;
@@ -86,5 +85,6 @@ export function createPresenceRouter(
       send();
     },
   );
+
   return router;
 }

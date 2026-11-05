@@ -90,14 +90,11 @@ graph TD
 
     Create --> Startup["core/database/health.ts<br/>checkStartupDatabase"]
     Create --> GA["GatewayAuth<br/>gateway/auth.service"]
-    Create --> PS["DatabaseProviderRepository<br/>providers/persistence（默认）"]
+    Create --> PS["providerRepository<br/>providers/persistence"]
     Create --> VS["ttsService<br/>tts/services/tts.service"]
-    Create --> AS["AsrSettingsStore<br/>audio/persistence"]
+    Create --> AS["asrService<br/>asr/services/asr.service"]
 
-    Create --> WS["WorldStore<br/>world/persistence/store（Prisma）"]
     Create --> ACM["AICharacterManager<br/>ai-characters"]
-    Create --> MC["ModelCatalog<br/>providers/adapters/model-catalog"]
-    Create --> LS["LocalSpeech<br/>audio/services/asr"]
 
     Create --> App["Express 中间件与路由"]
     Create --> Sockets["SocketRoutes Map"]
@@ -109,10 +106,9 @@ graph TD
     Colyseus --> Room["define('world', WorldRoom)"]
 
     ACM -.->|tasks| Tasks["tasks 模块"]
-    ACM -.->|events| Events["management/services/events.service"]
+    ACM -.->|events| Events["console-sync/services/sync-events.service"]
     PS --> ACM
     VS --> ACM
-    PS --> MC
 ```
 
 ### 服务端模块全景
@@ -473,7 +469,7 @@ graph LR
     WorldStoreN --> EditT
     DatabaseProviderRepoN["DatabaseProviderRepository"] --> Prov
     VSN["TtsService"] --> VDB["DatabaseVoiceServicePersistence"] --> VoiceF
-    ASN["AsrSettingsStore"] --> ADB["DatabaseAsrServicePersistence"] --> ASRF
+    ASN["AsrService"] --> ADB["DatabaseAsrServicePersistence"] --> ASRF
     Token -->|env.readServer| GAN["GatewayAuth"]
     MP["management-persistence / archive"] --> Chars
     MP --> TaskF

@@ -1,13 +1,10 @@
-import { ConsoleSyncCommands } from '../../console-sync';
+import { consoleSync } from '../../console-sync';
 import express, { type Router } from 'express';
-import type { ProviderService } from '../services/provider.service';
+import { providerService } from '../services/provider.service';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 /** 创建独立的 Provider 路由 Router 实例 */
-export function createProviderRouter(
-  providers: ProviderService,
-  consoleSync: ConsoleSyncCommands,
-): Router {
+export function createProviderRouter(): Router {
   const router = express.Router();
   /**
    * @openapi
@@ -25,7 +22,7 @@ export function createProviderRouter(
   router.get(
     '/providers',
     route(async (_req, res) => {
-      res.json(await providers.list());
+      res.json(await providerService.list());
     }),
   );
 
@@ -52,7 +49,7 @@ export function createProviderRouter(
     '/providers',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'providers', () =>
-        providers.save(req.body),
+        providerService.save(req.body),
       );
       res.status(201).json(result);
     }),
@@ -87,7 +84,7 @@ export function createProviderRouter(
     '/providers/:id',
     route(async (req, res) => {
       const result = await consoleSync.execute(req, 'providers', () =>
-        providers.save(req.body, String(req.params.id)),
+        providerService.save(req.body, String(req.params.id)),
       );
       res.json(result);
     }),
@@ -116,7 +113,7 @@ export function createProviderRouter(
     '/providers/:id',
     route(async (req, res) => {
       await consoleSync.execute(req, 'providers', () =>
-        providers.remove(String(req.params.id)),
+        providerService.remove(String(req.params.id)),
       );
       res.sendStatus(204);
     }),
@@ -144,7 +141,7 @@ export function createProviderRouter(
   router.get(
     '/providers/:id/models',
     route(async (req, res) => {
-      const models = await providers.models(String(req.params.id));
+      const models = await providerService.models(String(req.params.id));
       res.json({ models });
     }),
   );
@@ -171,7 +168,7 @@ export function createProviderRouter(
   router.get(
     '/providers/:id/health',
     route(async (req, res) => {
-      res.json(await providers.health(String(req.params.id)));
+      res.json(await providerService.health(String(req.params.id)));
     }),
   );
   return router;

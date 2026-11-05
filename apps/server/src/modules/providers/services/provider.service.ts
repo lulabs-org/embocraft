@@ -1,16 +1,8 @@
-import { AppError } from '../../../core/errors/app-error';
+import { domainEvents } from '../../../core/events/domain-events';
 import { ModelCatalog } from '../adapters/model-catalog';
 import { ProviderHealthChecker } from '../adapters/health-checker';
+import { providerRepository } from '../persistence/database-repository';
 import type { ProviderRepository, ProviderRuntimePort } from '../ports';
-
-export const PROVIDERS_CHANGED = 'providers.changed' as const;
-
-export type ProviderChangedEvent = {
-  type: typeof PROVIDERS_CHANGED;
-  providerId: string;
-};
-
-export type ProviderEventPublisher = (event: ProviderChangedEvent) => void;
 
 /** Coordinates provider writes and their cross-module reference rule. */
 export class ProviderService {
@@ -21,11 +13,8 @@ export class ProviderService {
     private readonly store: Pick<
       ProviderRepository,
       'list' | 'save' | 'remove'
-    >,
+    > = providerRepository,
     catalog?: Pick<ModelCatalog, 'models'>,
-    private readonly hasCharacterReference: (id: string) => boolean = () =>
-      false,
-    private readonly changed: ProviderEventPublisher = () => {},
     healthChecker?: Pick<ProviderHealthChecker, 'check'>,
   ) {
     this.catalog =
@@ -41,18 +30,14 @@ export class ProviderService {
 
   async save(value: unknown, id?: string) {
     const provider = await this.store.save(value, id);
-    this.changed({ type: PROVIDERS_CHANGED, providerId: provider.id });
+    domainEvents.emit('provider.changed', { providerId: provider.id });
     return provider;
   }
 
   async remove(id: string) {
-    if (this.hasCharacterReference(id))
-      throw new AppError(
-        '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
-        409,
-      );
+    domainEvents.emit('provider.removing', { providerId: id });
     await this.store.remove(id);
-    this.changed({ type: PROVIDERS_CHANGED, providerId: id });
+    domainEvents.emit('provider.changed', { providerId: id });
   }
 
   models(id: string) {
@@ -63,3 +48,5 @@ export class ProviderService {
     return this.healthChecker.check(id);
   }
 }
+
+export const providerService = new ProviderService();

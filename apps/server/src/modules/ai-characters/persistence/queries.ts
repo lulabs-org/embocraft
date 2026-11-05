@@ -105,10 +105,10 @@ function detail(row: CharacterRow): CharacterDetail {
 
 /** HTTP reads go straight to PostgreSQL, independently of runtime recovery snapshots. */
 export class CharacterQueries {
-  private readonly db: PrismaClient;
+  constructor(private readonly customDb?: PrismaClient) {}
 
-  constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+  private get db(): PrismaClient {
+    return this.customDb ?? getDatabaseClient();
   }
 
   async get(id: string): Promise<CharacterDetail> {
@@ -155,3 +155,5 @@ export class CharacterQueries {
     );
   }
 }
+
+export const characterQueries = new CharacterQueries();

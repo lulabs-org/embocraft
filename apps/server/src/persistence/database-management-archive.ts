@@ -114,10 +114,10 @@ export class DatabaseManagementArchive implements ArchivePort {
     runs: [],
     requests: {},
   });
-  private readonly db: PrismaClient;
+  constructor(private readonly customDb?: PrismaClient) {}
 
-  constructor(db?: PrismaClient) {
-    this.db = db ?? getDatabaseClient();
+  private get db(): PrismaClient {
+    return this.customDb ?? getDatabaseClient();
   }
 
   async load(): Promise<ManagementArchive | undefined> {

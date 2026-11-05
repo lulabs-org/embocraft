@@ -21,49 +21,22 @@ import {
   setDatabaseClient,
 } from './core/database/client';
 import { checkStartupDatabase } from './core/database/health';
-import { DatabaseManagementArchive } from './persistence/database-management-archive';
 
 import type { SocketRoutes } from './core/transport/socket-routes';
 import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 
 import {
   AICharacterManager,
-  CharacterQueries,
   createAICharacterRouter,
 } from './modules/ai-characters';
-
-import {
-  AsrSettingsStore,
-  DatabaseAsrServicePersistence,
-  installAsrSocket,
-  LocalSpeech,
-  createAsrRouter,
-} from './modules/asr';
-
+import { asrService, createAsrRouter, installAsrSocket } from './modules/asr';
 import { createTtsRouter, ttsService } from './modules/tts';
-
 import { GatewayAuth, installGatewaySocket } from './modules/gateway';
-
-import {
-  DatabaseProviderRepository,
-  ProviderService,
-  createProviderRouter,
-} from './modules/providers';
-
-import {
-  ConsoleSyncCommands,
-  createConsoleSyncRouter,
-} from './modules/console-sync';
-
+import { createProviderRouter, providerRepository } from './modules/providers';
+import { consoleSync, createConsoleSyncRouter } from './modules/console-sync';
 import { createTaskRouter } from './modules/tasks';
-
-import {
-  WorldRoom,
-  WorldStore,
-  createWorldRouter,
-  createPresenceRouter,
-} from './modules/world';
-import { ChatStore, createChatRouter } from './modules/chat';
+import { WorldRoom, createWorldRouter, getActiveWorld } from './modules/world';
+import { createChatRouter } from './modules/chat';
 
 /**
  * 创建并装配服务器实例。
@@ -76,28 +49,11 @@ export async function createServer() {
 
   const db = createDatabaseClient(config.databaseUrl);
   setDatabaseClient(db);
-  const providers = new DatabaseProviderRepository(db);
-  const asrSettings = new AsrSettingsStore(
-    new DatabaseAsrServicePersistence(db),
-  );
-  const store = new WorldStore(config.databaseUrl, db);
-  let world: WorldRoom | undefined;
   let serverUrls: ServerUrls | undefined;
-  const archive = new DatabaseManagementArchive(db);
   const characters = new AICharacterManager(
-    providers,
-    () => serverUrls?.wsUrl ?? '',
-    archive,
-  );
-  const providerService = new ProviderService(
-    providers,
     undefined,
-    (id) => characters.hasProviderReference(id),
-    () => characters.events.publish('providers'),
+    () => serverUrls?.wsUrl ?? '',
   );
-  const speech = new LocalSpeech();
-  const consoleSync = new ConsoleSyncCommands();
-  const characterQueries = new CharacterQueries(db);
 
   const app = express();
   app.use(publicCors(config.webOrigin));
@@ -110,25 +66,24 @@ export async function createServer() {
       DEFAULT_MANAGEMENT_PATHS,
       gatewayAuth.middleware,
       (management) => {
-        management.use(
-          createAICharacterRouter(characters, consoleSync, characterQueries),
-        );
-        management.use(createProviderRouter(providerService, consoleSync));
-        management.use(createTaskRouter(characters.tasks, consoleSync));
-        management.use(createConsoleSyncRouter(consoleSync));
+        management.use(createAICharacterRouter());
+        management.use(createProviderRouter());
+        management.use(createTaskRouter());
+        management.use(createConsoleSyncRouter());
       },
     ),
   );
 
   // 2. 语音与音频路由
   app.use(
-    createAsrRouter({
-      authenticateManagement: gatewayAuth.middleware,
-      speech,
-      asrSettings,
-      origin: config.webOrigin,
-    }),
+    ['/voice/asr/services', '/voice/asr/defaults', '/voice/asr/models'],
+    gatewayAuth.middleware,
   );
+  app.use('/voice/asr/assignments', (req, res, next) => {
+    if (req.method === 'GET') next();
+    else gatewayAuth.middleware(req, res, next);
+  });
+  app.use(createAsrRouter());
   app.use(
     createManagementRouter(
       '/voice/tts',
@@ -140,41 +95,22 @@ export async function createServer() {
   );
 
   // 3. 游戏世界房间与聊天路由
-  app.use(createWorldRouter(() => world?.roomId ?? ''));
-  app.use(createPresenceRouter(() => world?.getPresence(), config.webOrigin));
-  app.use(
-    createChatRouter(
-      () => world?.chat,
-      speech,
-      () => world?.agentSpeech,
-      config.webOrigin,
-      asrSettings,
-    ),
-  );
+  app.use(createWorldRouter());
+  app.use(createChatRouter());
 
   app.use(errorHandler());
   const http = createHttpServer(app);
   // Sockets register module-by-module like HTTP routes; other upgrades reach Colyseus.
   const sockets: SocketRoutes = new Map();
-  installGatewaySocket(sockets, {
-    events: characters.events,
-    auth: gatewayAuth,
-  });
-  installAsrSocket(sockets, {
-    settings: asrSettings,
-    origin: config.webOrigin,
-  });
+  installGatewaySocket(sockets, gatewayAuth);
+  installAsrSocket(sockets);
   const transport = new RoutedWebSocketTransport(http, sockets);
   const server = new Server({
     transport,
     greet: false,
     gracefullyShutdown: false,
   });
-  const chatStore = new ChatStore(db);
-  server.define('world', WorldRoom, {
-    store,
-    chatStore,
-  });
+  server.define('world', WorldRoom);
   server.onBeforeShutdown(() => characters.close());
   let closing: Promise<void> | undefined;
   let listening = false;
@@ -190,13 +126,9 @@ export async function createServer() {
           http.closeAllConnections();
           await once(http, 'close');
         }
-        try {
-          if (!world) await store.close();
-        } finally {
-          resetDatabaseClient(db);
-          await db?.$disconnect();
-          world = undefined;
-        }
+        consoleSync.reset();
+        resetDatabaseClient(db);
+        await db?.$disconnect();
       }
     })());
   const listen = async () => {
@@ -208,8 +140,7 @@ export async function createServer() {
         http.address() as AddressInfo,
         config.host,
       );
-      const listing = await matchMaker.createRoom('world', {});
-      world = matchMaker.getLocalRoomById(listing.roomId) as WorldRoom;
+      await matchMaker.createRoom('world', {});
       await characters.load();
       return serverUrls;
     } catch (error) {
@@ -235,11 +166,11 @@ export async function createServer() {
       http,
       server,
       characters,
-      providers,
+      providers: providerRepository,
       voiceServices: ttsService,
-      asrSettings,
+      asrSettings: asrService,
       get world() {
-        return world!;
+        return getActiveWorld()!;
       },
     },
   };
