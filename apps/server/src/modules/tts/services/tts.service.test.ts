@@ -7,7 +7,6 @@ import {
   voicePersistence,
 } from '../../../../test/helpers/memory-storage';
 import { TtsService, validateVoiceService } from './tts.service';
-import { createDefaultSpeechSynthesizer } from './piper.service';
 
 const mocked = vi.hoisted(() => ({
   persistence: undefined as unknown as MemoryVoicePersistence,
@@ -329,8 +328,10 @@ it('keeps the unmanaged default voice independent of saved-service concurrency',
     ).rejects.toMatchObject({
       status: 429,
     });
+    const resolved = await service.resolveSpeech(undefined);
+    if (resolved.kind !== 'server') throw new Error('expected server speech');
     await expect(
-      createDefaultSpeechSynthesizer().synthesize('default', signal),
+      resolved.synthesizer.synthesize('default', signal),
     ).resolves.toMatchObject({ durationMs: 1000 });
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch.mock.calls[0][0]).toBe(
@@ -369,4 +370,30 @@ it('persists browser profiles without credentials and never runs server synthesi
   const restored = new TtsService();
 
   expect((await restored.get(saved.id)).voiceLanguage).toBe('zh-CN');
+});
+
+it('resolves unbound, empty and saved bindings through their existing paths', async () => {
+  const defaultSpeech = { synthesize: vi.fn() };
+  const service = new TtsService(undefined, undefined, () => defaultSpeech);
+  const browser = await service.save({
+    name: 'Browser',
+    type: 'browser',
+    voice: 'test',
+  });
+
+  expect(await service.resolveSpeech(undefined)).toEqual({
+    kind: 'server',
+    synthesizer: defaultSpeech,
+  });
+  expect(await service.resolveSpeech(browser.id)).toMatchObject({
+    kind: 'browser',
+    voice: { voice: 'test' },
+  });
+  const empty = await service.resolveSpeech('');
+  if (empty.kind !== 'server') throw new Error('expected server speech');
+  const signal = new AbortController().signal;
+  await expect(
+    empty.synthesizer.synthesize('text', signal),
+  ).rejects.toMatchObject({ status: 404 });
+  expect(defaultSpeech.synthesize).not.toHaveBeenCalled();
 });

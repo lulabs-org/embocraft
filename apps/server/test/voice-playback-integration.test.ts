@@ -46,8 +46,8 @@ it('cancels a pending browser resolution after a saved voice changes', async () 
       serviceId: saved.id,
     });
 
-    const original = ttsService.synthesizer.bind(ttsService);
-    vi.spyOn(ttsService, 'synthesizer').mockImplementationOnce(async (id) => {
+    const original = ttsService.resolveSpeech.bind(ttsService);
+    vi.spyOn(ttsService, 'resolveSpeech').mockImplementationOnce(async (id) => {
       const speech = await original(id);
       await new Promise<void>((resolve) => {
         release = resolve;

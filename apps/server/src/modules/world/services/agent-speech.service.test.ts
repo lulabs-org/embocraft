@@ -148,3 +148,27 @@ it('delivers browser speech only to authorized listeners without synthesizing or
   expect(report).not.toHaveBeenCalled();
   service.close();
 });
+
+it('resolves the default voice through TTS when no resolver is supplied', async () => {
+  const { ttsService } = await import('../../tts');
+  const synthesize = vi.fn(async () => ({
+    bytes: Buffer.from('wav'),
+    durationMs: 1000,
+  }));
+  const resolve = vi.spyOn(ttsService, 'resolveSpeech').mockResolvedValue({
+    kind: 'server',
+    synthesizer: { synthesize },
+  });
+  const players = [person('ai', 'ai-agent'), person('a')];
+  const notify = vi.fn();
+  const service = new AgentSpeech(() => players, notify, vi.fn());
+  try {
+    service.enqueue('ai', message());
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledOnce());
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(synthesize).toHaveBeenCalledOnce();
+  } finally {
+    service.close();
+    resolve.mockRestore();
+  }
+});

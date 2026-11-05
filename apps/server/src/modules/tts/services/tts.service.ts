@@ -6,7 +6,8 @@ import type {
 import { createSpeechAdapter } from '../adapters/speech-adapter-factory';
 import { SpeechModelsService } from './speech-models.service';
 import { SpeechService } from './speech.service';
-import type { SpeechSynthesizer } from './speech-synthesizer';
+import { createDefaultSpeechSynthesizer } from './piper.service';
+import type { ResolvedSpeech, SpeechSynthesizer } from './speech-synthesizer';
 import { VoiceServiceManagement } from './voice-service-management.service';
 
 export { validateVoiceService } from '../domain/voice-service-validation';
@@ -24,6 +25,7 @@ export class TtsService {
   constructor(
     storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
     factory: (value: SavedVoice) => SpeechSynthesizer = createSpeechAdapter,
+    private readonly defaultSpeech: () => SpeechSynthesizer = createDefaultSpeechSynthesizer,
   ) {
     this.management = new VoiceServiceManagement(storage);
     const getVoice = (id: string) => this.get(id);
@@ -49,6 +51,23 @@ export class TtsService {
 
   remove(id: string) {
     return this.management.remove(id);
+  }
+
+  /** Resolve unmanaged, disabled, or saved voice bindings without changing their limits. */
+  resolveSpeech(id: string | undefined): Promise<ResolvedSpeech> {
+    if (id === undefined)
+      return Promise.resolve({
+        kind: 'server',
+        synthesizer: this.defaultSpeech(),
+      });
+    if (id === '')
+      return Promise.resolve({
+        kind: 'server',
+        synthesizer: {
+          synthesize: (text, signal) => this.synthesize(id, text, signal),
+        },
+      });
+    return this.synthesizer(id);
   }
 
   synthesizer(id: string) {
