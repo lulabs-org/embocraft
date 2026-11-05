@@ -3,7 +3,7 @@ import { TestVoiceServiceStore as VoiceServiceStore } from '../../../../test/hel
 
 import { validateVoiceService } from './voice-service-store';
 
-import { PiperTts } from '../services/piper.service';
+import { PiperTts } from './piper.service';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 

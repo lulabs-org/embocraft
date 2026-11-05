@@ -14,7 +14,11 @@ import {
   VoiceServiceStore,
   validateVoiceService,
   type SavedVoice,
-} from '../../src/modules/tts/persistence/voice-service-store';
+} from '../../src/modules/tts/services/voice-service-store';
+import type {
+  VoiceServicePersistence,
+  VoiceServiceTransaction,
+} from '../../src/modules/tts/persistence/voice-service-types';
 import type {
   ArchivePort,
   ManagementArchive,
@@ -44,8 +48,43 @@ export class MemoryPersistence<T> {
     return operation;
   }
 }
+export class MemoryVoicePersistence
+  extends MemoryPersistence<SavedVoice[]>
+  implements VoiceServicePersistence
+{
+  private transactions: Promise<unknown> = Promise.resolve();
+  async get(id: string) {
+    return (await this.load()).find((value) => value.id === id);
+  }
+  transaction<T>(run: (tx: VoiceServiceTransaction) => Promise<T>): Promise<T> {
+    const operation = this.transactions.then(async () => {
+      const values = await this.load();
+      const tx: VoiceServiceTransaction = {
+        get: async (id) => values.find((value) => value.id === id),
+        count: async () => values.length,
+        create: async (value) => {
+          values.push(value);
+        },
+        update: async (value) => {
+          values[values.findIndex((item) => item.id === value.id)] = value;
+        },
+        remove: async (id) => {
+          values.splice(
+            values.findIndex((item) => item.id === id),
+            1,
+          );
+        },
+      };
+      const result = await run(tx);
+      await this.save(values);
+      return result;
+    });
+    this.transactions = operation.catch(() => {});
+    return operation;
+  }
+}
 export const voicePersistence = () =>
-  new MemoryPersistence<SavedVoice[]>([
+  new MemoryVoicePersistence([
     {
       ...validateVoiceService({
         name: 'Speaches 语音服务',

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { DatabaseVoiceServicePersistence } from './database-voice-services';
-import type { SavedVoice } from './voice-service-store';
+import type { SavedVoice } from '../services/voice-service-store';
 
 describe('DatabaseVoiceServicePersistence', () => {
   it('returns empty array when table is empty', async () => {
@@ -73,70 +73,56 @@ describe('DatabaseVoiceServicePersistence', () => {
     ]);
   });
 
-  it('saves unpacked fields and deletes missing entries in a transaction', async () => {
-    const findManyServices = vi.fn().mockResolvedValue([{ id: 'old-service' }]);
-    const deleteService = vi.fn().mockResolvedValue({});
-    const upsertService = vi.fn().mockResolvedValue({});
-
+  it('creates, updates and deletes individual records inside a transaction', async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       ttsProvider: {
-        findMany: findManyServices,
-        delete: deleteService,
-        upsert: upsertService,
+        aggregate: vi.fn().mockResolvedValue({ _max: { position: 3 } }),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
       },
     };
-
     const db = {
       $transaction: vi.fn(async (cb: (prisma: typeof tx) => Promise<unknown>) =>
         cb(tx),
       ),
     } as unknown as PrismaClient;
-
     const persistence = new DatabaseVoiceServicePersistence(db);
-    const services: SavedVoice[] = [
-      {
-        id: 'service-1',
-        name: 'Test Voice',
-        type: 'compatible',
-        baseUrl: 'https://tts.example.com',
-        apiKey: 'secret',
-        model: 'tts-1',
-        voice: 'alloy',
-        speed: 1.0,
-      },
-    ];
+    const voice: SavedVoice = {
+      id: 'service-1',
+      name: 'Test Voice',
+      type: 'compatible',
+      baseUrl: 'https://tts.example.com',
+      apiKey: 'secret',
+      model: 'tts-1',
+      voice: 'alloy',
+      speed: 1,
+    };
 
-    await persistence.save(services);
-
-    expect(deleteService).toHaveBeenCalledWith({
-      where: { id: 'old-service' },
+    await persistence.transaction(async (repo) => {
+      await repo.create(voice);
+      await repo.update({ ...voice, name: 'Renamed' });
+      await repo.remove(voice.id);
     });
-    expect(upsertService).toHaveBeenCalledWith({
-      where: { id: 'service-1' },
-      create: {
-        id: 'service-1',
-        position: 0,
-        name: 'Test Voice',
-        type: 'compatible',
-        baseUrl: 'https://tts.example.com',
-        apiKey: 'secret',
-        model: 'tts-1',
-        voice: 'alloy',
-        speed: 1.0,
+    expect(tx.ttsProvider.create).toHaveBeenCalledWith({
+      data: { ...voice, position: 4, voiceLanguage: null },
+    });
+    expect(tx.ttsProvider.update).toHaveBeenCalledWith({
+      where: { id: voice.id },
+      data: {
+        name: 'Renamed',
+        type: voice.type,
+        baseUrl: voice.baseUrl,
+        apiKey: voice.apiKey,
+        model: voice.model,
+        voice: voice.voice,
+        speed: voice.speed,
         voiceLanguage: null,
       },
-      update: {
-        position: 0,
-        name: 'Test Voice',
-        type: 'compatible',
-        baseUrl: 'https://tts.example.com',
-        apiKey: 'secret',
-        model: 'tts-1',
-        voice: 'alloy',
-        speed: 1.0,
-        voiceLanguage: null,
-      },
+    });
+    expect(tx.ttsProvider.delete).toHaveBeenCalledWith({
+      where: { id: voice.id },
     });
   });
 
@@ -152,7 +138,7 @@ describe('DatabaseVoiceServicePersistence', () => {
     await expect(persistence.load()).rejects.toThrow(
       '无法读取语音服务数据库配置。',
     );
-    await expect(persistence.save([])).rejects.toThrow(
+    await expect(persistence.transaction(async () => {})).rejects.toThrow(
       '无法保存语音服务数据库配置。',
     );
   });
