@@ -7,7 +7,7 @@ import {
   type Player,
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
-import { createDefaultSpeechSynthesizer, type ResolvedSpeech } from '../../tts';
+import { ttsService, type ResolvedSpeech } from '../../tts';
 
 type Pending = {
   actor: string;
@@ -29,10 +29,12 @@ export class AgentSpeech {
     private report: (actor: string, message: string) => void,
     private tts:
       | ResolvedSpeech
-      | ((actor: string) => ResolvedSpeech | Promise<ResolvedSpeech>) = {
-      kind: 'server',
-      synthesizer: createDefaultSpeechSynthesizer(),
-    },
+      | Promise<ResolvedSpeech>
+      | ((
+          actor: string,
+        ) =>
+          | ResolvedSpeech
+          | Promise<ResolvedSpeech>) = ttsService.resolveSpeech(undefined),
   ) {}
   private speaker(actor: string) {
     return [...this.players()].find(
