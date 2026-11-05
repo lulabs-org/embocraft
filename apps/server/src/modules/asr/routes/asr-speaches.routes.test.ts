@@ -48,7 +48,7 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
       temperature: 0,
       prompt: '',
     });
-    const before = (await voices.list());
+    const before = await voices.list();
     const discover = (
       body: unknown,
       token = 'fixture-gateway-token-for-tests',
@@ -90,8 +90,8 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
       200,
     );
     expect(calls.at(-1)).toBe('Bearer new-draft-key');
-    expect((await voices.list())).toEqual(before);
-    expect(JSON.stringify((await voices.list()))).not.toContain('fixture-secret');
+    expect(await voices.list()).toEqual(before);
+    expect(JSON.stringify(await voices.list())).not.toContain('fixture-secret');
   } finally {
     vi.unstubAllEnvs();
     await server.close();

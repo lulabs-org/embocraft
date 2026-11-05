@@ -485,7 +485,11 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
     const response = await fetch(server.httpUrl + '/ai-characters', {
       method: 'POST',
       headers: { ...headers, 'Idempotency-Key': 'failed-create' },
-      body: JSON.stringify({ providerId: 'deepseek', name: 'Failure fixture', joinWorld: false }),
+      body: JSON.stringify({
+        providerId: 'deepseek',
+        name: 'Failure fixture',
+        joinWorld: false,
+      }),
     });
     expect(response.status).toBe(500);
     expect(changed).not.toHaveBeenCalled();

@@ -198,8 +198,9 @@ export class TestVoiceServiceStore extends VoiceServiceStore {
   constructor(
     readonly persistence = voicePersistence(),
     factory?: ConstructorParameters<typeof VoiceServiceStore>[1],
+    hasReference?: ConstructorParameters<typeof VoiceServiceStore>[2],
   ) {
-    super(persistence, factory);
+    super(persistence, factory, hasReference);
   }
 }
 export class TestAsrSettingsStore extends AsrSettingsStore {

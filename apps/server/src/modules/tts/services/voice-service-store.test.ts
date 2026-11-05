@@ -205,18 +205,23 @@ it('rejects credential reuse for a different endpoint and invalid configuration'
 });
 
 it('rejects deletion of referenced services and validates bindings before changing them', async () => {
-  const store = new VoiceServiceStore();
+  let referenced = true;
+  const store = new VoiceServiceStore(
+    undefined,
+    undefined,
+    (id) => referenced && id === 'local-default',
+  );
 
+  await expect(store.remove('local-default')).rejects.toThrow('引用');
+  referenced = false;
   await expect(store.remove('local-default', () => true)).rejects.toThrow(
     '引用',
   );
   await store.bind('actor', 'local-default');
-  await expect(store.remove('local-default', () => false)).rejects.toThrow(
-    '引用',
-  );
+  await expect(store.remove('local-default')).rejects.toThrow('引用');
   await expect(store.bind('actor', 'missing')).rejects.toThrow();
   store.unbind('actor');
-  await store.remove('local-default', () => false);
+  await store.remove('local-default');
   expect(await store.list()).toEqual([]);
 });
 

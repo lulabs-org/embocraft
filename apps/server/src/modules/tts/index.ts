@@ -1,4 +1,4 @@
-export { createTtsRouter, type TtsRouteDependencies } from './routes/tts.http';
+export { createTtsRouter } from './routes/tts.routes';
 export { DatabaseVoiceServicePersistence } from './persistence/database-voice-services';
 export { VoiceServiceStore } from './services/voice-service-store';
 export { PiperModels } from './services/piper-models.service';

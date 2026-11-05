@@ -1,7 +1,4 @@
-export {
-  createAsrRouter,
-  type AsrRouteDependencies,
-} from './routes/asr.http';
+export { createAsrRouter, type AsrRouteDependencies } from './routes/asr.http';
 export { AsrSettingsStore } from './services/asr-settings-store';
 export { DatabaseAsrServicePersistence } from './persistence/database-asr-services';
 export { installAsrSocket } from './sockets/asr.socket';

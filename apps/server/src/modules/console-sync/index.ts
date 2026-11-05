@@ -3,6 +3,4 @@ export {
   ConsoleSyncEvents,
   type ConsoleResourceChange,
 } from './services/sync-events.service';
-export {
-  createConsoleSyncRouter,
-} from './routes/console-sync.routes';
+export { createConsoleSyncRouter } from './routes/console-sync.routes';

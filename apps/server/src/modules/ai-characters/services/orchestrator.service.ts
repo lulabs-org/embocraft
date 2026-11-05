@@ -666,11 +666,15 @@ export class AICharacterOrchestrator {
     return [...this.jobs.values()].some((job) => job.view.providerId === id);
   }
 
+  hasVoiceServiceReference(id: string) {
+    return [...this.jobs.values()].some(
+      (j) => j.updating || j.view.voiceServiceId === id,
+    );
+  }
+
   async removeVoiceService(id: string) {
     await this.voiceCoordinator.removeVoiceService(id, () =>
-      [...this.jobs.values()].some(
-        (j) => j.updating || j.view.voiceServiceId === id,
-      ),
+      this.hasVoiceServiceReference(id),
     );
   }
 

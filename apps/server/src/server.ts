@@ -76,8 +76,10 @@ export async function createServer() {
 
   const db = createDatabaseClient(config.databaseUrl);
   const providers = new DatabaseProviderRepository(db);
-  const voiceServices = new VoiceServiceStore(
+  const voiceServices: VoiceServiceStore = new VoiceServiceStore(
     new DatabaseVoiceServicePersistence(db),
+    undefined,
+    (id) => characters.hasVoiceServiceReference(id),
   );
   const asrSettings = new AsrSettingsStore(
     new DatabaseAsrServicePersistence(db),
@@ -134,11 +136,13 @@ export async function createServer() {
     }),
   );
   app.use(
-    createTtsRouter({
-      authenticateManagement: gatewayAuth.middleware,
-      voiceServices,
-      removeVoiceService: (id) => characters.removeVoiceService(id),
-    }),
+    createManagementRouter(
+      '/voice/tts',
+      gatewayAuth.middleware,
+      (management) => {
+        management.use(createTtsRouter(voiceServices));
+      },
+    ),
   );
 
   // 3. 游戏世界房间与聊天路由
