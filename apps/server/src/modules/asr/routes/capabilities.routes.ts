@@ -4,13 +4,13 @@ import { env } from '../../../core/config/env';
 import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { PiperModels } from '../../tts';
+import { createDefaultSpeechStatus } from '../../tts';
 import { localSpeech } from '../engines';
 import { asrService } from '../services/asr.service';
 
 export function installCapabilitiesRoutes(router: Router) {
   const origin = env.webOrigin();
-  const piperModels = new PiperModels();
+  const defaultSpeechStatus = createDefaultSpeechStatus();
   router.use(
     '/voice/capabilities',
     createOriginGuard({
@@ -71,7 +71,7 @@ export function installCapabilitiesRoutes(router: Router) {
           local: await localSpeech.status(
             selected?.provider === 'whisper' ? selected : undefined,
           ),
-          agentSpeech: await piperModels.status(),
+          agentSpeech: await defaultSpeechStatus(),
         });
       } catch (error) {
         res.status(error instanceof AppError ? error.status : 500).json({

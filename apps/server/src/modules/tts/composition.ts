@@ -7,6 +7,7 @@ import type {
   VoiceServicePersistence,
 } from './ports';
 import { createDefaultSpeechSynthesizer } from './services/piper.service';
+import { PiperModels } from './services/piper-models.service';
 import type { SpeechSynthesizer } from './services/speech-synthesizer';
 import { TtsService as TtsApplicationService } from './services/tts.service';
 
@@ -26,3 +27,9 @@ export class TtsService extends TtsApplicationService {
 }
 
 export const ttsService = new TtsService();
+
+/** Bind the deployment's default readiness check when the route is installed. */
+export function createDefaultSpeechStatus() {
+  const models = new PiperModels();
+  return () => models.status();
+}

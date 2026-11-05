@@ -56,7 +56,7 @@ apps/server/src/modules/asr/
 2. **职责聚合过多**：
    - `AsrService` 兼具了数据库持久化协调、运行中租约锁控制（`acquire`/`release` 防止误删正在识别的配置）以及远程模型探测（`models()`）。
 3. **跨域能力探针**：
-   - `capabilities.routes.ts` 位于 ASR 模块，经 `tts` 模块门面调用 `PiperModels.status()` 聚合返回 TTS 状态。未来建议由顶层网关或组合层聚合返回。
+   - `capabilities.routes.ts` 位于 ASR 模块，经 `tts` 模块门面调用默认语音就绪能力聚合返回 TTS 状态。未来建议由顶层网关或组合层聚合返回。
 
 ---
 

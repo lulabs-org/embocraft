@@ -116,3 +116,22 @@ it('does not start an aborted discovery request', async () => {
   ).rejects.toThrow();
   expect(request).not.toHaveBeenCalled();
 });
+
+it('keeps discovery task filtering and skips malformed fields on nonmatching records', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      data: [
+        { id: 'missing-task', voices: 'invalid' },
+        {
+          id: 'other-task',
+          task: 'automatic-speech-recognition',
+          voices: 'invalid',
+        },
+        { id: 'tts-model', task: 'text-to-speech', voices: [] },
+      ],
+    }),
+  );
+  await expect(new SpeachesModels({}, request).list()).resolves.toEqual([
+    { id: 'tts-model', languages: [], voices: [] },
+  ]);
+});

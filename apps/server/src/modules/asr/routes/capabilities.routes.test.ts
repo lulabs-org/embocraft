@@ -11,9 +11,7 @@ const mocked = vi.hoisted(() => ({
 }));
 
 vi.mock('../../tts', () => ({
-  PiperModels: class {
-    status = mocked.ttsStatus;
-  },
+  createDefaultSpeechStatus: () => mocked.ttsStatus,
 }));
 
 vi.mock('../engines', async (importOriginal) => {
