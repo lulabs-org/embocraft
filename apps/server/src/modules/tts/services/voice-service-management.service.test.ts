@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { domainEvents } from '../../../core/events/domain-events';
 import { validateVoiceService } from '../domain/voice-service-validation';
-import type { VoiceServicePersistence } from '../persistence/voice-service-types';
+import type { VoiceServicePersistence } from '../ports';
 import { VoiceServiceManagement } from './voice-service-management.service';
 
 it('checks deletion again inside the transaction before removing the voice', async () => {

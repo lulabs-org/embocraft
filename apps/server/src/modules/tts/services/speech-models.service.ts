@@ -1,10 +1,13 @@
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
-import { SpeachesModels } from '../../../core/audio/speaches-models';
 import type { SavedVoice } from '../domain/voice-service-validation';
+import type { SpeechModelQuery } from '../ports';
 
 export class SpeechModelsService {
-  constructor(private readonly getVoice: (id: string) => Promise<SavedVoice>) {}
+  constructor(
+    private readonly getVoice: (id: string) => Promise<SavedVoice>,
+    private readonly queryModels: SpeechModelQuery,
+  ) {}
 
   async models(value: unknown, signal?: AbortSignal) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -18,8 +21,9 @@ export class SpeechModelsService {
         : await this.getVoice(input.serviceId as string);
     if (previous && previous.type !== 'speaches')
       throw new AppError('请选择 Speaches 服务。');
-    return new SpeachesModels(
+    return this.queryModels(
       validateVoiceConnection(input, 'speaches', previous),
-    ).list(signal);
+      signal,
+    );
   }
 }

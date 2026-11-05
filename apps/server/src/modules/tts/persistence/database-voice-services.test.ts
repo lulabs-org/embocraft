@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { DatabaseVoiceServicePersistence } from './database-voice-services';
-import type { SavedVoice } from '../services/tts.service';
+import type { SavedVoice } from '../domain/voice-service-validation';
 
 describe('DatabaseVoiceServicePersistence', () => {
   it('returns empty array when table is empty', async () => {

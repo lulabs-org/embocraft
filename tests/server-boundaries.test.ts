@@ -376,3 +376,24 @@ it('keeps all world integration/sandbox assembly on the production test factory'
       );
     }
 });
+
+it('keeps TTS application services independent of concrete persistence and speech clients', () => {
+  for (const name of [
+    'tts.service.ts',
+    'voice-service-management.service.ts',
+    'speech.service.ts',
+    'speech-models.service.ts',
+  ]) {
+    const file = resolve(root, 'modules/tts/services', name);
+    for (const dep of graph.get(file) ?? []) {
+      const target = relative(root, dep);
+      expect(
+        target.startsWith('modules/tts/adapters/') ||
+          target.startsWith('modules/tts/persistence/') ||
+          target.startsWith('core/database/') ||
+          target === 'core/audio/speaches-models.ts',
+        `${relative(root, file)} -> ${target}`,
+      ).toBe(false);
+    }
+  }
+});

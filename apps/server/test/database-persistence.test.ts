@@ -20,7 +20,7 @@ import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/da
 import { AppError } from '../src/core/errors/app-error';
 import { domainEvents } from '../src/core/events/domain-events';
 import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/database-voice-services';
-import { TtsService } from '../src/modules/tts/services/tts.service';
+import { TtsService } from '../src/modules/tts';
 import { bootstrapProviders } from './helpers/provider-seed';
 import { DatabaseProviderRepository } from '../src/modules/providers';
 import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
