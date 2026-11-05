@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import {
@@ -42,43 +41,23 @@ try {
   address.search = '';
   address.hash = '';
   const baseUrl = address.toString().replace(/\/$/, '');
-  const explicitTokenFile = option('--token-file');
-  const tokenFile =
-    explicitTokenFile ??
-    process.env.AGENT_GATEWAY_TOKEN_FILE ??
-    fileURLToPath(new URL('../../.data/agent-gateway-token', import.meta.url));
-  const resolveToken = async () => {
-    if (explicitTokenFile) {
-      return (await readFile(explicitTokenFile, 'utf8')).trim();
-    }
-    const envToken = process.env.AGENT_GATEWAY_TOKEN?.trim();
-    if (envToken) return envToken;
-    try {
-      const fileToken = (await readFile(tokenFile, 'utf8')).trim();
-      if (fileToken) return fileToken;
-    } catch {
-      // ignore ENOENT
-    }
-    return '';
-  };
+  const token = process.env.AGENT_GATEWAY_TOKEN?.trim() ?? '';
   const goal = option('--goal');
   const characterId = option('--character') ?? option('--agent');
   const json = args.includes('--json');
   if (json) args.splice(args.indexOf('--json'), 1);
+  const unknownOption = args.find(
+    (arg) => arg.startsWith('--') && arg !== '--help',
+  );
+  if (unknownOption) throw Error(`不支持的选项 ${unknownOption}`);
   const [command, id, third] = args;
   if (!command || command === 'help' || command === '--help') {
     console.log(
-      '用法：agent:ctl list | status/join/stop <characterId> | plans [characterId] | watch [characterId] | runs <characterId> <planId> | task create <characterId> --goal ... | run pause/resume/cancel <runId> --character <characterId> | receipt <commandId> | auth show；选项 --url --token-file --json',
+      '用法：agent:ctl list | status/join/stop <characterId> | plans [characterId] | watch [characterId] | runs <characterId> <planId> | task create <characterId> --goal ... | run pause/resume/cancel <runId> --character <characterId> | receipt <commandId> | auth show；选项 --url --json',
     );
   } else if (command === 'auth' && id === 'show') {
-    const token = await resolveToken();
-    if (token) {
-      console.log(token);
-    } else {
-      console.log('未配置 AGENT_GATEWAY_TOKEN，Agent Gateway 当前处于免密访问模式。');
-    }
+    console.log(token || '本地未设置 AGENT_GATEWAY_TOKEN。');
   } else {
-    const token = await resolveToken();
     const pending = new AbortController();
     const request = <T = unknown>(
       path: string,

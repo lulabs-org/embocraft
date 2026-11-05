@@ -654,177 +654,39 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  position: relative;
+  gap: 8px;
 }
-.console-access-hint {
-  font-size: 12px;
-  color: #7b8e80;
-}
-.agent-dialog .console-help-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  padding: 0;
-  border: 1px solid #d4ded0;
-  border-radius: 50%;
-  background: #f7f9f5;
-  color: #657b6b;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-.agent-dialog .console-help-icon-btn:hover,
-.agent-dialog .console-help-icon-btn.active {
-  color: var(--color-action);
-  background: #e6ede0;
-  border-color: #bacbba;
-}
-.console-token-popover {
-  width: min(320px, calc(100vw - 32px));
-  box-sizing: border-box;
-  padding: 12px 14px;
-  background: #ffffff;
-  border: 1px solid #d2ded0;
-  border-radius: 10px;
-  box-shadow:
-    0 10px 30px rgba(22, 56, 47, 0.15),
-    0 2px 8px rgba(22, 56, 47, 0.08);
-  color: var(--color-text);
-  font-size: 12px;
-  z-index: 9999;
-  animation: console-popover-in 0.15s ease-out;
-}
-.console-token-popover-arrow {
-  fill: #ffffff;
-  stroke: #d2ded0;
-  stroke-width: 1px;
-}
-@keyframes console-popover-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.console-token-popover-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.console-token-popover-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #244131;
-}
-.agent-dialog .console-token-popover-close {
+.agent-dialog .console-token-help-button {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
+  border-radius: 50%;
   background: transparent;
-  color: #7b8e80;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 4px;
+  color: #506555;
 }
-.agent-dialog .console-token-popover-close:hover {
-  background: #edf2e8;
-  color: var(--color-action);
+.agent-dialog .console-token-help-button:hover,
+.agent-dialog .console-token-help-button[data-state='open'] {
+  background: #e4ebdc;
 }
-.console-token-popover-sub {
-  display: block;
-  font-size: 11px;
-  color: #6a7e70;
-  margin-bottom: 5px;
+.console-token-help {
+  width: min(260px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d2ded0;
+  border-radius: 8px;
+  background: white;
+  fill: white;
+  box-shadow: 0 4px 16px #16382f26;
 }
-.console-token-cmd-box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: #f4f7f2;
-  border: 1px solid #dbe5d8;
-  border-radius: 6px;
-  padding: 6px 8px 6px 10px;
-  margin-bottom: 8px;
-}
-.console-token-cmd-box code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  color: #1f3f2f;
-  user-select: all;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.agent-dialog .console-token-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #ffffff;
-  border: 1px solid #cedcd0;
-  color: #3e5a47;
-  border-radius: 4px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-.agent-dialog .console-token-copy-btn:hover {
-  background: #eaf1e7;
-  border-color: #b7cbb9;
-  color: var(--color-action);
-}
-.agent-dialog .console-token-copy-btn.copied {
-  background: #edf6eb;
-  border-color: #8ac29b;
-  color: #2b6e41;
-}
-.console-token-popover-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0 0 10px;
-  padding: 8px 10px;
+.console-access-hint {
+  margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #2f5d3f;
-  background: #eef6ea;
-  border: 1px solid #cfe3c9;
-  border-left: 3px solid #7fae7a;
-  border-radius: 6px;
-}
-.console-token-popover-tip svg {
-  flex-shrink: 0;
-  margin-top: 1px;
-  color: #4f8a5b;
-}
-.console-token-cmd-label {
-  display: block;
-  font-size: 11px;
-  color: #6a7e70;
-  margin-bottom: 5px;
-}
-.console-token-popover-footer {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #7b8e80;
-  border-top: 1px solid #edf2e8;
-  padding-top: 6px;
+  overflow-wrap: anywhere;
+  color: #506555;
 }
 .console-access-pending {
   display: flex;

@@ -8,13 +8,9 @@ import {
   UnknownOutcome,
   type SocketLike,
 } from '@voxel/shared/management';
-import { gatewaySocket } from '../src/modules/gateway';
+import { GatewayAuth, gatewaySocket } from '../src/modules/gateway';
 import { ConsoleSyncEvents as ServerManagementEvents } from '../src/modules/console-sync';
 import { EventEmitter } from 'node:events';
-import { GatewayAuth } from '../src/modules/gateway';
-import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 describe('gateway command boundary', () => {
   it('coalesces concurrent commands and rejects reused IDs with different payloads', async () => {
     const router = new CommandRouter();
@@ -70,48 +66,16 @@ describe('gateway command boundary', () => {
     expect(router.get('bad').state).toBe('unknown');
     clock.mockRestore();
   });
-  it('generates private stable credentials and never treats wildcard Origin as authorization', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'gateway-auth-'));
-    try {
-      const tokenFile = join(dir, 'token');
-      const auth = await GatewayAuth.load({
-        tokenFile,
-        origins: ['http://localhost'],
-      });
-      const token = (await readFile(tokenFile, 'utf8')).trim();
-      expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
-      expect(auth.verify(token)).toBe(true);
-      expect(auth.verify('wrong')).toBe(false);
-      expect(auth.acceptsOrigin('https://other')).toBe(false);
-      expect(auth.acceptsOrigin(undefined)).toBe(true);
-      const next = await GatewayAuth.load({ tokenFile, origins: [] });
-      expect(next.verify(token)).toBe(true);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('disables authentication in development when AGENT_GATEWAY_TOKEN is not configured', async () => {
-    const auth = await GatewayAuth.load({
+  it('checks the Origin even when the gateway has no token', () => {
+    const auth = new GatewayAuth({
       origins: ['http://localhost'],
-      isProduction: false,
+      token: undefined,
     });
-    expect(auth.enabled).toBe(false);
+    expect(auth.verify(undefined)).toBe(true);
     expect(auth.verify('')).toBe(true);
     expect(auth.verify('any-token')).toBe(true);
     expect(auth.acceptsOrigin('http://localhost')).toBe(true);
     expect(auth.acceptsOrigin('https://other')).toBe(false);
-  });
-
-  it('refuses to start in production without AGENT_GATEWAY_TOKEN', async () => {
-    await expect(
-      GatewayAuth.load({
-        origins: ['http://localhost'],
-        isProduction: true,
-      }),
-    ).rejects.toThrow(
-      '生产环境必须配置 AGENT_GATEWAY_TOKEN 环境变量，禁止无鉴权启动 Agent Gateway。',
-    );
   });
 });
 class FakeSocket implements SocketLike {
@@ -165,7 +129,7 @@ function serverSocket(
   const socket = new ServerSocket();
   gatewaySocket(
     gateway as Parameters<typeof gatewaySocket>[0],
-    new GatewayAuth('fixture-gateway-token-for-tests', ['http://localhost']),
+    new GatewayAuth({ token: hello.token, origins: ['http://localhost'] }),
     socket as unknown as Parameters<typeof gatewaySocket>[2],
     { headers: { origin } } as Parameters<typeof gatewaySocket>[3],
   );

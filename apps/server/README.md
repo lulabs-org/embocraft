@@ -49,7 +49,7 @@ Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/a
 
 `ai-characters/services/` 集中角色管理器、编排器、宿主、唤醒调度与语音协调；服务使用 `*.service.ts` 命名，生产装配包装器为 `character-manager.service.ts`。`character-job.ts`、`execution-context.ts`、`task-execution-adapter.ts` 与 `world-event-handler.ts` 是同层运行时辅助文件，保留会话、Runner 与任务状态适配职责。HTTP 路由和 OpenAPI 注解位于 `routes/ai-characters.routes.ts`，纯校验与日志留在 `domain/`，角色快照留在 `persistence/`。模块根部 `index.ts` 保留全部公开导出；目录调整不改变角色生命周期、唤醒时序、语音行为、接口或存档格式。
 
-`gateway` 保持轻量目录：`auth.service.ts` 负责令牌加载与 HTTP 鉴权，`gateway.socket.ts` 负责管理通知握手、事件订阅与连接清理，`validation.ts` 校验握手数据。根部 `index.ts` 保留全部公开导出，令牌读取顺序、Origin 策略、通知协议和关闭行为保持不变。跨管理模块与共享客户端的 `test/gateway.test.ts` 保留在集成测试目录，并通过 gateway 门面引用。
+`env.readServer()` 校验网关令牌和来源配置。`gateway/auth.service.ts` 为 HTTP 管理路由和 WebSocket 握手提供令牌比对与来源检查，`gateway.socket.ts` 负责握手、事件订阅与连接清理。
 
 `providers` 保留现有 `domain/`、`adapters/`、`persistence/`、`services/` 和 `routes/` 分层。服务与就近测试统一命名为 `services/provider.service.ts` 和 `provider.service.test.ts`；模块门面继续导出 `ProviderService`，提供商读写、删除引用检查、模型查询、健康检测及变更事件行为保持不变。
 
@@ -76,7 +76,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 ## 状态与测试
 
-`dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；旧 JSON 存储后备路径已移除，网关令牌及本地语音模型文件保留原配置位置。现有数据库存档恢复与运行时迁移继续保留。
+`dataPath()` 锚定仓库根目录，Docker 中对应 `/app/.data/`。生产默认将模型提供商、Agent/任务联合存档和 TTS/ASR 配置保存在 PostgreSQL；网关通过环境变量 `AGENT_GATEWAY_TOKEN` 配置令牌，本地语音模型文件保留原配置位置。现有数据库存档恢复与运行时迁移继续保留。
 
 角色与执行快照在当前 schema 中按所有权分开保存：
 
@@ -96,7 +96,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 `20261101013936_split_character_execution_storage` 补齐角色配置、长期记忆、日志和 Run checkpoint 的结构变更。该迁移不搬迁旧存档，会删除 `AgentCharacter.data`，适用于空库或已重置的开发库；需要保留旧数据的环境必须先另行准备数据迁移方案。运行数据库测试时使用独立的 `TEST_DATABASE_URL`，测试会清空该测试库中的业务表。
 
-`test/helpers/test-server.ts` 使用生产 `createServer`，通过 `test/helpers/memory-storage.ts` 注入内存模型服务、角色存档与语音配置；默认配置临时令牌目录、内存世界、随机 loopback 端口与 mock 语音。调用方可注入模型运行器、存储和语音依赖；`close()` 清理工厂拥有的临时目录，调用方提供的目录由调用方负责。默认 fixture key 不可用于真实推理。
+`test/helpers/test-server.ts` 使用生产 `createServer()`，通过环境变量设置测试用网关令牌，在专用测试数据库和随机本地端口上运行服务。`close()` 恢复环境变量并清理工厂创建的临时目录。
 
 ```sh
 pnpm --filter @voxel/server test  # 服务端就近测试与网络生命周期
@@ -168,7 +168,7 @@ ASR 显式分配改用 `AsrAssignment`，服务目录与分配在同一事务中
 
 ## HTTP 领域路径
 
-共享模型配置使用 `/providers`，全局计划使用 `/tasks`，运行控制使用 `/task-runs`，TTS 配置和试听使用 `/voice/tts/services`，Piper 模型目录与安装使用 `/voice/tts/piper`。它们与 `/ai-characters`、`/voice/asr/services` 都需要管理员 Bearer 令牌。Agent 音色绑定继续为 `/ai-characters/:id/voice`；聊天音频继续使用 `/chat` 下的玩家会话鉴权。
+共享模型配置使用 `/providers`，全局计划使用 `/tasks`，运行控制使用 `/task-runs`，TTS 配置和试听使用 `/voice/tts/services`，Piper 模型目录与安装使用 `/voice/tts/piper`。启用鉴权时，这些接口与 `/ai-characters`、`/voice/asr/services` 都需要管理员 Bearer 令牌。Agent 音色绑定继续为 `/ai-characters/:id/voice`；聊天音频继续使用 `/chat` 下的玩家会话鉴权。
 
 这些路径替换旧的 `/ai-characters/providers`、`/ai-characters/tasks`、`/ai-characters/task-runs`、`/ai-characters/voice-services`；没有旧路径别名。浏览器、CLI 脚本和外部 HTTP 客户端需要同步升级。WebSocket 连接地址仍为 `/ai-characters/gateway`。
 

@@ -157,7 +157,7 @@ apps/server/
         │   └── index.ts                 # 导出 installChatRoutes 等
         │
         ├── gateway/                     # ── 4. 管理网关鉴权与安全通道 ──
-        │   ├── auth.service.ts          # Bearer 令牌与文件 Token 双轨校验服务（GatewayAuth）
+        │   ├── auth.service.ts          # 管理令牌与浏览器来源校验（GatewayAuth）
         │   ├── gateway.socket.ts        # WebSocket 握手鉴权守卫（/ai-characters/gateway）
         │   ├── validation.ts            # 网关请求校验守卫
         │   └── index.ts                 # 暴露 GatewayAuth, installGatewaySocket
@@ -500,12 +500,9 @@ graph LR
 
 ## 9. 安全防护与服务生命周期（Security & Lifecycle）
 
-### 9.1 网关令牌双轨鉴权
+### 9.1 网关令牌鉴权
 
-- **令牌读取优先级**：优先读取环境变量 `AGENT_GATEWAY_TOKEN`；若未配置，则自动尝试读取 `tokenFile`（如 `.agent-gateway-token`）；
-- **环境隔离输出**：
-  - 本地开发模式下（`!config.isProduction`），启动时终端显式打印管理员令牌，方便开发者一键粘贴解锁控制台；
-  - 生产环境严禁打印任何 Token 明文，仅输出令牌加载来源。
+服务启动时，`env.readServer()` 校验 `AGENT_GATEWAY_TOKEN` 和允许的来源。生产环境必须设置令牌。开发环境留空时允许免密访问，设置后可从启动终端复制令牌。生产环境仅记录已启用令牌鉴权。HTTP 管理路由与管理 WebSocket 共用同一个 `GatewayAuth` 实例。
 
 ### 9.2 严格安全中间件链
 
@@ -520,7 +517,7 @@ graph LR
 1. 校验与加载强类型环境变量（`env.load()`）；
 2. 数据库探活（`checkStartupDatabase()`），遇错脱敏中断；
 3. 创建运行时数据库客户端；
-4. 并行加载 Gateway、Provider、TTS/ASR 配置（`loadStores()`），成功后装配服务、HTTP 和 Socket；任一加载失败时等待其他加载结束，释放数据库客户端并中断启动；
+4. 用网关配置同步构造 `GatewayAuth`，装配服务、HTTP 和 Socket。Provider、TTS 与 ASR 在使用时查询数据库。
 5. 启动 HTTP 服务并在同端口绑定升级 WebSocket 路由器；
 6. 启动 Colyseus 房间引擎，依据已保存的快照恢复并自动唤醒智能体。
 

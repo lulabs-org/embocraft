@@ -68,6 +68,17 @@ function validateWebOrigin(origin: string): string {
   return origin;
 }
 
+function parseGatewayToken(raw: string | undefined, isProduction: boolean) {
+  const token = raw?.trim() || undefined;
+  if (isProduction && !token) {
+    throw new Error('生产环境必须配置 AGENT_GATEWAY_TOKEN 环境变量。');
+  }
+  if (token && (token.length < 24 || token.length > 4096 || /\s/.test(token))) {
+    throw new Error('AGENT_GATEWAY_TOKEN 需为 24–4096 个无空白字符。');
+  }
+  return token;
+}
+
 function parseGatewayOrigins(
   raw: string | undefined,
   currentWebOrigin: string,
@@ -125,6 +136,7 @@ function readServerConfig(env: EnvLookup = process.env) {
   const port = parsePort(env.SERVER_PORT);
   const host = parseHost(env.SERVER_HOST);
   const origin = validateWebOrigin(webOrigin(env));
+  const isProduction = env.NODE_ENV?.trim() === 'production';
   const gatewayOrigins = parseGatewayOrigins(
     env.AGENT_GATEWAY_ALLOWED_ORIGINS,
     origin,
@@ -135,10 +147,9 @@ function readServerConfig(env: EnvLookup = process.env) {
     host,
     webOrigin: origin,
     databaseUrl: databaseUrl(env),
-    isProduction: (env.NODE_ENV ?? '').trim() === 'production',
+    isProduction,
     gateway: {
-      token: env.AGENT_GATEWAY_TOKEN?.trim() || undefined,
-      tokenFile: env.AGENT_GATEWAY_TOKEN_FILE?.trim() || undefined,
+      token: parseGatewayToken(env.AGENT_GATEWAY_TOKEN, isProduction),
       origins: gatewayOrigins,
     },
   };

@@ -26,7 +26,7 @@ Local development and Docker Compose share [.env.example](.env.example). Copy it
 cp -n .env.example .env
 ```
 
-Follow the common, local, and Docker sections in the example. Set a database password before deploying with Docker; see [Configuration setup](docs/guide/getting-started.md#统一配置入口) for defaults and overrides.
+Follow the common, local, and Docker sections in the example. Set a database password and a unique `AGENT_GATEWAY_TOKEN` before deploying with Docker. For example, generate the token with `openssl rand -base64 32`. See [Configuration setup](docs/guide/getting-started.md#统一配置入口) for defaults and overrides.
 
 ### 1. Local Development Environment
 

@@ -124,7 +124,7 @@ pnpm agent:mock
 
 ### 2. 一键启动指令
 
-完成上方统一配置后，在 `.env` 的 Docker Compose 配置区设置数据库密码，按需调整对外端口。
+完成上方统一配置后，在 `.env` 中设置数据库密码和 `AGENT_GATEWAY_TOKEN`，按需调整对外端口。可用 `openssl rand -base64 32` 生成管理令牌。
 
 ```bash
 # 使用 pnpm 快捷脚本一键构建并后台启动
@@ -215,7 +215,7 @@ pnpm test:integration
 ## 接入首个 AI 玩家
 
 1. 打开游戏控制台或直接访问管理员面板。
-2. 输入管理员访问令牌（本地可通过 `pnpm agent:ctl auth show` 查询当前令牌）。
+2. 若出现解锁提示，输入服务端 `AGENT_GATEWAY_TOKEN` 的值。使用他人部署的服务时，请向管理员索取令牌。
 3. 进入 **Agent 玩家 → 创建 Agent**：
    - 设定角色昵称与角色系统提示词；
    - 选择预设的 LLM 思考模型服务（如 DeepSeek）；

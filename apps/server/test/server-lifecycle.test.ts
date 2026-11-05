@@ -1,5 +1,8 @@
 import { Session, until } from '@voxel/agent-runtime';
-import { MANAGEMENT_EVENTS_VERSION } from '@voxel/shared/management';
+import {
+  MANAGEMENT_EVENTS_VERSION,
+  ManagementEvents,
+} from '@voxel/shared/management';
 import { access } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
@@ -175,6 +178,44 @@ describe('server assembly and lifecycle', () => {
       await server.close();
     }
   }, 15000);
+
+  it('enforces the same token and allowed Origin for HTTP and WebSocket clients', async () => {
+    const origin = 'http://localhost:5173';
+    const token = 'fixture-gateway-token-for-tests';
+    const server = await createTestServer({ origin });
+    try {
+      for (const [clientOrigin, clientToken, status] of [
+        [origin, token, 200],
+        [origin, 'wrong', 401],
+        ['https://foreign.example', token, 403],
+      ] as const) {
+        const response = await fetch(server.httpUrl + '/ai-characters', {
+          headers: {
+            Origin: clientOrigin,
+            Authorization: `Bearer ${clientToken}`,
+          },
+        });
+        expect(response.status).toBe(status);
+        const client = new ManagementEvents({
+          url: server.wsUrl + '/ai-characters/gateway',
+          token: () => clientToken,
+          socket: (url) => new WebSocket(url, { origin: clientOrigin }),
+          reconnect: false,
+        });
+        try {
+          if (status === 200) await client.connect();
+          else
+            await expect(client.connect()).rejects.toMatchObject({
+              code: 'UNAUTHORIZED',
+            });
+        } finally {
+          client.close();
+        }
+      }
+    } finally {
+      await server.close();
+    }
+  });
 
   it('stops before listening or loading stores when database diagnostics fail', async () => {
     vi.spyOn(health, 'checkStartupDatabase').mockRejectedValueOnce(
