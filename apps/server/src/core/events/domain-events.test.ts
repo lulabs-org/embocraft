@@ -43,3 +43,21 @@ describe('DomainEventBus', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
+
+it('delivers settled notifications to all listeners and reports failures without changing guard behavior', () => {
+  const bus = new DomainEventBus();
+  const later = vi.fn();
+  const remove = bus.on('tts.service.changed', () => {
+    throw new Error('private');
+  });
+  bus.on('tts.service.changed', later);
+  expect(bus.emitSettled('tts.service.changed', { serviceId: 'voice' })).toBe(
+    false,
+  );
+  expect(later).toHaveBeenCalledExactlyOnceWith({ serviceId: 'voice' });
+  remove();
+  expect(bus.emitSettled('tts.service.changed', { serviceId: 'voice' })).toBe(
+    true,
+  );
+  expect(later).toHaveBeenCalledTimes(2);
+});

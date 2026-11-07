@@ -398,3 +398,78 @@ it('resolves unbound, empty and saved bindings through their existing paths', as
   ).rejects.toMatchObject({ status: 404 });
   expect(defaultSpeech.synthesize).not.toHaveBeenCalled();
 });
+
+it('keeps committed updates and removals successful when a change listener fails', async () => {
+  const service = new TtsService();
+  const saved = await service.save({ ...local(), name: 'Before' });
+  const later = vi.fn();
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const releaseFailure = domainEvents.on('tts.service.changed', () => {
+    throw new Error('private details');
+  });
+  const releaseLater = domainEvents.on('tts.service.changed', later);
+  try {
+    await expect(
+      service.save({ ...saved, name: 'After' }, saved.id),
+    ).resolves.toMatchObject({ name: 'After' });
+    expect((await service.get(saved.id)).name).toBe('After');
+    await expect(service.remove(saved.id)).resolves.toBeUndefined();
+    await expect(service.get(saved.id)).rejects.toMatchObject({ status: 404 });
+    expect(later).toHaveBeenCalledTimes(2);
+    expect(log).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private details');
+  } finally {
+    releaseFailure();
+    releaseLater();
+    log.mockRestore();
+  }
+});
+
+it('does not notify about a failed transaction and releases deletion coordination for retry', async () => {
+  const service = new TtsService();
+  const saved = await service.save({ ...local(), name: 'Voice' });
+  const changed = vi.fn();
+  const release = domainEvents.on('tts.service.changed', changed);
+  try {
+    mocked.persistence.saveError = new Error('storage failure');
+    await expect(service.remove(saved.id)).rejects.toThrow('storage failure');
+    expect(changed).not.toHaveBeenCalled();
+    expect(await service.get(saved.id)).toMatchObject({ id: saved.id });
+    mocked.persistence.saveError = undefined;
+    await service.remove(saved.id);
+    expect(changed).toHaveBeenCalledExactlyOnceWith({ serviceId: saved.id });
+  } finally {
+    mocked.persistence.saveError = undefined;
+    release();
+  }
+});
+
+it('reports an unexpected notifier failure without misreporting a committed update', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const coordination = {
+    withRemoval: async <T>(_id: string, operation: () => Promise<T>) =>
+      operation(),
+    assertRemovable: () => {},
+    notifyChanged: () => {
+      throw new Error('private details');
+    },
+  };
+  const service = new TtsService(
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    coordination,
+  );
+  try {
+    const saved = await service.save({ ...local(), name: 'Before' });
+    await expect(
+      service.save({ ...saved, name: 'After' }, saved.id),
+    ).resolves.toMatchObject({ name: 'After' });
+    expect((await service.get(saved.id)).name).toBe('After');
+    expect(log).toHaveBeenCalledOnce();
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private details');
+  } finally {
+    log.mockRestore();
+  }
+});

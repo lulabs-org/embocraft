@@ -22,3 +22,10 @@ export type SpeechModelQuery = (
   connection: Pick<VoiceServiceDraft, 'baseUrl' | 'apiKey'>,
   signal?: AbortSignal,
 ) => Promise<SpeachesModel[]>;
+
+/** In-process deletion guards and post-commit runtime notification. */
+export interface VoiceServiceCoordination {
+  withRemoval<T>(id: string, operation: () => Promise<T>): Promise<T>;
+  assertRemovable(id: string): void;
+  notifyChanged(id: string): boolean;
+}

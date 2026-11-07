@@ -4,7 +4,7 @@ import {
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
-import { ttsService } from '../../tts';
+import { ttsService, withVoiceServiceReference } from '../../tts';
 import type { Job } from './character-job';
 import type { Session } from '@voxel/agent-runtime';
 
@@ -25,9 +25,11 @@ export class CharacterVoiceCoordinator {
       settings.voiceReplies && aiCharacterPermissions(settings).chat
         ? settings.voiceServiceId || 'local-default'
         : '';
-    if (serviceId) await ttsService.get(serviceId);
-    if (job.view.sessionId !== sessionId) return;
-    domainEvents.emit('agent.voice.bound', { sessionId, serviceId });
+    await withVoiceServiceReference(serviceId, async () => {
+      if (serviceId) await ttsService.get(serviceId);
+      if (job.view.sessionId !== sessionId) return;
+      domainEvents.emit('agent.voice.bound', { sessionId, serviceId });
+    });
   }
 
   unbindVoice(sessionId: string) {

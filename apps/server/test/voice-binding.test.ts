@@ -3,7 +3,12 @@ import type { Player } from '@voxel/shared';
 import { domainEvents } from '../src/core/events/domain-events';
 import { CharacterVoiceCoordinator } from '../src/modules/ai-characters/services/voice-coordinator.service';
 import type { Job } from '../src/modules/ai-characters/services/character-job';
-import { ttsService, type ResolvedSpeech } from '../src/modules/tts';
+import {
+  TtsService,
+  ttsService,
+  type ResolvedSpeech,
+} from '../src/modules/tts';
+import { voicePersistence } from './helpers/memory-storage';
 import { AgentSpeech } from '../src/modules/world/services/agent-speech.service';
 import { WorldRoom } from '../src/modules/world/world.room';
 
@@ -229,3 +234,89 @@ it.each([undefined, '', 'old'])(
     await expect(resolving).rejects.toMatchObject({ status: 409 });
   },
 );
+
+it('prevents deleting a voice while a runtime binding is being established', async () => {
+  const store = new TtsService(voicePersistence());
+  let release!: () => void;
+  vi.mocked(ttsService.get).mockImplementationOnce(async (id) => {
+    const value = await store.get(id);
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return value;
+  });
+  const job = {
+    view: {
+      sessionId: 'session',
+      voiceReplies: true,
+      voiceServiceId: 'local-default',
+      permissions: { chat: true },
+    },
+  } as unknown as Job;
+  const bound = vi.fn();
+  const off = domainEvents.on('agent.voice.bound', bound);
+  const binding = new CharacterVoiceCoordinator().bindVoice(job);
+  try {
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await expect(store.remove('local-default')).rejects.toMatchObject({
+      status: 409,
+    });
+  } finally {
+    release?.();
+  }
+  try {
+    await binding;
+    expect(bound).toHaveBeenCalledExactlyOnceWith({
+      sessionId: 'session',
+      serviceId: 'local-default',
+    });
+  } finally {
+    off();
+  }
+});
+
+it('rejects a new binding while the voice deletion transaction is in progress', async () => {
+  const persistence = voicePersistence();
+  const transaction = persistence.transaction.bind(persistence);
+  let release!: () => void;
+  vi.spyOn(persistence, 'transaction').mockImplementation((run) =>
+    transaction((tx) =>
+      run({
+        ...tx,
+        remove: async (id) => {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await tx.remove(id);
+        },
+      }),
+    ),
+  );
+  const store = new TtsService(persistence);
+  const removing = store.remove('local-default');
+  const job = {
+    view: {
+      sessionId: 'session',
+      voiceReplies: true,
+      voiceServiceId: 'local-default',
+      permissions: { chat: true },
+    },
+  } as unknown as Job;
+  const bound = vi.fn();
+  const off = domainEvents.on('agent.voice.bound', bound);
+  try {
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await expect(
+      new CharacterVoiceCoordinator().bindVoice(job),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(ttsService.get).not.toHaveBeenCalled();
+    expect(bound).not.toHaveBeenCalled();
+  } finally {
+    release?.();
+    off();
+  }
+  await removing;
+  await expect(store.get('local-default')).rejects.toMatchObject({
+    status: 404,
+  });
+});

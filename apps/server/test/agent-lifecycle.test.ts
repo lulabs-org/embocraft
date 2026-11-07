@@ -8,6 +8,7 @@ import {
 } from '../../../tests/support/model-fixture';
 import { AICharacterManager } from '../src/modules/ai-characters';
 import { TtsService, ttsService } from '../src/modules/tts';
+import { voiceServiceCoordination } from '../src/modules/tts/voice-service-coordination';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
@@ -1340,4 +1341,153 @@ it('rejects old runtime archives without overwriting them on shutdown', async ()
   expect(() => restored.assertWritable()).toThrow('存档恢复失败');
   await restored.close();
   expect(store.archive.json).toBe(original);
+});
+
+it('protects a voice while a new Agent is being validated and registered', async () => {
+  const voice = await ttsService.save({ name: 'Pending', type: 'speaches' });
+  const m = setup(fakeSession());
+  let release!: () => void;
+  const originalGet = mockTts.get.bind(mockTts);
+  vi.spyOn(ttsService, 'get').mockImplementationOnce(async (id) => {
+    const found = await originalGet(id);
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return found;
+  });
+  const creating = m.create({
+    ...settings,
+    voiceServiceId: voice.id,
+    voiceReplies: true,
+    joinWorld: false,
+  });
+  try {
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await expect(ttsService.remove(voice.id)).rejects.toMatchObject({
+      status: 409,
+    });
+  } finally {
+    release?.();
+  }
+  const created = await creating;
+  expect(created.voiceServiceId).toBe(voice.id);
+  await expect(ttsService.remove(voice.id)).rejects.toMatchObject({
+    status: 409,
+  });
+});
+
+it.each(['current', 'legacy alias', 'default'])(
+  'protects a %s voice while a persisted Agent is being restored',
+  async (format) => {
+    const first = setup(fakeSession());
+    const created = await first.create({
+      ...settings,
+      voiceReplies: true,
+      joinWorld: false,
+    });
+    await first.close();
+    if (format !== 'current') {
+      const archive = JSON.parse(store.archive.json!);
+      if (format === 'legacy alias') {
+        archive.characters[0].voiceServiceId = '';
+        archive.characters[0].voiceProviderId = 'local-default';
+      } else {
+        delete archive.characters[0].voiceServiceId;
+      }
+      store.archive.json = JSON.stringify(archive);
+    }
+    const restored = setup(fakeSession());
+    let release!: () => void;
+    const originalGet = mockTts.get.bind(mockTts);
+    vi.spyOn(ttsService, 'get').mockImplementationOnce(async (id) => {
+      const found = await originalGet(id);
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return found;
+    });
+    const loading = restored.load();
+    try {
+      await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+      await expect(ttsService.remove('local-default')).rejects.toMatchObject({
+        status: 409,
+      });
+    } finally {
+      release?.();
+    }
+    await loading;
+    expect(
+      restored.list().find((job) => job.id === created.id)?.voiceServiceId,
+    ).toBe('local-default');
+    await expect(ttsService.remove('local-default')).rejects.toMatchObject({
+      status: 409,
+    });
+  },
+);
+
+it('does not overwrite an Agent archive when restoration races a voice deletion', async () => {
+  const first = setup(fakeSession());
+  await first.create({ ...settings, voiceReplies: true, joinWorld: false });
+  await first.close();
+  const original = store.archive.json;
+  let release!: () => void;
+  const removing = voiceServiceCoordination.withRemoval(
+    'local-default',
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const restored = setup(fakeSession());
+  try {
+    await expect(restored.load()).rejects.toMatchObject({ status: 409 });
+    await restored.close();
+    expect(store.archive.json).toBe(original);
+  } finally {
+    release();
+    await removing;
+  }
+});
+
+it('rejects an Agent update that starts after the deletion guards have passed', async () => {
+  const persistence = voicePersistence();
+  mockTts = new TtsService(persistence);
+  const target = await ttsService.save({ name: 'Deleting', type: 'speaches' });
+  const m = setup(fakeSession());
+  const created = await m.create({
+    ...settings,
+    voiceReplies: true,
+    joinWorld: false,
+  });
+  const transaction = persistence.transaction.bind(persistence);
+  let release!: () => void;
+  vi.spyOn(persistence, 'transaction').mockImplementation((run) =>
+    transaction((tx) =>
+      run({
+        ...tx,
+        remove: async (id) => {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await tx.remove(id);
+        },
+      }),
+    ),
+  );
+  const removing = ttsService.remove(target.id);
+  try {
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await expect(
+      m.update(created.id, { voiceServiceId: target.id, voiceReplies: false }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(m.list().find((job) => job.id === created.id)?.voiceServiceId).toBe(
+      'local-default',
+    );
+  } finally {
+    release?.();
+  }
+  await removing;
+  await expect(ttsService.get(target.id)).rejects.toMatchObject({
+    status: 404,
+  });
 });

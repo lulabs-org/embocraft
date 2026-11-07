@@ -5,11 +5,13 @@ import type {
   SpeechAdapterFactory,
   SpeechModelQuery,
   VoiceServicePersistence,
+  VoiceServiceCoordination,
 } from './ports';
 import { createDefaultSpeechSynthesizer } from './services/piper.service';
 import { PiperModels } from './services/piper-models.service';
 import type { SpeechSynthesizer } from './services/speech-synthesizer';
 import { TtsService as TtsApplicationService } from './services/tts.service';
+import { voiceServiceCoordination } from './voice-service-coordination';
 
 const queryModels: SpeechModelQuery = (connection, signal) =>
   new SpeachesModels(connection).list(signal);
@@ -21,8 +23,9 @@ export class TtsService extends TtsApplicationService {
     factory: SpeechAdapterFactory = createSpeechAdapter,
     defaultSpeech: () => SpeechSynthesizer = createDefaultSpeechSynthesizer,
     models: SpeechModelQuery = queryModels,
+    coordination: VoiceServiceCoordination = voiceServiceCoordination,
   ) {
-    super(storage, factory, defaultSpeech, models);
+    super(storage, factory, defaultSpeech, models, coordination);
   }
 }
 

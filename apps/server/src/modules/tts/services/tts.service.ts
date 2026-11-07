@@ -2,6 +2,7 @@ import type {
   SpeechAdapterFactory,
   SpeechModelQuery,
   VoiceServicePersistence,
+  VoiceServiceCoordination,
 } from '../ports';
 import { SpeechModelsService } from './speech-models.service';
 import { SpeechService } from './speech.service';
@@ -23,8 +24,9 @@ export class TtsService {
     factory: SpeechAdapterFactory,
     private readonly defaultSpeech: () => SpeechSynthesizer,
     queryModels: SpeechModelQuery,
+    coordination: VoiceServiceCoordination,
   ) {
-    this.management = new VoiceServiceManagement(storage);
+    this.management = new VoiceServiceManagement(storage, coordination);
     const getVoice = (id: string) => this.get(id);
     this.modelDiscovery = new SpeechModelsService(getVoice, queryModels);
     this.speech = new SpeechService(getVoice, factory);
