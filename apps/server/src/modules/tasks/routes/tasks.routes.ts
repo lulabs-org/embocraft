@@ -126,7 +126,7 @@ export function createTaskRouter(): Router {
    */
   router.get(
     '/tasks',
-    route((req, res) => {
+    route(async (req, res) => {
       const offset = queryText(req.query.offset);
       const filter: PlanQueryFilter = {
         timing: queryText(req.query.timing) as PlanQueryFilter['timing'],
@@ -135,7 +135,7 @@ export function createTaskRouter(): Router {
         search: queryText(req.query.search),
         characterId: queryText(req.query.characterId),
       };
-      res.json(tasks.planPage(filter));
+      res.json(await tasks.planPage(filter));
     }),
   );
 
@@ -178,8 +178,8 @@ export function createTaskRouter(): Router {
    */
   router.get(
     '/tasks/:planId',
-    route((req, res) => {
-      res.json(tasks.publicPlan(String(req.params.planId)));
+    route(async (req, res) => {
+      res.json(await tasks.publicPlan(String(req.params.planId)));
     }),
   );
 
@@ -457,8 +457,8 @@ export function createTaskRouter(): Router {
    */
   router.get(
     '/tasks/:planId/runs',
-    route((req, res) => {
-      const result = tasks.publicRuns(
+    route(async (req, res) => {
+      const result = await tasks.publicRuns(
         queryText(req.query.characterId),
         String(req.params.planId),
         Number(req.query.offset ?? 0),

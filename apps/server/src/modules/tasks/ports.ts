@@ -1,15 +1,27 @@
 import type { AgentRuntime, RuntimeState } from '@voxel/agent-runtime';
-import type { AICharacterSettings, AICharacterView } from '@voxel/shared';
+import type {
+  AICharacterSettings,
+  AICharacterView,
+  TaskPlan,
+} from '@voxel/shared';
+import type { StoredRun } from './domain/types';
 import type { PlanQueryFilter } from './domain/types';
 import type { PlanService } from './persistence/plan-store';
+
+export type TaskQuerySnapshot = {
+  plans: TaskPlan[];
+  runs: StoredRun[];
+  requests: Record<string, string>;
+  characters: { id: string; name?: string; runtime?: RuntimeState }[];
+};
 
 /**
  * Tasks / Plans 领域的管理接口契约（由 TaskCoordinator 实现）
  */
 export interface TaskPort {
-  planPage(params: PlanQueryFilter): unknown;
-  publicPlans(characterId?: string, metadata?: boolean): unknown;
-  publicPlan(planId: string): unknown;
+  planPage(params: PlanQueryFilter): Promise<unknown>;
+  publicPlans(characterId?: string, metadata?: boolean): Promise<unknown>;
+  publicPlan(planId: string): Promise<unknown>;
   createTaskPlan(characterId: string, value: unknown): Promise<unknown>;
   updateTaskPlan(
     characterId: string | undefined,
@@ -32,7 +44,7 @@ export interface TaskPort {
     planId: string,
     offset?: number,
     metadata?: boolean,
-  ): unknown;
+  ): Promise<unknown>;
   controlTaskRun(
     characterId: string | undefined,
     runId: string,

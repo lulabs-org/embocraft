@@ -645,7 +645,7 @@ it('owns plans independently, reassigns with revision guards and retains executo
     expect(manager.tasks.taskRuns(a, p.id).items[0].status).toBe('completed'),
   );
   const first = manager.tasks.taskRuns(a, p.id).items[0];
-  const before = manager.tasks.publicPlan(p.id);
+  const before = await manager.tasks.publicPlan(p.id);
   const result = await manager.tasks.reassignPlan(p.id, b, {
     expectedPlanRevision: before.revision,
   });
@@ -654,7 +654,9 @@ it('owns plans independently, reassigns with revision guards and retains executo
     state: 'paused',
     spentTokens: 600,
   });
-  expect(manager.tasks.publicRuns(undefined, p.id).items[0]).toMatchObject({
+  expect(
+    (await manager.tasks.publicRuns(undefined, p.id)).items[0],
+  ).toMatchObject({
     id: first.id,
     characterId: a,
     planRevision: 1,
@@ -675,10 +677,10 @@ it('owns plans independently, reassigns with revision guards and retains executo
   await manager.tasks.controlTaskPlan(b, p.id, 'run', {
     requestId: 'new-owner',
   });
-  await vi.waitFor(() =>
-    expect(manager.tasks.publicPlan(p.id).spentTokens).toBe(1200),
+  await vi.waitFor(async () =>
+    expect((await manager.tasks.publicPlan(p.id)).spentTokens).toBe(1200),
   );
-  expect(manager.tasks.publicPlan(p.id).state).toBe('paused');
+  expect((await manager.tasks.publicPlan(p.id)).state).toBe('paused');
 });
 
 it('deletes an Agent without deleting plans or history and restores unassigned plans', async () => {
@@ -696,12 +698,14 @@ it('deletes an Agent without deleting plans or history and restores unassigned p
   await expect(manager.tasks.reassignPlan(p.id, a)).rejects.toThrow('未结束');
   await manager.remove(a);
   expect(manager.list()).toHaveLength(0);
-  expect(manager.tasks.publicPlan(p.id)).toMatchObject({
+  expect(await manager.tasks.publicPlan(p.id)).toMatchObject({
     state: 'paused',
     spentTokens: 600,
   });
-  expect(manager.tasks.publicPlan(p.id).characterId).toBeUndefined();
-  expect(manager.tasks.publicRuns(undefined, p.id).items[0]).toMatchObject({
+  expect((await manager.tasks.publicPlan(p.id)).characterId).toBeUndefined();
+  expect(
+    (await manager.tasks.publicRuns(undefined, p.id)).items[0],
+  ).toMatchObject({
     id: run.id,
     status: 'cancelled',
     characterId: a,
@@ -710,13 +714,13 @@ it('deletes an Agent without deleting plans or history and restores unassigned p
   await manager.close();
   manager = build();
   await manager.load();
-  expect(manager.tasks.publicPlan(p.id).characterId).toBeUndefined();
-  expect(manager.tasks.publicRuns(undefined, p.id).items[0].status).toBe(
-    'cancelled',
-  );
+  expect((await manager.tasks.publicPlan(p.id)).characterId).toBeUndefined();
+  expect(
+    (await manager.tasks.publicRuns(undefined, p.id)).items[0].status,
+  ).toBe('cancelled');
   const b = await role();
   await manager.tasks.reassignPlan(p.id, b);
-  expect(manager.tasks.publicPlan(p.id)).toMatchObject({
+  expect(await manager.tasks.publicPlan(p.id)).toMatchObject({
     characterId: b,
     state: 'paused',
     spentTokens: 600,
@@ -730,11 +734,11 @@ it('does not publish an uncommitted reassignment or lose other plans on save fai
     a,
     draft({ kind: 'interval', everyMs: 60000 }),
   );
-  const before = manager.tasks.publicPlan(p.id);
+  const before = await manager.tasks.publicPlan(p.id);
   store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(manager.tasks.reassignPlan(p.id, b)).rejects.toThrow();
-    expect(manager.tasks.publicPlan(p.id)).toEqual(before);
+    expect(await manager.tasks.publicPlan(p.id)).toEqual(before);
     expect(manager.plans.get(p.id).characterId).toBe(a);
   } finally {
     store.archive.saveError = undefined;
@@ -766,7 +770,7 @@ it('filters global plans and controls plan state independently of a chat task re
     characterId: a,
     characterName: expect.any(String),
   });
-  expect(manager.tasks.publicPlan(p.id)).toHaveProperty('goal');
+  expect(await manager.tasks.publicPlan(p.id)).toHaveProperty('goal');
   const none = await manager.tasks.planPage({
     search: '不存在',
   });
@@ -804,14 +808,14 @@ it('rolls back deletion of the Agent, bindings and history together when storage
   const id = await role();
   const plan = await manager.tasks.createTaskPlan(id, draft());
   await idle();
-  const history = manager.tasks.publicRuns(undefined, plan.id);
+  const history = await manager.tasks.publicRuns(undefined, plan.id);
   store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(manager.remove(id)).rejects.toThrow();
     expect(manager.list().some((a) => a.id === id)).toBe(true);
     expect(manager.plans.get(plan.id).characterId).toBe(id);
-    expect(manager.tasks.publicPlan(plan.id).characterId).toBe(id);
-    expect(manager.tasks.publicRuns(undefined, plan.id).items).toEqual(
+    expect((await manager.tasks.publicPlan(plan.id)).characterId).toBe(id);
+    expect((await manager.tasks.publicRuns(undefined, plan.id)).items).toEqual(
       history.items,
     );
   } finally {
@@ -823,20 +827,24 @@ it('freezes each executor name at launch while showing the live role name on pla
   const id = await role();
   const plan = await manager.tasks.createTaskPlan(id, draft());
   await idle();
-  const first = manager.tasks.publicRuns(undefined, plan.id).items[0];
+  const first = (await manager.tasks.publicRuns(undefined, plan.id)).items[0];
   await manager.update(id, { name: '改名后的角色' });
-  expect(manager.tasks.publicPlan(plan.id).characterName).toBe('改名后的角色');
+  expect((await manager.tasks.publicPlan(plan.id)).characterName).toBe(
+    '改名后的角色',
+  );
   await manager.tasks.controlTaskPlan(id, plan.id, 'run', {
     requestId: 'after-rename',
   });
   await idle();
-  const runs = manager.tasks.publicRuns(undefined, plan.id).items;
+  const runs = (await manager.tasks.publicRuns(undefined, plan.id)).items;
   expect(runs[0].characterName).toBe('改名后的角色');
   expect(runs[1].characterName).toBe(first.characterName);
   await manager.remove(id);
-  expect(manager.tasks.publicPlan(plan.id).characterName).toBe('改名后的角色');
+  expect((await manager.tasks.publicPlan(plan.id)).characterName).toBe(
+    '改名后的角色',
+  );
   expect(
-    manager.tasks.publicRuns(undefined, plan.id).items[1].characterName,
+    (await manager.tasks.publicRuns(undefined, plan.id)).items[1].characterName,
   ).toBe(first.characterName);
 });
 
@@ -845,10 +853,10 @@ it('preserves plan execution when changing models and rejects implicit task repl
   decide.mockImplementation(async () => response('waiting'));
   const plan = await manager.tasks.createTaskPlan(id, draft());
   await idle();
-  const before = manager.tasks.publicRuns(undefined, plan.id).items[0];
+  const before = (await manager.tasks.publicRuns(undefined, plan.id)).items[0];
   const calls = decide.mock.calls.length;
   await manager.update(id, { model: 'deepseek-reasoner' });
-  const after = manager.tasks.publicRuns(undefined, plan.id).items[0];
+  const after = (await manager.tasks.publicRuns(undefined, plan.id)).items[0];
   expect(after).toMatchObject({
     id: before.id,
     source: 'manual',
@@ -869,7 +877,9 @@ it('preserves plan execution when changing models and rejects implicit task repl
   expect(
     manager.plans.runs.every((run) => run.planId && run.source === 'manual'),
   ).toBe(true);
-  expect(manager.tasks.publicRuns(undefined, plan.id).items[0]).toMatchObject({
+  expect(
+    (await manager.tasks.publicRuns(undefined, plan.id)).items[0],
+  ).toMatchObject({
     id: before.id,
     status: 'paused',
     totalTokens: before.totalTokens,
@@ -1021,7 +1031,7 @@ it('saves plan configuration and character reassignment together', async () => {
     state: 'paused',
   });
   expect(saved.nextRunAt).toBeUndefined();
-  expect(manager.tasks.publicPlan(p.id)).toMatchObject({
+  expect(await manager.tasks.publicPlan(p.id)).toMatchObject({
     name: '新的安排',
     characterId: b,
   });

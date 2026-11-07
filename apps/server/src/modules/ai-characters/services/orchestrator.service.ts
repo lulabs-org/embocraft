@@ -139,38 +139,44 @@ export class AICharacterOrchestrator {
     const releaseProviderChanged = domainEvents.on('provider.changed', () => {
       this.events.publish('providers');
     });
-    this.tasks = new TaskCoordinator({
-      execution: (id) => executionState(this.taskJob(id)),
-      findExecution: (id) => {
-        const job = this.jobs.get(id);
-        return job ? executionState(job) : undefined;
+    this.tasks = new TaskCoordinator(
+      {
+        execution: (id) => executionState(this.taskJob(id)),
+        findExecution: (id) => {
+          const job = this.jobs.get(id);
+          return job ? executionState(job) : undefined;
+        },
+        executions: () => [...this.jobs.values()].map(executionState),
+        save: () => this.save(),
+        schedule: (id) => {
+          const job = this.jobs.get(id);
+          if (job) this.schedule(job);
+        },
+        launch: (id) => this.launchReserved(this.taskJob(id)),
+        withStoppedExecution: (id, change) =>
+          this.withStoppedExecution(id, change),
+        validateExecution: async (id, overrides) => {
+          const job = this.taskJob(id);
+          const settings = validateAICharacter(
+            { ...job.view, ...overrides },
+            await this.providers.getRuntime(job.view.providerId),
+          );
+          await this.checkVoice(settings);
+          return settings;
+        },
+        storageFailed: () => this.persistence.tasks.storageFailed,
+        committedName: (id) =>
+          this.persistence.characters.committedCharacterName(id),
+        publicIdentity: (id) => characters.publicIdentity(id),
+        resourceVersion: () => this.events.version,
+        isClosing: () => this.closing,
+        assertWritable: (id) => this.assertWritable(id),
       },
-      executions: () => [...this.jobs.values()].map(executionState),
-      save: () => this.save(),
-      schedule: (id) => {
-        const job = this.jobs.get(id);
-        if (job) this.schedule(job);
-      },
-      launch: (id) => this.launchReserved(this.taskJob(id)),
-      withStoppedExecution: (id, change) =>
-        this.withStoppedExecution(id, change),
-      validateExecution: async (id, overrides) => {
-        const job = this.taskJob(id);
-        const settings = validateAICharacter(
-          { ...job.view, ...overrides },
-          await this.providers.getRuntime(job.view.providerId),
-        );
-        await this.checkVoice(settings);
-        return settings;
-      },
-      storageFailed: () => this.persistence.tasks.storageFailed,
-      committedName: (id) =>
-        this.persistence.characters.committedCharacterName(id),
-      publicIdentity: (id) => characters.publicIdentity(id),
-      resourceVersion: () => this.events.version,
-      isClosing: () => this.closing,
-      assertWritable: (id) => this.assertWritable(id),
-    });
+      () =>
+        this.archive instanceof DatabaseManagementArchive
+          ? this.archive.readSnapshot()
+          : this.archive.load(),
+    );
     const releaseCharacterBinding = bindCharacterManager(this);
     const releaseTaskBinding = bindTaskService(this.tasks);
     const releaseSyncEvents = bindConsoleSyncEvents(this.events);

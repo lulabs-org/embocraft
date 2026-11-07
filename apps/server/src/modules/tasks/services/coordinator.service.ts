@@ -1,4 +1,8 @@
-import { createAgentRuntime, type TaskLease } from '@voxel/agent-runtime';
+import {
+  createAgentRuntime,
+  runtimeView,
+  type TaskLease,
+} from '@voxel/agent-runtime';
 import {
   duePlans,
   endedRun,
@@ -17,7 +21,11 @@ import { CommandQueue } from '../../../core/concurrency/command-queue';
 import { AppError } from '../../../core/errors/app-error';
 import { object } from '../../../core/http/validation';
 import { hasPlanTokenLimit } from '../domain/limits';
-import type { TaskExecutionState, TaskHostPort } from '../ports';
+import type {
+  TaskExecutionState,
+  TaskHostPort,
+  TaskQuerySnapshot,
+} from '../ports';
 import {
   captureTask,
   commitExecution,
@@ -42,15 +50,34 @@ export class TaskCoordinator {
       new AppError('同一命令标识不能用于不同操作。', 409, 'CONFLICT'),
   });
 
-  constructor(private readonly host: TaskHostPort) {
+  constructor(
+    private readonly host: TaskHostPort,
+    private readonly readArchive: () => Promise<TaskQuerySnapshot | undefined>,
+  ) {
     this.planScheduler = new TaskScheduler(() => this.dispatchDue());
   }
 
-  publicPlans(id?: string, metadata = false) {
-    const plans = this.committedPlans.views(id).map((p) => ({
+  private async queryState() {
+    const archive = await this.readArchive();
+    const plans = new PlanService();
+    if (archive)
+      Object.assign(plans, {
+        plans: archive.plans,
+        runs: archive.runs,
+        requests: archive.requests,
+      });
+    const characters = new Map(
+      archive?.characters.map((character) => [character.id, character]) ?? [],
+    );
+    return { plans, characters };
+  }
+
+  async publicPlans(id?: string, metadata = false) {
+    const { plans: stored, characters } = await this.queryState();
+    const plans = stored.views(id).map((p) => ({
       ...p,
       characterName: p.characterId
-        ? (this.host.committedName(p.characterId) ?? p.characterName)
+        ? (characters.get(p.characterId)?.name ?? p.characterName)
         : p.characterName,
     }));
     return metadata
@@ -58,26 +85,33 @@ export class TaskCoordinator {
           ...plan,
           resourceVersion: this.host.resourceVersion(),
           taskIdentity: plan.characterId
-            ? (this.host.publicIdentity(plan.characterId) ?? null)
+            ? characters.get(plan.characterId)?.runtime
+              ? (runtimeView(characters.get(plan.characterId)!.runtime!)
+                  .identity ?? null)
+              : null
             : null,
         }))
       : plans;
   }
 
-  publicRuns(
+  async publicRuns(
     id: string | undefined,
     plan: string,
     offset?: number,
     metadata = false,
   ) {
-    if (id) this.committedPlans.assertBinding(plan, id);
-    const page = this.committedPlans.history(plan, offset);
+    const { plans, characters } = await this.queryState();
+    if (id) plans.assertBinding(plan, id);
+    const page = plans.history(plan, offset);
     if (!metadata) return page;
     const annotate = (run: (typeof page.items)[number]) => ({
       ...run,
       resourceVersion: this.host.resourceVersion(),
       taskIdentity: run.characterId
-        ? (this.host.publicIdentity(run.characterId) ?? null)
+        ? characters.get(run.characterId)?.runtime
+          ? (runtimeView(characters.get(run.characterId)!.runtime!).identity ??
+            null)
+          : null
         : null,
     });
     return {
@@ -88,7 +122,7 @@ export class TaskCoordinator {
     };
   }
 
-  planPage(p: PlanQueryFilter) {
+  async planPage(p: PlanQueryFilter) {
     if (
       p.offset !== undefined &&
       (!Number.isSafeInteger(p.offset) || p.offset < 0)
@@ -111,7 +145,8 @@ export class TaskCoordinator {
       !['immediate', 'once', 'interval', 'daily', 'weekly'].includes(p.timing)
     )
       throw new AppError('执行方式无效。');
-    let all = this.committedPlans.plans.filter(
+    const { plans, characters } = await this.queryState();
+    let all = plans.plans.filter(
       (plan) =>
         (!p.characterId || plan.characterId === p.characterId) &&
         (!p.search ||
@@ -137,7 +172,7 @@ export class TaskCoordinator {
           state: plan.state,
           characterId: plan.characterId,
           characterName: plan.characterId
-            ? (this.host.committedName(plan.characterId) ?? plan.characterName)
+            ? (characters.get(plan.characterId)?.name ?? plan.characterName)
             : plan.characterName,
         }),
       ),
@@ -146,8 +181,10 @@ export class TaskCoordinator {
     };
   }
 
-  publicPlan(id: string) {
-    const p = this.publicPlans(undefined, true).find((p) => p.id === id);
+  async publicPlan(id: string) {
+    const p = (await this.publicPlans(undefined, true)).find(
+      (p) => p.id === id,
+    );
     if (!p) throw new AppError('计划不存在。', 404);
     return p;
   }

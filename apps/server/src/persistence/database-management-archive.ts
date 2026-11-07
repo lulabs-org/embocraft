@@ -120,20 +120,31 @@ export class DatabaseManagementArchive implements ArchivePort {
     return this.customDb ?? getDatabaseClient();
   }
 
+  /** Read using an independent instance so queries never alter the writer baseline. */
+  async readSnapshot(): Promise<ManagementArchive | undefined> {
+    return new DatabaseManagementArchive(this.customDb).load();
+  }
+
   async load(): Promise<ManagementArchive | undefined> {
     try {
-      const [characters, plans, runs, requests] = await Promise.all([
-        this.db.agentCharacter.findMany({
-          orderBy: { position: 'asc' },
-          include: { state: true, logs: { orderBy: { sequence: 'asc' } } },
-        }),
-        this.db.agentPlan.findMany({ orderBy: { position: 'asc' } }),
-        this.db.agentRun.findMany({
-          orderBy: { position: 'asc' },
-          include: { checkpoint: true },
-        }),
-        this.db.agentRequest.findMany(),
-      ]);
+      const [characters, plans, runs, requests] = await this.db.$transaction(
+        async (tx) => {
+          const characters = await tx.agentCharacter.findMany({
+            orderBy: { position: 'asc' },
+            include: { state: true, logs: { orderBy: { sequence: 'asc' } } },
+          });
+          const plans = await tx.agentPlan.findMany({
+            orderBy: { position: 'asc' },
+          });
+          const runs = await tx.agentRun.findMany({
+            orderBy: { position: 'asc' },
+            include: { checkpoint: true },
+          });
+          const requests = await tx.agentRequest.findMany();
+          return [characters, plans, runs, requests] as const;
+        },
+        { isolationLevel: 'RepeatableRead' },
+      );
       const restoredRuns = runs.map(restoreRun);
       const byRunId = new Map(restoredRuns.map((run) => [run.id, run]));
       const archive: ManagementArchive = {
