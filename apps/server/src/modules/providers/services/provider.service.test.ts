@@ -15,6 +15,9 @@ function fixture() {
   );
   const store = {
     list: vi.fn(async () => [view]),
+    getRuntime: vi.fn(async () =>
+      validateProvider({ id: 'ollama', name: 'Local', type: 'ollama' }),
+    ),
     save: vi.fn(async () => view),
     remove: vi.fn(async () => {}),
   };
@@ -114,4 +117,22 @@ it('passes through missing-provider and storage failures without publishing', as
   } finally {
     off();
   }
+});
+
+it('uses runtime provider details for default model and health checks', async () => {
+  const { store } = fixture();
+  const fetchModels = vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ data: [{ id: 'fixture-model' }] }), {
+        status: 200,
+      }),
+  );
+  const service = new ProviderService(store);
+  await expect(service.models('ollama')).resolves.toEqual(['fixture-model']);
+  await expect(service.health('ollama')).resolves.toEqual({
+    reachable: true,
+    modelsAvailable: true,
+  });
+  expect(store.getRuntime).toHaveBeenCalledTimes(2);
+  expect(fetchModels).toHaveBeenCalledTimes(2);
 });
