@@ -191,3 +191,35 @@ it('rejects a reused world command ID with different content instead of applying
   );
   expect(stopped).toHaveBeenCalledTimes(1);
 });
+
+it('reads public plans and runs from the injected committed storage rather than the live ledger', async () => {
+  const { host } = fixture();
+  const { TaskCoordinator } = await import('./coordinator.service');
+  const { storedPlan, storedRun, storedCharacter } = await import(
+    '../../../../test/helpers/task-records'
+  );
+  const snapshot = {
+    version: 3 as const,
+    characters: [storedCharacter({ name: 'Stored name' })],
+    plans: [storedPlan({ characterId: 'actor' })],
+    runs: [storedRun({ planId: 'plan', characterId: 'actor' })],
+    requests: {},
+  };
+  const tasks = new TaskCoordinator(host, async () =>
+    structuredClone(snapshot),
+  );
+  expect(tasks.committedPlans.plans).toHaveLength(0);
+  expect((await tasks.planPage({})).items[0]).toMatchObject({
+    id: 'plan',
+    characterName: 'Stored name',
+  });
+  expect(await tasks.publicPlan('plan')).toMatchObject({ id: 'plan' });
+  expect((await tasks.publicRuns('actor', 'plan')).items[0]).toMatchObject({
+    id: 'run',
+  });
+  snapshot.plans[0].name = 'Changed in storage';
+  expect((await tasks.publicPlan('plan')).name).toBe('Changed in storage');
+  await expect(tasks.publicRuns('other', 'plan')).rejects.toThrow(
+    '计划执行角色已改变',
+  );
+});

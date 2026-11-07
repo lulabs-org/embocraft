@@ -30,6 +30,8 @@ import { createServer } from '../src/server';
 import { newPlan, newRun } from '../src/modules/tasks';
 import { settleTaskUsage } from '../src/modules/tasks/domain/model';
 import { storedCharacter, storedPlan, storedRun } from './helpers/task-records';
+import { taskExecutionFixture } from './helpers/task-execution-fixture';
+import { TaskCoordinator } from '../src/modules/tasks';
 
 const url = process.env.TEST_DATABASE_URL;
 const db = url ? createDatabaseClient(url) : undefined;
@@ -52,6 +54,42 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     await db!.world.deleteMany();
   });
   afterAll(async () => db?.$disconnect());
+
+  it('reads plan queries from committed database rows independently of the in-memory ledger', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter({ name: 'Database character' })],
+      plans: [storedPlan({ characterId: 'actor' })],
+      runs: [storedRun({ planId: 'plan', characterId: 'actor' })],
+      requests: {},
+    });
+    const { host } = taskExecutionFixture();
+    const tasks = new TaskCoordinator(host, () => archive.readSnapshot());
+    expect(tasks.committedPlans.plans).toHaveLength(0);
+    expect((await tasks.planPage({ search: '巡查' })).items[0]).toMatchObject({
+      id: 'plan',
+      characterName: 'Database character',
+    });
+    expect(await tasks.publicPlan('plan')).toMatchObject({
+      id: 'plan',
+      characterName: 'Database character',
+    });
+    expect((await tasks.publicRuns('actor', 'plan')).items[0]).toMatchObject({
+      id: 'run',
+      status: 'queued',
+    });
+    await db!.agentPlan.update({
+      where: { id: 'plan' },
+      data: { name: 'Changed in database' },
+    });
+    expect((await tasks.publicPlan('plan')).name).toBe('Changed in database');
+    await expect(tasks.publicRuns('other', 'plan')).rejects.toThrow(
+      '计划执行角色已改变',
+    );
+    await expect(tasks.publicPlan('missing')).rejects.toThrow('计划不存在');
+  });
 
   it('queries persisted character details, current checkpoints and log pages without a running manager', async () => {
     await bootstrapProviders(new DatabaseProviderRepository(db!));

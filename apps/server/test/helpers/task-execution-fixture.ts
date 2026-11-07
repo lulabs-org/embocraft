@@ -36,7 +36,7 @@ export function taskExecutionFixture() {
     isClosing: () => false,
     assertWritable: () => {},
   };
-  const tasks = new TaskCoordinator(host);
+  const tasks = new TaskCoordinator(host, async () => undefined);
   const runtime = createAgentRuntime({
     state: {
       version: 4 as const,
