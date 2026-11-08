@@ -277,6 +277,12 @@ describe('agent runtime dependency boundaries', () => {
       'restoreCheckpoint',
       'restoreBatchHistory',
     ]);
+    // Database adapters serialize and rebuild runtime snapshots. Host services must
+    // still treat these partitions as opaque and use the runtime API.
+    const archiveMappings = new Set([
+      'apps/server/src/modules/ai-characters/persistence/character-storage.ts',
+      'apps/server/src/modules/tasks/persistence/run-storage.ts',
+    ]);
     const partitions = new Set([
       'character',
       'execution',
@@ -319,7 +325,8 @@ describe('agent runtime dependency boundaries', () => {
           if (owner === 'memory')
             expect(partitions.has(node.name.text), name).toBe(false);
           if (owner === 'runtime') {
-            expect(partitions.has(node.name.text), name).toBe(false);
+            if (!archiveMappings.has(name))
+              expect(partitions.has(node.name.text), name).toBe(false);
             expect(['state', 'attention'].includes(node.name.text), name).toBe(
               false,
             );

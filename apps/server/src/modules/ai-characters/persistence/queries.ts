@@ -1,21 +1,10 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getDatabaseClient } from '../../../core/database/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
-import type {
-  AICharacterSettings,
-  AICharacterSummary,
-  TaskRun,
-} from '@voxel/shared';
-import type { TaskIdentity } from '@voxel/shared/management';
+import type { AICharacterSettings, TaskRun } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 
-export type CharacterDetail = AICharacterSummary & {
-  taskIdentity: TaskIdentity | null;
-};
-export type CharacterQueryPort = Pick<
-  CharacterQueries,
-  'get' | 'list' | 'logs'
->;
+import type { CharacterDetail, CharacterQueryPort } from '../ports';
 
 const include = {
   provider: { select: { name: true } },
@@ -74,7 +63,7 @@ function detail(row: CharacterRow): CharacterDetail {
     voiceServiceId: row.voiceServiceId ?? '',
     voiceServiceName: voiceService?.name,
     createdAt: createdAt?.getTime() ?? 0,
-    status: state.status as AICharacterSummary['status'],
+    status: state.status as CharacterDetail['status'],
     task: execution?.task.current,
     taskIdentity: execution?.task.identity ?? null,
     taskExecution: current
@@ -104,7 +93,7 @@ function detail(row: CharacterRow): CharacterDetail {
 }
 
 /** HTTP reads go straight to PostgreSQL, independently of runtime recovery snapshots. */
-export class CharacterQueries {
+export class CharacterQueries implements CharacterQueryPort {
   constructor(private readonly customDb?: PrismaClient) {}
 
   private get db(): PrismaClient {

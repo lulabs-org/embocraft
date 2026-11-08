@@ -4,10 +4,10 @@ import { restoreAICharacterLogs } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
 import { isMissingApiKey, type ProviderRuntimePort } from '../../providers';
-import type { CharacterRecord } from './record';
-import { createCharacterJob, type Job } from '../services/character-job';
+import type { CharacterRecord } from '../persistence/record';
+import { createCharacterJob, type Job } from './character-job';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
-import { executionState } from '../services/task-execution-adapter';
+import { executionState } from './task-execution-adapter';
 
 export async function restoreAICharacterJob(
   view: CharacterRecord,

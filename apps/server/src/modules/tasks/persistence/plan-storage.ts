@@ -1,6 +1,6 @@
 import type { AgentPlan, Prisma } from '@prisma/client';
 import type { TaskPlan } from '@voxel/shared';
-import { stableJson } from './stable-json';
+import { stableJson } from '../../../core/database/stable-json';
 import {
   counter,
   counterNumber,

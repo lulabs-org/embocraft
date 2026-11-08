@@ -27,6 +27,7 @@ import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 
 import {
   AICharacterManager,
+  CharacterQueries,
   createAICharacterRouter,
 } from './modules/ai-characters';
 import { asrService, createAsrRouter, installAsrSocket } from './modules/asr';
@@ -66,7 +67,7 @@ export async function createServer() {
       DEFAULT_MANAGEMENT_PATHS,
       gatewayAuth.middleware,
       (management) => {
-        management.use(createAICharacterRouter());
+        management.use(createAICharacterRouter(new CharacterQueries(db)));
         management.use(createProviderRouter());
         management.use(createTaskRouter());
         management.use(createConsoleSyncRouter());

@@ -60,7 +60,34 @@ it('centralizes database client and pool construction in core/database/client.ts
     }
   }
 });
-it('keeps joint persistence independent of management, runtime and HTTP implementations', () => {
+it('keeps character persistence independent of runtime services and other modules', () => {
+  for (const [file, deps] of graph) {
+    const name = relative(root, file);
+    if (!name.startsWith('modules/ai-characters/persistence/')) continue;
+    for (const dep of deps) {
+      const target = relative(root, dep);
+      expect(
+        target.startsWith('modules/ai-characters/services/'),
+        `${name} -> ${target}`,
+      ).toBe(false);
+      expect(
+        target.startsWith('modules/') &&
+          !target.startsWith('modules/ai-characters/'),
+        `${name} -> ${target}`,
+      ).toBe(false);
+    }
+  }
+});
+
+const jointStorageFacades = new Set([
+  'modules/ai-characters/persistence/index.ts',
+  'modules/tasks/persistence/index.ts',
+]);
+const isJointStorageDependency = (source: string, target: string) =>
+  source === 'persistence/database-management-archive.ts' &&
+  jointStorageFacades.has(target);
+
+it('keeps joint persistence independent of runtime and HTTP implementations', () => {
   for (const [file, deps] of graph) {
     const name = relative(root, file);
     for (const dep of deps) {
@@ -69,7 +96,8 @@ it('keeps joint persistence independent of management, runtime and HTTP implemen
         expect(
           target.startsWith('persistence/') ||
             target.startsWith('core/errors/') ||
-            target.startsWith('core/database/'),
+            target.startsWith('core/database/') ||
+            isJointStorageDependency(name, target),
           `${name} -> ${target}`,
         ).toBe(true);
       }
@@ -82,6 +110,19 @@ it('keeps joint persistence independent of management, runtime and HTTP implemen
         );
     }
   }
+});
+
+it('uses module-owned storage facades for the joint database transaction', () => {
+  const file = resolve(root, 'persistence/database-management-archive.ts');
+  const dependencies = graph.get(file)!.map((dep) => relative(root, dep));
+  for (const facade of jointStorageFacades)
+    expect(dependencies).toContain(facade);
+  for (const expected of [
+    'modules/ai-characters/persistence/character-storage.ts',
+    'modules/tasks/persistence/plan-storage.ts',
+    'modules/tasks/persistence/run-storage.ts',
+  ])
+    expect(existsSync(resolve(root, expected)), expected).toBe(true);
 });
 
 /** Follow only the symbols imported from a module facade, not every re-export. */
@@ -156,7 +197,7 @@ it('keeps infrastructure independent of business modules and modules independent
         const owner = name.startsWith('modules/')
           ? name.split('/')[1]
           : undefined;
-        if (owner !== domain)
+        if (owner !== domain && !isJointStorageDependency(name, target))
           expect(target, `${name} -> ${target}`).toBe(
             `modules/${domain}/index.ts`,
           );
@@ -345,6 +386,16 @@ it('exports server module contracts from their owning module rather than compati
       const spec = statement.moduleSpecifier.text;
       if (!spec.startsWith('.')) continue;
       const target = relative(root, resolve(dirname(file), spec));
+      // Preserve the existing public character type while the archive contract owns its shape.
+      const archiveCharacterType =
+        name === 'modules/ai-characters/persistence/record.ts' &&
+        target === 'persistence/management-archive' &&
+        statement.isTypeOnly &&
+        !!statement.exportClause &&
+        ts.isNamedExports(statement.exportClause) &&
+        statement.exportClause.elements.length === 1 &&
+        statement.exportClause.elements[0].name.text === 'CharacterRecord';
+      if (archiveCharacterType) continue;
       expect(
         target.startsWith(`modules/${module}/`),
         `${name} re-exports ${target}`,
