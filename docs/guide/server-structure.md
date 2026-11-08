@@ -72,10 +72,13 @@ apps/server/
     │       ├── speaches-models.test.ts
     │       └── voice-service-connection.ts # ASR/TTS 共用连接参数校验
     │
+    ├── application/
+    │   ├── management-persistence.ts    # 联合提交参与者、失败保护与通知的协调
+    │   └── management-commit.ts         # 跨模块快照串行提交与存储失败代次
+    │
     ├── persistence/                     # ════════【全局数据快照与持久化底座】════════
     │   ├── management-archive.ts        # 跨模块快照契约（ArchivePort, ManagementArchive）
     │   ├── database-management-archive.ts # 【生产主干】PostgreSQL + Prisma 关系表快照驱动
-    │   ├── management-persistence.ts    # 跨模块快照串行提交与 storageRevision 失败代次
     │   └── migrate-archive.ts           # 存档结构校验与历史版本迁移
     │
     └── modules/                         # ════════【业务领域模块层（各领域自闭环）】════════
@@ -86,20 +89,24 @@ apps/server/
         │   │   └── activity-log.ts      # 动作日志格式纯函数
         │   ├── services/                # 核心编排服务与 Actor 运行时
         │   │   ├── character-manager.service.ts # 智能体总管服务（AICharacterManager）
-        │   │   ├── orchestrator.service.ts # 意图与动作编排服务
+        │   │   ├── orchestrator.service.ts # 协调服务装配、恢复与关闭
+        │   │   ├── character-management.service.ts # 角色配置与管理操作
+        │   │   ├── character-execution.service.ts # 执行、唤醒、停止与存储失败保护
+        │   │   ├── character-restore.ts # 从存档恢复角色运行时
+        │   │   ├── character-snapshots.ts # 捕获运行时快照与判断保存失败影响
         │   │   ├── character-host.service.ts # 单智能体 Actor 宿主与执行上下文
         │   │   ├── wake-scheduler.service.ts # 定时与事件唤醒调度器
         │   │   ├── voice-coordinator.service.ts # 语音协同调度服务
-        │   │   ├── job.ts               # 托管运行时状态、集合与状态判定
+        │   │   ├── character-job.ts     # 托管运行时状态、集合与状态判定
         │   │   ├── execution-context.ts # 会话与 Runner 执行上下文契约
-        │   │   ├── task-adapter.ts      # 将角色运行时状态适配为 Tasks 执行状态
+        │   │   ├── task-execution-adapter.ts # 将角色运行时状态适配为 Tasks 执行状态
         │   │   └── world-event-handler.ts # 世界事件接收与角色唤醒协调
-        │   ├── persistence/             # 角色配置存储与快照捕获（Snapshots）
-        │   │   ├── queries.ts           # HTTP 直接数据库查询、详情组装与日志分页
-        │   │   ├── snapshots.ts         # 角色快照捕获
-        │   │   ├── restore.ts           # 历史快照还原
-        │   │   └── record.ts            # 运行时持久化记录映射
-        │   ├── ports.ts                 # 依赖端口抽象契约
+        │   ├── persistence/             # 数据库查询与存档记录映射
+        │   │   ├── queries.ts           # 数据库查询、详情组装与日志分页
+        │   │   ├── character-storage.ts # 角色配置、状态和日志数据库映射
+        │   │   ├── index.ts             # 联合事务使用的角色持久化门面
+        │   │   └── record.ts            # 存档记录契约与配置字段映射
+        │   ├── ports.ts                 # 角色查询端口
         │   ├── routes/
         │   │   └── ai-characters.routes.ts
         │   └── index.ts                 # 模块对外面向 server.ts/app.ts 的唯一导出
@@ -200,6 +207,10 @@ apps/server/
         │   │   ├── scheduler.service.ts   # 计划触发与时间窗口调度器
         │   │   └── execution.service.ts   # 任务单次执行与重试流水线
         │   ├── persistence/             # 任务计划快照捕获与状态仓储
+        │   │   ├── plan-storage.ts      # 计划数据库映射
+        │   │   ├── run-storage.ts       # 运行与检查点数据库映射
+        │   │   ├── task-storage-helpers.ts # 时间、计数器与 JSON 转换
+        │   │   ├── index.ts             # 联合事务使用的任务持久化门面
         │   │   ├── snapshots.ts         # 存档快照序列化
         │   │   ├── restore.ts           # 历史快照还原
         │   │   └── plan-store.ts        # 计划与执行历史内存状态仓储
@@ -304,9 +315,10 @@ import {
 } from './core/http/middleware/management-policy';
 import { errorHandler } from './core/http/middleware/error-handler';
 
-// 各模块统一从 index.ts 引入零参路由工厂与 Socket 安装函数
+// 各模块从 index.ts 引入路由工厂与 Socket 安装函数；角色路由接收查询端口
 import {
   AICharacterManager,
+  CharacterQueries,
   createAICharacterRouter,
 } from './modules/ai-characters';
 import { createProviderRouter } from './modules/providers';
@@ -346,11 +358,11 @@ import { GatewayAuth, installGatewaySocket } from './modules/gateway';
 - **生产主干：基于 PostgreSQL 的关系型快照驱动（`src/persistence/database-management-archive.ts`）**：
   - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 在同一事务中提交至 PostgreSQL 表中；角色、计划和执行元数据使用结构化列，运行时检查点与嵌套配置保留 JSON；
   - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
-- **跨模块快照协调与写屏障（`src/persistence/management-persistence.ts`）**：
-  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各模块的 `persistence/` 内；
+- **跨模块快照协调与写屏障（`src/application/management-commit.ts`）**：
+  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各自模块内；
   - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交角色和任务的可见状态，再调用注入的提交通知回调；角色编排器将回调连接到 `ManagementEvents.commit()`，持久化协调器不依赖事件总线实现；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
 - **角色 HTTP 查询（`ai-characters/persistence/queries.ts`）**：
-  - 路由直接调用 Prisma 查询角色列表、详情和日志分页；配置、当前执行、待执行任务、用量和日志都来自数据库，只有连接 ID 和事件版本由路由补充。关联读取使用 `RepeatableRead` 事务；角色快照不再维护 HTTP 响应缓存。写操作在 `flush(since)` 成功后复用数据库查询返回结果。
+  - 路由通过注入的查询接口获取角色列表、详情和日志分页；配置、当前执行、待执行任务、用量和日志都来自数据库，只有连接 ID 和事件版本由路由补充。关联读取使用 `RepeatableRead` 事务；角色快照不再维护 HTTP 响应缓存。写操作在 `flush(since)` 成功后复用数据库查询返回结果。
 - **离线测试与恢复验证（`test/helpers/memory-storage.ts` / `src/persistence/migrate-archive.ts`）**：
   - 测试显式注入内存 Provider、角色存档与 TTS/ASR 配置存储；读写时复制数据，重新创建服务实例验证恢复，并注入保存失败验证回滚。
   - `migrate-archive.ts` 负责 v3 存档结构校验与规整；旧文件读写、自动备份与 v0/v1/v2 历史版本兼容已移除。

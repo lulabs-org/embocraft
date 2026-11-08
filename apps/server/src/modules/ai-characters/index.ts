@@ -3,11 +3,8 @@ export {
   type AICharacterDependencies,
 } from './services/orchestrator.service';
 export { AICharacterManager } from './services/character-manager.service';
-export {
-  CharacterQueries,
-  characterQueries,
-  type CharacterQueryPort,
-} from './persistence/queries';
+export { CharacterQueries, characterQueries } from './persistence/queries';
+export type { CharacterDetail, CharacterQueryPort } from './ports';
 export {
   bindCharacterManager,
   getActiveCharacterManager,

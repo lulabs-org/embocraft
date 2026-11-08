@@ -3,7 +3,7 @@ import {
   AI_CHARACTER_LOG_PAGE_SIZE,
   type AICharacterLogPage,
 } from '@voxel/shared';
-import type { CharacterQueryPort } from '../persistence/queries';
+import type { CharacterQueryPort } from '../ports';
 
 export interface CharacterLogQueryOptions {
   limit?: unknown;

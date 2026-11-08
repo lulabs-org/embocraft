@@ -113,14 +113,14 @@ graph TD
 
 ### 服务端模块全景
 
-图中实线表示主要源码依赖；业务模块跨域引用通过各自的 `index.ts`。HTTP 路由安装回调由 `app.ts` 注入 management，传输实现通过注册表调用 Socket 处理器。
+图中实线表示主要源码依赖；业务模块跨域引用通过各自的 `index.ts`，联合数据库事务通过各模块专用的持久化门面调用数据映射。HTTP 路由安装回调由 `app.ts` 注入 management，传输实现通过注册表调用 Socket 处理器。
 
 ```mermaid
 graph TB
     App["app.ts<br/>HTTP 装配"]
     Server["server.ts<br/>资源生命周期与 Socket 装配"]
     Core["core/<br/>config · database · errors · concurrency<br/>http · openapi · transport"]
-    Persist["src/persistence/<br/>联合存档、提交与迁移"]
+    Persist["src/persistence/<br/>联合存档与迁移"]
     subgraph Modules["modules/ 领域模块"]
         World["world<br/>world.room · world.schema<br/>domain · persistence · routes"]
         AIC["ai-characters<br/>domain · services<br/>persistence · routes"]
@@ -155,7 +155,8 @@ graph TB
     World --> Chat
     World --> Audio
     Modules --> Core
-    Persist -->|仅历史任务迁移契约| Tasks
+    Persist -->|持久化门面| Tasks
+    Persist -->|持久化门面| AIC
 ```
 
 ### AI 角色模块内部（`modules/ai-characters`）
@@ -164,9 +165,14 @@ graph TB
 graph LR
     Routes["routes/ai-characters.routes.ts<br/>REST 管理接口"] --> Orch["services/orchestrator.service.ts<br/>AICharacterOrchestrator"]
     Manager["services/character-manager.service.ts<br/>AICharacterManager"] --> Orch
-    Orch --> Host["services/character-host.service.ts<br/>单角色生命周期"]
+    Orch --> Manage["services/character-management.service.ts<br/>角色管理"]
+    Orch --> Exec["services/character-execution.service.ts<br/>执行、唤醒与停止"]
+    Manage --> Exec
+    Exec --> Host["services/character-host.service.ts<br/>单角色世界会话"]
     Orch --> Voice["services/voice-coordinator.service.ts"]
-    Orch --> Restore["persistence/restore · snapshots"]
+    Orch --> Restore["services/character-restore · character-snapshots"]
+    Orch --> Joint["application/management-persistence.ts<br/>联合提交协调"]
+    Routes --> Queries["persistence/queries.ts<br/>注入的角色查询"]
     Host --> Ctx["services/execution-context.ts"]
     Orch --> Wake["services/wake-scheduler.service.ts"]
     Host --> WEH["services/world-event-handler.ts"]

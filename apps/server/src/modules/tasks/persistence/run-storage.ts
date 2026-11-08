@@ -1,8 +1,8 @@
 import type { AgentRun, AgentRunCheckpoint, Prisma } from '@prisma/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
-import type { ManagementArchive } from './management-archive';
-import { stableJson } from './stable-json';
-import { databaseJson } from '../core/database/client';
+import type { StoredRun } from '../domain/types';
+import { stableJson } from '../../../core/database/stable-json';
+import { databaseJson } from '../../../core/database/client';
 import {
   counter,
   counterNumber,
@@ -11,7 +11,6 @@ import {
   withoutNullFields,
 } from './task-storage-helpers';
 
-type StoredRun = ManagementArchive['runs'][number];
 export type SavedRun = {
   id: string;
   position: number;

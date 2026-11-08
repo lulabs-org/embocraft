@@ -37,17 +37,17 @@
 | `modules/chat`          | 消息、附件、音频票据及私聊权限                       |
 | `modules/world`         | 权威物理房间、Schema、持久化、SSE、Agent 语音与信令  |
 
-`asr/engines/whisper/whisper.adapter.ts` 负责通过独立语音服务 API 进行 Whisper 识别。Piper 模型和声音服务的管理路由归 `tts`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过注入回调检查绑定，音频模块不反向依赖 Agent。`character-manager.service.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的联合存档由 `src/persistence` 负责：先串行保存，再更新已提交视图，最后调用注入的提交通知回调；角色编排器将该回调连接到 `ConsoleSyncEvents.commit()`。存储失败时保留现有执行保护。角色和任务快照的捕获、恢复仍由各模块的 `persistence/` 实现，通过注入契约参与提交。
+`asr/engines/whisper/whisper.adapter.ts` 负责通过独立语音服务 API 进行 Whisper 识别。Piper 模型和声音服务的管理路由归 `tts`，HTTP 地址为 `/voice/tts/services`；Agent 音色绑定由 Agent 管理器处理，删除服务通过领域事件检查角色引用，音频模块不反向依赖 Agent。`character-manager.service.ts`、`orchestrator.service.ts` 位于 `ai-characters/services/`，Provider 仓储契约与数据库实现归属 `providers/persistence/`，`tasks` 模块按 `domain/`、`services/`、`persistence/` 和 `routes/` 分层；`ports.ts` 集中声明管理接口、执行状态与宿主契约。角色与任务的数据库映射分别归属 `ai-characters/persistence` 与 `tasks/persistence`，`src/persistence/database-management-archive.ts` 在同一事务中调用两者。应用层串行保存后更新已提交视图，再调用提交通知回调；`application/management-persistence.ts` 连接快照参与者、失败保护和提交通知；角色编排器提供参与者并连接 `ConsoleSyncEvents.commit()`。角色运行快照及恢复位于 `ai-characters/services/`，存储失败后由执行服务保护受影响的角色。
 
-全局 `persistence/` 直接提供存档契约、数据库驱动、结构规整和提交协调器，不再由 management 门面重导出。该层仅依赖自身及 `core/errors`、`core/database`。它不依赖角色运行时、任务模块、管理事件实现或 HTTP 装配；management 与 tasks 不反向依赖全局持久化层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
+全局 `persistence/` 提供跨模块存档契约、联合数据库事务驱动与结构规整；联合数据库驱动只通过角色和任务的持久化门面使用它们各自的数据映射，不依赖运行时或 HTTP。串行提交协调位于 `application/management-commit.ts`，任务模块不反向依赖全局存档层。`storageRevision` 只在保存失败时递增，`flush(since)` 只等待已排队的保存并检查失败代次，不捕获新快照。
 
 业务错误与通用异常统一使用 `core/errors/app-error.ts` 中的 `AppError`。复用 Origin 判断和异常处理机制不意味着统一所有端点的策略：保留语音接口允许无 Origin、管理接口的 Origin 校验、原有预检方法、JSON/原始音频限制以及错误状态和文案。Swagger 扫描 `core/http`、`core/openapi` 和 `modules` 下的 `*.routes.ts`，以及 `modules` 下的 `routes.ts`。
 
-Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/ai-characters`，任务计划、执行控制与计划调度位于 `modules/tasks`，模型提供商归入 `modules/providers`。各模块高内聚低耦合，不再依赖外部编排包。HTTP 路由和 OpenAPI 注释由各领域维护，`app.ts` 显式装配依赖；Provider 路由仅接收存储、模型查询、删除和变更通知接口。共享请求策略与管理路由构建 `createManagementRouter` 位于 `core/http/middleware/management-policy.ts`，回执路由位于 `modules/console-sync/routes/console-sync.routes.ts`。TTS 复用同一请求策略，但不进入命令回执队列；ASR 配置保留 8 KiB JSON 和专用错误映射，转录保留原始音频请求体。通过 `req.baseUrl + req.path` 保留命令指纹使用的完整请求路径。
+Agent 托管集合、唤醒调度、生命周期操作和日志位于 `modules/ai-characters`，任务计划、执行控制与计划调度位于 `modules/tasks`，模型提供商归入 `modules/providers`。各模块高内聚低耦合，不再依赖外部编排包。HTTP 路由和 OpenAPI 注释由各领域维护，`server.ts` 装配服务器；角色编排器仍负责绑定角色、任务和控制台服务，以及协调 Provider 与语音服务事件。共享请求策略与管理路由构建 `createManagementRouter` 位于 `core/http/middleware/management-policy.ts`，回执路由位于 `modules/console-sync/routes/console-sync.routes.ts`。TTS 复用同一请求策略，但不进入命令回执队列；ASR 配置保留 8 KiB JSON 和专用错误映射，转录保留原始音频请求体。通过 `req.baseUrl + req.path` 保留命令指纹使用的完整请求路径。
 
 `console-sync/services/` 集中 `console-sync.service.ts` 与 `sync-events.service.ts`，命令服务测试与源码共置。`core/concurrency/command-router.ts` 为通用队列提供错误策略，`ConsoleSyncCommands` 负责 HTTP 命令标识与指纹输入，`ConsoleSyncEvents` 计算快照差异并通知订阅者。公共回执与错误契约继续由 `@voxel/shared/management` 提供；模块不重复定义回执模型。根部 `index.ts` 保留全部公开导出，幂等指纹、排队顺序、回执状态、错误映射及事件通知行为保持不变。
 
-`ai-characters/services/` 集中角色管理器、编排器、宿主、唤醒调度与语音协调；服务使用 `*.service.ts` 命名，生产装配包装器为 `character-manager.service.ts`。`character-job.ts`、`execution-context.ts`、`task-execution-adapter.ts` 与 `world-event-handler.ts` 是同层运行时辅助文件，保留会话、Runner 与任务状态适配职责。HTTP 路由和 OpenAPI 注解位于 `routes/ai-characters.routes.ts`，纯校验与日志留在 `domain/`，角色快照留在 `persistence/`。模块根部 `index.ts` 保留全部公开导出；目录调整不改变角色生命周期、唤醒时序、语音行为、接口或存档格式。
+`ai-characters/services/` 中，`orchestrator.service.ts` 协调各服务及启动、恢复和关闭；`character-management.service.ts` 负责角色创建、配置修改、加入与删除；`character-execution.service.ts` 负责执行、唤醒和停止；`character-host.service.ts` 维护单个角色的世界会话和 Agent 执行。生产装配包装器为 `character-manager.service.ts`。`character-job.ts`、`execution-context.ts`、`task-execution-adapter.ts` 与 `world-event-handler.ts` 是同层运行时辅助文件，保留会话、Runner 与任务状态适配职责。HTTP 路由和 OpenAPI 注解位于 `routes/ai-characters.routes.ts`，纯校验与日志留在 `domain/`，角色快照留在 `persistence/`。模块根部 `index.ts` 保留全部公开导出；目录调整不改变角色生命周期、唤醒时序、语音行为、接口或存档格式。
 
 `env.readServer()` 校验网关令牌和来源配置。`gateway/auth.service.ts` 为 HTTP 管理路由和 WebSocket 握手提供令牌比对与来源检查，`gateway.socket.ts` 负责握手、事件订阅与连接清理。
 
@@ -88,7 +88,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 角色、日志、Run 元数据、checkpoint 和任务表仍在同一事务中提交，失败时不推进内存中的已提交状态。执行快照单独变化时不重写角色记忆或 Run 元数据。角色删除会级联删除状态和日志。
 
-角色列表、详情和日志的 HTTP 读取直接调用 `ai-characters/persistence/queries.ts` 中的 Prisma 查询，不经过编排器或内存快照缓存。查询文件集中组装角色配置、服务名称、当前执行 checkpoint、待执行任务、用量和最新日志；列表与详情只读取最新一条日志，完整日志按序号在数据库中分页。关联读取和日志计数/分页使用 `RepeatableRead` 事务，避免混合不同提交的数据。路由只补充实时 `sessionId` 和查询开始前的管理事件版本号；写操作等待保存成功后也通过同一查询返回。`snapshots.ts` 保留提交、失败处理与任务控制所需的已提交记录，不再保存 HTTP 响应副本。无数据库的测试显式注入读取已保存测试存档的查询实现，生产环境不回退到内存查询。
+角色列表、详情和日志的 HTTP 读取通过查询端口访问数据；`server.ts` 将 `ai-characters/persistence/queries.ts` 的 Prisma 实现注入路由，不经过编排器或内存快照缓存。查询文件集中组装角色配置、服务名称、当前执行 checkpoint、待执行任务、用量和最新日志；列表与详情只读取最新一条日志，完整日志按序号在数据库中分页。关联读取和日志计数/分页使用 `RepeatableRead` 事务，避免混合不同提交的数据。路由只补充实时 `sessionId` 和查询开始前的管理事件版本号；写操作等待保存成功后也通过同一查询返回。`services/character-snapshots.ts` 保留提交和任务控制所需的已提交记录，并判断保存失败涉及的角色，不再保存 HTTP 响应副本。无数据库的测试显式注入读取已保存测试存档的查询实现，生产环境不回退到内存查询。
 
 读取数据库时，将角色最新记忆与当前 Run 的 checkpoint 组合成运行时完整快照；缺失、归属错误或不一致的当前执行会拒绝加载或保存。组合后的角色与 Run 对象互不共享可变执行引用。内存运行时和归档端口保留完整快照形状，Run 快照中的角色分区为空；恢复历史执行只替换执行分区，保留最新对话、收件箱、节奏和累计用量。暂停、私聊过期与不重放未知动作的恢复规则保持不变。
 

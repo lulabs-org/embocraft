@@ -8,15 +8,20 @@ import {
   saveCharacterConfiguration,
   saveCharacterState,
   type SavedCharacter,
-} from './character-storage';
-import { stableJson } from './stable-json';
-import { captureRun, restoreRun, saveRun, type SavedRun } from './run-storage';
+} from '../modules/ai-characters/persistence';
+import { stableJson } from '../core/database/stable-json';
+import {
+  captureRun,
+  restoreRun,
+  saveRun,
+  type SavedRun,
+} from '../modules/tasks/persistence';
 import {
   capturePlan,
   restorePlan,
   savePlan,
   type SavedPlan,
-} from './plan-storage';
+} from '../modules/tasks/persistence';
 
 type SavedSnapshot = {
   characters: Map<string, SavedCharacter>;

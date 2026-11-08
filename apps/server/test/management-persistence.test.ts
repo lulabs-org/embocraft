@@ -6,12 +6,18 @@ import {
   AICharacterRegistry,
   AICharacterWakeScheduler,
   executionState,
-} from '../modules/ai-characters';
-import { CharacterSnapshots } from '../modules/ai-characters/persistence/snapshots';
-import { ConsoleSyncEvents } from '../modules/console-sync';
-import { PlanService, TaskSnapshots, newPlan, newRun } from '../modules/tasks';
-import type { ManagementArchive } from './management-archive';
-import { ManagementPersistence } from './management-persistence';
+} from '../src/modules/ai-characters';
+import { CharacterSnapshots } from '../src/modules/ai-characters/services/character-snapshots';
+import { ConsoleSyncEvents } from '../src/modules/console-sync';
+import {
+  PlanService,
+  TaskSnapshots,
+  newPlan,
+  newRun,
+} from '../src/modules/tasks';
+import type { ManagementArchive } from '../src/persistence/management-archive';
+import { createManagementPersistence } from '../src/application/management-persistence';
+import { protectCharactersAfterStorageFailure } from '../src/modules/ai-characters/services/character-execution.service';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const plans = new PlanService();
@@ -52,9 +58,8 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const presence = new Map<string, 'idle'>();
   const characters = new CharacterSnapshots();
   const tasks = new TaskSnapshots();
-  const persistence = new ManagementPersistence(
+  const persistence = createManagementPersistence(
     { load: async () => undefined, save },
-    (snapshot) => events.commit(snapshot.characters, snapshot),
     {
       characters,
       tasks,
@@ -71,12 +76,13 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
         ),
       captureTasks: () => tasks.capture(plans),
       rejectTasks: (snapshot) => tasks.reject(snapshot, committed),
-      rejectCharacters: (records, affected) =>
-        characters.reject(records, jobs, affected, (id) =>
-          scheduler.cancel(id),
-        ),
+      affectedCharacters: (records, affected) =>
+        characters.affectedByFailure(records, affected),
+      protectCharacters: (ids) =>
+        protectCharactersAfterStorageFailure(jobs, scheduler, ids),
       commitCharacters: (records) => characters.commit(records),
       restoreTasks: (snapshot) => tasks.restore(committed, snapshot),
+      publishCommitted: (snapshot, views) => events.commit(views, snapshot),
     },
   );
   const persist = () => persistence.persist();

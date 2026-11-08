@@ -5,13 +5,15 @@ import {
   getActiveCharacterManager,
   type AICharacterRoutePort,
 } from '../services/character-runtime.service';
-import { characterQueries, type CharacterDetail } from '../persistence/queries';
+import type { CharacterDetail, CharacterQueryPort } from '../ports';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 export type { AICharacterRoutePort };
 
 /** 创建独立的 AI 角色路由 Router 实例 */
-export function createAICharacterRouter(): Router {
+export function createAICharacterRouter(
+  characterQueries: CharacterQueryPort,
+): Router {
   const router = express.Router();
   const logService = new CharacterLogService(characterQueries);
   const response = (

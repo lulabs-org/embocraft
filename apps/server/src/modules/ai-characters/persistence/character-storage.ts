@@ -4,10 +4,10 @@ import type {
   AgentCharacterState,
   AgentCharacterLog,
 } from '@prisma/client';
-import { databaseJson } from '../core/database/client';
-import type { CharacterRecord, ManagementArchive } from './management-archive';
+import { databaseJson } from '../../../core/database/client';
+import type { CharacterRecord } from './record';
 import type { RuntimeState } from '@voxel/agent-runtime';
-import { stableJson } from './stable-json';
+import { stableJson } from '../../../core/database/stable-json';
 
 type Log = { sequence: number; time: number | null; text: string };
 export type SavedCharacter = {
@@ -104,7 +104,7 @@ export function restoreCharacter(
     state: AgentCharacterState | null;
     logs: AgentCharacterLog[];
   },
-  runs: Map<string, ManagementArchive['runs'][number]>,
+  runs: ReadonlyMap<string, { characterId?: string; runtime?: RuntimeState }>,
 ): CharacterRecord {
   if (!row.state) throw new Error('Character recovery state is missing.');
   const {

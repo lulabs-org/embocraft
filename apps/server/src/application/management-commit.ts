@@ -4,7 +4,7 @@ import type {
   ArchivePort,
   CharacterRecord,
   ManagementArchive,
-} from './management-archive';
+} from '../persistence/management-archive';
 
 type TaskSnapshot = Pick<ManagementArchive, 'plans' | 'runs' | 'requests'>;
 

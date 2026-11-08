@@ -1,11 +1,6 @@
-import type { RuntimeState } from '@voxel/agent-runtime';
-import type { AICharacterSettings, AICharacterView } from '@voxel/shared';
+import type { AICharacterSettings } from '@voxel/shared';
 
-export type CharacterRecord = AICharacterSettings &
-  Pick<AICharacterView, 'id' | 'createdAt' | 'status' | 'logEntries'> & {
-    runtime?: RuntimeState;
-    currentRunId?: string;
-  };
+export type { CharacterRecord } from '../../../persistence/management-archive';
 
 /** Select persisted settings, never a spread of the public view. */
 export function characterSettings(

@@ -1,10 +1,10 @@
 import { runtimeView } from '@voxel/agent-runtime';
 
 import type { AICharacterView } from '@voxel/shared';
-import type { AICharacterRegistry } from '../services/character-job';
-import { characterSettings, type CharacterRecord } from './record';
+import type { AICharacterRegistry } from './character-job';
+import { characterSettings, type CharacterRecord } from '../persistence/record';
 
-/** Character snapshots and failure handling; no file writes or task-ledger ownership. */
+/** Captures and tracks the last committed character runtime snapshots. */
 export class CharacterSnapshots {
   private committed = new Map<string, CharacterRecord>();
   publicIdentity(id: string) {
@@ -38,24 +38,17 @@ export class CharacterSnapshots {
     return { records, views };
   }
 
-  reject(
+  affectedByFailure(
     records: CharacterRecord[],
-    jobs: AICharacterRegistry,
     affected: Set<string | undefined>,
-    cancel: (id: string) => void,
-  ) {
-    for (const record of records) {
-      if (
-        !affected.has(record.id) &&
-        JSON.stringify(this.committed.get(record.id)) === JSON.stringify(record)
+  ): string[] {
+    return records
+      .filter(
+        (record) =>
+          affected.has(record.id) ||
+          JSON.stringify(this.committed.get(record.id)) !==
+            JSON.stringify(record),
       )
-        continue;
-      const job = jobs.get(record.id);
-      if (job) {
-        job.storageFailed = true;
-        job.abort.abort();
-        cancel(record.id);
-      }
-    }
+      .map((record) => record.id);
   }
 }
