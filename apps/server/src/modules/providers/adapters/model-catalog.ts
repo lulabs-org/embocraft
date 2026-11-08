@@ -1,6 +1,11 @@
 import { AppError } from '../../../core/errors/app-error';
-import type { ProviderRuntimePort } from '../ports';
-import { PROVIDER_SPECS, type SavedProvider } from '../domain/model';
+import type {
+  ModelCatalogPort,
+  ProviderModelsClient,
+  ProviderRuntimePort,
+} from '../ports';
+import type { SavedProvider } from '../domain/model';
+import { assertApiKeyConfigured } from '../domain/validation';
 
 /** Shared upstream HTTP policy for provider probes. */
 export function fetchProviderModels(
@@ -17,25 +22,22 @@ export function fetchProviderModels(
 }
 
 /** Model discovery belongs to providers and does not require a character session. */
-export class ModelCatalog {
+export class ModelCatalog implements ModelCatalogPort {
   private probing = new Set<string>();
 
   constructor(
     private readonly providers: ProviderRuntimePort,
-    private readonly client: (
-      provider: SavedProvider,
-    ) => Promise<Response> = fetchProviderModels,
+    private readonly client: ProviderModelsClient = fetchProviderModels,
   ) {}
 
-  async models(id: string) {
+  async models(id: string): Promise<string[]> {
     if (this.probing.has(id))
       throw new AppError('正在连接此模型服务，请稍候。', 429);
     this.probing.add(id);
 
     try {
       const provider = await this.providers.getRuntime(id);
-      if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
-        throw new AppError('请先配置 API Key。');
+      assertApiKeyConfigured(provider);
       const res = await this.client(provider);
       if (!res.ok) throw 0;
       const { data = [], models = [] } = (await res.json()) as {

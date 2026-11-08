@@ -11,7 +11,7 @@ it('preserves missing-provider and missing-credential errors without probing', a
         throw new AppError('模型服务不存在。', 404);
       },
     },
-    { getModels },
+    getModels,
   );
   await expect(missing.check('missing')).rejects.toMatchObject({ status: 404 });
 
@@ -19,7 +19,7 @@ it('preserves missing-provider and missing-credential errors without probing', a
     {
       getRuntime: () => validateProvider({ name: 'Remote', type: 'deepseek' }),
     },
-    { getModels },
+    getModels,
   );
   await expect(unconfigured.check('remote')).rejects.toMatchObject({
     status: 400,
@@ -37,7 +37,7 @@ it('separates network reachability from model-list support', async () => {
     .mockRejectedValueOnce(new Error('connection refused'));
   const checker = new ProviderHealthChecker(
     { getRuntime: () => saved },
-    { getModels },
+    getModels,
   );
 
   await expect(checker.check(saved.id)).resolves.toEqual({

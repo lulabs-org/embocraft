@@ -12,3 +12,23 @@ export interface ProviderRepository extends ProviderRuntimePort {
   save(value: unknown, id?: string): Promise<ProviderView>;
   remove(id: string): Promise<void>;
 }
+
+/** Low-level HTTP call to an upstream provider's `/models` endpoint. */
+export type ProviderModelsClient = (
+  provider: SavedProvider,
+) => Promise<Response>;
+
+/** Discovers the model IDs exposed by a saved provider. */
+export interface ModelCatalogPort {
+  models(id: string): Promise<string[]>;
+}
+
+export type ProviderHealth = {
+  reachable: boolean;
+  modelsAvailable: boolean;
+};
+
+/** Probes connectivity and model-list support of a saved provider. */
+export interface ProviderHealthPort {
+  check(id: string): Promise<ProviderHealth>;
+}
