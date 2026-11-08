@@ -13,18 +13,18 @@ import { appendAICharacterLog } from '../domain/activity-log';
 import {
   aiCharacterProfileInput,
   validateAICharacter,
-} from '../domain/validation';
+} from '../domain/character-settings';
+import { executionState } from '../integrations/task-execution-adapter';
+import type { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
+import type { CharacterExecutionService } from '../runtime/character-execution';
 import {
   active,
   createCharacterJob,
   isJobBusy,
   resident,
   type AICharacterRegistry,
-} from './character-job';
-import type { CharacterExecutionService } from './character-execution.service';
-import { executionState } from './task-execution-adapter';
-import type { CharacterVoiceCoordinator } from './voice-coordinator.service';
-import type { AICharacterWakeScheduler } from './wake-scheduler.service';
+} from '../runtime/character-registry';
+import type { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
 
 type ManagementContext = {
   jobs: AICharacterRegistry;

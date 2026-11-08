@@ -6,3 +6,4 @@ export {
   saveCharacterState,
   type SavedCharacter,
 } from './character-storage';
+export { CharacterSnapshots } from './character-snapshots';

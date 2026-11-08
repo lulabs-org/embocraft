@@ -5,9 +5,10 @@ import { expect, it, vi } from 'vitest';
 import {
   AICharacterRegistry,
   AICharacterWakeScheduler,
+  CharacterSnapshots,
   executionState,
+  protectCharactersAfterStorageFailure,
 } from '../src/modules/ai-characters';
-import { CharacterSnapshots } from '../src/modules/ai-characters/services/character-snapshots';
 import { ConsoleSyncEvents } from '../src/modules/console-sync';
 import {
   PlanService,
@@ -17,7 +18,6 @@ import {
 } from '../src/modules/tasks';
 import type { ManagementArchive } from '../src/persistence/management-archive';
 import { createManagementPersistence } from '../src/application/management-persistence';
-import { protectCharactersAfterStorageFailure } from '../src/modules/ai-characters/services/character-execution.service';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const plans = new PlanService();

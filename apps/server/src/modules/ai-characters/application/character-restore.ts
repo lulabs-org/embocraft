@@ -1,13 +1,13 @@
 import type { AICharacterSettings } from '@voxel/shared';
 import type { PlanService } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
-import { validateAICharacter } from '../domain/validation';
+import { validateAICharacter } from '../domain/character-settings';
 import { AppError } from '../../../core/errors/app-error';
 import { isMissingApiKey, type ProviderRuntimePort } from '../../providers';
-import type { CharacterRecord } from '../persistence/record';
-import { createCharacterJob, type Job } from './character-job';
+import type { CharacterRecord } from '../persistence/character-record';
+import { createCharacterJob, type Job } from '../runtime/character-registry';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
-import { executionState } from './task-execution-adapter';
+import { executionState } from '../integrations/task-execution-adapter';
 
 export async function restoreAICharacterJob(
   view: CharacterRecord,

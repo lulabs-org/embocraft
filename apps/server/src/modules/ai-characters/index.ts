@@ -1,43 +1,50 @@
 export {
+  AICharacterManager,
   AICharacterOrchestrator,
-  type AICharacterDependencies,
-} from './services/orchestrator.service';
-export { AICharacterManager } from './services/character-manager.service';
-export { CharacterQueries, characterQueries } from './persistence/queries';
-export type { CharacterDetail, CharacterQueryPort } from './ports';
-export {
   bindCharacterManager,
   getActiveCharacterManager,
-} from './services/character-runtime.service';
-export { CharacterVoiceCoordinator } from './services/voice-coordinator.service';
-export { validateAICharacter } from './domain/validation';
+  type AICharacterDependencies,
+} from './application/character-orchestrator';
+export {
+  CharacterLogService,
+  type CharacterLogQueryOptions,
+} from './application/character-log-query';
 export {
   appendAICharacterLog,
   restoreAICharacterLogs,
 } from './domain/activity-log';
+export { validateAICharacter } from './domain/character-settings';
+export {
+  executionState,
+  taskExecutionState,
+} from './integrations/task-execution-adapter';
+export { CharacterVoiceCoordinator } from './integrations/voice-coordinator';
+export {
+  CharacterQueries,
+  characterQueries,
+} from './persistence/character-queries';
+export type { CharacterRecord } from './persistence/character-record';
+export { CharacterSnapshots } from './persistence/character-snapshots';
+export type {
+  AICharacterRoutePort,
+  CharacterDetail,
+  CharacterQueryPort,
+} from './ports';
+export { createAICharacterRouter } from './routes/ai-characters.routes';
+export {
+  CharacterExecutionService,
+  protectCharactersAfterStorageFailure,
+} from './runtime/character-execution';
+export { AICharacterHost } from './runtime/character-host';
 export {
   AICharacterRegistry,
-  type Job,
-  type HostedAICharacter,
   active,
-  resident,
-  isJobBusy,
   canWakeJob,
-} from './services/character-job';
-export type { CharacterRecord } from './persistence/record';
-export {
-  taskExecutionState,
-  executionState,
-} from './services/task-execution-adapter';
-export { AICharacterWakeScheduler } from './services/wake-scheduler.service';
-export { AICharacterHost } from './services/character-host.service';
-export type { ExecutionContext } from './services/execution-context';
-export { handleWorldEvent } from './services/world-event-handler';
-export {
-  CharacterLogService,
-  type CharacterLogQueryOptions,
-} from './services/character-log.service';
-export {
-  createAICharacterRouter,
-  type AICharacterRoutePort,
-} from './routes/ai-characters.routes';
+  isJobBusy,
+  resident,
+  type HostedAICharacter,
+  type Job,
+} from './runtime/character-registry';
+export type { ExecutionContext } from './runtime/execution-context';
+export { AICharacterWakeScheduler } from './runtime/wake-scheduler';
+export { handleWorldEvent } from './runtime/world-event-handler';

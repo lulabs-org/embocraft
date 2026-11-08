@@ -1,8 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
 import { domainEvents } from '../src/core/events/domain-events';
-import { CharacterVoiceCoordinator } from '../src/modules/ai-characters/services/voice-coordinator.service';
-import type { Job } from '../src/modules/ai-characters/services/character-job';
+import {
+  CharacterVoiceCoordinator,
+  type Job,
+} from '../src/modules/ai-characters';
 import { ttsService, type ResolvedSpeech } from '../src/modules/tts';
 import { AgentSpeech } from '../src/modules/world/services/agent-speech.service';
 import { WorldRoom } from '../src/modules/world/world.room';

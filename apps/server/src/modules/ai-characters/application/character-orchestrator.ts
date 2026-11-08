@@ -1,12 +1,15 @@
 import {
+  Session,
   type AgentConfig,
   type RuntimeModelOptions,
-  type Session,
 } from '@voxel/agent-runtime';
 import type { AICharacterSettings } from '@voxel/shared';
+import type { ManagementPersistence } from '../../../application/management-commit';
+import { createManagementPersistence } from '../../../application/management-persistence';
+import { AppError } from '../../../core/errors/app-error';
+import { domainEvents } from '../../../core/events/domain-events';
 import { DatabaseManagementArchive } from '../../../persistence/database-management-archive';
 import type { ArchivePort } from '../../../persistence/management-archive';
-import type { ManagementPersistence } from '../../../application/management-commit';
 import { migrateArchive } from '../../../persistence/migrate-archive';
 import { bindConsoleSyncEvents, ConsoleSyncEvents } from '../../console-sync';
 import {
@@ -14,23 +17,35 @@ import {
   type ProviderRuntimePort,
   type SavedProvider,
 } from '../../providers';
-import { appendAICharacterLog } from '../domain/activity-log';
-import { AICharacterWakeScheduler } from './wake-scheduler.service';
-
-import { AppError } from '../../../core/errors/app-error';
-import { validateAICharacter } from '../domain/validation';
-
 import { bindTaskService, TaskCoordinator, TaskSnapshots } from '../../tasks';
+import { appendAICharacterLog } from '../domain/activity-log';
+import { validateAICharacter } from '../domain/character-settings';
+import { executionState } from '../integrations/task-execution-adapter';
+import { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
+import { CharacterSnapshots } from '../persistence/character-snapshots';
+import type { AICharacterRoutePort } from '../ports';
+import { CharacterExecutionService } from '../runtime/character-execution';
+import { AICharacterRegistry, type Job } from '../runtime/character-registry';
+import { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
+import { CharacterManagementService } from './character-management';
 import { restoreAICharacterJob } from './character-restore';
-import { CharacterSnapshots } from './character-snapshots';
-import { createManagementPersistence } from '../../../application/management-persistence';
-import { domainEvents } from '../../../core/events/domain-events';
-import { CharacterExecutionService } from './character-execution.service';
-import { CharacterManagementService } from './character-management.service';
-import { AICharacterRegistry, type Job } from './character-job';
-import { bindCharacterManager } from './character-runtime.service';
-import { executionState } from './task-execution-adapter';
-import { CharacterVoiceCoordinator } from './voice-coordinator.service';
+
+let activeCharacterManager: AICharacterRoutePort | undefined;
+
+export function bindCharacterManager(
+  manager: AICharacterRoutePort,
+): () => void {
+  activeCharacterManager = manager;
+  return () => {
+    if (activeCharacterManager === manager) activeCharacterManager = undefined;
+  };
+}
+
+export function getActiveCharacterManager(): AICharacterRoutePort {
+  if (!activeCharacterManager)
+    throw new AppError('AI 角色管理服务尚未就绪。', 503);
+  return activeCharacterManager;
+}
 
 export class AICharacterOrchestrator {
   readonly jobs = new AICharacterRegistry();
@@ -370,6 +385,24 @@ export class AICharacterOrchestrator {
     await Promise.allSettled([...this.jobs.values()].map((j) => j.done));
     await this.save();
     this.events.close();
+  }
+}
+
+/** Manager wrapper with explicit persistence supplied by the host. */
+export class AICharacterManager extends AICharacterOrchestrator {
+  constructor(
+    providers: ProviderRuntimePort = providerRepository,
+    serverUrl: string | (() => string) = '',
+    archive: ArchivePort = new DatabaseManagementArchive(),
+    dependencies: AICharacterDependencies = {
+      session: (url) => new Session(url),
+      model: (_config, provider) => ({
+        endpoint: { type: provider.type, baseUrl: provider.baseUrl },
+        request: fetch,
+      }),
+    },
+  ) {
+    super(providers, serverUrl, dependencies, archive);
   }
 }
 

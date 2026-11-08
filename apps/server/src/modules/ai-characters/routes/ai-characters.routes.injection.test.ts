@@ -2,11 +2,12 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { expect, it, vi } from 'vitest';
-import type { CharacterDetail, CharacterQueryPort } from '../ports';
-import {
-  bindCharacterManager,
-  type AICharacterRoutePort,
-} from '../services/character-runtime.service';
+import { bindCharacterManager } from '../application/character-orchestrator';
+import type {
+  AICharacterRoutePort,
+  CharacterDetail,
+  CharacterQueryPort,
+} from '../ports';
 import { createAICharacterRouter } from './ai-characters.routes';
 
 it('uses the query port supplied to the router for lists, details, and logs', async () => {

@@ -6,7 +6,7 @@ import type {
 } from '@voxel/agent-runtime';
 import type { WorldEvent } from '@voxel/shared';
 import type { SavedProvider } from '../../providers';
-import type { Job } from './character-job';
+import type { Job } from './character-registry';
 
 /** AI 角色在游戏世界中的会话运行时执行上下文契约 */
 export type ExecutionContext = {

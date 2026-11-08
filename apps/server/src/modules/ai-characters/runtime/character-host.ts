@@ -9,9 +9,9 @@ import {
   executionConfigOverrides,
 } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
+import { executionState } from '../integrations/task-execution-adapter';
+import type { Job } from './character-registry';
 import type { ExecutionContext } from './execution-context';
-import type { Job } from './character-job';
-import { executionState } from './task-execution-adapter';
 import { handleWorldEvent } from './world-event-handler';
 
 export type { ExecutionContext };

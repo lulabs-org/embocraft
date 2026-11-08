@@ -3,7 +3,7 @@ import {
   AI_CHARACTER_LOG_MAX_PAGE_SIZE,
   AI_CHARACTER_LOG_PAGE_SIZE,
 } from '@voxel/shared';
-import { CharacterLogService } from './character-log.service';
+import { CharacterLogService } from './character-log-query';
 
 describe('CharacterLogService', () => {
   it('encodes and decodes cursors round-trip', () => {

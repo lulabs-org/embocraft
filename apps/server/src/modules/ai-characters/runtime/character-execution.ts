@@ -2,18 +2,18 @@ import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort, SavedProvider } from '../../providers';
 import { markOffline } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
-import { AICharacterHost } from './character-host.service';
+import { executionState } from '../integrations/task-execution-adapter';
+import type { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
+import { AICharacterHost } from './character-host';
 import {
   canWakeJob,
   isJobBusy,
   resident,
   type AICharacterRegistry,
   type Job,
-} from './character-job';
+} from './character-registry';
 import type { ExecutionContext } from './execution-context';
-import { executionState } from './task-execution-adapter';
-import type { CharacterVoiceCoordinator } from './voice-coordinator.service';
-import type { AICharacterWakeScheduler } from './wake-scheduler.service';
+import type { AICharacterWakeScheduler } from './wake-scheduler';
 
 type RuntimeContext = {
   jobs: AICharacterRegistry;
