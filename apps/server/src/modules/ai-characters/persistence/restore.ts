@@ -3,7 +3,7 @@ import type { PlanService } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/validation';
 import { AppError } from '../../../core/errors/app-error';
-import { PROVIDER_SPECS, type ProviderRuntimePort } from '../../providers';
+import { isMissingApiKey, type ProviderRuntimePort } from '../../providers';
 import type { CharacterRecord } from './record';
 import { createCharacterJob, type Job } from '../services/character-job';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
@@ -31,8 +31,7 @@ export async function restoreAICharacterJob(
   if (typeof view.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(view.id))
     throw new AppError('Agent 标识无效。', 500);
 
-  const missingApiKey =
-    PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey;
+  const missingApiKey = isMissingApiKey(provider);
 
   const job = createCharacterJob(
     {

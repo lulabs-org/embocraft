@@ -1,35 +1,27 @@
-import { AppError } from '../../../core/errors/app-error';
-import type { ProviderRuntimePort } from '../ports';
-import { PROVIDER_SPECS, type SavedProvider } from '../domain/model';
+import type {
+  ProviderHealth,
+  ProviderHealthPort,
+  ProviderModelsClient,
+  ProviderRuntimePort,
+} from '../ports';
+import { assertApiKeyConfigured } from '../domain/validation';
 import { fetchProviderModels } from './model-catalog';
 
-export type ProviderHealth = {
-  reachable: boolean;
-  modelsAvailable: boolean;
-};
-
-type FetchModels =
-  | ((provider: SavedProvider) => Promise<Response>)
-  | { getModels: (provider: SavedProvider) => Promise<Response> };
+export type { ProviderHealth } from '../ports';
 
 /** Probe connectivity and whether the upstream exposes its model catalog. */
-export class ProviderHealthChecker {
+export class ProviderHealthChecker implements ProviderHealthPort {
   constructor(
     private readonly providers: ProviderRuntimePort,
-    private readonly client: FetchModels = fetchProviderModels,
+    private readonly client: ProviderModelsClient = fetchProviderModels,
   ) {}
 
   async check(id: string): Promise<ProviderHealth> {
     const provider = await this.providers.getRuntime(id);
-    if (PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey)
-      throw new AppError('请先配置 API Key。');
+    assertApiKeyConfigured(provider);
 
     try {
-      const fetchFn =
-        typeof this.client === 'function'
-          ? this.client
-          : this.client.getModels.bind(this.client);
-      const response = await fetchFn(provider);
+      const response = await this.client(provider);
       await response.body?.cancel();
       return { reachable: true, modelsAvailable: response.ok };
     } catch {

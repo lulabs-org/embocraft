@@ -30,6 +30,13 @@ export type SavedProvider = ProviderDraft & {
   id: string;
 };
 
+/** Whether the provider type requires an API key that has not been configured. */
+export function isMissingApiKey(
+  provider: Pick<SavedProvider, 'type' | 'apiKey'>,
+): boolean {
+  return PROVIDER_SPECS[provider.type].requiresApiKey && !provider.apiKey;
+}
+
 /**
  * Strip the plaintext API key from a saved provider and return a public view
  * indicating only whether a key has been configured (`hasApiKey: boolean`).

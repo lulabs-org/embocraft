@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
 import { object, text } from '../../../core/http/validation';
 import type { ProviderType } from '@voxel/shared';
-import { PROVIDER_SPECS, type SavedProvider } from './model';
+import { PROVIDER_SPECS, isMissingApiKey, type SavedProvider } from './model';
 
 const SUPPORTED_TYPES = ['deepseek', 'ollama', 'compatible', 'gemini'] as const;
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -104,4 +104,11 @@ export function validateProvider(
     apiKey,
     defaultModel: text(input.defaultModel, '默认模型', 128),
   };
+}
+
+/** Reject upstream calls for providers whose required API key is missing. */
+export function assertApiKeyConfigured(
+  provider: Pick<SavedProvider, 'type' | 'apiKey'>,
+): void {
+  if (isMissingApiKey(provider)) throw new AppError('请先配置 API Key。');
 }

@@ -7,13 +7,24 @@ export {
   validateProviderModel,
 } from './domain/inference';
 export type { InferenceSettings } from './domain/inference';
-export { toProviderView, PROVIDER_SPECS } from './domain/model';
+export {
+  isMissingApiKey,
+  toProviderView,
+  PROVIDER_SPECS,
+} from './domain/model';
 export type { SavedProvider } from './domain/model';
-export { validateProvider } from './domain/validation';
+export { assertApiKeyConfigured, validateProvider } from './domain/validation';
 export {
   DatabaseProviderRepository,
   providerRepository,
 } from './persistence/database-repository';
-export type { ProviderRepository, ProviderRuntimePort } from './ports';
+export type {
+  ModelCatalogPort,
+  ProviderHealth,
+  ProviderHealthPort,
+  ProviderModelsClient,
+  ProviderRepository,
+  ProviderRuntimePort,
+} from './ports';
 export { createProviderRouter } from './routes/providers.routes';
 export { ProviderService, providerService } from './services/provider.service';

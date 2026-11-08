@@ -1,7 +1,7 @@
 import type { ProviderType } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { integer, text } from '../../../core/http/validation';
-import { PROVIDER_SPECS, type SavedProvider } from './model';
+import { isMissingApiKey, type SavedProvider } from './model';
 
 export type InferenceSettings = {
   thinking: 'enabled' | 'disabled';
@@ -46,11 +46,7 @@ export function validateProviderModel(
     throw new AppError('请输入有效模型 ID。');
   if (provider.type === 'ollama' && /cloud/i.test(model))
     throw new AppError('Ollama 请选择已安装在目标服务上的模型。');
-  if (
-    !options?.allowMissingApiKey &&
-    PROVIDER_SPECS[provider.type].requiresApiKey &&
-    !provider.apiKey
-  )
+  if (!options?.allowMissingApiKey && isMissingApiKey(provider))
     throw new AppError('请先为该模型服务配置 API Key。');
   return model;
 }

@@ -17,6 +17,9 @@ function fixture() {
     list: vi.fn(async () => [view]),
     save: vi.fn(async () => view),
     remove: vi.fn(async () => {}),
+    getRuntime: vi.fn(async () => {
+      throw new AppError('unexpected runtime lookup', 500);
+    }),
   };
   const catalog = { models: vi.fn(async () => ['fixture-model']) };
   const health = {
