@@ -1,8 +1,8 @@
 import { runtimeView } from '@voxel/agent-runtime';
 
 import type { AICharacterView } from '@voxel/shared';
-import type { AICharacterRegistry } from './character-job';
-import { characterSettings, type CharacterRecord } from '../persistence/record';
+import type { AICharacterRegistry } from '../runtime/character-registry';
+import { characterSettings, type CharacterRecord } from './character-record';
 
 /** Captures and tracks the last committed character runtime snapshots. */
 export class CharacterSnapshots {

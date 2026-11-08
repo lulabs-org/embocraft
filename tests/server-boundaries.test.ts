@@ -388,7 +388,7 @@ it('exports server module contracts from their owning module rather than compati
       const target = relative(root, resolve(dirname(file), spec));
       // Preserve the existing public character type while the archive contract owns its shape.
       const archiveCharacterType =
-        name === 'modules/ai-characters/persistence/record.ts' &&
+        name === 'modules/ai-characters/persistence/character-record.ts' &&
         target === 'persistence/management-archive' &&
         statement.isTypeOnly &&
         !!statement.exportClause &&

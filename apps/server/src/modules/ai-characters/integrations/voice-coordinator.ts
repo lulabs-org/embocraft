@@ -5,7 +5,7 @@ import {
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
 import { ttsService } from '../../tts';
-import type { Job } from './character-job';
+import type { Job } from '../runtime/character-registry';
 import type { Session } from '@voxel/agent-runtime';
 
 /**

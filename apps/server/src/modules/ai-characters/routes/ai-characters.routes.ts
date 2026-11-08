@@ -1,11 +1,12 @@
 import { consoleSync } from '../../console-sync';
 import express, { type Request, type Router } from 'express';
-import { CharacterLogService } from '../services/character-log.service';
-import {
-  getActiveCharacterManager,
-  type AICharacterRoutePort,
-} from '../services/character-runtime.service';
-import type { CharacterDetail, CharacterQueryPort } from '../ports';
+import { CharacterLogService } from '../application/character-log-query';
+import { getActiveCharacterManager } from '../application/character-orchestrator';
+import type {
+  AICharacterRoutePort,
+  CharacterDetail,
+  CharacterQueryPort,
+} from '../ports';
 import { asyncRoute as route } from '../../../core/http/middleware/async-route';
 
 export type { AICharacterRoutePort };

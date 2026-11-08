@@ -5,7 +5,7 @@ import type {
   AgentCharacterLog,
 } from '@prisma/client';
 import { databaseJson } from '../../../core/database/client';
-import type { CharacterRecord } from './record';
+import type { CharacterRecord } from './character-record';
 import type { RuntimeState } from '@voxel/agent-runtime';
 import { stableJson } from '../../../core/database/stable-json';
 
