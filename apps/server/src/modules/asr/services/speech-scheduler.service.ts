@@ -1,20 +1,19 @@
-import type { WhisperAsrDraft } from '@voxel/shared';
-import { LocalSpeech } from './local-speech.service';
 import { AppError } from '../../../core/errors/app-error';
+import type { SpeechSettings, SpeechTranscriber } from './speech-transcriber';
 
 type Job = { run: () => Promise<void>; cancel: () => void };
 /** Final sentences wait in a bounded queue. Obsolete previews never queue. */
 export class SpeechScheduler {
   private running = false;
   private queue: Job[] = [];
-  constructor(private speech: LocalSpeech) {}
+  constructor(private speech: SpeechTranscriber) {}
   transcribe(
     audio: Buffer,
     type: string,
     language: string,
     signal: AbortSignal,
     partial = false,
-    settings?: WhisperAsrDraft,
+    settings?: SpeechSettings,
   ): Promise<string> {
     if (signal.aborted) return Promise.reject(signal.reason);
     if ((partial && this.running) || this.queue.length >= 4)
@@ -75,8 +74,8 @@ export class SpeechScheduler {
     }
   }
 }
-const schedulers = new WeakMap<LocalSpeech, SpeechScheduler>();
-export function scheduleSpeech(speech: LocalSpeech) {
+const schedulers = new WeakMap<SpeechTranscriber, SpeechScheduler>();
+export function scheduleSpeech(speech: SpeechTranscriber) {
   let scheduler = schedulers.get(speech);
   if (!scheduler) {
     scheduler = new SpeechScheduler(speech);

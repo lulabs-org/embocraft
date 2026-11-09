@@ -6,12 +6,16 @@ import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { LocalSpeech } from '../services/local-speech.service';
+import {
+  settingsFor,
+  speechRouter,
+  type SpeechRouter,
+} from '../services/speech-router.service';
 import { scheduleSpeech } from '../services/speech-scheduler.service';
 import { MAX_AUDIO_BYTES } from '../../../core/audio/normalize';
 export function installTranscribeRoutes(
   app: Express,
-  speech = new LocalSpeech(),
+  router: SpeechRouter = speechRouter(),
   asrSettings: AsrSettingsStore,
   origin = env.webOrigin(),
 ) {
@@ -52,7 +56,7 @@ export function installTranscribeRoutes(
    *         name: serviceId
    *         schema:
    *           type: string
-   *         description: 可选指定的 ASR 服务配置 ID
+   *         description: 可选指定的 ASR 服务配置 ID（Whisper 或本地 SenseVoice）
    *       - in: query
    *         name: partial
    *         schema:
@@ -94,17 +98,14 @@ export function installTranscribeRoutes(
             ? undefined
             : asrSettings.acquire(String(req.query.serviceId));
         release = selected?.release;
-        if (selected && selected.settings.provider !== 'whisper')
-          throw new AppError('请选择 Whisper 服务。');
-        const text = await scheduleSpeech(speech).transcribe(
+        const profile = selected?.settings;
+        const text = await scheduleSpeech(router.engineFor(profile)).transcribe(
           Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
           req.headers['content-type'] ?? '',
           String(req.query.language ?? 'zh'),
           controller.signal,
           req.query.partial === '1',
-          selected?.settings.provider === 'whisper'
-            ? selected.settings
-            : undefined,
+          settingsFor(profile),
         );
         if (!controller.signal.aborted) res.json({ text });
       } catch (error) {

@@ -797,6 +797,7 @@
       "serviceType": "服务类型",
       "typeWhisper": "Speaches 识别服务",
       "typeBailian": "阿里云百炼",
+      "typeSenseVoice": "本地 SenseVoice",
       "typeBrowser": "浏览器语音识别（Web Speech API）",
       "primaryLanguage": "主要识别语言",
       "browserNote": "配置仅保存在当前浏览器，不会同步到其他设备；无需 API Key。每次选择一种主要语言，实际支持取决于浏览器识别服务。",

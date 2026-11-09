@@ -800,6 +800,7 @@
       "serviceType": "Service Type",
       "typeWhisper": "Speaches Recognition Service",
       "typeBailian": "Alibaba Cloud Bailian",
+      "typeSenseVoice": "Local SenseVoice",
       "typeBrowser": "Browser Speech Recognition (Web Speech API)",
       "primaryLanguage": "Primary Recognition Language",
       "browserNote": "Config is saved in this browser only and will not sync to other devices. No API key needed. Actual language support depends on your browser.",

@@ -9,7 +9,7 @@ import {
 import { type WorldChat } from '../services/chat.service';
 
 import { AppError } from '../../../core/errors/app-error';
-import { AsrSettingsStore, LocalSpeech } from '../../asr';
+import { AsrSettingsStore, speechRouter, type SpeechRouter } from '../../asr';
 import { ChatSpeechService } from '../services/speech.service';
 
 /** Read-only access to synthesized Agent speech clips owned by the world room. */
@@ -42,7 +42,7 @@ function parseChatRoute(query: express.Request['query']) {
 export function installChatRoutes(
   app: Express,
   getChat: () => WorldChat | undefined,
-  speech = new LocalSpeech(),
+  speech: SpeechRouter = speechRouter(),
   getAgentSpeech: () => AgentSpeechClips | undefined = () => undefined,
   origin = env.webOrigin(),
   asrSettings: AsrSettingsStore,

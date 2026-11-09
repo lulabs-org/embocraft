@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { BailianAsrDraft } from '@voxel/shared';
+import type { BailianAsrDraft, BailianAsrView } from '@voxel/shared';
 import { useI18n } from '../../i18n/context';
 import type { AsrProvider } from './browser-asr-services';
 import { SpeachesAsrConfig } from './SpeachesAsrConfig';
@@ -26,16 +26,19 @@ export function BailianAsrConfig({
   } = manager;
   const [editingKey, setEditingKey] = useState(false);
   useEffect(() => setEditingKey(false), [saved]);
-  const hasSavedKey =
-    saved?.provider !== 'whisper' &&
-    saved?.provider !== 'browser' &&
-    !!saved?.hasApiKey;
+  /** Optional `provider` on Bailian records blocks discrimination, so narrow explicitly. */
+  const savedBailian =
+    saved && (saved.provider ?? 'bailian') === 'bailian'
+      ? (saved as BailianAsrView & { id: string; name: string })
+      : undefined;
+  const hasSavedKey = !!savedBailian?.hasApiKey;
   const canKeepKey =
     hasSavedKey &&
     draft.provider !== 'whisper' &&
+    draft.provider !== 'sense-voice' &&
     draft.provider !== 'browser' &&
-    saved?.region === draft.region &&
-    saved?.workspaceId === draft.workspaceId;
+    savedBailian?.region === draft.region &&
+    savedBailian?.workspaceId === draft.workspaceId;
   return (
     <form
       onSubmit={(e) => {
@@ -124,6 +127,8 @@ export function BailianAsrConfig({
               />
             </label>
           </>
+        ) : draft.provider === 'sense-voice' ? (
+          <small>{t('console.asr.senseVoiceServerNote')}</small>
         ) : (
           <>
             <label>

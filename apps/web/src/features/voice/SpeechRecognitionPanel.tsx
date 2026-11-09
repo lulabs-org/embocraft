@@ -137,7 +137,11 @@ export function SpeechRecognitionPanel({
         !asr.loading &&
         (asr.selected.provider === 'whisper'
           ? capabilities?.local.available && !checking && !checkError
-          : asr.selected.provider !== 'browser' && asr.selected.hasApiKey));
+          : asr.selected.provider === 'sense-voice'
+            ? capabilities?.local.available && !checking && !checkError
+            : asr.selected.provider !== 'browser' &&
+              'hasApiKey' in asr.selected &&
+              asr.selected.hasApiKey));
   const chooseService = (id: string) => {
     if (id === service) return;
     stop();
@@ -262,7 +266,9 @@ export function SpeechRecognitionPanel({
                     ? `${t('console.asr.typeBrowser')} · ${browserLanguages.find(([code]) => code === value.language)?.[1] ?? value.language}`
                     : value.provider === 'whisper'
                       ? `Speaches · ${value.model}`
-                      : `${t('console.asr.typeBailian')} · ${value.model}`,
+                      : value.provider === 'sense-voice'
+                        ? `${t('console.asr.typeSenseVoice')} · ${value.model}`
+                        : `${t('console.asr.typeBailian')} · ${value.model}`,
               }))
               .map((item) => (
                 <button

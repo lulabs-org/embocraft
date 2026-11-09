@@ -5,6 +5,8 @@ dist/
 .env.*
 !.env.example
 .data/
+models/*
+!models/.gitkeep
 artifacts/
 *.log
 .DS_Store

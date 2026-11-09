@@ -5,11 +5,16 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { AsrSettingsStore } from '../persistence/asr-settings-store';
-import { LocalSpeech } from '../services/local-speech.service';
+import {
+  settingsFor,
+  speechRouter,
+  type SpeechRouter,
+} from '../services/speech-router.service';
+import { listSenseVoiceModels } from '../services/sense-voice-models';
 import { PiperModels } from '../../tts';
 export function installCapabilitiesRoutes(
   app: Express,
-  speech = new LocalSpeech(),
+  router: SpeechRouter = speechRouter(),
   asrSettings: AsrSettingsStore,
   origin = env.webOrigin(),
 ) {
@@ -56,6 +61,10 @@ export function installCapabilitiesRoutes(
    *               properties:
    *                 local:
    *                   type: object
+   *                 senseVoiceModels:
+   *                   type: array
+   *                   items:
+   *                     type: string
    *                 agentSpeech:
    *                   type: object
    */
@@ -67,12 +76,15 @@ export function installCapabilitiesRoutes(
           req.query.serviceId === undefined
             ? undefined
             : asrSettings.get(String(req.query.serviceId));
-        if (selected && selected.provider !== 'whisper')
-          throw new AppError('请选择 Whisper 服务。');
+        // Cloud profiles are not a server engine, so engineFor rejects them.
+        const engine = router.engineFor(selected);
+        const [local, senseVoiceModels] = await Promise.all([
+          engine.status(settingsFor(selected)),
+          listSenseVoiceModels(),
+        ]);
         res.json({
-          local: await speech.status(
-            selected?.provider === 'whisper' ? selected : undefined,
-          ),
+          local,
+          senseVoiceModels: senseVoiceModels.map((model) => model.name),
           agentSpeech: await new PiperModels().status(),
         });
       } catch (error) {

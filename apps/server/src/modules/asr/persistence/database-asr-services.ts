@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
-import type { AsrUse, BailianAsrSettings } from '@voxel/shared';
+import type {
+  AsrUse,
+  BailianAsrSettings,
+  SenseVoiceLanguage,
+} from '@voxel/shared';
 import { getDatabaseClient } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
@@ -36,6 +40,16 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
             ...(uses ? { uses } : {}),
           };
         }
+        if (row.provider === 'sense-voice') {
+          return {
+            id: row.id,
+            name: row.name,
+            provider: 'sense-voice',
+            model: row.model,
+            language: (row.language || 'zh') as SenseVoiceLanguage,
+            ...(uses ? { uses } : {}),
+          };
+        }
         return {
           id: row.id,
           name: row.name,
@@ -66,19 +80,44 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
           if (!ids.has(row.id))
             await tx.asrProvider.delete({ where: { id: row.id } });
         for (const [position, value] of values.entries()) {
-          const isWhisper = value.provider === 'whisper';
-          const payload = {
-            position,
-            name: value.name,
-            provider: isWhisper ? 'whisper' : 'bailian',
-            model: value.model,
-            apiKey: encryptSecret(value.apiKey ?? ''),
-            region: !isWhisper ? value.region : null,
-            workspaceId: !isWhisper ? value.workspaceId : null,
-            baseUrl: isWhisper ? (value.baseUrl ?? '') : null,
-            temperature: isWhisper ? (value.temperature ?? 0) : null,
-            prompt: isWhisper ? (value.prompt ?? '') : null,
-          };
+          const base = { position, name: value.name, model: value.model };
+          // Server-side engines keep no secret, so their rows never store one.
+          const payload =
+            value.provider === 'whisper'
+              ? {
+                  ...base,
+                  provider: 'whisper',
+                  apiKey: encryptSecret(value.apiKey ?? ''),
+                  region: null,
+                  workspaceId: null,
+                  language: null,
+                  baseUrl: value.baseUrl ?? '',
+                  temperature: value.temperature ?? 0,
+                  prompt: value.prompt,
+                }
+              : value.provider === 'sense-voice'
+                ? {
+                    ...base,
+                    provider: 'sense-voice',
+                    apiKey: encryptSecret(''),
+                    region: null,
+                    workspaceId: null,
+                    language: value.language,
+                    baseUrl: null,
+                    temperature: null,
+                    prompt: null,
+                  }
+                : {
+                    ...base,
+                    provider: 'bailian',
+                    apiKey: encryptSecret(value.apiKey),
+                    region: value.region,
+                    workspaceId: value.workspaceId,
+                    language: null,
+                    baseUrl: null,
+                    temperature: null,
+                    prompt: null,
+                  };
           await tx.asrProvider.upsert({
             where: { id: value.id },
             create: { id: value.id, ...payload },

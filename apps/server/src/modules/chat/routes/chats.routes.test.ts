@@ -7,7 +7,7 @@ import {
   TestAsrSettingsStore,
 } from '../../../../test/helpers/memory-storage';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
-import type { LocalSpeech } from '../../asr';
+import { SpeechRouter, type LocalSpeech } from '../../asr';
 import { WorldChat } from '../services/chat.service';
 import { installChatRoutes } from './chats.routes';
 
@@ -135,7 +135,14 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   } as unknown as AsrSettingsStore;
   const app = express();
   const origin = 'http://127.0.0.1:5173';
-  installChatRoutes(app, () => chat, speech, undefined, origin, store);
+  installChatRoutes(
+    app,
+    () => chat,
+    new SpeechRouter({ whisper: speech, default: speech }),
+    undefined,
+    origin,
+    store,
+  );
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

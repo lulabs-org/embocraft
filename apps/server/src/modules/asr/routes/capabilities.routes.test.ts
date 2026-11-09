@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpers/memory-storage';
 
 import { LocalSpeech } from '../services/local-speech.service';
+import { SpeechRouter } from '../services/speech-router.service';
 import { PiperModels } from '../../tts/services/piper-models.service';
 import { installCapabilitiesRoutes } from './capabilities.routes';
 
@@ -23,7 +24,12 @@ describe('audio capabilities HTTP boundary', () => {
     store = new AsrSettingsStore();
     await store.load();
     const app = express();
-    installCapabilitiesRoutes(app, speech, store, origin);
+    installCapabilitiesRoutes(
+      app,
+      new SpeechRouter({ whisper: speech, default: speech }),
+      store,
+      origin,
+    );
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),

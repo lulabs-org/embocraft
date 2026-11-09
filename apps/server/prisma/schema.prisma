@@ -283,6 +283,8 @@ model AsrProvider {
   baseUrl     String?
   temperature Float?
   prompt      String?
+  /// Offline SenseVoice language; empty for the other providers.
+  language    String?
   createdAt   DateTime        @default(now()) @db.Timestamptz
   updatedAt   DateTime        @updatedAt @db.Timestamptz
   assignments AsrAssignment[]

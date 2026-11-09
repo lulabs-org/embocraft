@@ -13,7 +13,7 @@ describe('DatabaseAsrServicePersistence', () => {
     expect(await persistence.load()).toEqual([]);
   });
 
-  it('loads unpacked fields into SavedService for both Bailian and Whisper providers', async () => {
+  it('loads unpacked fields into SavedService for Bailian, Whisper and SenseVoice providers', async () => {
     const db = {
       asrProvider: {
         findMany: vi.fn().mockResolvedValue([
@@ -45,6 +45,21 @@ describe('DatabaseAsrServicePersistence', () => {
             temperature: 0.2,
             prompt: 'Minecraft voxel world',
           },
+          {
+            id: 'sense-voice-1',
+            position: 2,
+            name: 'SenseVoice Local',
+            provider: 'sense-voice',
+            model: 'default',
+            language: 'en',
+            apiKey: '',
+            assignments: [],
+            region: null,
+            workspaceId: null,
+            baseUrl: null,
+            temperature: null,
+            prompt: null,
+          },
         ]),
       },
     } as unknown as PrismaClient;
@@ -73,6 +88,13 @@ describe('DatabaseAsrServicePersistence', () => {
         temperature: 0.2,
         prompt: 'Minecraft voxel world',
         uses: ['spatial', 'clip'],
+      },
+      {
+        id: 'sense-voice-1',
+        name: 'SenseVoice Local',
+        provider: 'sense-voice',
+        model: 'default',
+        language: 'en',
       },
     ]);
   });
@@ -124,6 +146,13 @@ describe('DatabaseAsrServicePersistence', () => {
         prompt: '',
         apiKey: '',
       },
+      {
+        id: 's-1',
+        name: 'SenseVoice Model',
+        provider: 'sense-voice',
+        model: 'default',
+        language: 'zh',
+      },
     ];
 
     await persistence.save(services);
@@ -150,6 +179,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: null,
         temperature: null,
         prompt: null,
+        language: null,
       },
       update: {
         position: 0,
@@ -162,6 +192,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: null,
         temperature: null,
         prompt: null,
+        language: null,
       },
     });
 
@@ -179,6 +210,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: 'http://localhost:8000',
         temperature: 0,
         prompt: '',
+        language: null,
       },
       update: {
         position: 1,
@@ -191,6 +223,38 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: 'http://localhost:8000',
         temperature: 0,
         prompt: '',
+        language: null,
+      },
+    });
+
+    expect(upsertService).toHaveBeenCalledWith({
+      where: { id: 's-1' },
+      create: {
+        id: 's-1',
+        position: 2,
+        name: 'SenseVoice Model',
+        provider: 'sense-voice',
+        model: 'default',
+        apiKey: '',
+        region: null,
+        workspaceId: null,
+        baseUrl: null,
+        temperature: null,
+        prompt: null,
+        language: 'zh',
+      },
+      update: {
+        position: 2,
+        name: 'SenseVoice Model',
+        provider: 'sense-voice',
+        model: 'default',
+        apiKey: '',
+        region: null,
+        workspaceId: null,
+        baseUrl: null,
+        temperature: null,
+        prompt: null,
+        language: 'zh',
       },
     });
   });

@@ -6,6 +6,7 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../../../core/errors/app-error';
 import { LocalSpeech } from '../services/local-speech.service';
+import { SpeechRouter } from '../services/speech-router.service';
 import { installTranscribeRoutes } from './transcribe.routes';
 describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: AsrSettingsStore;
@@ -22,7 +23,11 @@ describe('transcription HTTP boundary', () => {
     store = new AsrSettingsStore();
     await store.load();
     const app = express();
-    installTranscribeRoutes(app, speech, store);
+    installTranscribeRoutes(
+      app,
+      new SpeechRouter({ whisper: speech, default: speech }),
+      store,
+    );
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),

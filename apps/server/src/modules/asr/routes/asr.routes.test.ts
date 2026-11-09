@@ -11,6 +11,7 @@ import { TestAsrSettingsStore as AsrSettingsStore } from '../../../../test/helpe
 
 import { RoutedWebSocketTransport } from '../../../core/transport/websocket.transport';
 import { LocalSpeech } from '../services/local-speech.service';
+import { SpeechRouter } from '../services/speech-router.service';
 import { createAsrSocket } from '../sockets/asr.socket';
 import { installAsrRoutes } from './asr.routes.ts';
 import { installCapabilitiesRoutes } from './capabilities.routes';
@@ -36,7 +37,11 @@ beforeEach(async () => {
     available: true,
     reason: 'local',
   });
-  installCapabilitiesRoutes(app, speech, store);
+  installCapabilitiesRoutes(
+    app,
+    new SpeechRouter({ whisper: speech, default: speech }),
+    store,
+  );
   installAsrRoutes(app, store);
   server = createServer(app);
   transport = new RoutedWebSocketTransport(

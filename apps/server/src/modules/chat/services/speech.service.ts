@@ -1,7 +1,11 @@
-import { AppError } from '../../../core/errors/app-error';
-import { AsrSettingsStore, LocalSpeech, scheduleSpeech } from '../../asr';
-import type { WorldChat } from './chat.service';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
+import {
+  AsrSettingsStore,
+  scheduleSpeech,
+  settingsFor,
+  type SpeechRouter,
+} from '../../asr';
+import type { WorldChat } from './chat.service';
 
 type AudioInput = {
   chat: WorldChat;
@@ -25,7 +29,7 @@ type SpatialInput = Omit<AudioInput, 'route' | 'language'> & {
 /** Coordinates ASR with chat authorization and ticket lifetimes. */
 export class ChatSpeechService {
   constructor(
-    private speech: LocalSpeech,
+    private speech: SpeechRouter,
     private asrSettings: AsrSettingsStore,
   ) {}
 
@@ -42,44 +46,38 @@ export class ChatSpeechService {
   }: AudioInput) {
     chat.beginUpload(actor, route);
     try {
-      const normalized = await this.speech.normalize(
-        bytes,
-        contentType,
-        signal,
-      );
-      let text = '';
+      const selected = serviceId
+        ? this.asrSettings.acquire(serviceId)
+        : undefined;
       try {
-        const selected = serviceId
-          ? this.asrSettings.acquire(serviceId)
-          : undefined;
+        const profile = selected?.settings;
+        const engine = this.speech.engineFor(profile);
+        const normalized = await engine.normalize(bytes, contentType, signal);
+        let text = '';
         try {
-          if (selected && selected.settings.provider !== 'whisper')
-            throw new AppError('录制语音只能使用 Whisper 识别服务。');
-          text = await scheduleSpeech(this.speech).transcribe(
+          text = await scheduleSpeech(engine).transcribe(
             normalized.bytes,
             'audio/wav',
             language,
             signal,
             false,
-            selected?.settings.provider === 'whisper'
-              ? selected.settings
-              : undefined,
+            settingsFor(profile),
           );
-        } finally {
-          selected?.release();
+        } catch {
+          signal.throwIfAborted();
         }
-      } catch {
         signal.throwIfAborted();
+        chat.authenticate(token);
+        return chat.publishAudio(
+          actor,
+          route,
+          normalized.bytes,
+          normalized.durationMs,
+          text,
+        );
+      } finally {
+        selected?.release();
       }
-      signal.throwIfAborted();
-      chat.authenticate(token);
-      return chat.publishAudio(
-        actor,
-        route,
-        normalized.bytes,
-        normalized.durationMs,
-        text,
-      );
     } finally {
       chat.endUpload(actor);
     }
@@ -101,25 +99,26 @@ export class ChatSpeechService {
       ? this.asrSettings.acquire(serviceId)
       : undefined;
     try {
-      if (selected && selected.settings.provider !== 'whisper')
-        throw new AppError('请选择 Whisper 服务。');
+      const profile = selected?.settings;
+      const engine = this.speech.engineFor(profile);
       const signal = AbortSignal.any([
         requestSignal,
         partial ? chat.previewSpatial(actor, id) : chat.claimSpatial(actor, id),
       ]);
-      const text = await scheduleSpeech(this.speech).transcribe(
+      // Nearby transcripts are published without review, so Whisper keeps temperature 0.
+      const settings =
+        profile?.provider === 'whisper'
+          ? { ...profile, temperature: 0 }
+          : profile?.provider === 'sense-voice'
+            ? profile
+            : { ...DEFAULT_WHISPER_ASR, temperature: 0 };
+      const text = await scheduleSpeech(engine).transcribe(
         bytes,
         contentType,
         language,
         signal,
         partial,
-        {
-          ...(selected?.settings.provider === 'whisper'
-            ? selected.settings
-            : DEFAULT_WHISPER_ASR),
-          // Nearby transcripts are published automatically, without a review step.
-          temperature: 0,
-        },
+        settings,
       );
       signal.throwIfAborted();
       chat.authenticate(token);

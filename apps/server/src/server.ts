@@ -27,6 +27,8 @@ import {
   DatabaseAsrServicePersistence,
   installAsrSocket,
   LocalSpeech,
+  speechRouter,
+  SpeechRouter,
   type AsrBridge,
 } from './modules/asr';
 
@@ -55,7 +57,10 @@ export type ServerOptions = {
   characterQueries?: CharacterQueryPort;
   voiceServices?: VoiceServiceStore;
   asrSettings?: AsrSettingsStore;
+  /** Self-hosted Whisper engine; also pins the default engine for voice without a saved service. */
   speech?: LocalSpeech;
+  /** Complete router, for callers that inject every engine. */
+  speechRouter?: SpeechRouter;
   worldStore?: WorldStore;
   agentDependencies?: AICharacterDependencies;
   databaseCheck?: (url: string) => Promise<void>;
@@ -138,7 +143,11 @@ export async function createServer(options: ServerOptions = {}) {
     () => characters.events.publish('providers'),
     providerHealth,
   );
-  const speech = options.speech ?? new LocalSpeech();
+  const speech = options.speechRouter
+    ? options.speechRouter
+    : options.speech
+      ? new SpeechRouter({ whisper: options.speech, default: options.speech })
+      : speechRouter();
   const app = createApp({
     origin: config.webOrigin,
     health: config,

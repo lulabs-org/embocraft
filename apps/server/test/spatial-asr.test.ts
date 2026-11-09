@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
 import { LocalSpeech } from '../src/modules/asr/services/local-speech.service';
+import { SpeechRouter } from '../src/modules/asr/services/speech-router.service';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
 import { installChatRoutes } from '../src/modules/chat/routes/chats.routes';
 import { TestAsrSettingsStore } from './helpers/memory-storage';
@@ -72,10 +73,11 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
     );
   });
   const app = express();
+  const speech = new LocalSpeech('http://asr.test/v1', upstream);
   installChatRoutes(
     app,
     () => chat,
-    new LocalSpeech('http://asr.test/v1', upstream),
+    new SpeechRouter({ whisper: speech, default: speech }),
     undefined,
     'http://127.0.0.1:5173',
     new TestAsrSettingsStore(),

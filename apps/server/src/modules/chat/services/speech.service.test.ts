@@ -5,7 +5,7 @@ import {
   TestAsrSettingsStore as AsrSettingsStore,
   TestAsrSettingsStore,
 } from '../../../../test/helpers/memory-storage';
-import type { LocalSpeech } from '../../asr';
+import type { LocalSpeech, SpeechRouter } from '../../asr';
 import { WorldChat } from './chat.service';
 import { ChatSpeechService } from './speech.service';
 
@@ -29,6 +29,7 @@ function setup() {
   const normalize = vi.fn().mockResolvedValue({ bytes, durationMs: 1000 });
   const transcribe = vi.fn().mockResolvedValue('hello');
   const speech = { normalize, transcribe } as unknown as LocalSpeech;
+  const router = { engineFor: () => speech } as unknown as SpeechRouter;
   return {
     chat,
     token,
@@ -37,7 +38,8 @@ function setup() {
     normalize,
     transcribe,
     speech,
-    service: new ChatSpeechService(speech, new TestAsrSettingsStore()),
+    router,
+    service: new ChatSpeechService(router, new TestAsrSettingsStore()),
   };
 }
 
@@ -110,7 +112,7 @@ describe('chat speech coordination', () => {
   });
 
   it('uses and releases the selected Whisper profile for nearby transcription', async () => {
-    const { chat, token, bytes, transcribe, speech } = setup();
+    const { chat, token, bytes, transcribe, router } = setup();
     const release = vi.fn();
     const settings = {
       ...DEFAULT_WHISPER_ASR,
@@ -122,7 +124,7 @@ describe('chat speech coordination', () => {
     const store = {
       acquire: vi.fn(() => ({ settings, release })),
     } as unknown as AsrSettingsStore;
-    const service = new ChatSpeechService(speech, store);
+    const service = new ChatSpeechService(router, store);
     const id = chat.beginSpatial('actor');
     await service.transcribeSpatial({
       chat,
@@ -148,7 +150,7 @@ describe('chat speech coordination', () => {
   });
 
   it('uses and releases the selected Whisper profile for recorded chat audio', async () => {
-    const { chat, token, bytes, transcribe, speech } = setup();
+    const { chat, token, bytes, transcribe, router } = setup();
     const release = vi.fn();
     const settings = {
       ...DEFAULT_WHISPER_ASR,
@@ -159,7 +161,7 @@ describe('chat speech coordination', () => {
     const store = {
       acquire: vi.fn(() => ({ settings, release })),
     } as unknown as AsrSettingsStore;
-    const service = new ChatSpeechService(speech, store);
+    const service = new ChatSpeechService(router, store);
     const data = await service.publishAudio({
       chat,
       actor: 'actor',

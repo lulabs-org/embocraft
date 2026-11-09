@@ -1,6 +1,6 @@
 import type { Express, RequestHandler } from 'express';
 import type { AsrSettingsStore } from '../persistence/asr-settings-store';
-import type { LocalSpeech } from '../services/local-speech.service';
+import type { SpeechRouter } from '../services/speech-router.service';
 import { installAsrRoutes } from './asr.routes';
 import { installTranscribeRoutes } from './transcribe.routes';
 import { installCapabilitiesRoutes } from './capabilities.routes';
@@ -8,7 +8,8 @@ import { installCapabilitiesRoutes } from './capabilities.routes';
 export type AsrRouteDependencies = {
   origin: string;
   authenticateManagement: RequestHandler;
-  speech: LocalSpeech;
+  /** Whisper, local SenseVoice and the engine used when no service is selected. */
+  speech: SpeechRouter;
   asrSettings: AsrSettingsStore;
 };
 

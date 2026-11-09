@@ -18,6 +18,10 @@ const DEFAULT_GATEWAY_ORIGINS = [
   'http://127.0.0.1:5173',
 ] as const;
 
+/** Engines the project server can run itself; profiles from the console pick their own. */
+export const VALID_ASR_PROVIDERS = ['auto', 'whisper', 'sense-voice'] as const;
+export type AsrProviderName = (typeof VALID_ASR_PROVIDERS)[number];
+
 const repositoryRoot = fileURLToPath(
   new URL('../../../../../', import.meta.url),
 );
@@ -113,8 +117,20 @@ function encryptionSecret(env: EnvLookup = process.env): string | undefined {
 }
 
 function readSpeechConfig(env: EnvLookup = process.env) {
+  const asrProvider = (env.ASR_PROVIDER ?? 'auto').trim() || 'auto';
+  if (!VALID_ASR_PROVIDERS.includes(asrProvider as AsrProviderName)) {
+    throw new Error('ASR_PROVIDER 仅支持 auto、whisper 或 sense-voice。');
+  }
+  const threads = Number(env.ASR_THREADS ?? 2);
+  if (!Number.isInteger(threads) || threads < 1 || threads > 16) {
+    throw new Error('ASR_THREADS 须为 1–16 的整数。');
+  }
   return {
     speechApiUrl: env.SPEECH_API_URL,
+    asrProvider: asrProvider as AsrProviderName,
+    asrModelDir: env.ASR_MODEL_DIR?.trim() || resolve(repositoryRoot, 'models'),
+    senseVoiceModel: env.SENSE_VOICE_MODEL?.trim() ?? '',
+    asrThreads: threads,
   };
 }
 

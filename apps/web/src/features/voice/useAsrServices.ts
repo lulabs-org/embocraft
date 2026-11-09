@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_BAILIAN_ASR,
+  DEFAULT_SENSE_VOICE_ASR,
   DEFAULT_WHISPER_ASR,
   type AsrServiceView,
 } from '@voxel/shared';
@@ -19,22 +20,29 @@ import {
 const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }
-    : provider === 'whisper'
-      ? {
-          ...DEFAULT_WHISPER_ASR,
-          provider,
-          name: '',
-          baseUrl: '',
-          apiKey: '',
-          model: '',
-        }
-      : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+    : provider === 'sense-voice'
+      ? { ...DEFAULT_SENSE_VOICE_ASR, provider, name: '' }
+      : provider === 'whisper'
+        ? {
+            ...DEFAULT_WHISPER_ASR,
+            provider,
+            name: '',
+            baseUrl: '',
+            apiKey: '',
+            model: '',
+          }
+        : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+/** Server-side engines never carry a secret, so editing them keeps every field. */
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
-  draft.provider === 'browser' ? draft : { ...draft, apiKey: '' };
+  draft.provider === 'browser'
+    ? draft
+    : draft.provider === 'sense-voice'
+      ? draft
+      : { ...draft, apiKey: '' };
 const formFor = (id: string, saved?: WebAsrService) => ({
   id,
   draft: saved
-    ? saved.provider === 'browser'
+    ? saved.provider === 'browser' || saved.provider === 'sense-voice'
       ? { ...saved }
       : { ...saved, apiKey: '' }
     : fresh(),
