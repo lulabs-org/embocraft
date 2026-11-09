@@ -3,6 +3,7 @@ import type { SavedVoice } from '../domain/voice-service-validation';
 import type { SpeechSynthesizer } from '../services/speech-synthesizer';
 import { BailianTts } from './bailian-tts.adapter';
 import { CompatibleTts } from './compatible-tts.adapter';
+import { MimoTts } from './mimo-tts.adapter';
 import { PiperTts } from './speaches-tts.adapter';
 
 export function createSpeechAdapter(value: SavedVoice): SpeechSynthesizer {
@@ -11,6 +12,8 @@ export function createSpeechAdapter(value: SavedVoice): SpeechSynthesizer {
       return new PiperTts(value);
     case 'bailian':
       return new BailianTts(value);
+    case 'mimo':
+      return new MimoTts(value);
     case 'compatible':
       return new CompatibleTts(value);
     case 'browser':

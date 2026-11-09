@@ -28,6 +28,7 @@ export function validateVoiceService(
     type !== 'speaches' &&
     type !== 'browser' &&
     type !== 'bailian' &&
+    type !== 'mimo' &&
     type !== 'compatible'
   )
     throw new AppError('请选择支持的语音服务类型。');
