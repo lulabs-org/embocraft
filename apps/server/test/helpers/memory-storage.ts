@@ -18,9 +18,11 @@ import type {
   VoiceServicePersistence,
   VoiceServiceTransaction,
 } from '../../src/modules/tts/ports';
-import type {
-  ArchivePort,
-  ManagementArchive,
+import {
+  applyManagementChange,
+  type ManagementChange,
+  type ArchivePort,
+  type ManagementArchive,
 } from '../../src/persistence/management-archive';
 
 /** Clone on both sides of the persistence boundary, including JSON's undefined semantics. */
@@ -102,6 +104,11 @@ export class MemoryArchive implements ArchivePort {
   saveError?: Error;
   async load(): ReturnType<ArchivePort['load']> {
     return this.json === undefined ? undefined : JSON.parse(this.json);
+  }
+  async commit(change: ManagementChange): Promise<ManagementArchive> {
+    const next = applyManagementChange(await this.load(), change);
+    await this.save(next);
+    return next;
   }
   async save(records: ManagementArchive): Promise<void> {
     if (this.saveError) throw this.saveError;

@@ -11,7 +11,7 @@ export async function startTask(
     taskTimeoutMs?: number;
   },
 ) {
-  const agent = manager.list().find((a) => a.id === id)!;
+  const agent = (await manager.list()).find((a) => a.id === id)!;
   return manager.tasks.createTaskPlan(id, {
     name: value.goal.slice(0, 80),
     goal: value.goal,
@@ -26,7 +26,7 @@ export async function startTask(
 }
 
 /** Resolve the ID as test setup; the production command always targets the specified run. */
-export function controlRun(
+export async function controlRun(
   manager: AICharacterManager,
   id: string,
   operation: 'pause' | 'cancel' | 'resume',
@@ -34,7 +34,7 @@ export function controlRun(
 ) {
   return manager.tasks.controlTaskRun(
     id,
-    manager.currentRunId(id)!,
+    (await manager.list()).find((role) => role.id === id)!.taskExecution!.runId,
     operation,
     value,
   );

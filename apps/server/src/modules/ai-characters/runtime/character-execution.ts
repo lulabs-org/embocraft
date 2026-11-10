@@ -17,6 +17,7 @@ import type { AICharacterWakeScheduler } from './wake-scheduler';
 
 type RuntimeContext = {
   jobs: AICharacterRegistry;
+  release: (job: Job) => void;
   scheduler: AICharacterWakeScheduler;
   providers: ProviderRuntimePort;
   serverUrl: string | (() => string);
@@ -135,13 +136,37 @@ export class CharacterExecutionService {
         this.context.controlMessage(targetId, op, identity, commandId, message),
       wake: (j) => this.wake(j),
       schedule: (j) => this.schedule(j),
+      disconnected: (j) => {
+        void Promise.resolve(j.done)
+          .then(() => this.releaseDisconnected(j))
+          .catch(() => {});
+      },
       save: () => this.context.save(),
       persist: () => {
         void this.context.persist();
       },
     };
     job.host ??= new AICharacterHost(job, ctx);
-    return job.host.run(provider, run);
+    try {
+      await job.host.run(provider, run);
+    } finally {
+      // Persistence owns failure reporting; cleanup must not leave an offline host resident.
+      await this.releaseDisconnected(job).catch(() => {});
+    }
+  }
+
+  private async releaseDisconnected(job: Job) {
+    if (
+      this.context.jobs.get(job.view.id) !== job ||
+      job.session ||
+      job.view.status === 'stopping'
+    )
+      return;
+    try {
+      await this.context.save();
+    } finally {
+      this.context.release(job);
+    }
   }
 
   protectAfterStorageFailure(ids: Iterable<string>) {
@@ -154,7 +179,7 @@ export class CharacterExecutionService {
 
   stop(id: string) {
     const job = this.context.jobs.get(id);
-    if (!job) throw new AppError('Agent 不存在。', 404);
+    if (!job) return;
     if (
       job.view.status !== 'stopping' &&
       (resident(job) || job.view.status !== 'stopped')
@@ -176,7 +201,11 @@ export class CharacterExecutionService {
         delete job.view.sessionId;
         job.view.status = 'stopped';
         markOffline(executionState(job));
-        void this.context.persist();
+        try {
+          await this.context.persist();
+        } finally {
+          this.context.release(job);
+        }
       })();
     }
   }

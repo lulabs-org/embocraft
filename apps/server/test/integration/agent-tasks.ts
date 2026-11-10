@@ -204,23 +204,24 @@ try {
   });
   assert.equal(response.status, 201);
   const { id } = (await response.json()) as { id: string };
-  const current = () => manager!.list().find((role) => role.id === id)!;
+  const current = async () =>
+    (await manager!.list()).find((role) => role.id === id)!;
   const task = (goal: string, limits = {}) =>
     startTask(manager!, id, { goal, ...limits });
   const control = (command: 'pause' | 'resume' | 'cancel', limits = {}) =>
     controlRun(manager!, id, command, limits);
-  await until(() => current().status === 'idle');
+  await until(async () => (await current()).status === 'idle');
   assert.equal(calls, 0);
-  assert.equal(current().task, undefined);
+  assert.equal((await current()).task, undefined);
   await task('检查附近环境一次');
-  await until(() => current().task?.status === 'completed');
-  const identity = current().sessionId!;
+  await until(async () => (await current()).task?.status === 'completed');
+  const identity = (await current()).sessionId!;
   assert.equal(calls, 1);
   await delay(1100);
   assert.equal(calls, 1, 'Completed tasks do not poll inference');
   if (preview) {
     await task('等待附近方块变化');
-    await until(() => current().task?.status === 'waiting');
+    await until(async () => (await current()).task?.status === 'waiting');
     console.log(
       'Task preview ready at backend 2578; provider responses are local SSE fixtures.',
     );
@@ -238,14 +239,14 @@ try {
         text,
       });
     await say('你好');
-    await until(() => calls === 2 && current().status === 'idle');
-    assert.equal(current().task?.status, 'completed');
+    await until(async () => calls === 2 && (await current()).status === 'idle');
+    assert.equal((await current()).task?.status, 'completed');
     await delay(400);
     await say('请建造一个木方块');
     await until(
-      () =>
-        current().task?.goal.includes('木方块') === true &&
-        current().task?.status === 'completed',
+      async () =>
+        (await current()).task?.goal.includes('木方块') === true &&
+        (await current()).task?.status === 'completed',
     );
     assert.equal(
       calls,
@@ -268,41 +269,43 @@ try {
     await delay(400);
     await say('到我这里来');
     await until(
-      () =>
-        current().task?.goal === '靠近发送者' &&
-        current().task?.status === 'completed',
+      async () =>
+        (await current()).task?.goal === '靠近发送者' &&
+        (await current()).task?.status === 'completed',
     );
     assert(room.state.players.get(identity)!.x > oldX);
-    assert.equal(current().sessionId, identity);
+    assert.equal((await current()).sessionId, identity);
     await task('等待附近方块变化');
-    await until(() => current().task?.status === 'waiting');
+    await until(async () => (await current()).task?.status === 'waiting');
     const waitingCalls = calls;
     await delay(2200);
     assert.equal(calls, waitingCalls, 'Unchanged waits spend no requests');
     await control('pause');
-    assert.equal(current().task?.status, 'paused');
+    assert.equal((await current()).task?.status, 'paused');
     await control('resume');
     await until(
-      () => calls === waitingCalls + 1 && current().task?.status === 'waiting',
+      async () =>
+        calls === waitingCalls + 1 &&
+        (await current()).task?.status === 'waiting',
     );
     await control('cancel');
     const beforeLoop = calls;
     await task('循环检查', { maxTurns: 2 });
-    await until(() => current().task?.status === 'budget');
+    await until(async () => (await current()).task?.status === 'budget');
     assert.equal(calls, beforeLoop + 2);
-    const runId = current().taskExecution!.runId;
-    const tokens = current().task!.tokens;
+    const runId = (await current()).taskExecution!.runId;
+    const tokens = (await current()).task!.tokens;
     await control('resume', { maxTurns: 4 });
-    await until(() => current().task?.status === 'budget');
-    assert.equal(current().taskExecution!.runId, runId);
-    assert.equal(current().task!.calls, 4);
-    assert(current().task!.tokens > tokens);
+    await until(async () => (await current()).task?.status === 'budget');
+    assert.equal((await current()).taskExecution!.runId, runId);
+    assert.equal((await current()).task!.calls, 4);
+    assert((await current()).task!.tokens > tokens);
     await control('cancel');
     const beforeSlow = calls;
     await task('慢请求测试');
     await until(() => calls === beforeSlow + 1);
     await say('暂停');
-    await until(() => current().task?.status === 'paused');
+    await until(async () => (await current()).task?.status === 'paused');
     assert(
       !room.blocks.has('2,4,1'),
       'Cancelled inference cannot execute a late write',
@@ -317,10 +320,10 @@ try {
     );
     await manager.load();
     assert.equal(calls, beforeRestore);
-    assert.equal(current().task?.status, 'paused');
+    assert.equal((await current()).task?.status, 'paused');
     await control('cancel');
     await task('批次成功', { maxTurns: 30 });
-    await until(() => current().task?.status === 'completed');
+    await until(async () => (await current()).task?.status === 'completed');
     assert.equal(room.blocks.get('3,3,0')?.material, 'wood');
     assert.equal(room.blocks.get('3,4,0')?.material, 'wood');
     const actions =
@@ -333,7 +336,7 @@ try {
       2,
     );
     await task('批次失败');
-    await until(() => current().task?.status === 'needs_input');
+    await until(async () => (await current()).task?.status === 'needs_input');
     assert.equal(room.blocks.get('3,3,1')?.material, 'wood');
     const failed =
       manager.plans.runs.find((run) => run.id === manager!.currentRunId(id))!
@@ -349,13 +352,15 @@ try {
     const beforePause = calls;
     await task('批次暂停');
     await until(
-      () =>
+      async () =>
         calls === beforePause + 1 &&
-        current().logEntries.some((entry) => entry.text.includes('goto')),
+        (await current()).logEntries.some((entry) =>
+          entry.text.includes('goto'),
+        ),
     );
     await delay(100);
     await control('pause');
-    assert.equal(current().task?.status, 'paused');
+    assert.equal((await current()).task?.status, 'paused');
     assert(!room.blocks.has('3,3,2'));
     const lastCalls = calls;
     await manager.close();

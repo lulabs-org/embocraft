@@ -143,7 +143,7 @@ try {
     assert.equal(rejected.status, 400);
     assert.match((await rejected.json()).error, /Tasks/);
   }
-  assert.equal(manager.list().length, 0);
+  assert.equal((await manager.list()).length, 0);
   assert.equal(manager.plans.plans.length, 0);
   assert.equal(manager.plans.runs.length, 0);
   const publicProviders = await (await api('/providers')).text();
@@ -190,14 +190,18 @@ try {
     assert.equal(response.status, 201);
     const job = (await response.json()) as { id: string };
     await until(
-      () => manager!.list().find((j) => j.id === job.id)?.status === 'idle',
+      async () =>
+        (await manager!.list()).find((j) => j.id === job.id)?.status === 'idle',
     );
     assert.equal(
       room.state.players.size,
       1,
       'completed rounds keep the player online',
     );
-    assert.equal(manager.list().find((j) => j.id === job.id)?.task, undefined);
+    assert.equal(
+      (await manager.list()).find((j) => j.id === job.id)?.task,
+      undefined,
+    );
     const firstTask = await api('/tasks', 'POST', {
       characterId: job.id,
       name: 'Say hello once',
@@ -208,11 +212,13 @@ try {
     });
     assert.equal(firstTask.status, 201);
     await until(
-      () =>
-        manager!.list().find((j) => j.id === job.id)?.task?.status ===
+      async () =>
+        (await manager!.list()).find((j) => j.id === job.id)?.task?.status ===
         'completed',
     );
-    const idle: AICharacterView = manager.list().find((j) => j.id === job.id)!;
+    const idle: AICharacterView = (await manager.list()).find(
+      (j) => j.id === job.id,
+    )!;
     assert.equal(idle.roleDescription, '你是一名建筑师，负责规划房屋。');
     assert.equal(rolesInRequests.at(-1), idle.roleDescription);
     const taskBeforeUpdate = structuredClone(idle.task);
@@ -228,7 +234,7 @@ try {
       assert.match((await rejected.json()).error, /Tasks/);
     }
     assert.deepEqual(
-      manager.list().find((j) => j.id === job.id)?.task,
+      (await manager.list()).find((j) => j.id === job.id)?.task,
       taskBeforeUpdate,
     );
     assert.equal(manager.plans.plans.length, planCount);
@@ -249,11 +255,12 @@ try {
       201,
     );
     await until(
-      () => manager!.list().find((j) => j.id === job.id)?.status === 'idle',
+      async () =>
+        (await manager!.list()).find((j) => j.id === job.id)?.status === 'idle',
     );
-    const resumed: AICharacterView = manager
-      .list()
-      .find((j) => j.id === job.id)!;
+    const resumed: AICharacterView = (await manager.list()).find(
+      (j) => j.id === job.id,
+    )!;
     assert.equal(resumed.sessionId, idle.sessionId);
     assert.equal(resumed.task?.goal, 'A different task');
     const current = room.state.players.get(resumed.sessionId!)!;
@@ -262,8 +269,7 @@ try {
       originalPosition,
     );
     assert(
-      manager
-        .list()
+      (await manager.list())
         .find((j) => j.id === job.id)
         ?.logEntries.some((entry) => entry.text.includes('chat')),
     );
@@ -293,9 +299,9 @@ try {
       scope: 'public',
     });
     await until(
-      () =>
+      async () =>
         calls === callsWhenIdle + 1 &&
-        manager!.list().find((j) => j.id === job.id)?.status === 'idle',
+        (await manager!.list()).find((j) => j.id === job.id)?.status === 'idle',
     );
     assert.equal(observations.at(-1)?.attention?.actor, speaker.room.sessionId);
     assert.equal(
@@ -303,7 +309,7 @@ try {
       '你是一名建筑师，先确认位置和尺寸，再规划施工。',
     );
     assert.equal(
-      manager.list().find((j) => j.id === job.id)?.sessionId,
+      (await manager.list()).find((j) => j.id === job.id)?.sessionId,
       idle.sessionId,
     );
     await new Promise((resolve) => setTimeout(resolve, 350));
@@ -313,9 +319,9 @@ try {
       recipients: [idle.sessionId],
     });
     await until(
-      () =>
+      async () =>
         calls === callsWhenIdle + 2 &&
-        manager!.list().find((j) => j.id === job.id)?.status === 'idle',
+        (await manager!.list()).find((j) => j.id === job.id)?.status === 'idle',
     );
     assert.equal(
       (observations.at(-1)?.attention?.data as { scope: string }).scope,
@@ -339,11 +345,13 @@ try {
       200,
     );
     await until(
-      () => manager!.list().find((j) => j.id === job.id)?.status === 'stopped',
+      async () =>
+        (await manager!.list()).find((j) => j.id === job.id)?.status ===
+        'stopped',
     );
     assert.equal(room.state.players.size, 0);
     assert(
-      manager.list().some((j) => j.id === job.id),
+      (await manager.list()).some((j) => j.id === job.id),
       'closing retains reusable config',
     );
   }
@@ -354,11 +362,13 @@ try {
   assert.equal(standbyResponse.status, 201);
   const standby = (await standbyResponse.json()) as AICharacterView;
   await until(
-    () => manager!.list().find((j) => j.id === standby.id)?.status === 'idle',
+    async () =>
+      (await manager!.list()).find((j) => j.id === standby.id)?.status ===
+      'idle',
   );
   assert.equal(calls, 8, 'creating a standby character does not call a model');
   assert.equal(
-    manager.list().find((j) => j.id === standby.id)?.task,
+    (await manager.list()).find((j) => j.id === standby.id)?.task,
     undefined,
   );
   assert.equal(
@@ -375,15 +385,18 @@ try {
   );
   await api(`/ai-characters/${standby.id}/stop`, 'POST', {});
   await until(
-    () =>
-      manager!.list().find((j) => j.id === standby.id)?.status === 'stopped',
+    async () =>
+      (await manager!.list()).find((j) => j.id === standby.id)?.status ===
+      'stopped',
   );
   assert.equal(
     (await api(`/ai-characters/${standby.id}/join`, 'POST', {})).status,
     200,
   );
   await until(
-    () => manager!.list().find((j) => j.id === standby.id)?.status === 'idle',
+    async () =>
+      (await manager!.list()).find((j) => j.id === standby.id)?.status ===
+      'idle',
   );
   assert.equal(calls, 8, 'joining also does not call a model');
   assert.equal(
@@ -392,8 +405,9 @@ try {
   );
   await api(`/ai-characters/${standby.id}/stop`, 'POST', {});
   await until(
-    () =>
-      manager!.list().find((j) => j.id === standby.id)?.status === 'stopped',
+    async () =>
+      (await manager!.list()).find((j) => j.id === standby.id)?.status ===
+      'stopped',
   );
   assert.equal(calls, 8);
   const created = [] as string[];
@@ -411,7 +425,8 @@ try {
     const roleId = ((await res.json()) as { id: string }).id;
     created.push(roleId);
     await until(
-      () => manager!.list().find((j) => j.id === roleId)?.status === 'idle',
+      async () =>
+        (await manager!.list()).find((j) => j.id === roleId)?.status === 'idle',
     );
     assert.equal(
       (
@@ -428,16 +443,17 @@ try {
     );
   }
   await until(() => room.state.players.size === 4);
-  await until(() =>
-    created.every(
+  await until(async () => {
+    const roles = await manager!.list();
+    return created.every(
       (id) =>
-        manager!.list().find((j) => j.id === id)?.task?.status === 'completed',
-    ),
-  );
+        roles.find((role) => role.id === id)?.task?.status === 'completed',
+    );
+  });
   assert([...room.state.players.values()].every((p) => p.kind === 'ai-agent'));
   speaker = new Session(url.replace('http', 'ws'));
   await speaker.join('Human caller', 'human');
-  const sleeping = manager.list().find((j) => j.id === created[0])!;
+  const sleeping = (await manager.list()).find((j) => j.id === created[0])!;
   const beforeWake = calls;
   assert.equal(
     (await api(`/ai-characters/${created[0]}`, 'PUT', { maxTurns: 9 })).status,
@@ -471,18 +487,18 @@ try {
     200,
   );
   await until(
-    () =>
-      manager!.list().find((j) => j.id === created[0])?.status === 'stopped',
+    async () =>
+      (await manager!.list()).find((j) => j.id === created[0])?.status ===
+      'stopped',
   );
   assert.equal(room.state.players.size, 3);
   assert(
-    manager
-      .list()
+    (await manager.list())
       .filter((j) => j.status === 'running')
       .every((j) => j.intervalMode === 'random'),
   );
   assert(
-    manager.list().find((j) => j.id === created[0])?.task?.status ===
+    (await manager.list()).find((j) => j.id === created[0])?.task?.status ===
       'completed',
   );
   // A forbidden tool must stop the remaining tools in the response.
@@ -498,8 +514,9 @@ try {
   assert.equal(capabilityResponse.status, 201);
   const capabilityJob = (await capabilityResponse.json()) as AICharacterView;
   await until(
-    () =>
-      manager!.list().find((j) => j.id === capabilityJob.id)?.status === 'idle',
+    async () =>
+      (await manager!.list()).find((j) => j.id === capabilityJob.id)?.status ===
+      'idle',
   );
   assert.equal(
     calls,
@@ -525,9 +542,10 @@ try {
   assert.equal(capabilityTaskResponse.status, 201);
   const capabilityPlan = await capabilityTaskResponse.json();
   await until(
-    () =>
+    async () =>
       calls > beforeCapabilities &&
-      manager!.list().find((j) => j.id === capabilityJob.id)?.status === 'idle',
+      (await manager!.list()).find((j) => j.id === capabilityJob.id)?.status ===
+        'idle',
   );
   assert.equal(
     room.state.revision,
@@ -544,7 +562,7 @@ try {
     ['building', 'guide'],
   );
   assert.equal(
-    manager.list().find((j) => j.id === capabilityJob.id)!.task?.status,
+    (await manager.list()).find((j) => j.id === capabilityJob.id)!.task?.status,
     'blocked',
   );
 
@@ -586,9 +604,10 @@ try {
     200,
   );
   await until(
-    () =>
+    async () =>
       calls > beforeScheduled &&
-      manager!.list().find((j) => j.id === capabilityJob.id)?.status === 'idle',
+      (await manager!.list()).find((j) => j.id === capabilityJob.id)?.status ===
+        'idle',
   );
   const history = await (await api(`/tasks/${plan.id}/runs`)).json();
   assert.equal(history.items.length, 1);
@@ -649,7 +668,7 @@ try {
     (await api(`/ai-characters/${capabilityJob.id}`, 'DELETE')).status,
     204,
   );
-  assert(!manager.list().some((j) => j.id === capabilityJob.id));
+  assert(!(await manager.list()).some((j) => j.id === capabilityJob.id));
   assert.equal(
     (await api(`/ai-characters/${capabilityJob.id}`, 'DELETE')).status,
     404,
@@ -659,11 +678,11 @@ try {
   await until(() => room.state.players.size === 3);
   await manager.close();
   await until(() => room.state.players.size === 0);
-  assert(!JSON.stringify(manager.list()).includes('fixture-secret'));
+  assert(!JSON.stringify(await manager.list()).includes('fixture-secret'));
   assert(
-    manager
-      .list()
-      .every((j) => !['joining', 'running', 'stopping'].includes(j.status)),
+    (await manager.list()).every(
+      (j) => !['joining', 'running', 'stopping'].includes(j.status),
+    ),
   );
   const beforeRestore = calls;
   manager = new AICharacterManager(
@@ -678,12 +697,15 @@ try {
   await manager.load();
   assert.equal(calls, beforeRestore, 'restoration never spends inference');
   assert.equal(room.state.players.size, 3);
-  assert.equal(manager.list().filter((j) => j.status === 'idle').length, 3);
-  const stopped = manager.list().find((j) => j.id === created[0])!;
+  assert.equal(
+    (await manager.list()).filter((j) => j.status === 'idle').length,
+    3,
+  );
+  const stopped = (await manager.list()).find((j) => j.id === created[0])!;
   assert.equal(stopped.status, 'stopped');
   await manager.join(stopped.id);
   await manager.settled(stopped.id);
-  const priorPlan = manager.tasks.taskPlans(stopped.id)[0];
+  const priorPlan = (await manager.tasks.taskPlans(stopped.id))[0];
   await manager.tasks.controlTaskPlan(stopped.id, priorPlan.id, 'run', {
     requestId: 'explicit-rerun',
   });
@@ -693,7 +715,9 @@ try {
     }),
   );
   await until(
-    () => manager!.list().find((j) => j.id === stopped.id)?.status === 'idle',
+    async () =>
+      (await manager!.list()).find((j) => j.id === stopped.id)?.status ===
+      'idle',
   );
   assert.equal(room.state.players.size, 4);
   await assert.rejects(
@@ -702,7 +726,8 @@ try {
   );
   await manager.remove(stopped.id);
   await until(() => room.state.players.size === 3);
-  for (const j of manager.list().filter((j) => j.sessionId)) manager.stop(j.id);
+  for (const j of (await manager.list()).filter((j) => j.sessionId))
+    await manager.stop(j.id);
   await until(() => room.state.players.size === 0);
   console.log(
     'PASS: origin guard, credential redaction, task completion stays online, reuse preserves player identity/position, task replacement, idle spends no inference, close/rejoin, canonical capabilities, permission failure stops trailing tools, silent chat denial, online capacity and restart restoration without inference. Model responses are fixtures.',

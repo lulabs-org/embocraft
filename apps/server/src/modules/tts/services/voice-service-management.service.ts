@@ -53,10 +53,10 @@ export class VoiceServiceManagement {
   }
 
   async remove(id: string) {
-    domainEvents.emit('tts.service.removing', { serviceId: id });
+    await domainEvents.emitAsync('tts.service.removing', { serviceId: id });
     await this.storage.transaction(async (tx) => {
       this.find(await tx.get(id));
-      domainEvents.emit('tts.service.removing', { serviceId: id });
+      await domainEvents.emitAsync('tts.service.removing', { serviceId: id });
       await tx.remove(id);
     });
     domainEvents.emit('tts.service.changed', { serviceId: id });

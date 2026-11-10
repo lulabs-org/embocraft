@@ -171,7 +171,9 @@ try {
       { commandId: 'create-stable' },
     ),
   );
-  await until(() => server.characters.list()[0].status === 'idle');
+  await until(
+    async () => (await server.characters.list())[0].status === 'idle',
+  );
   const standby = await c.request<PublicAICharacterView>('characters.get', {
     characterId: first.id,
   });
@@ -217,7 +219,9 @@ try {
     { characterId: first.id, value: immediate },
     { commandId: 'assign' },
   );
-  await until(() => server.characters.list()[0].task?.status === 'waiting');
+  await until(
+    async () => (await server.characters.list())[0].task?.status === 'waiting',
+  );
   const duplicatePlanCreate = await c.request<PublicPlanView>(
     'plans.create',
     { characterId: first.id, value: immediate },
@@ -295,7 +299,7 @@ try {
       ),
     );
   }
-  assert.equal(server.characters.list()[0].task?.status, 'waiting');
+  assert.equal((await server.characters.list())[0].task?.status, 'waiting');
 
   await assert.rejects(
     c.request(
@@ -325,7 +329,7 @@ try {
   assert.equal(paused.id, runId);
   assert.equal(paused.planId, plan.id);
   assert.equal(paused.status, 'paused');
-  assert.equal(server.characters.list()[0].task?.status, 'paused');
+  assert.equal((await server.characters.list())[0].task?.status, 'paused');
   const concurrentPlan = await c.request<PublicPlanView>(
     'plans.create',
     {
@@ -334,7 +338,7 @@ try {
     },
     { commandId: 'second-execution' },
   );
-  assert.equal(server.characters.list()[0].task?.status, 'paused');
+  assert.equal((await server.characters.list())[0].task?.status, 'paused');
   const queuedHistory = await c.request<{
     total: number;
     resourceVersion: number;
@@ -365,7 +369,7 @@ try {
     },
     { commandId: 'cancel-queued' },
   );
-  assert.equal(server.characters.list()[0].task?.status, 'paused');
+  assert.equal((await server.characters.list())[0].task?.status, 'paused');
   const updated = await c.request<PublicAICharacterView>('characters.get', {
     characterId: first.id,
   });
@@ -374,10 +378,12 @@ try {
     { runId, operation: 'resume', expectedTask: updated.taskIdentity },
     { commandId: 'resume' },
   );
-  await until(() => server.characters.list()[0].task?.status === 'waiting');
+  await until(
+    async () => (await server.characters.list())[0].task?.status === 'waiting',
+  );
   c.close();
-  assert.equal(server.characters.list()[0].task?.status, 'waiting');
-  assert(server.characters.list()[0].sessionId);
+  assert.equal((await server.characters.list())[0].task?.status, 'waiting');
+  assert((await server.characters.list())[0].sessionId);
   const read = await http('/ai-characters');
   assert.equal(read.status, 200);
   assert.equal((await read.json())[0].id, first.id);
@@ -419,7 +425,7 @@ try {
   });
   assert.equal(JSON.parse(output).id, first.id);
   assert(
-    server.characters.list()[0].sessionId,
+    (await server.characters.list())[0].sessionId,
     'CLI exit must not stop hosted agent',
   );
   await new Promise<void>((resolve, reject) => {
@@ -466,7 +472,7 @@ try {
     });
   });
   assert(
-    server.characters.list()[0].sessionId,
+    (await server.characters.list())[0].sessionId,
     'watch Ctrl+C must not stop the hosted Agent',
   );
   const latest = await other.request<PublicAICharacterView>('characters.get', {
@@ -477,7 +483,7 @@ try {
     { runId, operation: 'cancel', expectedTask: latest.taskIdentity },
     { commandId: 'cancel' },
   );
-  assert.equal(server.characters.list()[0].task?.status, 'cancelled');
+  assert.equal((await server.characters.list())[0].task?.status, 'cancelled');
   const cliPlan = await cli(
     'task',
     'create',
@@ -485,7 +491,9 @@ try {
     '--goal',
     'CLI immediate task',
   );
-  await until(() => server.characters.list()[0].task?.status === 'waiting');
+  await until(
+    async () => (await server.characters.list())[0].task?.status === 'waiting',
+  );
   const cliRuns = await other.request<{
     total: number;
     resourceVersion: number;
@@ -495,28 +503,32 @@ try {
   assert.equal(cliRuns.total, 1);
   const cliRunId = cliRuns.items[0].id;
   await cli('run', 'pause', cliRunId, '--character', first.id);
-  assert.equal(server.characters.list()[0].task?.status, 'paused');
+  assert.equal((await server.characters.list())[0].task?.status, 'paused');
   await other.request('characters.stop', { characterId: first.id });
   await assert.rejects(
     cli('run', 'resume', cliRunId, '--character', first.id),
     /离线/,
   );
   assert.equal(
-    server.characters.list()[0].status,
+    (await server.characters.list())[0].status,
     'stopped',
     'resume cannot implicitly join the world',
   );
   await other.request('characters.join', { characterId: first.id });
-  await until(() => server.characters.list()[0].status === 'idle');
+  await until(
+    async () => (await server.characters.list())[0].status === 'idle',
+  );
   assert.equal(
-    server.characters.list()[0].task?.status,
+    (await server.characters.list())[0].task?.status,
     'paused',
     'join must not resume task execution',
   );
   await cli('run', 'resume', cliRunId, '--character', first.id);
-  await until(() => server.characters.list()[0].task?.status === 'waiting');
+  await until(
+    async () => (await server.characters.list())[0].task?.status === 'waiting',
+  );
   await cli('run', 'cancel', cliRunId, '--character', first.id);
-  assert.equal(server.characters.list()[0].task?.status, 'cancelled');
+  assert.equal((await server.characters.list())[0].task?.status, 'cancelled');
   assert.equal(
     (
       await other.request<{

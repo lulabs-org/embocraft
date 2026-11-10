@@ -91,6 +91,7 @@ export class AICharacterHost {
             log('世界连接已断开，可点击继续运行重新加入。');
           }
           ctx.persist();
+          if (job.view.status !== 'stopping') ctx.disconnected?.(job);
         });
 
         log('已加入世界。');

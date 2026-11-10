@@ -32,8 +32,6 @@ import {
   currentRun,
   executeTaskPlanControl,
   executeTaskRunControl,
-  getTaskPlans,
-  getTaskRuns,
   reserveRun,
   startQueuedRun,
   taskBusy,
@@ -191,19 +189,36 @@ export class TaskCoordinator {
 
   async reassignPlan(id: string, characterId: string, value: unknown = {}) {
     this.checkPlanRevision(id, value);
-    const agent = this.host.execution(characterId);
-    return this.commitPlan(id, () => this.plans.reassign(id, agent.view));
+    const character = this.host.readCharacter
+      ? await this.host.readCharacter(characterId)
+      : this.host.execution(characterId).view;
+    return this.commitPlan(id, () => this.plans.reassign(id, character));
   }
 
-  taskPlans(id: string) {
-    return getTaskPlans(this.host.execution(id));
+  async taskPlans(id: string) {
+    const { plans, characters } = await this.queryState();
+    if (!characters.has(id)) throw new AppError('Agent 不存在。', 404);
+    return plans.views(id);
   }
 
-  taskRuns(id: string, planId: string, offset = 0) {
-    return getTaskRuns(this.host.execution(id), planId, offset);
+  async taskRuns(id: string, planId: string, offset = 0) {
+    const { plans, characters } = await this.queryState();
+    if (!characters.has(id)) throw new AppError('Agent 不存在。', 404);
+    plans.assertBinding(planId, id);
+    return plans.history(planId, offset);
   }
 
-  async createTaskPlan(id: string, value: unknown) {
+  private withExecution<T>(id: string, action: () => Promise<T>) {
+    return this.host.withExecution
+      ? this.host.withExecution(id, action)
+      : action();
+  }
+
+  createTaskPlan(id: string, value: unknown) {
+    return this.withExecution(id, () => this.createPlan(id, value));
+  }
+
+  private async createPlan(id: string, value: unknown) {
     this.host.assertWritable(id);
     if (this.host.storageFailed())
       throw new AppError('计划存档失败，请修复存储后重启。', 503);
@@ -290,10 +305,12 @@ export class TaskCoordinator {
     const targetCharacterId = object(value).targetCharacterId;
     const target =
       targetCharacterId !== undefined && targetCharacterId !== plan.characterId
-        ? this.host.execution(String(targetCharacterId))
+        ? this.host.readCharacter
+          ? await this.host.readCharacter(String(targetCharacterId))
+          : this.host.execution(String(targetCharacterId)).view
         : undefined;
     return this.commitPlan(planId, () => {
-      if (target) this.plans.reassign(planId, target.view);
+      if (target) this.plans.reassign(planId, target);
       Object.assign(plan, draft);
       this.plans.touch(plan);
       plan.nextRunAt =
@@ -316,16 +333,18 @@ export class TaskCoordinator {
       );
     const target = this.plans.get(planId).characterId;
     if (!target) throw new AppError('请先指派执行角色。', 409);
-    this.checkTaskRevision(target, value);
-    return executeTaskPlanControl(
-      this.host.execution(target),
-      planId,
-      operation,
-      value,
-      () => this.host.save(),
-      (j) => this.host.schedule(j.view.id),
-      (j) => this.host.launch(j.view.id),
-    );
+    return this.withExecution(target, async () => {
+      this.checkTaskRevision(target, value);
+      return executeTaskPlanControl(
+        this.host.execution(target),
+        planId,
+        operation,
+        value,
+        () => this.host.save(),
+        (j) => this.host.schedule(j.view.id),
+        (j) => this.host.launch(j.view.id),
+      );
+    });
   }
 
   async controlTaskRun(
@@ -338,20 +357,22 @@ export class TaskCoordinator {
     if (!targetId) throw new AppError('任务未关联执行角色。', 404);
     if (this.plans.run(runId).characterId !== targetId)
       throw new AppError('执行角色不匹配。', 409);
-    if (this.plans.run(runId).status !== 'queued')
-      this.checkTaskRevision(targetId, value);
-    const job = this.host.execution(targetId);
-    return executeTaskRunControl(
-      job,
-      runId,
-      operation,
-      value,
-      (settings) => this.host.validateExecution(targetId, settings),
-      () => this.host.save(),
-      (j) => this.host.schedule(j.view.id),
-      (j) => this.host.launch(j.view.id),
-      (op) => this.controlCurrentRun(job, runId, op),
-    );
+    return this.withExecution(targetId, async () => {
+      if (this.plans.run(runId).status !== 'queued')
+        this.checkTaskRevision(targetId, value);
+      const job = this.host.execution(targetId);
+      return executeTaskRunControl(
+        job,
+        runId,
+        operation,
+        value,
+        (settings) => this.host.validateExecution(targetId, settings),
+        () => this.host.save(),
+        (j) => this.host.schedule(j.view.id),
+        (j) => this.host.launch(j.view.id),
+        (op) => this.controlCurrentRun(job, runId, op),
+      );
+    });
   }
 
   private checkPlanRevision(id: string, value: unknown) {
@@ -496,68 +517,83 @@ export class TaskCoordinator {
 
   async dispatchDue(now = Date.now()) {
     if (this.host.isClosing() || this.host.storageFailed()) return;
-    for (const job of this.host.executions()) {
+    const ids = new Set([
+      ...[...this.host.executions()].map((job) => job.view.id),
+      ...duePlans(this.plans, now).flatMap((plan) =>
+        plan.characterId ? [plan.characterId] : [],
+      ),
+    ]);
+    for (const id of ids) {
       if (
-        job.storageFailed ||
-        job.taskMutating ||
-        job.updating ||
-        job.controlling
+        this.host.findExecution(id)?.taskMutating ||
+        this.host.findExecution(id)?.updating ||
+        this.host.findExecution(id)?.controlling
       )
         continue;
-      const due = duePlans(job.ledger, now).filter(
-        (p) => p.characterId === job.view.id,
-      );
+      await this.withExecution(id, async () => {
+        const job = this.host.execution(id);
+        if (
+          job.storageFailed ||
+          job.taskMutating ||
+          job.updating ||
+          job.controlling
+        )
+          return;
+        const due = duePlans(job.ledger, now).filter(
+          (p) => p.characterId === job.view.id,
+        );
 
-      for (const plan of due) {
-        if (this.changingPlans.has(plan.id)) continue;
-        const at = plan.nextRunAt!;
-        const skip = !job.online ? '角色离线，本次触发已错过。' : undefined;
-        let runId: string | undefined;
-        await commitExecution(
-          job,
-          () => {
-            if (
-              hasPlanTokenLimit(plan) &&
-              plan.spentTokens >= plan.totalTokenBudget
-            ) {
-              plan.state = 'paused';
-              plan.reason = '累计额度已用尽。';
-              delete plan.nextRunAt;
-              return;
-            }
-            runId = reserveRun(job, plan, 'scheduled', at, skip);
-            plan.nextRunAt = isRepeating(plan.timing)
-              ? nextOccurrence(plan, now)
-              : undefined;
-          },
-          () => this.host.save(),
-          (j) => this.host.schedule(j.view.id),
-          !skip,
-        );
-        if (runId) {
-          this.host.launch(job.view.id);
+        for (const plan of due) {
+          if (this.changingPlans.has(plan.id)) continue;
+          const at = plan.nextRunAt!;
+          const skip = !job.online ? '角色离线，本次触发已错过。' : undefined;
+          let runId: string | undefined;
+          await commitExecution(
+            job,
+            () => {
+              if (
+                hasPlanTokenLimit(plan) &&
+                plan.spentTokens >= plan.totalTokenBudget
+              ) {
+                plan.state = 'paused';
+                plan.reason = '累计额度已用尽。';
+                delete plan.nextRunAt;
+                return;
+              }
+              runId = reserveRun(job, plan, 'scheduled', at, skip);
+              plan.nextRunAt = isRepeating(plan.timing)
+                ? nextOccurrence(plan, now)
+                : undefined;
+            },
+            () => this.host.save(),
+            (j) => this.host.schedule(j.view.id),
+            !skip,
+          );
+          if (runId) {
+            this.host.launch(job.view.id);
+          }
         }
-      }
-      const queued = job.ledger.runs
-        .filter((r) => r.characterId === job.view.id && r.status === 'queued')
-        .sort(
-          (a, b) => a.scheduledAt - b.scheduledAt || a.id.localeCompare(b.id),
-        );
-      if (
-        queued.length &&
-        job.online &&
-        !taskBusy(job) &&
-        !job.runtime.view().occupied
-      ) {
-        const runId = await commitExecution(
-          job,
-          () => startQueuedRun(job, queued[0].id),
-          () => this.host.save(),
-          (j) => this.host.schedule(j.view.id),
-          true,
-        );
-        if (runId) this.host.launch(job.view.id);
-      }
+        const queued = job.ledger.runs
+          .filter((r) => r.characterId === job.view.id && r.status === 'queued')
+          .sort(
+            (a, b) => a.scheduledAt - b.scheduledAt || a.id.localeCompare(b.id),
+          );
+        if (
+          queued.length &&
+          job.online &&
+          !taskBusy(job) &&
+          !job.runtime.view().occupied
+        ) {
+          const runId = await commitExecution(
+            job,
+            () => startQueuedRun(job, queued[0].id),
+            () => this.host.save(),
+            (j) => this.host.schedule(j.view.id),
+            true,
+          );
+          if (runId) this.host.launch(job.view.id);
+        }
+      });
     }
   }
 }

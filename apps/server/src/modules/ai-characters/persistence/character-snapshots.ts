@@ -7,6 +7,10 @@ import { characterSettings, type CharacterRecord } from './character-record';
 /** Captures and tracks the last committed character runtime snapshots. */
 export class CharacterSnapshots {
   private committed = new Map<string, CharacterRecord>();
+  forget(id: string) {
+    this.committed.delete(id);
+  }
+
   publicIdentity(id: string) {
     const runtime = this.committed.get(id)?.runtime;
     return runtime ? runtimeView(runtime).identity : undefined;

@@ -55,6 +55,176 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   });
   afterAll(async () => db?.$disconnect());
 
+  it('manages offline characters from database rows without retaining runtime instances', async () => {
+    const providers = new DatabaseProviderRepository(db!);
+    await bootstrapProviders(providers);
+    const manager = new AICharacterManager(
+      providers,
+      '',
+      new DatabaseManagementArchive(db!),
+    );
+    try {
+      await manager.load();
+      const role = await manager.create({
+        providerId: 'ollama',
+        model: 'qwen2.5:3b',
+        name: 'Offline',
+        joinWorld: false,
+      });
+      expect(manager.jobs.size).toBe(0);
+      await db!.agentCharacter.update({
+        where: { id: role.id },
+        data: { name: 'Changed in SQL' },
+      });
+      await manager.update(role.id, {
+        roleDescription: 'Keep the database name',
+      });
+      expect((await new CharacterQueries(db!).get(role.id)).name).toBe(
+        'Changed in SQL',
+      );
+      const plan = await manager.tasks.createTaskPlan(role.id, {
+        name: 'Later',
+        goal: 'Inspect',
+        timing: { kind: 'interval', everyMs: 60000 },
+        timeZone: 'UTC',
+        limits: DEFAULT_TASK_LIMITS,
+        totalTokenBudget: 500000,
+      });
+      expect(manager.jobs.size).toBe(0);
+      await manager.tasks.dispatchDue(Date.now() + 120000);
+      expect(
+        (await manager.tasks.taskRuns(role.id, plan.id)).items[0].status,
+      ).toBe('skipped');
+      expect(manager.jobs.size).toBe(0);
+      await manager.remove(role.id);
+      expect(await db!.agentCharacter.count()).toBe(0);
+      expect(
+        (await manager.tasks.publicPlan(plan.id)).characterId,
+      ).toBeUndefined();
+      expect(
+        (await manager.tasks.publicRuns(undefined, plan.id)).items,
+      ).toHaveLength(1);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  it('checkpoint commits preserve database configuration and omitted offline characters, and never resurrect deletions', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    const actor = storedCharacter();
+    await archive.save({
+      version: 3,
+      characters: [actor, storedCharacter({ id: 'offline' })],
+      plans: [],
+      runs: [],
+      requests: {},
+    });
+    await db!.agentCharacter.update({
+      where: { id: actor.id },
+      data: { name: 'Database authority' },
+    });
+    await archive.commit({
+      version: 3,
+      characters: [actor],
+      plans: [],
+      runs: [],
+      requests: {},
+    });
+    expect(await db!.agentCharacter.count()).toBe(2);
+    expect((await new CharacterQueries(db!).get(actor.id)).name).toBe(
+      'Database authority',
+    );
+    await archive.commit({
+      version: 3,
+      characters: [],
+      remove: [actor.id],
+      plans: [],
+      runs: [],
+      requests: {},
+    });
+    await expect(
+      archive.commit({
+        version: 3,
+        characters: [actor],
+        plans: [],
+        runs: [],
+        requests: {},
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(await db!.agentCharacter.count()).toBe(1);
+  });
+
+  it('retains historical database logs when the runtime window advances', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    const entries = Array.from({ length: 700 }, (_, index) => ({
+      time: index,
+      text: `entry-${index}`,
+    }));
+    const actor = storedCharacter({ logEntries: entries });
+    await archive.save({
+      version: 3,
+      characters: [actor],
+      plans: [],
+      runs: [],
+      requests: {},
+    });
+    const recent = [...entries.slice(-499), { time: 700, text: 'new entry' }];
+    const change = {
+      version: 3 as const,
+      characters: [{ ...actor, logEntries: recent }],
+      plans: [],
+      runs: [],
+      requests: {},
+    };
+    await archive.commit(change);
+    await archive.commit(change);
+    const page = await new CharacterQueries(db!).logs(actor.id, 2, 0);
+    expect(page).toEqual({
+      entries: [{ time: 700, text: 'new entry' }, entries[699]],
+      total: 701,
+    });
+    expect(
+      await db!.agentCharacterLog.findUnique({
+        where: { characterId_sequence: { characterId: actor.id, sequence: 1 } },
+      }),
+    ).toMatchObject(entries[0]);
+  });
+
+  it('counts offline profiles inside the transaction when concurrent creates reach the limit', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: Array.from({ length: 49 }, (_, index) =>
+        storedCharacter({ id: `offline-${index}` }),
+      ),
+      plans: [],
+      runs: [],
+      requests: {},
+    });
+    const results = await Promise.allSettled(
+      ['last-a', 'last-b'].map((id) =>
+        new DatabaseManagementArchive(db!).commit({
+          version: 3,
+          characters: [],
+          create: storedCharacter({ id }),
+          plans: [],
+          runs: [],
+          requests: {},
+        }),
+      ),
+    );
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === 'rejected'),
+    ).toMatchObject({ reason: { status: 409 } });
+    expect(await db!.agentCharacter.count()).toBe(50);
+  });
+
   it('reads plan queries from committed database rows independently of the in-memory ledger', async () => {
     await bootstrapProviders(new DatabaseProviderRepository(db!));
     const archive = new DatabaseManagementArchive(db!);
@@ -274,7 +444,14 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         return response.json();
       };
       expect(await get(path)).toEqual(original);
+      expect(server._internals.characters.jobs.size).toBe(0);
+      await server._internals.characters.join(original.id);
+      await server._internals.characters.settled(original.id);
       const job = server._internals.characters.jobs.get(original.id)!;
+      await db!.agentCharacterLog.deleteMany({
+        where: { characterId: original.id },
+      });
+      job.view.logEntries = [];
       job.view.name = 'Unsaved runtime name';
       job.view.logEntries.push({ text: 'Unsaved runtime log', time: 1 });
       job.view.sessionId = 'live-connection';

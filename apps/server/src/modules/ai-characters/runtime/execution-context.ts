@@ -29,6 +29,7 @@ export type ExecutionContext = {
     message: WorldEvent,
   ) => Promise<unknown>;
   wake: (job: Job) => void;
+  disconnected?: (job: Job) => void;
   schedule: (job: Job) => void;
   save: () => Promise<void>;
   persist: () => void;

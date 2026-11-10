@@ -1,15 +1,24 @@
 import {
   Session,
+  runtimeView,
   type AgentConfig,
   type RuntimeModelOptions,
 } from '@voxel/agent-runtime';
-import type { AICharacterSettings } from '@voxel/shared';
+import {
+  AI_CHARACTER_LOG_LIMIT,
+  type AICharacterSettings,
+  type AICharacterView,
+} from '@voxel/shared';
 import type { ManagementPersistence } from '../../../application/management-commit';
 import { createManagementPersistence } from '../../../application/management-persistence';
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
 import { DatabaseManagementArchive } from '../../../persistence/database-management-archive';
-import type { ArchivePort } from '../../../persistence/management-archive';
+import type {
+  ArchivePort,
+  CharacterChanges,
+  CharacterRecord,
+} from '../../../persistence/management-archive';
 import { migrateArchive } from '../../../persistence/migrate-archive';
 import { bindConsoleSyncEvents, ConsoleSyncEvents } from '../../console-sync';
 import {
@@ -17,7 +26,12 @@ import {
   type ProviderRuntimePort,
   type SavedProvider,
 } from '../../providers';
-import { bindTaskService, TaskCoordinator, TaskSnapshots } from '../../tasks';
+import {
+  bindTaskService,
+  markOffline,
+  TaskCoordinator,
+  TaskSnapshots,
+} from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/character-settings';
 import { executionState } from '../integrations/task-execution-adapter';
@@ -25,9 +39,15 @@ import { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
 import { CharacterSnapshots } from '../persistence/character-snapshots';
 import type { AICharacterRoutePort } from '../ports';
 import { CharacterExecutionService } from '../runtime/character-execution';
-import { AICharacterRegistry, type Job } from '../runtime/character-registry';
+import {
+  AICharacterRegistry,
+  active,
+  type Job,
+} from '../runtime/character-registry';
 import { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
 import { CharacterManagementService } from './character-management';
+import { CharacterOperations } from './character-operations';
+import { characterSettings } from '../persistence/character-record';
 import { restoreAICharacterJob } from './character-restore';
 
 let activeCharacterManager: AICharacterRoutePort | undefined;
@@ -59,10 +79,12 @@ export class AICharacterOrchestrator {
   readonly voiceCoordinator = new CharacterVoiceCoordinator();
   private readonly execution: CharacterExecutionService;
   private readonly management: CharacterManagementService;
+  private readonly operations: CharacterOperations;
 
   private readonly releaseBindings: () => void;
   private closing = false;
   private restoreFailed = false;
+  private readonly failedCharacters = new Set<string>();
   private closePromise?: Promise<void>;
   private shutdownPresence = new Map<string, Job['view']['status']>();
 
@@ -72,8 +94,15 @@ export class AICharacterOrchestrator {
     private dependencies: AICharacterDependencies,
     private archive: ArchivePort = new DatabaseManagementArchive(),
   ) {
+    this.operations = new CharacterOperations(
+      this.jobs,
+      this.archive,
+      () => this.plans,
+      (job) => this.releaseOffline(job),
+    );
     this.execution = new CharacterExecutionService({
       jobs: this.jobs,
+      release: (job) => this.releaseOffline(job),
       scheduler: this.taskScheduler,
       providers: this.providers,
       serverUrl: this.serverUrl,
@@ -89,25 +118,36 @@ export class AICharacterOrchestrator {
     this.persistence = createManagementPersistence(this.archive, {
       characters,
       tasks,
-      captureExecutions: () =>
-        tasks.captureExecutions([...this.jobs.values()].map(executionState)),
+      captureExecutions: (exclude) =>
+        tasks.captureExecutions(
+          this.participatingJobs()
+            .filter((job) => !exclude?.includes(job.view.id))
+            .map(executionState),
+        ),
       captureCharacters: () =>
-        characters.capture(this.jobs, () => this.list(), this.shutdownPresence),
+        characters.capture(
+          new Map(this.participatingJobs().map((job) => [job.view.id, job])),
+          () => this.runtimeViews(),
+          this.shutdownPresence,
+        ),
       captureTasks: () => tasks.capture(this.plans),
       rejectTasks: (snapshot) => tasks.reject(snapshot, this.committedPlans),
       affectedCharacters: (records, affected) =>
         characters.affectedByFailure(records, affected),
-      protectCharacters: (ids) =>
-        this.execution.protectAfterStorageFailure(ids),
-      commitCharacters: (records) => characters.commit(records),
+      protectCharacters: (ids) => {
+        ids.forEach((id) => this.failedCharacters.add(id));
+        this.execution.protectAfterStorageFailure(ids);
+      },
+      commitCharacters: (records) =>
+        characters.commit(records.filter((record) => this.jobs.has(record.id))),
       restoreTasks: (snapshot) => tasks.restore(this.committedPlans, snapshot),
       publishCommitted: (snapshot, views) =>
         this.events.commit(views, snapshot),
     });
     const releaseVoiceGuard = domainEvents.on(
       'tts.service.removing',
-      ({ serviceId }) => {
-        if (this.hasVoiceServiceReference(serviceId))
+      async ({ serviceId }) => {
+        if (await this.hasVoiceServiceReference(serviceId))
           throw new AppError(
             '有 Agent 正在引用此服务或保存参数，请先完成更新，并在编辑参数中更换或移除语音服务。',
             409,
@@ -116,8 +156,8 @@ export class AICharacterOrchestrator {
     );
     const releaseProviderGuard = domainEvents.on(
       'provider.removing',
-      ({ providerId }) => {
-        if (this.hasProviderReference(providerId))
+      async ({ providerId }) => {
+        if (await this.hasProviderReference(providerId))
           throw new AppError(
             '已有可复用 Agent 关联此模型服务，请保留配置或更新其密钥。',
             409,
@@ -129,9 +169,15 @@ export class AICharacterOrchestrator {
     });
     this.tasks = new TaskCoordinator(
       {
-        execution: (id) => executionState(this.execution.taskJob(id)),
+        execution: (id) => {
+          const job = this.operations.get(id);
+          if (!job) throw new AppError('请先让角色上线。', 409);
+          return executionState(job);
+        },
+        withExecution: (id, action) => this.operations.run(id, action),
+        readCharacter: async (id) => await this.record(id),
         findExecution: (id) => {
-          const job = this.jobs.get(id);
+          const job = this.operations.get(id);
           return job ? executionState(job) : undefined;
         },
         executions: () => [...this.jobs.values()].map(executionState),
@@ -143,9 +189,12 @@ export class AICharacterOrchestrator {
         launch: (id) =>
           this.execution.launchReserved(this.execution.taskJob(id)),
         withStoppedExecution: (id, change) =>
-          this.execution.withStoppedExecution(id, change),
+          this.jobs.has(id)
+            ? this.execution.withStoppedExecution(id, change)
+            : change(),
         validateExecution: async (id, overrides) => {
-          const job = this.execution.taskJob(id);
+          const job = this.operations.get(id);
+          if (!job) throw new AppError('Agent 不存在。', 404);
           const settings = validateAICharacter(
             { ...job.view, ...overrides },
             await this.providers.getRuntime(job.view.providerId),
@@ -173,11 +222,12 @@ export class AICharacterOrchestrator {
       scheduler: this.taskScheduler,
       execution: this.execution,
       closing: () => this.closing,
-      plans: () => this.plans,
-      list: () => this.list(),
-      save: () => this.save(),
-      persist: () => this.persist(),
-      flush: () => this.flush(),
+      findJob: (id) => this.operations.get(id),
+      result: (id) => this.get(id),
+      read: (id) => this.record(id),
+      insert: (record) => this.save({ create: record }),
+      join: (id) => this.join(id),
+      save: (changes) => this.save(changes),
       detachAgent: (...args) => this.tasks.detachAgent(...args),
     });
     const releaseCharacterBinding = bindCharacterManager(this);
@@ -214,22 +264,25 @@ export class AICharacterOrchestrator {
       throw new AppError('AI 角色存档恢复失败，请修复存档后重启服务。', 503);
     this.persistence.assertWritable(
       this.closing,
-      id ? this.jobs.get(id)?.storageFailed : undefined,
+      id
+        ? this.failedCharacters.has(id) || this.jobs.get(id)?.storageFailed
+        : undefined,
     );
   }
 
   async settled(id: string) {
     await this.jobs.get(id)?.done;
+    await this.flush();
   }
 
-  private persist() {
+  private persist(changes: CharacterChanges = {}) {
     // Shutdown also runs after failed startup; never replace unread/partially restored data.
     if (this.restoreFailed) return Promise.resolve();
-    return this.persistence.persist();
+    return this.persistence.persist(changes);
   }
 
-  private save(): Promise<void> {
-    return this.persist();
+  private save(changes: CharacterChanges = {}): Promise<void> {
+    return this.persist(changes);
   }
 
   async flush(since = this.storageRevision) {
@@ -253,7 +306,9 @@ export class AICharacterOrchestrator {
       return;
     }
     this.persistence.tasks.restore(this.plans, saved);
-    const autoJoin: Job[] = [];
+    const autoJoin: string[] = [];
+    const recovered: CharacterRecord[] = [];
+    const profiles: NonNullable<CharacterChanges['profiles']> = {};
     for (const view of saved.characters) {
       const { job, voiceWarning, shouldAutoJoin } = await restoreAICharacterJob(
         view,
@@ -261,19 +316,25 @@ export class AICharacterOrchestrator {
         (settings) => this.checkVoice(settings),
         this.plans,
       );
-      this.jobs.set(view.id, job);
+      // Keep only serialized recovery data; do not retain offline execution instances.
       if (voiceWarning) appendAICharacterLog(job.view, voiceWarning);
-      if (shouldAutoJoin) autoJoin.push(job);
+      this.persistence.tasks.captureExecutions([executionState(job)]);
+      profiles[view.id] = characterSettings(job.view);
+      recovered.push({
+        ...view,
+        ...characterSettings(job.view),
+        status: job.view.status,
+        logEntries: job.view.logEntries,
+        runtime: job.runtime.snapshot(),
+        currentRunId: job.currentRunId,
+      });
+      if (shouldAutoJoin) autoJoin.push(view.id);
     }
-    await this.save();
-    for (const job of autoJoin.slice(0, 4)) {
-      job.view.status = 'joining';
-      job.done = this.execution.execute(
-        job,
-        await this.providers.getRuntime(job.view.providerId),
-        false,
-      );
-      await job.done;
+    // Validate every record before writing any recovery changes.
+    await this.persistence.persist({ profiles }, recovered);
+    for (const id of autoJoin.slice(0, 4)) {
+      await this.operations.run(id, () => this.management.join(id, true));
+      await this.settled(id);
     }
     this.planScheduler.start();
   }
@@ -294,8 +355,8 @@ export class AICharacterOrchestrator {
     return this.voiceCoordinator.checkVoice(settings);
   }
 
-  list() {
-    return [...this.jobs.values()]
+  private runtimeViews() {
+    return this.participatingJobs()
       .map(({ view, runtime, currentRunId }) => {
         const state = runtime.view();
         const run = this.plans.runs.find((run) => run.id === currentRunId);
@@ -333,38 +394,138 @@ export class AICharacterOrchestrator {
       .reverse();
   }
 
-  create(value: unknown) {
+  private participatingJobs() {
+    return [...new Map([...this.operations.pending, ...this.jobs]).values()];
+  }
+
+  private releaseOffline(job: Job) {
+    if (job.session || active(job.view.status)) return;
+    if (this.jobs.get(job.view.id) === job) this.jobs.delete(job.view.id);
+    this.taskScheduler.cancel(job.view.id);
+    this.persistence.characters.forget(job.view.id);
+  }
+
+  private async record(id: string): Promise<CharacterRecord> {
+    const record = (await this.archive.load())?.characters.find(
+      (record) => record.id === id,
+    );
+    if (!record) throw new AppError('Agent 不存在。', 404);
+    return record;
+  }
+
+  async list(): Promise<AICharacterView[]> {
+    const archive = await this.archive.load();
+    return Promise.all(
+      (archive?.characters ?? [])
+        .slice()
+        .reverse()
+        .map(async (record) => {
+          const state = record.runtime
+            ? runtimeView(record.runtime)
+            : undefined;
+          const run = archive?.runs.find(
+            (run) => run.id === record.currentRunId,
+          );
+          return {
+            ...characterSettings(record),
+            id: record.id,
+            createdAt: record.createdAt,
+            status: record.status,
+            logEntries: record.logEntries.slice(-AI_CHARACTER_LOG_LIMIT),
+            providerName: (await this.providers.getRuntime(record.providerId))
+              .name,
+            sessionId: this.sessionId(record.id),
+            task: state?.task,
+            usage: state?.usage,
+            lastResponse: state?.lastResponse,
+            taskRequiresReassignment: state?.requiresReassignment,
+            taskExecution: run
+              ? {
+                  runId: run.id,
+                  limits: run.snapshot.limits,
+                  source: run.source,
+                  action: state?.action,
+                }
+              : undefined,
+            queuedTasks: archive!.runs
+              .filter(
+                (run) =>
+                  run.characterId === record.id && run.status === 'queued',
+              )
+              .map((run) => ({
+                id: run.id,
+                goal: run.snapshot.goal,
+                scheduledAt: run.scheduledAt,
+                coalescedTriggers: run.coalescedTriggers ?? 0,
+              })),
+          };
+        }),
+    );
+  }
+
+  private async get(id: string) {
+    const view = (await this.list()).find((view) => view.id === id);
+    if (!view) throw new AppError('Agent 不存在。', 404);
+    return view;
+  }
+
+  async create(value: unknown) {
+    this.assertWritable();
     return this.management.create(value);
   }
 
-  join(id: string) {
-    return this.management.join(id);
+  async join(id: string) {
+    this.assertWritable(id);
+    return this.operations.run(id, () => this.management.join(id));
   }
 
-  update(id: string, value: unknown) {
-    return this.management.update(id, value);
+  async update(id: string, value: unknown) {
+    this.assertWritable(id);
+    return this.operations.run(id, () => this.management.update(id, value));
   }
 
-  setVoice(id: string, value: unknown) {
-    return this.management.setVoice(id, value);
+  async setVoice(id: string, value: unknown) {
+    this.assertWritable(id);
+    return this.operations.run(id, () => this.management.setVoice(id, value));
   }
 
   remove(id: string) {
-    return this.management.remove(id);
+    return this.operations.run(id, () => this.management.remove(id));
   }
 
-  stop(id: string) {
+  async stop(id: string) {
+    if (!this.jobs.has(id)) {
+      return this.operations.run(id, async () => {
+        const job = this.operations.get(id)!;
+        if (job.view.status !== 'stopped') {
+          job.view.status = 'stopped';
+          markOffline(executionState(job));
+          await this.save();
+        }
+        return this.get(id);
+      });
+    }
     this.execution.stop(id);
-    return this.list().find((view) => view.id === id)!;
+    await this.settled(id);
+    return this.get(id);
   }
 
-  hasProviderReference(id: string) {
-    return [...this.jobs.values()].some((job) => job.view.providerId === id);
+  async hasProviderReference(id: string) {
+    return (
+      (await this.archive.load())?.characters.some(
+        (record) => record.providerId === id,
+      ) || this.participatingJobs().some((job) => job.view.providerId === id)
+    );
   }
 
-  hasVoiceServiceReference(id: string) {
-    return [...this.jobs.values()].some(
-      (j) => j.updating || j.view.voiceServiceId === id,
+  async hasVoiceServiceReference(id: string) {
+    return (
+      (await this.archive.load())?.characters.some(
+        (record) => record.voiceServiceId === id,
+      ) ||
+      this.participatingJobs().some(
+        (job) => job.updating || job.view.voiceServiceId === id,
+      )
     );
   }
 

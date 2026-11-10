@@ -2,13 +2,28 @@
 
 本文记录 `apps/server/src/modules/ai-characters` 的职责边界、分层架构与目录规范。
 
+## 数据所有权
+
+PostgreSQL 是角色配置、已提交状态、恢复检查点和历史日志的权威来源。`AICharacterRegistry` 只持有在线（含正在上线、下线）角色的运行实例，不能用它判断角色是否存在或统计已保存角色数量。
+
+- 创建离线角色直接提交数据库，不分配常驻运行实例。上线时读取角色和恢复检查点；下线或连接失败后释放实例和唤醒定时器。
+- `CharacterOperations` 为单次管理或任务命令按需加载离线角色，命令结束后释放临时状态，并防止同一角色的命令并发修改。离线角色仍可修改配置、安排定时任务、查询历史和删除。
+- 角色配置变更通过显式的 `create` / `profiles` / `remove` 提交；普通运行检查点不能覆盖数据库配置，也不能删除未参加本次提交的离线角色。保存数量上限在数据库事务内检查。
+- 角色与任务仍在同一事务内提交。删除角色会解除计划绑定并结束未完成执行，保留执行历史；被删除角色的迟到检查点不能重新创建角色。
+- `DatabaseManagementArchive.commit` 在事务内读取当前数据并应用本次变更，不持有全量角色存档的长期内存副本。当前仍使用联合角色/任务读取和差异写入；这不是多实例执行调度机制。
+- `CharacterSnapshots` 只跟踪在线实例的提交状态，通知系统只缓存摘要以识别变更。存储失败后保留角色 ID 的阻断标记，避免释放实例后绕过失败保护。
+- 历史日志独立追加存储；运行实例和 `list()` 的最近日志窗口仍有上限，裁剪窗口不会删除数据库历史。暂未设置历史日志自动过期策略。
+- `list()`、任务历史查询和持久化引用检查均为异步读取。HTTP 查询继续直接使用 `CharacterQueries`，会话 ID 从在线实例补充。
+
+启动恢复会逐个规范化已保存记录和任务检查点，临时恢复对象随处理结束释放；只有需要自动上线且满足在线数量限制的角色进入注册表。
+
 ## 1. 模块职责与边界
 
 `ai-characters` 模块负责：
 
 - **角色配置与生命周期用例（Application）**：管理 AI 角色的创建、更新、删除、上线（`join`）、离线（`stop`）、语音回复开关及历史日志分页查询；在服务启动时从存档恢复角色状态并按策略自动上线。
 - **纯业务规则与领域校验（Domain）**：校验角色配置、动作权限（`permissions`）、技能（`skills`）、模型与轮询间隔等规则，管理内存运行日志窗口的清洗与追加。
-- **进程内运行态与世界会话宿主（Runtime）**：维护受管角色的内存注册表（`AICharacterRegistry`），驱动 Colyseus 房间会话（`AICharacterHost`）、AgentRuntime 执行循环、世界事件接收（`handleWorldEvent`）与定时唤醒调度（`AICharacterWakeScheduler`）。
+- **进程内运行态与世界会话宿主（Runtime）**：维护在线角色的内存注册表（`AICharacterRegistry`），驱动 Colyseus 房间会话（`AICharacterHost`）、AgentRuntime 执行循环、世界事件接收（`handleWorldEvent`）与定时唤醒调度（`AICharacterWakeScheduler`）。
 - **跨模块协作与防腐适配（Integrations）**：将角色运行态 `Job` 适配为 `tasks` 模块所需的 `TaskExecutionState`，以及协调 `tts` 模块的语音服务校验、会话绑定与领域事件通知。
 - **数据库读写与快照转换（Persistence）**：提供面向 HTTP 读路径的 PostgreSQL 直查（`CharacterQueries`），以及面向联合事务（`DatabaseManagementArchive`）的配置/状态/日志持久化转换与内存快照比对（`CharacterSnapshots`）。
 
@@ -31,6 +46,7 @@ apps/server/src/modules/ai-characters/
 ├── application/                               # 角色管理用例与模块生命周期编排
 │   ├── character-orchestrator.ts              # 模块生命周期根协调器（含 AICharacterManager 与运行时实例绑定）
 │   ├── character-management.ts                # 角色 CRUD 与上下线用例（create / update / remove / join / setVoice）
+│   ├── character-operations.ts                # 单次命令的角色加载、互斥与释放
 │   ├── character-restore.ts                   # 启动时从存档恢复角色 Job 与自动上线判定
 │   ├── character-log-query.ts                 # 历史日志分页与游标编解码用例
 │   └── character-log-query.test.ts            # 历史日志分页与游标单元测试

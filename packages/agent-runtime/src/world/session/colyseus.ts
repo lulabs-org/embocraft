@@ -6,9 +6,12 @@ export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Poll until a condition is met; throws if timeout expires. */
-export async function until(predicate: () => boolean, timeout = 5000) {
+export async function until(
+  predicate: () => boolean | Promise<boolean>,
+  timeout = 5000,
+) {
   const start = Date.now();
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() - start > timeout)
       throw Error('Timed out waiting for state');
     await delay(25);

@@ -202,7 +202,8 @@ try {
     intervalMs: 60000,
     maxTurns: 10,
   });
-  const view = () => manager!.list().find((a) => a.id === managed.id)!;
+  const view = async () =>
+    (await manager!.list()).find((a) => a.id === managed.id)!;
   await manager.settled(managed.id);
   await manager.tasks.createTaskPlan(managed.id, {
     name: '持续跟随',
@@ -211,32 +212,41 @@ try {
     timeZone: 'UTC',
     limits: { maxTurns: 10 },
   });
-  const managedPosition = () => room.state.players.get(view().sessionId!)!;
-  const separation = () => {
-    const p = managedPosition(),
+  const managedPosition = async () =>
+    room.state.players.get((await view()).sessionId!)!;
+  const separation = async () => {
+    const p = await managedPosition(),
       h = room.state.players.get(human!.room.sessionId)!;
     return p ? Math.hypot(p.x - h.x, p.z - h.z) : Infinity;
   };
   await until(
-    () => separation() <= 1.5 && view().task?.status === 'waiting',
+    async () =>
+      (await separation()) <= 1.5 && (await view()).task?.status === 'waiting',
     10000,
   );
   await controlRun(manager, managed.id, 'pause');
-  const paused = { x: managedPosition().x, z: managedPosition().z };
+  const paused = {
+    x: (await managedPosition()).x,
+    z: (await managedPosition()).z,
+  };
   for (let i = 0; i < 8; i++) {
     human.move(1, 0);
     await delay(100);
   }
   human.move(0, 0);
   await delay(300);
-  assert.deepEqual({ x: managedPosition().x, z: managedPosition().z }, paused);
+  assert.deepEqual(
+    { x: (await managedPosition()).x, z: (await managedPosition()).z },
+    paused,
+  );
   await controlRun(manager, managed.id, 'resume');
   await until(
-    () => separation() <= 1.5 && view().task?.status === 'waiting',
+    async () =>
+      (await separation()) <= 1.5 && (await view()).task?.status === 'waiting',
     10000,
   );
   await controlRun(manager, managed.id, 'cancel');
-  assert.equal(view().task!.status, 'cancelled');
+  assert.equal((await view()).task!.status, 'cancelled');
   assert.equal(
     calls,
     2,

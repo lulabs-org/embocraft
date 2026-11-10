@@ -42,7 +42,7 @@ export const canWakeJob = (job: Job, closing: boolean) =>
     (job.view.status === 'failed' && job.runtime.pendingMessages)) &&
   !!job.session;
 
-/** The sole owner of hosted Agent instances. Never shared with standalone CLI instances. */
+/** Online hosts only (including joining/stopping). Offline profiles are owned by the database. */
 export class AICharacterRegistry extends Map<string, Job> {}
 
 /** The runtime owns state and attention for the whole lifetime of a hosted character. */

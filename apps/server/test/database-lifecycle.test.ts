@@ -25,6 +25,7 @@ const findRequests = vi.fn().mockResolvedValue([]);
 const transaction = vi.fn();
 const db = {
   $disconnect: disconnect,
+  $queryRaw: vi.fn(),
   world: { upsert: loadWorld },
   agentProvider: { findMany: findProviders },
   ttsProvider: { findMany: findTtsProviders },

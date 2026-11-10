@@ -109,8 +109,12 @@ try {
     taskTimeoutMs: 120000,
     permissions: { move: true, chat: true, place: true, remove: true },
   });
-  const view = () => manager!.list().find((a) => a.id === managed.id)!;
-  await until(() => view().status === 'idle' && !!view().sessionId, 10000);
+  const view = async () =>
+    (await manager!.list()).find((a) => a.id === managed.id)!;
+  await until(
+    async () => (await view()).status === 'idle' && !!(await view()).sessionId,
+    10000,
+  );
   const put = (x: number, y: number, z: number) =>
     room.blocks.set(key({ x, y, z }), { x, y, z, material: 'stone' });
   for (const kind of ['flat', 'cancelled-wall', 'cancelled-step']) {
@@ -132,7 +136,7 @@ try {
         Date.now(),
       );
       await controlRun(manager, managed.id, 'cancel');
-      assert.equal(view().task?.status, 'cancelled');
+      assert.equal((await view()).task?.status, 'cancelled');
     }
     room.blocks.clear();
     for (let x = -12; x <= 12; x++)
@@ -141,7 +145,7 @@ try {
       for (let z = -2; z <= 2; z++) for (let y = 3; y <= 6; y++) put(2, y, z);
     if (kind.endsWith('step'))
       for (let x = 2; x <= 6; x++) for (let z = -12; z <= 12; z++) put(x, 3, z);
-    const agent = room.state.players.get(view().sessionId!)!;
+    const agent = room.state.players.get((await view()).sessionId!)!;
     const target = room.state.players.get(human.room.sessionId)!;
     const bystander = room.state.players.get(observer.room.sessionId)!;
     Object.assign(agent, { x: 0, y: 2.55, z: 0 });
@@ -156,7 +160,7 @@ try {
     const xyz = (p: typeof agent) => ({ x: p.x, y: p.y, z: p.z });
     const start = xyz(agent),
       destination = xyz(target);
-    const priorStartedAt = view().task?.startedAt;
+    const priorStartedAt = (await view()).task?.startedAt;
     const trajectory: ReturnType<typeof xyz>[] = [];
     const timer = setInterval(() => trajectory.push(xyz(agent)), 50);
     const started = Date.now();
@@ -166,12 +170,15 @@ try {
           await human.request('chat', {
             text: '到我这里来',
             scope: 'private',
-            recipients: [view().sessionId],
+            recipients: [(await view()).sessionId],
           })
         ).ok,
       );
-      await until(() => calls > 0 && view().status === 'idle', 125000);
-      const final = view();
+      await until(
+        async () => calls > 0 && (await view()).status === 'idle',
+        125000,
+      );
+      const final = await view();
       const distance = Math.hypot(agent.x - target.x, agent.z - target.z);
       const result = {
         case: kind,
@@ -247,7 +254,7 @@ try {
   actions.clear();
   taskStates.clear();
   for (const [k, block] of room.blocks) if (block.y >= 3) room.blocks.delete(k);
-  const follower = room.state.players.get(view().sessionId!)!;
+  const follower = room.state.players.get((await view()).sessionId!)!;
   const leader = room.state.players.get(human.room.sessionId)!;
   Object.assign(follower, { x: 0, y: 2.55, z: 0 });
   Object.assign(leader, { x: 4, y: 2.55, z: 0 });
@@ -259,19 +266,19 @@ try {
         await human!.request('chat', {
           text,
           scope: 'private',
-          recipients: [view().sessionId],
+          recipients: [(await view()).sessionId],
         })
       ).ok,
     );
   };
   await speak('请持续跟着我，保持大约 1.5 格距离。');
   await until(
-    () =>
-      view().task?.status === 'waiting' &&
-      view().task?.summary.includes('跟随') === true,
+    async () =>
+      (await view()).task?.status === 'waiting' &&
+      (await view()).task?.summary.includes('跟随') === true,
     125000,
   );
-  const followingTask = view().task!;
+  const followingTask = (await view()).task!;
   const initialCalls = calls;
   await delay(2000);
   assert.equal(
@@ -284,24 +291,25 @@ try {
     () => Math.hypot(follower.x - leader.x, follower.z - leader.z) < 2.2,
     15000,
   );
-  const oldResponse = view().lastResponse;
+  const oldResponse = (await view()).lastResponse;
   await speak('你叫什么名字？只回答名字，不要改变当前跟随任务。');
   await until(
-    () => calls > initialCalls && view().lastResponse !== oldResponse,
+    async () =>
+      calls > initialCalls && (await view()).lastResponse !== oldResponse,
     125000,
   );
   assert.equal(
-    view().task?.startedAt,
+    (await view()).task?.startedAt,
     followingTask.startedAt,
     'ordinary chat must preserve task identity',
   );
   assert.equal(
-    view().task?.goal,
+    (await view()).task?.goal,
     followingTask.goal,
     'ordinary chat must preserve the goal',
   );
   assert.equal(
-    view().task?.calls,
+    (await view()).task?.calls,
     followingTask.calls,
     'ordinary chat must not consume task model budget',
   );
@@ -315,14 +323,14 @@ try {
   await speak(
     '不要再跟随了，修改当前任务：走到 x=-3、y=2.5、z=0，到了就完成任务。',
   );
-  await until(() => view().task?.status === 'completed', 125000);
+  await until(async () => (await view()).task?.status === 'completed', 125000);
   assert.equal(
-    view().task?.startedAt,
+    (await view()).task?.startedAt,
     followingTask.startedAt,
     'revision must not create a new task',
   );
   assert(
-    view().task!.calls > followingTask.calls,
+    (await view()).task!.calls > followingTask.calls,
     'revision retains and adds to the original budget',
   );
   assert(
@@ -334,7 +342,7 @@ try {
     calls,
     initialCalls,
     afterReplyCalls,
-    task: view().task,
+    task: (await view()).task,
     end: { x: follower.x, y: follower.y, z: follower.z },
   };
   results.push(followResult);

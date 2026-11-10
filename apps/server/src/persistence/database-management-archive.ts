@@ -1,7 +1,12 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { getDatabaseClient } from '../core/database/client';
 import { AppError } from '../core/errors/app-error';
-import type { ArchivePort, ManagementArchive } from './management-archive';
+import {
+  applyManagementChange,
+  type ArchivePort,
+  type ManagementArchive,
+  type ManagementChange,
+} from './management-archive';
 import {
   captureCharacter,
   restoreCharacter,
@@ -112,75 +117,84 @@ function snapshot(
 
 /** Commits one character/task snapshot as a transaction of changed rows. */
 export class DatabaseManagementArchive implements ArchivePort {
-  private committed: SavedSnapshot = snapshot({
-    version: 3,
-    characters: [],
-    plans: [],
-    runs: [],
-    requests: {},
-  });
   constructor(private readonly customDb?: PrismaClient) {}
 
   private get db(): PrismaClient {
     return this.customDb ?? getDatabaseClient();
   }
 
-  /** Read using an independent instance so queries never alter the writer baseline. */
   async readSnapshot(): Promise<ManagementArchive | undefined> {
-    return new DatabaseManagementArchive(this.customDb).load();
+    return this.load();
+  }
+
+  private async read(tx: Prisma.TransactionClient) {
+    const characters = await tx.agentCharacter.findMany({
+      orderBy: { position: 'asc' },
+      include: { state: true, logs: { orderBy: { sequence: 'asc' } } },
+    });
+    const plans = await tx.agentPlan.findMany({ orderBy: { position: 'asc' } });
+    const runs = await tx.agentRun.findMany({
+      orderBy: { position: 'asc' },
+      include: { checkpoint: true },
+    });
+    const requests = await tx.agentRequest.findMany();
+    const restoredRuns = runs.map(restoreRun);
+    const byRunId = new Map(restoredRuns.map((run) => [run.id, run]));
+    const archive: ManagementArchive = {
+      version: 3,
+      characters: characters.map((row) => restoreCharacter(row, byRunId)),
+      plans: plans.map(restorePlan),
+      runs: restoredRuns,
+      requests: Object.fromEntries(
+        requests.map((row) => [row.key, row.planId]),
+      ),
+    };
+    const before = snapshot(archive);
+    for (const row of characters) {
+      before.characters.get(row.id)!.logs = row.logs.map(
+        ({ sequence, time, text }) => ({ sequence, time, text }),
+      );
+    }
+    return { archive, before };
   }
 
   async load(): Promise<ManagementArchive | undefined> {
     try {
-      const [characters, plans, runs, requests] = await this.db.$transaction(
+      return await this.db.$transaction(
         async (tx) => {
-          const characters = await tx.agentCharacter.findMany({
-            orderBy: { position: 'asc' },
-            include: { state: true, logs: { orderBy: { sequence: 'asc' } } },
-          });
-          const plans = await tx.agentPlan.findMany({
-            orderBy: { position: 'asc' },
-          });
-          const runs = await tx.agentRun.findMany({
-            orderBy: { position: 'asc' },
-            include: { checkpoint: true },
-          });
-          const requests = await tx.agentRequest.findMany();
-          return [characters, plans, runs, requests] as const;
+          const { archive } = await this.read(tx);
+          return archive.characters.length ||
+            archive.plans.length ||
+            archive.runs.length ||
+            Object.keys(archive.requests).length
+            ? archive
+            : undefined;
         },
         { isolationLevel: 'RepeatableRead' },
       );
-      const restoredRuns = runs.map(restoreRun);
-      const byRunId = new Map(restoredRuns.map((run) => [run.id, run]));
-      const archive: ManagementArchive = {
-        version: 3,
-        characters: characters.map((row) => restoreCharacter(row, byRunId)),
-        plans: plans.map(restorePlan),
-        runs: restoredRuns,
-        requests: Object.fromEntries(
-          requests.map((row) => [row.key, row.planId]),
-        ),
-      };
-      this.committed = snapshot(archive);
-      for (const row of characters) {
-        this.committed.characters.get(row.id)!.logs = row.logs.map(
-          ({ sequence, time, text }) => ({ sequence, time, text }),
-        );
-      }
-      return characters.length || plans.length || runs.length || requests.length
-        ? archive
-        : undefined;
     } catch {
       throw new AppError('无法读取 Agent 数据库记录。', 500);
     }
   }
 
+  async commit(change: ManagementChange): Promise<ManagementArchive> {
+    return this.write((stored) => applyManagementChange(stored, change));
+  }
+
   async save(archive: ManagementArchive): Promise<void> {
-    const before = this.committed;
+    await this.write(() => archive);
+  }
+
+  private async write(
+    change: (stored: ManagementArchive) => ManagementArchive,
+  ) {
     try {
-      const next = snapshot(archive, before);
-      await this.db.$transaction(
+      return await this.db.$transaction(
         async (tx) => {
+          await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext('embocraft.characters.commit'))) AS held`;
+          const { archive: stored, before } = await this.read(tx);
+          const archive = change(stored);
+          const next = snapshot(archive, before);
           // Release changing selections before deleting or replacing their targets.
           // This intermediate state is never visible outside the transaction.
           for (const [id, character] of before.characters) {
@@ -230,11 +244,12 @@ export class DatabaseManagementArchive implements ArchivePort {
             if (before.requests.get(key) === planId) continue;
             await tx.agentRequest.create({ data: { key, planId } });
           }
+          return archive;
         },
         { maxWait: 10000, timeout: 30000 },
       );
-      this.committed = next;
-    } catch {
+    } catch (error) {
+      if (error instanceof AppError) throw error;
       throw new AppError('无法保存 Agent 数据库记录。', 500);
     }
   }

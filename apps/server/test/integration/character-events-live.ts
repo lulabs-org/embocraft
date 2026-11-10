@@ -58,8 +58,12 @@ try {
     permissions: { move: true, chat: true, place: true, remove: true },
     voiceReplies: false,
   });
-  const view = () => server.characters.list().find((c) => c.id === role.id)!;
-  await until(() => view().status === 'idle' && !!view().sessionId, 10000);
+  const view = async () =>
+    (await server.characters.list()).find((c) => c.id === role.id)!;
+  await until(
+    async () => (await view()).status === 'idle' && !!(await view()).sessionId,
+    10000,
+  );
   human = await new Session(server.url).join('验收玩家', 'human');
   const world = server.world;
   world.blocks.clear();
@@ -67,7 +71,7 @@ try {
     for (let z = -12; z <= 12; z++)
       for (let y = 0; y <= 2; y++)
         world.blocks.set(key({ x, y, z }), { x, y, z, material: 'stone' });
-  const actor = world.state.players.get(view().sessionId!)!;
+  const actor = world.state.players.get((await view()).sessionId!)!;
   const leader = world.state.players.get(human.room.sessionId)!;
   Object.assign(actor, { x: 0, y: 2.55, z: -2 });
   Object.assign(leader, { x: -2, y: 2.55, z: -2 });
@@ -79,18 +83,21 @@ try {
         await human!.request('chat', {
           text,
           scope: 'private',
-          recipients: [view().sessionId],
+          recipients: [(await view()).sessionId],
         })
       ).ok,
     );
   await say(
     '请在最小角 (0,3,0) 建造一座木屋，宽3格、深3格、高4格，门朝北。建好后确认完成。',
   );
-  await until(() => calls > 0 && view().status === 'idle', 300000);
+  await until(
+    async () => calls > 0 && (await view()).status === 'idle',
+    300000,
+  );
   results.push({
     case: 'chat-house',
-    task: view().task,
-    usage: view().usage,
+    task: (await view()).task,
+    usage: (await view()).usage,
     block: world.blocks.get('0,3,0'),
     calls,
   });
@@ -105,7 +112,7 @@ try {
       20,
     'must build the house, not a single block',
   );
-  assert.equal(view().task?.status, 'completed');
+  assert.equal((await view()).task?.status, 'completed');
   // A once-plan uses precisely the same Pi tools without any conversation handoff.
   await server.characters.tasks.createTaskPlan(role.id, {
     name: '计划建造',
@@ -115,25 +122,25 @@ try {
     limitsMode: 'inherit',
   });
   await until(
-    () =>
+    async () =>
       world.blocks.get('4,3,0')?.material === 'wood' &&
-      view().task?.status === 'completed',
+      (await view()).task?.status === 'completed',
     300000,
   );
   results.push({
     case: 'scheduled-build',
-    task: view().task,
-    usage: view().usage,
+    task: (await view()).task,
+    usage: (await view()).usage,
     calls,
   });
   await say('请持续跟随我，保持 1.5 格距离，不要结束跟随任务。');
   await until(
-    () =>
+    async () =>
       !!server.characters.jobs.get(role.id)?.runtime.snapshot().execution
-        .effects.follow && view().status === 'idle',
+        .effects.follow && (await view()).status === 'idle',
     300000,
   );
-  const identity = view().task!.startedAt;
+  const identity = (await view()).task!.startedAt;
   const beforeFollow = calls;
   Object.assign(leader, { x: 5, y: 2.55, z: -2 });
   await until(
@@ -143,21 +150,26 @@ try {
   await delay(2500);
   assert.equal(calls, beforeFollow, 'Navigation ticks must not call the model');
   const beforeQuestion = calls;
+  const replySessionId = (await view()).sessionId;
   const replyCount = human.events.filter(
-    (e) => e.type === 'chat' && e.actor === view().sessionId,
+    (e) => e.type === 'chat' && e.actor === replySessionId,
   ).length;
   await say('你好，你叫什么名字？');
-  await until(() => calls > beforeQuestion && view().status === 'idle', 150000);
+  await until(
+    async () => calls > beforeQuestion && (await view()).status === 'idle',
+    150000,
+  );
   assert(
-    human.events.filter(
-      (e) => e.type === 'chat' && e.actor === view().sessionId,
-    ).length > replyCount,
+    human.events.filter((e) => e.type === 'chat' && e.actor === replySessionId)
+      .length > replyCount,
     'The player must actually receive a reply',
   );
-  assert.equal(view().task!.startedAt, identity);
+  assert.equal((await view()).task!.startedAt, identity);
   await say('停止');
   await until(
-    () => view().task?.status === 'paused' && view().status === 'idle',
+    async () =>
+      (await view()).task?.status === 'paused' &&
+      (await view()).status === 'idle',
     10000,
   );
   const stopped = { x: actor.x, z: actor.z };
@@ -168,10 +180,10 @@ try {
   assert.equal(calls, stoppedCalls);
   results.push({
     case: 'follow-chat-stop',
-    task: view().task,
+    task: (await view()).task,
     position: stopped,
     calls,
-    usage: view().usage,
+    usage: (await view()).usage,
   });
   console.log(
     'PASS: real model chat house, scheduled build, follow, chat during follow, immediate stop',
@@ -179,7 +191,7 @@ try {
 } catch (error) {
   results.push({
     error: String(error),
-    roles: server.characters.list().map((c) => ({
+    roles: (await server.characters.list()).map((c) => ({
       task: c.task,
       lastResponse: c.lastResponse,
       logEntries: c.logEntries.slice(-8),
