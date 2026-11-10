@@ -14,6 +14,7 @@ import { BrowserVoiceSelect } from './BrowserVoiceSelect';
 import { SpeachesModelSelect } from '../../../components/audio/SpeachesModelSelect';
 import { VoicePreview } from './VoicePreview';
 
+/** Provider defaults stay in sync with the server-side validation and MiMo presets. */
 const fresh = (type: VoiceServiceType = 'speaches'): VoiceServiceDraft => ({
   name: '',
   type,
@@ -379,6 +380,7 @@ export function VoiceServices({
             ) : draft.type === 'mimo' ? (
               <label>
                 {t('console.voice.voiceLabel')}
+                {/* Voice IDs are sent verbatim; Chinese voices use Chinese names by design. */}
                 <select
                   value={draft.voice}
                   onChange={(e) => change({ voice: e.target.value })}
@@ -432,11 +434,12 @@ export function VoiceServices({
           {dirty && (
             <p className="agent-hint">{t('console.voice.previewDirtyHint')}</p>
           )}
+          {/* Preview the current form values, including edits that are not saved yet. */}
           <VoicePreview
             serviceId={selected ?? undefined}
-            service={saved}
+            draft={draft}
             active={active}
-            disabled={dirty || busy}
+            disabled={busy}
           />
           <fieldset disabled={busy}>
             <div className="voice-service-actions console-form-actions">

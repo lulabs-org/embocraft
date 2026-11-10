@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { DEFAULT_PIPER_MODEL, type VoiceServiceView } from '@voxel/shared';
+import {
+  DEFAULT_MIMO_TTS_VOICE,
+  DEFAULT_PIPER_MODEL,
+  MIMO_TTS_MODEL,
+  type VoiceServiceView,
+} from '@voxel/shared';
 import { installReactMount } from '../../../../test/helpers/react-mount';
 import { VoiceServices } from './VoiceServices';
 import { voiceApi } from './api';
@@ -101,4 +106,48 @@ it('keeps an existing key for the deployment default but requests a new key when
       .placeholder,
   ).toBe('http://deployment-speech:8000/v1');
   expect(mount.host.querySelector('.voice-key-saved')).not.toBeNull();
+});
+
+// Changing a preset voice marks the form dirty; preview must still work.
+it('previews a newly selected MiMo voice without saving it first', async () => {
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = vi.fn(() => 'blob:preview');
+      static revokeObjectURL = vi.fn();
+    },
+  );
+  const preview = vi
+    .spyOn(voiceApi, 'previewVoice')
+    .mockResolvedValue(new Blob(['audio']));
+  const mimo: VoiceServiceView = {
+    id: 'mimo-voice',
+    name: 'Xiaomi MiMo',
+    type: 'mimo',
+    baseUrl: 'https://api.xiaomimimo.com/v1',
+    model: MIMO_TTS_MODEL,
+    voice: DEFAULT_MIMO_TTS_VOICE,
+    speed: 1,
+    capability: 'tts',
+    hasApiKey: true,
+  };
+  await mount.render(
+    <VoiceServices services={[mimo]} onChange={vi.fn()} active />,
+  );
+  const voice = mount.host.querySelectorAll('select')[1];
+  await act(async () => {
+    voice.value = '冰糖';
+    voice.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const button = mount.host.querySelector<HTMLButtonElement>(
+    '.tts-preview button',
+  )!;
+  expect(button.disabled).toBe(false);
+  await act(async () => button.click());
+  expect(preview).toHaveBeenCalledOnce();
+  expect(preview.mock.calls[0][0]).toMatchObject({
+    serviceId: mimo.id,
+    draft: { type: 'mimo', voice: '冰糖' },
+    text: expect.any(String),
+  });
 });
