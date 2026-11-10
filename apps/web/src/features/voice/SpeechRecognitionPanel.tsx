@@ -126,6 +126,8 @@ export function SpeechRecognitionPanel({
     t,
   ]);
   const busy = state !== 'idle';
+  // Whisper and SenseVoice both report through `capabilities.local`; SenseVoice owns
+  // no key, so requiring `hasApiKey` here would wrongly disable it.
   const ready =
     active &&
     !!asr.selected &&

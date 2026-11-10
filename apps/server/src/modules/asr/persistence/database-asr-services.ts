@@ -41,6 +41,8 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
           };
         }
         if (row.provider === 'sense-voice') {
+          // No secret is decrypted for server-side engines, and rows written before
+          // the language column existed keep working as Chinese profiles.
           return {
             id: row.id,
             name: row.name,
@@ -99,6 +101,7 @@ export class DatabaseAsrServicePersistence implements AsrServicePersistence {
                 ? {
                     ...base,
                     provider: 'sense-voice',
+                    // Empty ciphertext keeps the NOT NULL column uniform; it is never read.
                     apiKey: encryptSecret(''),
                     region: null,
                     workspaceId: null,

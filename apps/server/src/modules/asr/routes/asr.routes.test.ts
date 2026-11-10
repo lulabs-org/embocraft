@@ -37,6 +37,7 @@ beforeEach(async () => {
     available: true,
     reason: 'local',
   });
+  // Pin the router default to the stubbed Whisper engine; engine selection has its own tests.
   installCapabilitiesRoutes(
     app,
     new SpeechRouter({ whisper: speech, default: speech }),

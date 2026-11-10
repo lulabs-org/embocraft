@@ -80,7 +80,10 @@ const session = (text = '你好世界'): Session => ({
   delayMs: 0,
 });
 
-/** Double for sherpa-onnx that records the language switches and decodes. */
+/**
+ * Double for sherpa-onnx that records the language switches and decodes.
+ * `busy`/`overlapped` prove the engine never runs two decodes on one session.
+ */
 function fakeSherpa(state: Session): () => Promise<SherpaOfflineModule> {
   return async () => ({
     OfflineRecognizer: {

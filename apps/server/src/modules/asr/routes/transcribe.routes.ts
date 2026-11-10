@@ -98,6 +98,7 @@ export function installTranscribeRoutes(
             ? undefined
             : asrSettings.acquire(String(req.query.serviceId));
         release = selected?.release;
+        // A saved profile pins its own engine; requests without one follow ASR_PROVIDER.
         const profile = selected?.settings;
         const text = await scheduleSpeech(router.engineFor(profile)).transcribe(
           Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),

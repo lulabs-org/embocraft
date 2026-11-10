@@ -78,6 +78,8 @@ export function installCapabilitiesRoutes(
             : asrSettings.get(String(req.query.serviceId));
         // Cloud profiles are not a server engine, so engineFor rejects them.
         const engine = router.engineFor(selected);
+        // The installed model list is global, so the console can offer models even
+        // before a SenseVoice profile has been saved.
         const [local, senseVoiceModels] = await Promise.all([
           engine.status(settingsFor(selected)),
           listSenseVoiceModels(),

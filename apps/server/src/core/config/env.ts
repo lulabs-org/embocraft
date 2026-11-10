@@ -118,10 +118,12 @@ function encryptionSecret(env: EnvLookup = process.env): string | undefined {
 
 function readSpeechConfig(env: EnvLookup = process.env) {
   const asrProvider = (env.ASR_PROVIDER ?? 'auto').trim() || 'auto';
+  // Fail at boot rather than silently falling back, so a typo cannot pin another engine.
   if (!VALID_ASR_PROVIDERS.includes(asrProvider as AsrProviderName)) {
     throw new Error('ASR_PROVIDER 仅支持 auto、whisper 或 sense-voice。');
   }
   const threads = Number(env.ASR_THREADS ?? 2);
+  // Decoding shares the CPU with the game loop, so keep the fan-out small and bounded.
   if (!Number.isInteger(threads) || threads < 1 || threads > 16) {
     throw new Error('ASR_THREADS 须为 1–16 的整数。');
   }

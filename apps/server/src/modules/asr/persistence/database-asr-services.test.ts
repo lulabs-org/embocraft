@@ -45,6 +45,7 @@ describe('DatabaseAsrServicePersistence', () => {
             temperature: 0.2,
             prompt: 'Minecraft voxel world',
           },
+          // A server-side profile stores the model pack and language, never a secret.
           {
             id: 'sense-voice-1',
             position: 2,

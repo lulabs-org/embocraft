@@ -64,6 +64,8 @@ export class ChatSpeechService {
             settingsFor(profile),
           );
         } catch {
+          // A failed transcript must not drop the recording: the audio still publishes
+          // with empty text, while a genuine abort keeps cancelling the upload.
           signal.throwIfAborted();
         }
         signal.throwIfAborted();
@@ -105,7 +107,8 @@ export class ChatSpeechService {
         requestSignal,
         partial ? chat.previewSpatial(actor, id) : chat.claimSpatial(actor, id),
       ]);
-      // Nearby transcripts are published without review, so Whisper keeps temperature 0.
+      // Nearby transcripts are published without review, so Whisper keeps temperature 0;
+      // SenseVoice has no sampling temperature and uses the saved language as-is.
       const settings =
         profile?.provider === 'whisper'
           ? { ...profile, temperature: 0 }

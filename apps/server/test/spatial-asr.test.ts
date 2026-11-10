@@ -74,6 +74,7 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
   });
   const app = express();
   const speech = new LocalSpeech('http://asr.test/v1', upstream);
+  // Pin every route to Whisper so the test keeps exercising the transcription path.
   installChatRoutes(
     app,
     () => chat,

@@ -29,6 +29,7 @@ function setup() {
   const normalize = vi.fn().mockResolvedValue({ bytes, durationMs: 1000 });
   const transcribe = vi.fn().mockResolvedValue('hello');
   const speech = { normalize, transcribe } as unknown as LocalSpeech;
+  // Routing itself is covered by the router test, so collapse it to one engine here.
   const router = { engineFor: () => speech } as unknown as SpeechRouter;
   return {
     chat,

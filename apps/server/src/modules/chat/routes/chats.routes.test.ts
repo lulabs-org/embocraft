@@ -135,6 +135,7 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   } as unknown as AsrSettingsStore;
   const app = express();
   const origin = 'http://127.0.0.1:5173';
+  // Pin the router default to the stubbed Whisper engine; engine selection has its own tests.
   installChatRoutes(
     app,
     () => chat,

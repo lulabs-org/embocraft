@@ -17,6 +17,7 @@ import {
   type WebAsrService,
 } from './browser-asr-services';
 
+/** Drafts start from provider defaults; the server-side SenseVoice engine needs only a name. */
 const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }

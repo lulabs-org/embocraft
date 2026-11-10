@@ -111,6 +111,7 @@ function validateService(
         }
       : provider === 'sense-voice'
         ? {
+            // No secret or cloud fields: the installed model pack is the whole connection.
             ...validateSenseVoiceSettings(value),
             provider: 'sense-voice' as const,
           }

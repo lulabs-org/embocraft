@@ -24,6 +24,7 @@ describe('audio capabilities HTTP boundary', () => {
     store = new AsrSettingsStore();
     await store.load();
     const app = express();
+    // Pin the router default to the stubbed Whisper engine; engine selection has its own tests.
     installCapabilitiesRoutes(
       app,
       new SpeechRouter({ whisper: speech, default: speech }),
