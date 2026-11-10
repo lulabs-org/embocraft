@@ -119,3 +119,34 @@ it('does not start synthesis after cancellation while reading configuration', as
   await expect(result).rejects.toThrow();
   expect(factory).not.toHaveBeenCalled();
 });
+
+// Draft previews bypass storage entirely but keep the same text limits.
+it('synthesizes an unsaved draft without reading the stored configuration', async () => {
+  const stored = validateVoiceService({
+    name: 'Stored',
+    type: 'speaches',
+    model: 'speaches-ai/piper-zh_CN-huayan-medium',
+    voice: 'huayan',
+  });
+  const draft = validateVoiceService({
+    name: 'Preview',
+    type: 'mimo',
+    baseUrl: 'https://api.xiaomimimo.com/v1',
+    model: 'mimo-v2.5-tts',
+    voice: '冰糖',
+    apiKey: 'draft-key',
+  });
+  const getVoice = vi.fn(async () => stored);
+  const factory = vi.fn(() => ({
+    synthesize: async () => ({ bytes: Buffer.from('audio'), durationMs: 1 }),
+  }));
+  const service = new SpeechService(getVoice, factory);
+  expect(
+    await service.preview(draft, '你好', new AbortController().signal),
+  ).toEqual({ bytes: Buffer.from('audio'), durationMs: 1 });
+  expect(getVoice).not.toHaveBeenCalled();
+  expect(factory).toHaveBeenCalledWith(draft);
+  await expect(
+    service.preview(draft, '', new AbortController().signal),
+  ).rejects.toThrow('试听文字');
+});

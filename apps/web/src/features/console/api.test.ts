@@ -233,7 +233,9 @@ it('retains authenticated HTTP voice management and actionable HTTP errors', asy
   http.mockResolvedValueOnce(
     new Response(JSON.stringify({ error: '音色不可用' }), { status: 503 }),
   );
-  await expect(voiceApi.listVoiceServices(signal)).rejects.toThrow('音色不可用');
+  await expect(voiceApi.listVoiceServices(signal)).rejects.toThrow(
+    '音色不可用',
+  );
 });
 
 it('uses the TTS domain for service CRUD and binary preview', async () => {
@@ -268,21 +270,31 @@ it('uses the TTS domain for service CRUD and binary preview', async () => {
     'https://world.example/voice/tts/services/custom%2Fvoice',
     expect.objectContaining({ method: 'DELETE' }),
   );
+  // Preview requests carry the draft; the service id only reuses its stored key.
   http.mockResolvedValueOnce(
     new Response('wav', { headers: { 'Content-Type': 'audio/wav' } }),
   );
   expect(
-    await (await voiceApi.previewVoice('custom/voice', 'hello', signal)).text(),
+    await (
+      await voiceApi.previewVoice(
+        { serviceId: 'custom/voice', draft, text: 'hello' },
+        signal,
+      )
+    ).text(),
   ).toBe('wav');
   expect(http).toHaveBeenLastCalledWith(
-    'https://world.example/voice/tts/services/custom%2Fvoice/preview',
+    'https://world.example/voice/tts/preview',
     expect.objectContaining({
       method: 'POST',
       signal: expect.any(AbortSignal),
       headers: expect.objectContaining({
         Authorization: 'Bearer fixture-token',
       }),
-      body: '{"text":"hello"}',
+      body: JSON.stringify({
+        serviceId: 'custom/voice',
+        draft,
+        text: 'hello',
+      }),
     }),
   );
 });

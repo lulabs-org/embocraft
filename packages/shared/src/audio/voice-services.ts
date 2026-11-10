@@ -29,6 +29,11 @@ export const PIPER_MODELS = [
 export const DEFAULT_PIPER_MODEL = PIPER_MODELS[0].id;
 /** Xiaomi MiMo speaks the chat-completions contract; preset voices use this model. */
 export const MIMO_TTS_MODEL = 'mimo-v2.5-tts';
+/**
+ * Official preset catalog for MIMO_TTS_MODEL. IDs are sent verbatim as
+ * `audio.voice`; Chinese voices are identified by the Chinese name itself
+ * (e.g. 冰糖), which is intentional, not a typo.
+ */
 export const MIMO_TTS_VOICES = [
   { id: 'mimo_default', name: 'MiMo 默认' },
   { id: '冰糖', name: '中文女声 · 冰糖' },

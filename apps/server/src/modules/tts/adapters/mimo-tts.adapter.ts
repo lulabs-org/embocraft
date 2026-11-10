@@ -18,6 +18,8 @@ export class MimoTts implements SpeechSynthesizer {
   async synthesize(text: string, signal: AbortSignal) {
     signal.throwIfAborted();
     const c = this.config;
+    // MiMo has no numeric speed parameter: a non-default speed travels as a
+    // natural-language hint in the leading user message.
     const response = await this.request(`${c.baseUrl}/chat/completions`, {
       method: 'POST',
       signal,
@@ -52,9 +54,11 @@ export class MimoTts implements SpeechSynthesizer {
         stream: false,
       }),
     });
+    // The envelope carries base64 audio, so cap the JSON before decoding it.
     const body = await boundedBody(response, 10 * 1024 * 1024);
     let data: unknown;
     try {
+      // Only a chat completion that actually spoke exposes inline audio here.
       data = JSON.parse(body.toString('utf8'))?.choices?.[0]?.message?.audio
         ?.data;
     } catch {
@@ -71,6 +75,8 @@ export class MimoTts implements SpeechSynthesizer {
     const bytes = Buffer.from(data, 'base64');
     if (!bytes.length)
       throw new AppError('小米 MiMo 返回了空的音频数据。', 502);
+    // MiMo may emit other sample rates; normalize to the 16 kHz mono PCM WAV
+    // that world audio playback and storage expect.
     return normalizeSpeech(bytes, signal);
   }
 }

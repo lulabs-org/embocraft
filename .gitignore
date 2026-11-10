@@ -5,6 +5,7 @@ dist/
 .env.*
 !.env.example
 .data/
+# Local speech models are large binaries; only the placeholder is tracked.
 models/*
 !models/.gitkeep
 artifacts/

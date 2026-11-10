@@ -6,6 +6,7 @@ import { CompatibleTts } from './compatible-tts.adapter';
 import { MimoTts } from './mimo-tts.adapter';
 import { PiperTts } from './speaches-tts.adapter';
 
+/** Map a saved service type to its synthesizer; browser speech never reaches the server. */
 export function createSpeechAdapter(value: SavedVoice): SpeechSynthesizer {
   switch (value.type) {
     case 'speaches':

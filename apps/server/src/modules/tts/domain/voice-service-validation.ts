@@ -55,6 +55,8 @@ export function validateVoiceService(
     type === 'browser' ? str('voiceLanguage', 40) : undefined;
   if (voiceLanguage && !/^[a-zA-Z0-9-]+$/.test(voiceLanguage))
     throw new AppError('音色语言格式无效。');
+  // MiMo preset voices are Chinese names (e.g. 冰糖), so any Unicode letter is allowed;
+  // Speaches keeps its own ID format and is skipped below.
   const voicePattern = /^[\p{L}\p{N}_. ()-]+$/u;
   if (
     type !== 'browser' &&

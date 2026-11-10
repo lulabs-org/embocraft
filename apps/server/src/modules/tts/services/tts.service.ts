@@ -3,6 +3,8 @@ import type {
   SpeechModelQuery,
   VoiceServicePersistence,
 } from '../ports';
+import { AppError } from '../../../core/errors/app-error';
+import { validateVoiceService } from '../domain/voice-service-validation';
 import { SpeechModelsService } from './speech-models.service';
 import { SpeechService } from './speech.service';
 import type { ResolvedSpeech, SpeechSynthesizer } from './speech-synthesizer';
@@ -73,5 +75,34 @@ export class TtsService {
 
   synthesize(id: string, text: string, signal: AbortSignal) {
     return this.speech.synthesize(id, text, signal);
+  }
+
+  /**
+   * Synthesize an unsaved draft. When a saved service is referenced, its key
+   * fills in a blank draft key for the same type and endpoint only, so the
+   * browser never receives the stored secret. Nothing is persisted.
+   */
+  async preview(value: unknown, signal: AbortSignal) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      throw new AppError('试听配置无效。');
+    const input = value as Record<string, unknown>;
+    const draft = input.draft;
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft))
+      throw new AppError('试听配置无效。');
+    if (input.serviceId !== undefined && typeof input.serviceId !== 'string')
+      throw new AppError('语音服务 ID 无效。');
+    const text = input.text;
+    if (typeof text !== 'string') throw new AppError('试听文字需为 1–240 字。');
+    const previous =
+      input.serviceId === undefined
+        ? undefined
+        : await this.management.get(input.serviceId);
+    const fields = draft as Record<string, unknown>;
+    // A brand-new draft may not be named yet; previewing must not require one.
+    const entry = validateVoiceService(
+      { ...fields, name: fields.name || 'Preview' },
+      previous,
+    );
+    return this.speech.preview(entry, text, signal);
   }
 }
