@@ -258,16 +258,7 @@ export function BailianAsrConfig({
         <p className="agent-hint">{t('console.asr.browserHint')}</p>
       ) : draft.provider === 'whisper' ? (
         <p className="agent-hint">{t('console.asr.whisperHint')}</p>
-      ) : draft.provider === 'openai' || draft.provider === 'gemini' ? null : (
-        <a
-          className="console-help-link"
-          href="https://help.aliyun.com/zh/model-studio/real-time-speech-recognition-user-guide"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {t('console.asr.aliyunDocs')}
-        </a>
-      )}
+      ) : null}
       {children}
       <fieldset disabled={busy || disabled}>
         <div className="voice-service-actions console-form-actions">

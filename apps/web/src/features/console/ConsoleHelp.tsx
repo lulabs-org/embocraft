@@ -46,9 +46,7 @@ export function ConsoleHelp() {
         <h4>{t('console.help.charactersTitle')}</h4>
         <p>{t('console.help.charactersDesc')}</p>
         <h4>{t('console.help.plansTitle')}</h4>
-        <p>{t('console.help.plansDesc1')}</p>
-        <p>{t('console.help.plansDesc2')}</p>
-        <p>{t('console.help.plansDesc3')}</p>
+        <p>{t('console.help.plansDesc')}</p>
         <h4>{t('console.help.providersTitle')}</h4>
         <p>{t('console.help.providersDesc')}</p>
         <h4>{t('console.help.ttsTitle')}</h4>

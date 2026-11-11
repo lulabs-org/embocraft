@@ -10,20 +10,6 @@
   font-weight: 500;
   color: var(--agents-muted);
 }
-.agents-progress {
-  border: 1px solid #e6ebdf;
-  background: #f5f7ef;
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin: 0 0 17px;
-}
-.agents-progress p {
-  font-size: 12px;
-  line-height: 1.85;
-  margin: 7px 0 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .agents-current-task,
 .agents-task-queue,
 .agents-task-empty {
