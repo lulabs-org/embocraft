@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { getDatabaseClient } from '../../../core/database/client';
 import { createTestServer } from '../../../../test/helpers/test-server';
 
 const origin = 'http://world.test';
@@ -37,7 +38,14 @@ it('returns consistent committed summaries for character detail, list and writes
     expect(second).not.toHaveProperty('lastLog');
     expect(second).not.toHaveProperty('lastLogAt');
 
+    expect(server.characters.jobs.size).toBe(0);
+    await server.characters.join(second.id);
+    await server.characters.settled(second.id);
     const job = server.characters.jobs.get(second.id)!;
+    await getDatabaseClient().agentCharacterLog.deleteMany({
+      where: { characterId: second.id },
+    });
+    job.view.logEntries = [];
     job.view.logEntries.push(
       { text: 'Older', time: 123 },
       { text: 'Latest legacy entry', time: null },

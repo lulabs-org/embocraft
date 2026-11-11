@@ -3,12 +3,7 @@ import { aiCharacterPermissions, type AICharacterView } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { boolean, object, text } from '../../../core/http/validation';
 import type { ProviderRuntimePort } from '../../providers';
-import {
-  markJoined,
-  modelChanged,
-  pauseTaskForHost,
-  type PlanService,
-} from '../../tasks';
+import { markJoined, modelChanged, pauseTaskForHost } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
 import {
   aiCharacterProfileInput,
@@ -19,11 +14,13 @@ import type { CharacterVoiceCoordinator } from '../integrations/voice-coordinato
 import type { CharacterExecutionService } from '../runtime/character-execution';
 import {
   active,
-  createCharacterJob,
   isJobBusy,
   resident,
   type AICharacterRegistry,
+  type Job,
 } from '../runtime/character-registry';
+import type { CharacterRecord } from '../persistence/character-record';
+import type { CharacterChanges } from '../../../persistence/management-archive';
 import type { AICharacterWakeScheduler } from '../runtime/wake-scheduler';
 
 type ManagementContext = {
@@ -33,11 +30,12 @@ type ManagementContext = {
   scheduler: AICharacterWakeScheduler;
   execution: CharacterExecutionService;
   closing: () => boolean;
-  plans: () => PlanService;
-  list: () => AICharacterView[];
-  save: () => Promise<void>;
-  persist: () => Promise<void>;
-  flush: () => Promise<void>;
+  findJob: (id: string) => Job | undefined;
+  result: (id: string) => Promise<AICharacterView>;
+  read: (id: string) => Promise<CharacterRecord>;
+  insert: (record: CharacterRecord) => Promise<void>;
+  join: (id: string) => Promise<AICharacterView>;
+  save: (changes?: CharacterChanges) => Promise<void>;
   detachAgent: (id: string, name: string) => () => void;
 };
 
@@ -63,33 +61,22 @@ export class CharacterManagementService {
         '最多同时在线 4 个受管理的 Agent（含待命），请先关闭一个。',
         409,
       );
-    if (this.context.jobs.size >= 50)
-      throw new AppError(
-        '最多保存 50 个 Agent；为保留任务历史，不能自动删除旧角色。',
-        409,
-      );
-    const job = createCharacterJob({
-      view: {
-        ...settings,
-        id: randomUUID(),
-        providerName: provider.name,
-        status: joinWorld ? 'joining' : 'stopped',
-        createdAt: Date.now(),
-        logEntries: [],
-      },
-      abort: new AbortController(),
-      ledger: this.context.plans(),
-    });
-    this.context.jobs.set(job.view.id, job);
-    if (joinWorld)
-      job.done = this.context.execution.execute(job, provider, false);
-    void this.context.persist();
-    return this.context.list().find((v) => v.id === job.view.id)!;
+    const record: CharacterRecord = {
+      ...settings,
+      id: randomUUID(),
+      status: 'stopped',
+      createdAt: Date.now(),
+      logEntries: [],
+    };
+    await this.context.insert(record);
+    return joinWorld
+      ? this.context.join(record.id)
+      : this.context.result(record.id);
   }
 
-  async join(id: string) {
+  async join(id: string, restoring = false) {
     if (this.context.closing()) throw new AppError('世界服务正在关闭。', 503);
-    const job = this.context.jobs.get(id);
+    const job = this.context.findJob(id);
     if (!job) throw new AppError('Agent 不存在。', 404);
     if (resident(job) || isJobBusy(job))
       throw new AppError('角色已在线或正在更新，请稍候。', 409);
@@ -101,6 +88,7 @@ export class CharacterManagementService {
     const previousStatus = job.view.status;
     job.updating = true;
     job.view.status = 'joining';
+    this.context.jobs.set(id, job);
     job.abort = new AbortController();
     try {
       const provider = await this.context.providers.getRuntime(
@@ -108,7 +96,7 @@ export class CharacterManagementService {
       );
       if (
         this.context.closing() ||
-        this.context.jobs.get(id) !== job ||
+        this.context.findJob(id) !== job ||
         job.abort.signal.aborted ||
         job.view.status !== 'joining'
       )
@@ -117,7 +105,7 @@ export class CharacterManagementService {
       await this.context.voice.checkVoice(settings);
       if (
         this.context.closing() ||
-        this.context.jobs.get(id) !== job ||
+        this.context.findJob(id) !== job ||
         job.abort.signal.aborted ||
         job.view.status !== 'joining'
       )
@@ -128,15 +116,15 @@ export class CharacterManagementService {
           409,
         );
       this.context.scheduler.cancel(job.view.id);
-      markJoined(executionState(job));
+      if (!restoring) markJoined(executionState(job));
       Object.assign(job.view, settings, {
         providerName: provider.name,
         status: 'joining',
       });
       job.runtime.clearMessages();
+      await this.context.save({ profiles: { [id]: settings } });
       job.done = this.context.execution.execute(job, provider, false);
-      void this.context.persist();
-      return this.context.list().find((v) => v.id === id)!;
+      return this.context.result(id);
     } catch (error) {
       if (job.view.status === 'joining') job.view.status = previousStatus;
       throw error;
@@ -147,37 +135,38 @@ export class CharacterManagementService {
 
   async update(id: string, value: unknown) {
     if (this.context.closing()) throw new AppError('世界服务正在关闭。', 503);
-    const job = this.context.jobs.get(id);
+    const job = this.context.findJob(id);
     if (!job) throw new AppError('Agent 不存在。', 404);
     const input = aiCharacterProfileInput(value);
     if (active(job.view.status) || isJobBusy(job))
       throw new AppError('请等待 Agent 待命，或关闭后再修改参数。', 409);
     job.updating = true;
     try {
+      const stored = await this.context.read(id);
       const provider = await this.context.providers.getRuntime(
-        text(input.providerId, '模型服务', 80, job.view.providerId),
+        text(input.providerId, '模型服务', 80, stored.providerId),
       );
       if (
         this.context.closing() ||
-        this.context.jobs.get(id) !== job ||
+        this.context.findJob(id) !== job ||
         active(job.view.status)
       )
         throw new AppError('角色状态已变化，请刷新后重试。', 409);
       const settings = validateAICharacter(
         {
-          ...job.view,
+          ...stored,
           ...input,
           permissions:
             input.permissions !== undefined
               ? input.permissions
-              : job.view.permissions,
+              : stored.permissions,
         },
         provider,
       );
       await this.context.voice.checkVoice(settings);
       if (
         this.context.closing() ||
-        this.context.jobs.get(id) !== job ||
+        this.context.findJob(id) !== job ||
         active(job.view.status)
       )
         throw new AppError('角色状态已变化，请刷新后重试。', 409);
@@ -202,7 +191,7 @@ export class CharacterManagementService {
       await this.context.voice.bindVoice(job, settings);
       if (
         this.context.closing() ||
-        this.context.jobs.get(id) !== job ||
+        this.context.findJob(id) !== job ||
         job.session !== session ||
         active(job.view.status)
       )
@@ -231,8 +220,8 @@ export class CharacterManagementService {
         );
       }
       Object.assign(job.view, settings, { providerName: provider.name });
-      await this.context.save();
-      return this.context.list().find((v) => v.id === job.view.id)!;
+      await this.context.save({ profiles: { [id]: settings } });
+      return this.context.result(id);
     } finally {
       job.updating = false;
       this.context.execution.schedule(job);
@@ -240,7 +229,7 @@ export class CharacterManagementService {
   }
 
   async setVoice(id: string, value: unknown) {
-    const job = this.context.jobs.get(id);
+    const job = this.context.findJob(id);
     if (!job) throw new AppError('Agent 不存在。', 404);
     if (
       this.context.closing() ||
@@ -257,7 +246,7 @@ export class CharacterManagementService {
         ...job.view,
         voiceReplies: enabled,
       });
-      if (this.context.closing() || this.context.jobs.get(id) !== job)
+      if (this.context.closing() || this.context.findJob(id) !== job)
         throw new AppError('角色状态已变化，请刷新后重试。', 409);
       const session = job.session;
       if (session?.room) {
@@ -274,14 +263,16 @@ export class CharacterManagementService {
       });
       if (
         this.context.closing() ||
-        this.context.jobs.get(id) !== job ||
+        this.context.findJob(id) !== job ||
         job.session !== session ||
         ['joining', 'stopping'].includes(job.view.status)
       )
         throw new AppError('角色状态已变化，请刷新后重试。', 409);
       job.view.voiceReplies = enabled;
-      await this.context.save();
-      return this.context.list().find((v) => v.id === job.view.id)!;
+      await this.context.save({
+        profiles: { [id]: { voiceReplies: enabled } },
+      });
+      return this.context.result(id);
     } finally {
       job.updating = false;
       this.context.execution.schedule(job);
@@ -289,7 +280,7 @@ export class CharacterManagementService {
   }
 
   async remove(id: string) {
-    const job = this.context.jobs.get(id);
+    const job = this.context.findJob(id);
     if (!job) throw new AppError('Agent 不存在。', 404);
     if (this.context.closing() || isJobBusy(job))
       throw new AppError('Agent 状态正在更新，请稍候。', 409);
@@ -298,15 +289,11 @@ export class CharacterManagementService {
       this.context.execution.stop(id);
       await job.done;
       const restoreTasks = this.context.detachAgent(id, job.view.name);
-      this.context.jobs.delete(id);
-      void this.context.persist();
       try {
-        await this.context.flush();
+        await this.context.save({ remove: [id] });
+        this.context.jobs.delete(id);
       } catch (error) {
         restoreTasks();
-        this.context.jobs.set(id, job);
-        void this.context.persist();
-        await this.context.flush().catch(() => {});
         throw error;
       }
     } finally {

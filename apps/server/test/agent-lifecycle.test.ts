@@ -143,8 +143,26 @@ async function createWithTask(
       taskTimeoutMs: value.taskTimeoutMs ?? 900000,
     },
   });
-  return m.list().find((agent) => agent.id === created.id)!;
+  return (await m.list()).find((agent) => agent.id === created.id)!;
 }
+it('does not partially save recovery when a later offline character is invalid', async () => {
+  const m = setup(fakeSession());
+  await m.create({ providerId: 'deepseek', name: 'First', joinWorld: false });
+  await m.close();
+  const saved = JSON.parse(store.archive.json!);
+  saved.characters.push({
+    ...saved.characters[0],
+    id: 'invalid-second',
+    providerId: 'missing-provider',
+  });
+  store.archive.json = JSON.stringify(saved);
+  const before = store.archive.json;
+  const restored = setup(fakeSession());
+  await expect(restored.load()).rejects.toThrow();
+  expect(restored.jobs.size).toBe(0);
+  await restored.close();
+  expect(store.archive.json).toBe(before);
+});
 const settings = {
   voiceServiceId: 'local-default',
   providerId: 'deepseek',
@@ -157,9 +175,9 @@ it('saves task heartbeat independently without resetting or resuming progress', 
   ]);
   const m = setup(fakeSession(), decide);
   const created = await createWithTask(m, { ...settings, maxTurns: 30 });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await controlRun(m, created.id, 'pause');
-  const before = m.list()[0];
+  const before = (await m.list())[0];
   const schedule = {
     intervalMode: 'random',
     intervalMs: 3000,
@@ -174,14 +192,14 @@ it('saves task heartbeat independently without resetting or resuming progress', 
   await expect(m.update(created.id, { intervalMinMs: 10000 })).rejects.toThrow(
     '下限',
   );
-  expect(m.list()[0]).toMatchObject(schedule);
+  expect((await m.list())[0]).toMatchObject(schedule);
   // A subsequent role-only save must retain the independently saved heartbeat.
   await m.update(created.id, { roleDescription: '负责营地建造' });
-  expect(m.list()[0]).toMatchObject(schedule);
+  expect((await m.list())[0]).toMatchObject(schedule);
   await m.close();
   const restored = setup(fakeSession(), decide);
   await restored.load();
-  expect(restored.list()[0]).toMatchObject({
+  expect((await restored.list())[0]).toMatchObject({
     ...schedule,
     task: JSON.parse(JSON.stringify(before.task)),
     usage: before.usage,
@@ -193,7 +211,7 @@ it('protects a new voice binding while an Agent update is waiting for the world'
   const session = fakeSession();
   const m = setup(session);
   const job = await createWithTask(m, { ...settings, voiceReplies: true });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   let release!: () => void;
   session.request.mockImplementationOnce(async () => {
     await new Promise<void>((resolve) => {
@@ -209,7 +227,7 @@ it('protects a new voice binding while an Agent update is waiting for the world'
   await vi.waitFor(() => expect(release).toBeTypeOf('function'));
   release();
   await updating;
-  expect(m.list()[0].voiceServiceId).toBe(next.id);
+  expect((await m.list())[0].voiceServiceId).toBe(next.id);
   await expect(ttsService.remove(next.id)).rejects.toThrow();
   await m.update(job.id, { voiceServiceId: '', voiceReplies: false });
   await ttsService.remove(next.id);
@@ -217,19 +235,16 @@ it('protects a new voice binding while an Agent update is waiting for the world'
 it('restores a missing voice service as text-only without model calls', async () => {
   const m = setup(fakeSession());
   await createWithTask(m, { ...settings, voiceReplies: true });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await m.close();
   await ttsService.remove('local-default');
   const decide = vi.fn();
   const restored = setup(fakeSession(), decide);
   await restored.load();
-  expect(restored.list()[0].voiceReplies).toBe(false);
-  expect(restored.list()[0].voiceServiceId).toBe('');
+  expect((await restored.list())[0].voiceReplies).toBe(false);
+  expect((await restored.list())[0].voiceServiceId).toBe('');
   expect(
-    restored
-      .list()[0]
-      .logEntries.map((entry) => entry.text)
-      .join('\n'),
+    (await restored.list())[0].logEntries.map((entry) => entry.text).join('\n'),
   ).toContain('原语音服务不可用');
   expect(decide).not.toHaveBeenCalled();
 });
@@ -267,7 +282,7 @@ it('toggles voice during inference without restarting the agent or making anothe
   expect(s.close).not.toHaveBeenCalled();
   expect(decide).toHaveBeenCalledTimes(1);
   release();
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
 });
 it('updates saved settings without inference, protects identity, validates inputs and persists', async () => {
   const s = fakeSession(),
@@ -278,7 +293,7 @@ it('updates saved settings without inference, protects identity, validates input
     );
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await expect(
     m.update(job.id, {
       intervalMode: 'random',
@@ -312,7 +327,7 @@ it('updates saved settings without inference, protects identity, validates input
   await m.close();
   const restored = setup(s, decide);
   await restored.load();
-  expect(restored.list()[0]).toMatchObject({
+  expect((await restored.list())[0]).toMatchObject({
     id: job.id,
     maxTurns: 50,
     intervalMinMs: 4000,
@@ -327,12 +342,16 @@ it('task errors leave a joined character online until explicitly closed', async 
       .mockRejectedValue(new AgentRuntimeError('fixture failure', true));
   const m = setup(s, decide),
     job = await createWithTask(m, { ...settings, maxTurns: 30 });
-  await vi.waitFor(() => expect(m.list()[0]?.task?.status).toBe('blocked'));
-  expect(m.list()[0]?.status).toBe('idle');
+  await vi.waitFor(async () =>
+    expect((await m.list())[0]?.task?.status).toBe('blocked'),
+  );
+  expect((await m.list())[0]?.status).toBe('idle');
   expect(s.close).not.toHaveBeenCalled();
-  expect(m.list()[0]?.sessionId).toBe('player-1');
-  m.stop(job.id);
-  await vi.waitFor(() => expect(m.list()[0]?.status).toBe('stopped'));
+  expect((await m.list())[0]?.sessionId).toBe('player-1');
+  await m.stop(job.id);
+  await vi.waitFor(async () =>
+    expect((await m.list())[0]?.status).toBe('stopped'),
+  );
   expect(s.close).toHaveBeenCalled();
 });
 it('closing while join is pending cannot leave an orphan player or start inference', async () => {
@@ -346,10 +365,13 @@ it('closing while join is pending cannot leave an orphan player or start inferen
   const m = setup(s, decide),
     job = await m.create(settings);
   await vi.waitFor(() => expect(s.join).toHaveBeenCalled());
-  m.stop(job.id);
+  const stopping = m.stop(job.id);
   resolve();
-  await vi.waitFor(() => expect(m.list()[0]?.status).toBe('stopped'));
-  expect(m.list()[0]?.sessionId).toBeUndefined();
+  await stopping;
+  await vi.waitFor(async () =>
+    expect((await m.list())[0]?.status).toBe('stopped'),
+  );
+  expect((await m.list())[0]?.sessionId).toBeUndefined();
   expect(decide).not.toHaveBeenCalled();
   expect(s.close.mock.calls.length).toBeGreaterThanOrEqual(2);
 });
@@ -361,10 +383,12 @@ it('stops a pending join while the provider is being queried', async () => {
   manager = new AICharacterManager(
     {
       getRuntime: async (id) => {
-        if (waitForProvider)
+        if (waitForProvider) {
+          waitForProvider = false;
           await new Promise<void>((resolve) => {
             release = resolve;
           });
+        }
         return store.getRuntime(id);
       },
     },
@@ -380,32 +404,70 @@ it('stops a pending join while the provider is being queried', async () => {
   waitForProvider = true;
   const joining = m.join(created.id);
   await vi.waitFor(() => expect(release).toBeTypeOf('function'));
-  expect(m.list()[0].status).toBe('joining');
-  m.stop(created.id);
+  expect((await m.list())[0].status).toBe('stopped');
+  await m.stop(created.id);
   release();
   await expect(joining).rejects.toMatchObject({ status: 409 });
   await m.settled(created.id);
-  expect(m.list()[0].status).toBe('stopped');
+  expect((await m.list())[0].status).toBe('stopped');
   expect(session.join).not.toHaveBeenCalled();
 });
 it('unexpected disconnect releases identity and allows rejoining the same saved agent', async () => {
   const s = fakeSession(),
     m = setup(s),
     job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0]?.status).toBe('idle'));
+  await vi.waitFor(async () =>
+    expect((await m.list())[0]?.status).toBe('idle'),
+  );
   await s.close();
-  expect(m.list()[0]?.status).toBe('failed');
-  expect(m.list()[0]?.sessionId).toBeUndefined();
+  await vi.waitFor(async () =>
+    expect((await m.list())[0]?.status).toBe('failed'),
+  );
+  expect((await m.list())[0]?.sessionId).toBeUndefined();
   await m.join(job.id);
   await m.settled(job.id);
   await startTask(m, job.id, { goal: 'New goal' });
-  await vi.waitFor(() => expect(m.list()[0]?.status).toBe('idle'));
-  expect(m.list()[0]).toMatchObject({
+  await vi.waitFor(async () =>
+    expect((await m.list())[0]?.status).toBe('idle'),
+  );
+  expect((await m.list())[0]).toMatchObject({
     id: job.id,
     sessionId: 'player-1',
   });
-  expect(m.list()[0].task?.goal).toBe('New goal');
+  expect((await m.list())[0].task?.goal).toBe('New goal');
   expect(s.join).toHaveBeenCalledTimes(2);
+});
+
+it('releases a disconnected instance even when its final checkpoint fails, without bypassing failure protection', async () => {
+  const session = fakeSession();
+  const m = setup(session);
+  const role = await m.create(settings);
+  await m.settled(role.id);
+  store.archive.saveError = new Error('fixture storage failure');
+  try {
+    await session.close();
+    await vi.waitFor(() => expect(m.jobs.has(role.id)).toBe(false));
+    await expect(m.join(role.id)).rejects.toMatchObject({ status: 503 });
+    expect((await m.list())[0].status).toBe('idle');
+  } finally {
+    store.archive.saveError = undefined;
+  }
+});
+
+it('persists an explicit stop after disconnection so restart does not rejoin the offline character', async () => {
+  const session = fakeSession();
+  const m = setup(session);
+  const role = await m.create(settings);
+  await m.settled(role.id);
+  await session.close();
+  await vi.waitFor(() => expect(m.jobs.size).toBe(0));
+  expect((await m.stop(role.id)).status).toBe('stopped');
+  await m.close();
+  session.join.mockClear();
+  const restored = setup(session);
+  await restored.load();
+  expect(restored.jobs.size).toBe(0);
+  expect(session.join).not.toHaveBeenCalled();
 });
 
 it('human mentions wake an idle agent once and queue during inference without concurrent calls', async () => {
@@ -416,7 +478,7 @@ it('human mentions wake an idle agent once and queue during inference without co
   ]);
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   const mention = (seq: number, actorKind = 'human'): WorldEvent => ({
     seq,
     actorKind,
@@ -445,12 +507,14 @@ it('human mentions wake an idle agent once and queue during inference without co
   s.onEvent!(mention(3));
   expect(decide).toHaveBeenCalledTimes(2);
   release();
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   expect(decide).toHaveBeenCalledTimes(3);
   expect(s.join).toHaveBeenCalledTimes(1);
   expect(s.close).not.toHaveBeenCalled();
-  m.stop(job.id);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('stopped'));
+  await m.stop(job.id);
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].status).toBe('stopped'),
+  );
   s.onEvent!(mention(4));
   expect(decide).toHaveBeenCalledTimes(3);
 });
@@ -469,27 +533,27 @@ it('pause, resume and cancel keep identity and retain task progress across resta
       maxTurns: 30,
       intervalMs: 60000,
     });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await controlRun(m, job.id, 'pause');
-  expect(m.list()[0]).toMatchObject({
+  expect((await m.list())[0]).toMatchObject({
     sessionId: 'player-1',
     task: { status: 'paused', summary: '地基已规划', calls: 1 },
     usage: { calls: 1 },
   });
   await controlRun(m, job.id, 'resume');
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await controlRun(m, job.id, 'pause');
   await m.close();
   const restored = setup(s, decide);
   await restored.load();
   expect(decide).toHaveBeenCalledTimes(2);
-  expect(restored.list()[0]).toMatchObject({
+  expect((await restored.list())[0]).toMatchObject({
     task: { status: 'paused', summary: '地基已规划', calls: 2 },
     usage: { calls: 2 },
   });
   await controlRun(restored, job.id, 'cancel');
-  expect(restored.list()[0]).toMatchObject({
+  expect((await restored.list())[0]).toMatchObject({
     sessionId: 'player-1',
     task: { status: 'cancelled' },
   });
@@ -523,7 +587,7 @@ it('pausing pending inference drops late edits and does not close the character'
     false,
   );
   expect(s.close).not.toHaveBeenCalled();
-  expect(m.list()[0].task?.status).toBe('paused');
+  expect((await m.list())[0].task?.status).toBe('paused');
 });
 
 it('expired private task audiences cannot be resumed after server restart', async () => {
@@ -535,7 +599,7 @@ it('expired private task audiences cannot be resumed after server restart', asyn
     );
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   decide.mockResolvedValueOnce([
     { name: 'start_task', arguments: { goal: 'private goal' } },
     { name: 'wait_for', arguments: { condition: 'world', reason: 'waiting' } },
@@ -554,14 +618,14 @@ it('expired private task audiences cannot be resumed after server restart', asyn
       name: 'Person',
     },
   });
-  await vi.waitFor(() =>
-    expect(m.list()[0].task?.privateTo).toBe('private-person'),
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].task?.privateTo).toBe('private-person'),
   );
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await m.close();
   const restored = setup(s, decide);
   await restored.load();
-  expect(restored.list()[0].task?.status).toBe('needs_input');
+  expect((await restored.list())[0].task?.status).toBe('needs_input');
   await expect(controlRun(restored, job.id, 'resume')).rejects.toThrow(
     '私聊会话已失效',
   );
@@ -575,7 +639,7 @@ it('keeps the current chat-assigned goal consistent through editing, persistence
   ]);
   const m = setup(s, decide),
     job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   decide.mockResolvedValueOnce([
     { name: 'start_task', arguments: { goal: 'Build a new house' } },
     { name: 'complete_task', arguments: { summary: 'House verified' } },
@@ -594,11 +658,11 @@ it('keeps the current chat-assigned goal consistent through editing, persistence
       name: 'Person',
     },
   });
-  await vi.waitFor(() =>
-    expect(m.list()[0].task?.goal).toBe('Build a new house'),
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].task?.goal).toBe('Build a new house'),
   );
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  const before = m.list()[0];
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  const before = (await m.list())[0];
   expect(before.task?.goal).toBe('Build a new house');
   const updated = await m.update(job.id, {
     maxTokens: 1024,
@@ -609,18 +673,22 @@ it('keeps the current chat-assigned goal consistent through editing, persistence
   await m.close();
   const restored = setup(s, decide);
   await restored.load();
-  expect(restored.list()[0].task?.goal).toBe('Build a new house');
-  await startTask(restored, job.id, { goal: restored.list()[0].task!.goal });
+  expect((await restored.list())[0].task?.goal).toBe('Build a new house');
+  await startTask(restored, job.id, {
+    goal: (await restored.list())[0].task!.goal,
+  });
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(3));
   expect(decide.mock.calls[2][1]).toMatchObject({
     task: { goal: 'Build a new house' },
   });
-  await vi.waitFor(() => expect(restored.list()[0].status).toBe('idle'));
-  const preserved = restored.list()[0];
+  await vi.waitFor(async () =>
+    expect((await restored.list())[0].status).toBe('idle'),
+  );
+  const preserved = (await restored.list())[0];
   await expect(
     restored.update(job.id, { goal: 'Plant a garden' }),
   ).rejects.toThrow('Tasks');
-  expect(restored.list()[0]).toEqual(preserved);
+  expect((await restored.list())[0]).toEqual(preserved);
 });
 
 it('an online agent with a failed task still accepts a new human mention without automatic retries', async () => {
@@ -630,8 +698,10 @@ it('an online agent with a failed task still accepts a new human mention without
     .mockRejectedValueOnce(new AgentRuntimeError('fixture failure', true));
   const m = setup(s, decide),
     job = await createWithTask(m, { ...settings, maxTurns: 30 });
-  await vi.waitFor(() => expect(m.list()[0].task?.status).toBe('blocked'));
-  expect(m.list()[0].status).toBe('idle');
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].task?.status).toBe('blocked'),
+  );
+  expect((await m.list())[0].status).toBe('idle');
   expect(decide).toHaveBeenCalledTimes(1);
   decide.mockResolvedValueOnce([
     { name: 'reply', arguments: { text: '我还在，任务已暂停。' } },
@@ -651,8 +721,8 @@ it('an online agent with a failed task still accepts a new human mention without
     },
   });
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  expect(m.list()[0]).toMatchObject({
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  expect((await m.list())[0]).toMatchObject({
     id: job.id,
     sessionId: 'player-1',
     task: { status: 'blocked', calls: 1 },
@@ -673,14 +743,14 @@ it('creates and restores a standby character with no task or automatic model cal
     ...settings,
     roleDescription: '你是一名建筑师，负责建造房屋。',
   });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  expect(m.list()[0]).toMatchObject({
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  expect((await m.list())[0]).toMatchObject({
     id: created.id,
     sessionId: 'player-1',
     roleDescription: '你是一名建筑师，负责建造房屋。',
     permissions: { move: true, chat: true, place: false, remove: false },
   });
-  expect(m.list()[0].task).toBeUndefined();
+  expect((await m.list())[0].task).toBeUndefined();
   expect(decide).not.toHaveBeenCalled();
   expect(m.currentRunId(created.id)).toBeUndefined();
   await expect(m.join(created.id)).rejects.toThrow('已在线');
@@ -690,21 +760,21 @@ it('creates and restores a standby character with no task or automatic model cal
     permissions: { move: true, chat: true, place: true, remove: true },
     roleDescription: '你是一名建筑师，施工前先确认玩家需求。',
   });
-  expect(m.list()[0].task).toBeUndefined();
+  expect((await m.list())[0].task).toBeUndefined();
   await m.close();
   const restored = setup(fakeSession(), decide);
   await restored.load();
-  expect(restored.list()[0]).toMatchObject({
+  expect((await restored.list())[0]).toMatchObject({
     id: created.id,
     name: 'Renamed standby',
     status: 'idle',
     roleDescription: '你是一名建筑师，施工前先确认玩家需求。',
   });
-  expect(restored.list()[0].task).toBeUndefined();
+  expect((await restored.list())[0].task).toBeUndefined();
   expect(decide).not.toHaveBeenCalled();
   await restored.update(created.id, { roleDescription: '' });
-  expect(restored.list()[0].roleDescription).toBe('');
-  expect(restored.list()[0].task).toBeUndefined();
+  expect((await restored.list())[0].roleDescription).toBe('');
+  expect((await restored.list())[0].task).toBeUndefined();
 });
 
 it('keeps task progress and usage when only the role description changes', async () => {
@@ -720,15 +790,15 @@ it('keeps task progress and usage when only the role description changes', async
     maxTurns: 30,
     intervalMs: 60000,
   });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await controlRun(m, created.id, 'pause');
-  const task = structuredClone(m.list()[0].task);
-  const usage = structuredClone(m.list()[0].usage);
+  const task = structuredClone((await m.list())[0].task);
+  const usage = structuredClone((await m.list())[0].usage);
   await m.update(created.id, {
     roleDescription: '你是一名建筑师，先检查已有施工进度。',
   });
-  expect(m.list()[0].task).toEqual(task);
-  expect(m.list()[0].usage).toEqual(usage);
+  expect((await m.list())[0].task).toEqual(task);
+  expect((await m.list())[0].usage).toEqual(usage);
   expect(decide).toHaveBeenCalledTimes(1);
 });
 
@@ -746,31 +816,33 @@ it('joining a stopped character preserves the task without executing or resettin
     maxTurns: 30,
     intervalMs: 60000,
   });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  m.stop(created.id);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('stopped'));
-  expect(m.list()[0].task).toMatchObject({
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  await m.stop(created.id);
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].status).toBe('stopped'),
+  );
+  expect((await m.list())[0].task).toMatchObject({
     status: 'paused',
     summary: 'Half done',
     calls: 1,
   });
   await m.join(created.id);
   await expect(m.join(created.id)).rejects.toThrow('已在线');
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   expect(decide).toHaveBeenCalledTimes(1);
-  expect(m.list()[0].task).toMatchObject({
+  expect((await m.list())[0].task).toMatchObject({
     status: 'paused',
     summary: 'Half done',
     calls: 1,
   });
   await startTask(m, created.id, { goal: 'A fresh task' });
-  expect(m.list()[0].queuedTasks).toHaveLength(1);
-  expect(m.list()[0].task?.status).toBe('paused');
+  expect((await m.list())[0].queuedTasks).toHaveLength(1);
+  expect((await m.list())[0].task?.status).toBe('paused');
   await controlRun(m, created.id, 'cancel');
   await m.tasks.dispatchDue();
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  expect(m.list()[0].task?.goal).toBe('A fresh task');
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  expect((await m.list())[0].task?.goal).toBe('A fresh task');
 });
 
 it('standby creation rejects task input and still enforces online capacity', async () => {
@@ -801,7 +873,7 @@ it('retains capability settings and construction progress across edits, reload a
     permissions: { move: true, chat: true, place: true, remove: true },
     intervalMs: 60000,
   });
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await m.close();
   const archive = JSON.parse(store.archive.json!);
   const block = { x: 10, y: 3, z: 1, material: 'wood' };
@@ -827,20 +899,22 @@ it('retains capability settings and construction progress across edits, reload a
   store.archive.json = JSON.stringify(archive);
   const restored = setup(fakeSession(), decide);
   await restored.load();
-  await vi.waitFor(() => expect(restored.list()[0].status).toBe('idle'));
-  expect(restored.list()[0].permissions).toEqual({
+  await vi.waitFor(async () =>
+    expect((await restored.list())[0].status).toBe('idle'),
+  );
+  expect((await restored.list())[0].permissions).toEqual({
     move: true,
     chat: true,
     place: true,
     remove: true,
   });
-  const before = structuredClone(restored.list()[0]);
+  const before = structuredClone((await restored.list())[0]);
   const permissions = { move: false, chat: true, place: true, remove: false };
   await restored.update(created.id, {
     skills: ['building', 'exploration'],
     permissions,
   });
-  const updated = restored.list()[0];
+  const updated = (await restored.list())[0];
   expect(updated.task).toEqual({
     ...before.task,
     status: 'paused',
@@ -859,15 +933,19 @@ it('retains capability settings and construction progress across edits, reload a
   const finalSession = fakeSession();
   const finalManager = setup(finalSession, decide);
   await finalManager.load();
-  expect(finalManager.list()[0]).toMatchObject({
+  expect((await finalManager.list())[0]).toMatchObject({
     permissions,
     skills: ['building', 'exploration'],
     task: { status: 'paused', calls: before.task!.calls },
   });
   await controlRun(finalManager, created.id, 'resume');
   await vi.waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
-  await vi.waitFor(() => expect(finalManager.list()[0].status).toBe('idle'));
-  expect(finalManager.list()[0].task!.calls).toBe(before.task!.calls + 1);
+  await vi.waitFor(async () =>
+    expect((await finalManager.list())[0].status).toBe('idle'),
+  );
+  expect((await finalManager.list())[0].task!.calls).toBe(
+    before.task!.calls + 1,
+  );
   expect(finalSession.move).not.toHaveBeenCalled();
   expect(
     finalSession.request.mock.calls.filter(([type]) => type === 'edit'),
@@ -888,15 +966,17 @@ it.each(['completed', 'cancelled'] as const)(
         : { name: 'complete_task', arguments: { summary: 'test' } },
     ]);
     const job = await createWithTask(m, settings);
-    await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+    await vi.waitFor(async () =>
+      expect((await m.list())[0].status).toBe('idle'),
+    );
     if (status === 'cancelled') await controlRun(m, job.id, 'cancel');
-    expect(m.list()[0].task?.status).toBe(status);
-    const task = structuredClone(m.list()[0].task);
+    expect((await m.list())[0].task?.status).toBe(status);
+    const task = structuredClone((await m.list())[0].task);
     await m.update(job.id, {
       skills: ['guide'],
       permissions: { move: false, chat: false, place: false, remove: false },
     });
-    expect(m.list()[0].task).toEqual(task);
+    expect((await m.list())[0].task).toEqual(task);
   },
 );
 
@@ -916,12 +996,14 @@ it('suppresses voice bindings and direct pause receipts while retaining the save
       maxTurns: 30,
       voiceReplies: true,
     });
-    await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+    await vi.waitFor(async () =>
+      expect((await m.list())[0].status).toBe('idle'),
+    );
     await m.update(job.id, {
       skills: ['guide'],
       permissions: { move: true, chat: false, place: false, remove: false },
     });
-    expect(m.list()[0].voiceReplies).toBe(true);
+    expect((await m.list())[0].voiceReplies).toBe(true);
     expect(s.request).toHaveBeenCalledWith('agent.voice', { enabled: false });
     expect(bound.at(-1)).toEqual({ sessionId: 'player-1', serviceId: '' });
     await expect(m.setVoice(job.id, { enabled: true })).rejects.toThrow(
@@ -942,7 +1024,9 @@ it('suppresses voice bindings and direct pause receipts while retaining the save
         name: 'Person',
       },
     });
-    await vi.waitFor(() => expect(m.list()[0].task!.status).toBe('cancelled'));
+    await vi.waitFor(async () =>
+      expect((await m.list())[0].task!.status).toBe('cancelled'),
+    );
     expect(s.request.mock.calls.filter(([type]) => type === 'chat')).toEqual(
       [],
     );
@@ -964,38 +1048,40 @@ it('applies task budgets on assignment and renewal, rejecting invalid budgets be
   const decide = vi.fn(async () => [{ name: 'observe', arguments: {} }]);
   const m = setup(s, decide);
   const job = await m.create(settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await startTask(m, job.id, {
     goal: '测试任务',
     maxTurns: 1,
     tokenBudget: 10000,
     taskTimeoutMs: 120000,
   });
-  await vi.waitFor(() => expect(m.list()[0].task?.status).toBe('budget'));
-  const before = m.list()[0];
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].task?.status).toBe('budget'),
+  );
+  const before = (await m.list())[0];
   await expect(
     startTask(m, job.id, { goal: '不能替换', maxTurns: 0 }),
   ).rejects.toThrow();
-  expect(m.list()[0].task).toEqual(before.task);
+  expect((await m.list())[0].task).toEqual(before.task);
   await controlRun(m, job.id, 'resume', {
     maxTurns: 2,
     tokenBudget: 20000,
     taskTimeoutMs: 180000,
   });
-  expect(m.list()[0].taskExecution?.limits).toMatchObject({
+  expect((await m.list())[0].taskExecution?.limits).toMatchObject({
     maxTurns: 2,
     tokenBudget: 20000,
     taskTimeoutMs: 180000,
   });
-  expect(m.list()[0].task?.goal).toBe('测试任务');
-  expect(m.list()[0].usage?.calls).toBe(before.usage?.calls);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  expect((await m.list())[0].task?.goal).toBe('测试任务');
+  expect((await m.list())[0].usage?.calls).toBe(before.usage?.calls);
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   await controlRun(m, job.id, 'pause');
   await m.close();
   manager = undefined;
   const restored = setup(fakeSession());
   await restored.load();
-  expect(restored.list()[0].taskExecution?.limits).toMatchObject({
+  expect((await restored.list())[0].taskExecution?.limits).toMatchObject({
     maxTurns: 2,
     tokenBudget: 20000,
     taskTimeoutMs: 180000,
@@ -1017,7 +1103,9 @@ it('uses newly saved provider configuration on the next decision without resetti
     }),
   });
   const job = await manager.create({ ...settings, maxTokens: 777 });
-  await vi.waitFor(() => expect(manager!.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () =>
+    expect((await manager!.list())[0].status).toBe('idle'),
+  );
   await store.save(
     { ...store.get('deepseek'), apiKey: 'updated-key' },
     'deepseek',
@@ -1029,8 +1117,8 @@ it('uses newly saved provider configuration on the next decision without resetti
     timing: { kind: 'immediate' },
     timeZone: 'UTC',
   });
-  await vi.waitFor(() =>
-    expect(manager!.list()[0].task?.status).toBe('completed'),
+  await vi.waitFor(async () =>
+    expect((await manager!.list())[0].task?.status).toBe('completed'),
   );
   expect((configs[0] as { apiKey: string }).apiKey).toBe('updated-key');
 });
@@ -1038,8 +1126,8 @@ it('uses newly saved provider configuration on the next decision without resetti
 it('reloads 500 timestamped activity records and truncates excess entries', async () => {
   const m = setup(fakeSession());
   const created = await m.create(settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  const logged = m.list()[0];
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  const logged = (await m.list())[0];
   expect(logged.logEntries.length).toBeGreaterThan(0);
   expect(
     logged.logEntries.every(
@@ -1059,25 +1147,25 @@ it('reloads 500 timestamped activity records and truncates excess entries', asyn
   const expected = archive.characters[0].logEntries.slice(-500);
   const restored = setup(fakeSession());
   await restored.load();
-  expect(restored.list()[0].logEntries).toEqual(expected);
+  expect((await restored.list())[0].logEntries).toEqual(expected);
 });
 
 it('deletes a resident character and its tasks durably, preserving shared services', async () => {
   const session = fakeSession();
   const m = setup(session);
   const job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
-  expect(m.tasks.taskPlans(job.id).length).toBeGreaterThan(0);
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
+  expect((await m.tasks.taskPlans(job.id)).length).toBeGreaterThan(0);
   await m.remove(job.id);
   expect(session.close).toHaveBeenCalled();
-  expect(m.list()).toEqual([]);
-  expect(() => m.tasks.taskPlans(job.id)).toThrow('不存在');
+  expect(await m.list()).toEqual([]);
+  await expect(m.tasks.taskPlans(job.id)).rejects.toThrow('不存在');
   expect(store.get('deepseek')).toBeDefined();
   await expect(m.remove(job.id)).rejects.toMatchObject({ status: 404 });
   await m.close();
   const restored = setup(fakeSession());
   await restored.load();
-  expect(restored.list()).toEqual([]);
+  expect(await restored.list()).toEqual([]);
 });
 
 it('aborts an active decision and blocks concurrent join/delete before removal completes', async () => {
@@ -1103,20 +1191,22 @@ it('aborts an active decision and blocks concurrent join/delete before removal c
   await expect(m.remove(job.id)).rejects.toMatchObject({ status: 409 });
   release();
   await removing;
-  expect(m.list()).toEqual([]);
+  expect(await m.list()).toEqual([]);
   expect(session.request.mock.calls.some(([type]) => type === 'chat')).toBe(
     false,
   );
 });
 
-it('keeps a stopped character recoverable when deletion cannot be persisted', async () => {
+it('keeps the last committed character recoverable when deletion cannot be persisted', async () => {
   const m = setup(fakeSession());
   const job = await createWithTask(m, settings);
-  await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+  await vi.waitFor(async () => expect((await m.list())[0].status).toBe('idle'));
   store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(m.remove(job.id)).rejects.toThrow();
-    expect(m.list()[0]).toMatchObject({ id: job.id, status: 'stopped' });
+    expect((await m.list())[0]).toMatchObject({ id: job.id, status: 'idle' });
+    expect(m.jobs.has(job.id)).toBe(false);
+    await expect(m.join(job.id)).rejects.toMatchObject({ status: 503 });
   } finally {
     store.archive.saveError = undefined;
   }
@@ -1131,22 +1221,24 @@ it.each(['completed', 'cancelled'] as const)(
         : { name: 'complete_task', arguments: { summary: '保留结果' } },
     ]);
     const job = await createWithTask(m, settings);
-    await vi.waitFor(() => expect(m.list()[0].status).toBe('idle'));
+    await vi.waitFor(async () =>
+      expect((await m.list())[0].status).toBe('idle'),
+    );
     if (status === 'cancelled') await controlRun(m, job.id, 'cancel');
-    const before = m.list()[0];
-    const plan = m.tasks.taskPlans(job.id)[0];
-    const history = m.tasks.taskRuns(job.id, plan.id);
+    const before = (await m.list())[0];
+    const plan = (await m.tasks.taskPlans(job.id))[0];
+    const history = await m.tasks.taskRuns(job.id, plan.id);
     for (const op of ['cancel', 'pause', 'cancel'] as const) {
       await expect(controlRun(m, job.id, op)).rejects.toThrow('执行已结束');
-      expect(m.list()[0].task).toEqual(before.task);
-      expect(m.list()[0].usage).toEqual(before.usage);
-      expect(m.tasks.taskRuns(job.id, plan.id)).toEqual(history);
+      expect((await m.list())[0].task).toEqual(before.task);
+      expect((await m.list())[0].usage).toEqual(before.usage);
+      expect(await m.tasks.taskRuns(job.id, plan.id)).toEqual(history);
     }
     await m.close();
     const restored = setup(fakeSession());
     await restored.load();
-    expect(restored.list()[0].task).toEqual(before.task);
-    const reloaded = restored.tasks.taskRuns(job.id, plan.id);
+    expect((await restored.list())[0].task).toEqual(before.task);
+    const reloaded = await restored.tasks.taskRuns(job.id, plan.id);
     expect(reloaded.items.map(({ logs: _, ...run }) => run)).toEqual(
       history.items.map(({ logs: _, ...run }) => run),
     );
@@ -1180,11 +1272,11 @@ it.each(['cancel', 'pause'] as const)(
     const job = await createWithTask(manager, settings);
     await vi.waitFor(() => expect(entered).toBe(true));
     await controlRun(manager, job.id, operation);
-    expect(manager.list()[0].task).toMatchObject({
+    expect((await manager.list())[0].task).toMatchObject({
       status: 'completed',
       reason: '动作已确认完成',
     });
-    expect(manager.tasks.taskPlans(job.id)[0].latestRun?.status).toBe(
+    expect((await manager.tasks.taskPlans(job.id))[0].latestRun?.status).toBe(
       'completed',
     );
   },
@@ -1205,7 +1297,7 @@ it.each([
     const m = setup(fakeSession(), decide);
     const job = await createWithTask(m, { ...settings, maxTurns: 30 });
     await m.settled(job.id);
-    const before = structuredClone(m.list());
+    const before = structuredClone(await m.list());
     const plans = structuredClone(m.plans.plans),
       runs = structuredClone(m.plans.runs);
     const calls = decide.mock.calls.length;
@@ -1215,13 +1307,13 @@ it.each([
     await expect(
       m.update(job.id, { name: 'Rejected rename', ...input }),
     ).rejects.toThrow('Tasks');
-    expect(m.list()).toEqual(before);
+    expect(await m.list()).toEqual(before);
     expect(m.plans.plans).toEqual(plans);
     expect(m.plans.runs).toEqual(runs);
     expect(decide).toHaveBeenCalledTimes(calls);
     await m.update(job.id, { roleDescription: 'Updated profile' });
-    expect(m.list()[0].task).toEqual(before[0].task);
-    expect(m.list()[0].usage).toEqual(before[0].usage);
+    expect((await m.list())[0].task).toEqual(before[0].task);
+    expect((await m.list())[0].usage).toEqual(before[0].usage);
     expect(m.plans.plans).toEqual(plans);
     expect(m.plans.runs.map((run) => run.id)).toEqual(
       runs.map((run) => run.id),
@@ -1240,6 +1332,7 @@ it('creates an offline profile without joining or allocating a plan, then joins 
   });
   await m.flush();
   expect(job.status).toBe('stopped');
+  expect(m.jobs.size).toBe(0);
   expect(session.join).not.toHaveBeenCalled();
   expect(m.plans.plans).toHaveLength(0);
   expect(m.plans.runs).toHaveLength(0);
@@ -1247,15 +1340,22 @@ it('creates an offline profile without joining or allocating a plan, then joins 
   await m.close();
   const restored = setup(session, decide);
   await restored.load();
-  expect(restored.list()[0].status).toBe('stopped');
+  expect((await restored.list())[0].status).toBe('stopped');
+  expect(restored.jobs.size).toBe(0);
   expect(session.join).not.toHaveBeenCalled();
   await restored.join(job.id);
   await restored.settled(job.id);
-  expect(restored.list()[0].status).toBe('idle');
-  expect(restored.list()[0].task).toBeUndefined();
+  expect((await restored.list())[0].status).toBe('idle');
+  expect((await restored.list())[0].task).toBeUndefined();
   expect(restored.plans.plans).toHaveLength(0);
   expect(restored.plans.runs).toHaveLength(0);
   expect(decide).not.toHaveBeenCalled();
+  expect(restored.jobs.size).toBe(1);
+  await restored.stop(job.id);
+  expect(restored.jobs.size).toBe(0);
+  expect(
+    restored.persistence.characters.committedCharacterName(job.id),
+  ).toBeUndefined();
 });
 
 it('restores the live task adapter and full profile after a failed task reservation, without launching a runner', async () => {
@@ -1267,13 +1367,13 @@ it('restores the live task adapter and full profile after a failed task reservat
     roleDescription: 'Keep identity',
   });
   await m.settled(job.id);
-  const before = structuredClone(m.list()[0]);
+  const before = structuredClone((await m.list())[0]);
   store.archive.saveError = new Error('fixture storage failure');
   try {
     await expect(
       startTask(m, job.id, { goal: 'Must not launch' }),
     ).rejects.toThrow();
-    expect(m.list()[0]).toEqual(before);
+    expect((await m.list())[0]).toEqual(before);
     expect(m.currentRunId(job.id)).toBeUndefined();
     expect(m.plans.plans).toHaveLength(0);
     expect(m.plans.runs).toHaveLength(0);
@@ -1314,7 +1414,9 @@ it('forwards the task lease, stable command ID and player event through the real
     expect.stringMatching(/^world-.*-123$/),
     message,
   );
-  await vi.waitFor(() => expect(m.list()[0].task?.status).toBe('paused'));
+  await vi.waitFor(async () =>
+    expect((await m.list())[0].task?.status).toBe('paused'),
+  );
   session.onEvent!(message);
   expect(control).toHaveBeenCalledTimes(1);
 });

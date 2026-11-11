@@ -388,7 +388,7 @@ it('keeps a stopped character provider until the character is removed', async ()
     });
     expect(created.status).toBe(201);
     const character = await created.json();
-    expect(server.characters.hasProviderReference('deepseek')).toBe(true);
+    expect(await server.characters.hasProviderReference('deepseek')).toBe(true);
 
     const blocked = await fetch(providerUrl, { method: 'DELETE', headers });
     expect(blocked.status).toBe(409);
@@ -404,7 +404,9 @@ it('keeps a stopped character provider until the character is removed', async ()
         })
       ).status,
     ).toBe(204);
-    expect(server.characters.hasProviderReference('deepseek')).toBe(false);
+    expect(await server.characters.hasProviderReference('deepseek')).toBe(
+      false,
+    );
 
     const deleteHeaders = { ...headers, 'Idempotency-Key': 'delete-deepseek' };
     expect(
@@ -477,7 +479,7 @@ it('does not acknowledge or publish an HTTP creation whose archive cannot be sav
   const changed = vi.fn();
   const off = server.characters.events.on(changed);
   const failedSave = vi
-    .spyOn(DatabaseManagementArchive.prototype, 'save')
+    .spyOn(DatabaseManagementArchive.prototype, 'commit')
     .mockRejectedValueOnce(
       new Error(`private storage failure: ${server.directory}`),
     );

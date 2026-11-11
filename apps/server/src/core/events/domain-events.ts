@@ -9,7 +9,7 @@ export type DomainEventMap = {
   'provider.changed': { providerId: string };
 };
 
-type Listener<T> = (payload: T) => void;
+type Listener<T> = (payload: T) => unknown;
 
 /**
  * 进程内轻量级领域事件总线，用于跨模块解耦通知与同步前置校验。
@@ -32,6 +32,14 @@ export class DomainEventBus {
     payload: DomainEventMap[K],
   ): void {
     this.emitter.emit(event, payload);
+  }
+
+  async emitAsync<K extends keyof DomainEventMap>(
+    event: K,
+    payload: DomainEventMap[K],
+  ): Promise<void> {
+    for (const listener of this.emitter.listeners(event))
+      await listener(payload);
   }
 
   clear(): void {

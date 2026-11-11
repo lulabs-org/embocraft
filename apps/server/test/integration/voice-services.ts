@@ -161,7 +161,8 @@ try {
     assert.equal(response.status, 201);
     const job = (await response.json()) as AICharacterView;
     await until(
-      () => manager!.list().find((j) => j.id === job.id)?.status === 'idle',
+      async () =>
+        (await manager!.list()).find((j) => j.id === job.id)?.status === 'idle',
     );
     assert.equal(
       (
@@ -177,11 +178,11 @@ try {
       201,
     );
     await until(
-      () =>
-        manager!.list().find((j) => j.id === job.id)?.task?.status ===
+      async () =>
+        (await manager!.list()).find((j) => j.id === job.id)?.task?.status ===
         'completed',
     );
-    return manager!.list().find((j) => j.id === job.id)!;
+    return (await manager!.list()).find((j) => j.id === job.id)!;
   };
   const first = await create(a.id, 'Guide'),
     second = await create(b.id, 'Builder');
@@ -279,11 +280,13 @@ try {
   );
   await restored.load();
   assert.equal(
-    restored.list().find((j) => j.id === first.id)?.voiceServiceId,
+    (await restored.list()).find((j) => j.id === first.id)?.voiceServiceId,
     b.id,
   );
   assert.equal(calls, count, 'restoration must not invoke the model');
-  const restoredId = restored.list().find((j) => j.id === first.id)!.sessionId;
+  const restoredId = (await restored.list()).find(
+    (j) => j.id === first.id,
+  )!.sessionId;
   const restoredBot = bots.find((s) => s.room.sessionId === restoredId)!;
   const requestsBefore = requests.length;
   assert(

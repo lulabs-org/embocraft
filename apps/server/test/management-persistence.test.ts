@@ -59,7 +59,14 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   const characters = new CharacterSnapshots();
   const tasks = new TaskSnapshots();
   const persistence = createManagementPersistence(
-    { load: async () => undefined, save },
+    {
+      load: async () => undefined,
+      save,
+      commit: async (snapshot) => {
+        await save(snapshot);
+        return snapshot;
+      },
+    },
     {
       characters,
       tasks,

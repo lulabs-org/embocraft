@@ -69,6 +69,8 @@ export interface TaskExecutionState {
 
 /** Tasks owns policy; the Agent adapter owns runtime effects and serialization with shutdown. */
 export interface TaskHostPort {
+  withExecution?<T>(id: string, action: () => Promise<T>): Promise<T>;
+  readCharacter?(id: string): Promise<AICharacterSettings & { id: string }>;
   execution(id: string): TaskExecutionState;
   findExecution(id: string): TaskExecutionState | undefined;
   executions(): Iterable<TaskExecutionState>;

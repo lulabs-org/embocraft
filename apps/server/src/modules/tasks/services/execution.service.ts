@@ -310,7 +310,7 @@ export function startQueuedRun(job: TaskExecutionState, id: string) {
   run.status = 'running';
   run.reason = '';
   job.currentRunId = run.id;
-  job.view.status = 'idle';
+  job.view.status = 'running';
   return run.id;
 }
 
@@ -517,7 +517,7 @@ export async function executeTaskRunControl(
       });
 
       run.status = 'running';
-      job.view.status = 'idle';
+      job.view.status = 'running';
       delete run.finishedAt;
     },
     save,

@@ -77,9 +77,12 @@ try {
   });
   manager = server.characters;
   const app = server.app;
-  app.get('/fixture-status', (_req, res) =>
-    res.json({ calls, characters: manager!.list() }),
-  );
+  app.get('/fixture-status', (_req, res, next) => {
+    void manager!
+      .list()
+      .then((characters) => res.json({ calls, characters }))
+      .catch(next);
+  });
   const a = await manager.create({
     providerId: 'deepseek',
     model: 'fixture-model',
@@ -92,7 +95,8 @@ try {
     permissions: { move: true, chat: true, place: true, remove: true },
   });
   await until(
-    () => manager!.list().filter((j) => j.status === 'idle').length === 2,
+    async () =>
+      (await manager!.list()).filter((j) => j.status === 'idle').length === 2,
   );
   await manager.tasks.createTaskPlan(b.id, {
     name: '等待附近环境变化',
@@ -101,11 +105,13 @@ try {
     timeZone: 'UTC',
   });
   await until(
-    () => manager!.list().find((j) => j.id === b.id)?.status === 'idle',
+    async () =>
+      (await manager!.list()).find((j) => j.id === b.id)?.status === 'idle',
   );
-  manager.stop(a.id);
+  await manager.stop(a.id);
   await until(
-    () => manager!.list().find((j) => j.id === a.id)?.status === 'stopped',
+    async () =>
+      (await manager!.list()).find((j) => j.id === a.id)?.status === 'stopped',
   );
   console.log(
     `Agent console sandbox ready: backend 2589, frontend origin 5189. Temporary data only. ${b.id}`,

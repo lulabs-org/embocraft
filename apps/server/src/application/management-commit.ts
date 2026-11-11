@@ -2,6 +2,7 @@ import type { AICharacterView } from '@voxel/shared';
 import { AppError } from '../core/errors/app-error';
 import type {
   ArchivePort,
+  CharacterChanges,
   CharacterRecord,
   ManagementArchive,
 } from '../persistence/management-archive';
@@ -11,7 +12,7 @@ type TaskSnapshot = Pick<ManagementArchive, 'plans' | 'runs' | 'requests'>;
 export type ManagementSnapshotPorts<Characters, Tasks> = {
   characters: Characters;
   tasks: Tasks;
-  captureExecutions(): void;
+  captureExecutions(exclude?: string[]): void;
   captureCharacters(): { records: CharacterRecord[]; views: AICharacterView[] };
   captureTasks(): TaskSnapshot;
   rejectTasks(snapshot: TaskSnapshot): Set<string | undefined>;
@@ -62,10 +63,15 @@ export class ManagementPersistence<Characters, Tasks> {
       throw new AppError('保存失败，操作结果待确认，请检查存储。', 503);
   }
 
-  persist(): Promise<void> {
-    this.snapshots.captureExecutions();
-    const { records, views } = this.snapshots.captureCharacters();
-    const snapshot: ManagementArchive = {
+  persist(
+    changes: CharacterChanges = {},
+    recovery?: CharacterRecord[],
+  ): Promise<void> {
+    this.snapshots.captureExecutions(changes.remove);
+    const captured = this.snapshots.captureCharacters();
+    const records = recovery ?? captured.records;
+    const views = captured.views;
+    let snapshot: ManagementArchive = {
       version: 3,
       characters: records,
       ...this.snapshots.captureTasks(),
@@ -74,14 +80,17 @@ export class ManagementPersistence<Characters, Tasks> {
       .catch(() => {})
       .then(async () => {
         try {
-          await this.archive.save(snapshot);
+          snapshot = await this.archive.commit({ ...snapshot, ...changes });
         } catch (error) {
           this.storageRevision++;
           const affected = this.snapshots.rejectTasks(snapshot);
           this.snapshots.rejectCharacters(records, affected);
           throw error;
         }
-        this.snapshots.commitCharacters(records, views);
+        this.snapshots.commitCharacters(
+          records.filter((record) => !changes.remove?.includes(record.id)),
+          views,
+        );
         this.snapshots.restoreTasks(snapshot);
         this.onCommitted(snapshot, views);
       });

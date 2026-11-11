@@ -36,7 +36,7 @@ export class ProviderService {
   }
 
   async remove(id: string) {
-    domainEvents.emit('provider.removing', { providerId: id });
+    await domainEvents.emitAsync('provider.removing', { providerId: id });
     await this.store.remove(id);
     domainEvents.emit('provider.changed', { providerId: id });
   }
