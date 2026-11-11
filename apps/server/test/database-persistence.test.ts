@@ -9,7 +9,7 @@ import {
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabaseClient } from '../src/core/database/client';
 import {
   AICharacterManager,
@@ -58,13 +58,13 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   it('manages offline characters from database rows without retaining runtime instances', async () => {
     const providers = new DatabaseProviderRepository(db!);
     await bootstrapProviders(providers);
-    const manager = new AICharacterManager(
-      providers,
-      '',
-      new DatabaseManagementArchive(db!),
-    );
+    const archive = new DatabaseManagementArchive(db!);
+    const manager = new AICharacterManager(providers, '', archive);
     try {
       await manager.load();
+      const load = vi
+        .spyOn(archive, 'load')
+        .mockRejectedValue(new Error('Queries must not load the full archive'));
       const role = await manager.create({
         providerId: 'ollama',
         model: 'qwen2.5:3b',
@@ -72,6 +72,10 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         joinWorld: false,
       });
       expect(manager.jobs.size).toBe(0);
+      expect((await manager.list()).map((item) => item.id)).toEqual([role.id]);
+      expect(await manager.hasProviderReference('ollama')).toBe(true);
+      expect(await manager.hasVoiceServiceReference('missing')).toBe(false);
+      expect(load).not.toHaveBeenCalled();
       await db!.agentCharacter.update({
         where: { id: role.id },
         data: { name: 'Changed in SQL' },
@@ -236,7 +240,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       requests: {},
     });
     const { host } = taskExecutionFixture();
-    const tasks = new TaskCoordinator(host, () => archive.readSnapshot());
+    const tasks = new TaskCoordinator(host, archive.tasks);
     expect(tasks.committedPlans.plans).toHaveLength(0);
     expect((await tasks.planPage({ search: '巡查' })).items[0]).toMatchObject({
       id: 'plan',
@@ -259,6 +263,299 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       '计划执行角色已改变',
     );
     await expect(tasks.publicPlan('missing')).rejects.toThrow('计划不存在');
+  });
+
+  it('reads one recoverable character and its bounded log window without restoring unrelated data', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
+    const archive = new DatabaseManagementArchive(db!);
+    const runtime = createAgentRuntime();
+    runtime.ensureTask('Recover only this actor');
+    const state = runtime.snapshot();
+    const logs = Array.from({ length: 700 }, (_, time) => ({
+      time,
+      text: `log-${time}`,
+    }));
+    const actor = storedCharacter({
+      currentRunId: 'current',
+      runtime: state,
+      logEntries: logs,
+      voiceServiceId: DEFAULT_TTS_PROVIDER.id,
+    });
+    await archive.save({
+      version: 3,
+      characters: [
+        actor,
+        storedCharacter({
+          id: 'unrelated',
+          runtime: createAgentRuntime().snapshot(),
+        }),
+      ],
+      plans: [],
+      runs: [
+        storedRun({
+          id: 'current',
+          characterId: actor.id,
+          status: 'running',
+          runtime: state,
+        }),
+      ],
+      requests: {},
+    });
+    await db!.agentCharacterState.update({
+      where: { characterId: 'unrelated' },
+      data: { runtimeVersion: 999 },
+    });
+    await expect(archive.load()).rejects.toMatchObject({ status: 500 });
+    expect(await archive.characters.record(actor.id)).toMatchObject({
+      id: actor.id,
+      currentRunId: 'current',
+      runtime: JSON.parse(JSON.stringify(state)),
+      logEntries: logs.slice(-500),
+    });
+    const view = await archive.characters.view(actor.id);
+    expect(view).toMatchObject({
+      id: actor.id,
+      task: { goal: 'Recover only this actor' },
+      logEntries: logs.slice(-500),
+    });
+    for (const key of [
+      'runtime',
+      'state',
+      'currentRunId',
+      'taskIdentity',
+      'logs',
+      'apiKey',
+    ])
+      expect(view).not.toHaveProperty(key);
+    expect(await archive.characters.hasProviderReference('deepseek')).toBe(
+      true,
+    );
+    expect(await archive.characters.hasProviderReference('missing')).toBe(
+      false,
+    );
+    expect(
+      await archive.characters.hasVoiceServiceReference(
+        DEFAULT_TTS_PROVIDER.id,
+      ),
+    ).toBe(true);
+    expect(await archive.characters.hasVoiceServiceReference('missing')).toBe(
+      false,
+    );
+    await expect(archive.characters.record('missing')).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(archive.characters.view('missing')).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('filters and pages plans in SQL with literal searches and stable page boundaries', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    const plans = Array.from({ length: 24 }, (_, index) =>
+      storedPlan({
+        id: `plan-${String(index).padStart(2, '0')}`,
+        name: `Inspect ${index}`,
+        characterId: 'actor',
+        characterName: 'Old name',
+      }),
+    );
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter({ name: 'Current name' })],
+      plans: [
+        ...plans,
+        storedPlan({ id: 'archived', state: 'archived' }),
+        storedPlan({
+          id: 'unassigned',
+          name: 'Literal 100%_path\\file',
+          state: 'paused',
+          timing: { kind: 'interval', everyMs: 60000 },
+          characterName: 'Former actor',
+        }),
+      ],
+      runs: [],
+      requests: {},
+    });
+    const { host } = taskExecutionFixture();
+    const tasks = new TaskCoordinator(host, archive.tasks);
+    const first = await tasks.planPage({});
+    expect(first.total).toBe(25);
+    expect(first.items.map((item) => item.id)).toEqual(
+      plans.slice(0, 20).map((plan) => plan.id),
+    );
+    expect(first.nextOffset).toBe(20);
+    expect(first.items[0].characterName).toBe('Current name');
+    const second = await tasks.planPage({ offset: first.nextOffset });
+    expect(second.items.map((item) => item.id)).toEqual([
+      ...plans.slice(20).map((plan) => plan.id),
+      'unassigned',
+    ]);
+    expect(second.nextOffset).toBeUndefined();
+    expect(
+      (await tasks.planPage({ search: 'INSPECT', characterId: 'actor' })).total,
+    ).toBe(24);
+    for (const search of ['%', '_', '\\', '100%_path\\file']) {
+      expect(
+        (await tasks.planPage({ search })).items.map((item) => item.id),
+      ).toEqual(['unassigned']);
+    }
+    expect(
+      (await tasks.planPage({ state: 'archived' })).items.map(
+        (item) => item.id,
+      ),
+    ).toEqual(['archived']);
+    expect(
+      (await tasks.planPage({ state: 'unassigned', timing: 'interval' }))
+        .items[0],
+    ).toMatchObject({
+      id: 'unassigned',
+      characterName: 'Former actor',
+      timing: { kind: 'interval', everyMs: 60000 },
+    });
+    expect(
+      (await tasks.planPage({ state: 'unassigned', characterId: 'actor' }))
+        .total,
+    ).toBe(0);
+    expect(
+      (await tasks.planPage({ offset: Number.MAX_SAFE_INTEGER })).items,
+    ).toEqual([]);
+    await expect(tasks.planPage({ offset: -1 })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(
+      tasks.planPage({ state: 'invalid' as 'enabled' }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(tasks.taskPlans('missing')).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('pages only the requested history and retains active runs, historical actors and current identities', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    const runtime = createAgentRuntime();
+    runtime.ensureTask('Current actor task');
+    runtime.lease();
+    const state = runtime.snapshot();
+    state.execution.conversation.audienceExpired = true;
+    const runs = Array.from({ length: 24 }, (_, index) =>
+      storedRun({
+        id: `run-${index}`,
+        planId: 'plan',
+        characterId: index === 0 ? 'deleted-actor' : 'actor',
+        characterName: index === 0 ? 'Deleted actor' : 'Previous name',
+        status: index === 0 ? 'blocked' : 'completed',
+        runtime: state,
+        logs: [`history-${index}`],
+        requestId: `private-${index}`,
+        lastBatch: 'private-batch',
+      }),
+    );
+    await archive.save({
+      version: 3,
+      characters: [
+        storedCharacter({
+          name: 'Current name',
+          runtime: state,
+          currentRunId: 'run-23',
+        }),
+        storedCharacter({ id: 'deleted-actor' }),
+      ],
+      plans: [
+        storedPlan({ characterId: 'actor' }),
+        storedPlan({ id: 'unrelated' }),
+      ],
+      runs: [
+        ...runs,
+        storedRun({
+          id: 'chat',
+          planId: 'plan',
+          characterId: 'actor',
+          source: 'chat',
+        }),
+        storedRun({ id: 'unrelated', planId: 'unrelated', runtime: state }),
+      ],
+      requests: {},
+    });
+    await db!.agentCharacter.delete({ where: { id: 'deleted-actor' } });
+    // A full archive restore would fail on this unrelated checkpoint.
+    await db!.agentRunCheckpoint.update({
+      where: { runId: 'unrelated' },
+      data: { version: 999 },
+    });
+    const { host } = taskExecutionFixture();
+    const tasks = new TaskCoordinator(host, archive.tasks);
+    const first = await tasks.publicRuns('actor', 'plan', 0, true);
+    expect(first.total).toBe(24);
+    expect(first.items.map((item) => item.id)).toEqual(
+      runs
+        .slice(4)
+        .reverse()
+        .map((run) => run.id),
+    );
+    expect(first.nextOffset).toBe(20);
+    expect(first.active).toHaveLength(1);
+    expect(first.active[0]).toMatchObject({
+      id: 'run-0',
+      characterId: 'deleted-actor',
+      characterName: 'Deleted actor',
+      taskIdentity: null,
+      requiresReassignment: true,
+    });
+    expect(first.items[0]).toMatchObject({
+      taskIdentity: runtime.lease(),
+      characterName: 'Previous name',
+      logs: runs[23].logs,
+    });
+    for (const key of [
+      'runtime',
+      'checkpoint',
+      'character',
+      'accountedTokens',
+      'requestId',
+      'lastBatch',
+      'position',
+    ])
+      expect(first.items[0]).not.toHaveProperty(key);
+    const second = await tasks.taskRuns('actor', 'plan', 20);
+    expect(second.items.map((item) => item.id)).toEqual(
+      runs
+        .slice(0, 4)
+        .reverse()
+        .map((run) => run.id),
+    );
+    expect(second.items[0]).not.toHaveProperty('taskIdentity');
+    const pastEnd = await tasks.publicRuns(
+      undefined,
+      'plan',
+      Number.MAX_SAFE_INTEGER,
+    );
+    expect(pastEnd.items).toEqual([]);
+    expect(pastEnd.active.map((run) => run.id)).toEqual(['run-0']);
+    const plan = await tasks.publicPlan('plan');
+    expect(plan).toMatchObject({
+      characterName: 'Current name',
+      taskIdentity: runtime.lease(),
+      latestRun: { id: 'run-23', logs: [] },
+    });
+    expect(plan.latestRun?.actions).toBeUndefined();
+    expect((await tasks.taskPlans('actor')).map((item) => item.id)).toEqual([
+      'plan',
+    ]);
+    await expect(tasks.publicRuns('other', 'plan')).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(tasks.publicRuns(undefined, 'missing')).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(tasks.taskRuns('missing', 'plan')).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(tasks.publicRuns(undefined, 'plan', -1)).rejects.toMatchObject(
+      { status: 400 },
+    );
   });
 
   it('queries persisted character details, current checkpoints and log pages without a running manager', async () => {

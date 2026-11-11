@@ -88,7 +88,7 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 
 角色、日志、Run 元数据、checkpoint 和任务表仍在同一事务中提交，失败时不推进内存中的已提交状态。执行快照单独变化时不重写角色记忆或 Run 元数据。角色删除会级联删除状态和日志。
 
-角色列表、详情和日志的 HTTP 读取通过查询端口访问数据；`server.ts` 将 `ai-characters/persistence/queries.ts` 的 Prisma 实现注入路由，不经过编排器或内存快照缓存。查询文件集中组装角色配置、服务名称、当前执行 checkpoint、待执行任务、用量和最新日志；列表与详情只读取最新一条日志，完整日志按序号在数据库中分页。关联读取和日志计数/分页使用 `RepeatableRead` 事务，避免混合不同提交的数据。路由只补充实时 `sessionId` 和查询开始前的管理事件版本号；写操作等待保存成功后也通过同一查询返回。`services/character-snapshots.ts` 保留提交和任务控制所需的已提交记录，并判断保存失败涉及的角色，不再保存 HTTP 响应副本。无数据库的测试显式注入读取已保存测试存档的查询实现，生产环境不回退到内存查询。
+角色列表、详情和日志的 HTTP 读取通过查询端口访问数据；`server.ts` 将 `ai-characters/persistence/character-queries.ts` 的 Prisma 实现注入路由，不经过编排器或内存快照缓存。查询文件集中组装角色配置、服务名称、当前执行 checkpoint、待执行任务与用量；HTTP 列表与详情不读取日志，历史日志按序号在数据库中分页。内部角色读取使用同一实现：单个恢复记录只查询目标角色、当前 Run 检查点和最近 500 条日志；内部视图附带最近日志窗口，服务引用检查只查询匹配记录是否存在。关联读取和日志计数/分页使用 `RepeatableRead` 事务，避免混合不同提交的数据。路由只补充实时 `sessionId` 和查询开始前的管理事件版本号；写操作等待保存成功后也通过同一查询返回。`ai-characters/persistence/character-snapshots.ts` 保留提交和任务控制所需的已提交记录，并判断保存失败涉及的角色，不再保存 HTTP 响应副本。无数据库的测试显式注入读取已保存测试存档的查询实现，生产环境不回退到内存查询。
 
 读取数据库时，将角色最新记忆与当前 Run 的 checkpoint 组合成运行时完整快照；缺失、归属错误或不一致的当前执行会拒绝加载或保存。组合后的角色与 Run 对象互不共享可变执行引用。内存运行时和归档端口保留完整快照形状，Run 快照中的角色分区为空；恢复历史执行只替换执行分区，保留最新对话、收件箱、节奏和累计用量。暂停、私聊过期与不重放未知动作的恢复规则保持不变。
 
@@ -125,7 +125,13 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 任务计划、执行历史、预算与调度规则由 `modules/tasks/services/coordinator.service.ts` 的 `TaskCoordinator` 与 `execution.service.ts` 管理；计划调度器位于同目录的 `scheduler.service.ts`。`ai-characters/services/wake-scheduler.service.ts` 只推进 Agent 消息唤醒、等待检查和本地跟随。HTTP/WebSocket 共用同一份计划集合、执行历史和计划调度器。
 
-`persistence/plan-store.ts` 持有计划与执行历史的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。`console-sync` 的 `commandReceiptBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 通过零参 `createTaskRouter()` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有公共导出通过模块根部 `index.ts` 提供。
+`tasks/persistence/plan-store.ts` 保留任务写入和调度所需的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。
+
+查询通过 `TaskQueryPort` 注入 `tasks/persistence/task-queries.ts`：计划详情按 ID 读取，列表筛选、排序、计数和每页 20 条的分页在数据库执行；历史按计划查询并排除聊天执行，活跃执行独立于历史分页返回。关联读取与计数/分页使用 `RepeatableRead`，角色名称取当前配置，历史执行保留原角色归属和名称。
+
+`ManagementStore` 将角色查询、任务查询与联合存档写入装配在同一数据库；全量存档读取仅用于启动恢复和现有联合提交，日常查询不再构造临时内存任务簿。
+
+`console-sync` 的 `commandReceiptBody` 仅为幂等命令指纹剔除 `expectedTask`、`expectedPlanRevision`，不承担输入白名单校验。`routes/tasks.routes.ts` 通过零参 `createTaskRouter()` 保留 `/tasks` 与 `/task-runs` 的 HTTP 路由和 OpenAPI 注解。所有公共导出通过模块根部 `index.ts` 提供。
 
 Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存至 PostgreSQL，嵌入的运行时状态为 version 4，Pi 检查点为 v3。存档恢复前经过结构校验，不再兼容 v0/v1/v2 历史存档或读写旧 Agent JSON 文件。删除角色保留计划与执行历史；聊天执行没有 planId。部署与回滚流程见 [Agent Gateway](../../docs/agent/gateway.md)。
 
@@ -137,7 +143,7 @@ Agent 与任务通过 v3 的 characters/plans/runs/requests 聚合快照保存�
 
 在目标 `DATABASE_URL` 下执行 `pnpm db:deploy` 后启动新版本。
 
-数据库时间与领域/API 的毫秒数由适配器转换；累计 Token 使用 `BIGINT`，接口仍使用安全整数 `number`。本阶段保留 `position` 和联合快照提交方式，未引入外键重构或数据库分页。
+数据库时间与领域/API 的毫秒数由适配器转换；累计 Token 使用 `BIGINT`，接口仍使用安全整数 `number`。保留 `position` 和联合快照提交方式；计划和执行历史已通过独立查询端口在数据库分页。
 
 使用已完成迁移的独立测试库验证：
 

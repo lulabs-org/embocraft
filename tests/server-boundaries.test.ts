@@ -84,8 +84,10 @@ const jointStorageFacades = new Set([
   'modules/tasks/persistence/index.ts',
 ]);
 const isJointStorageDependency = (source: string, target: string) =>
-  source === 'persistence/database-management-archive.ts' &&
-  jointStorageFacades.has(target);
+  [
+    'persistence/database-management-archive.ts',
+    'persistence/management-store.ts',
+  ].includes(source) && jointStorageFacades.has(target);
 
 it('keeps joint persistence independent of runtime and HTTP implementations', () => {
   for (const [file, deps] of graph) {

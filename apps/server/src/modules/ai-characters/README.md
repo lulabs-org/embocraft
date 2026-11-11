@@ -13,7 +13,8 @@ PostgreSQL 是角色配置、已提交状态、恢复检查点和历史日志的
 - `DatabaseManagementArchive.commit` 在事务内读取当前数据并应用本次变更，不持有全量角色存档的长期内存副本。当前仍使用联合角色/任务读取和差异写入；这不是多实例执行调度机制。
 - `CharacterSnapshots` 只跟踪在线实例的提交状态，通知系统只缓存摘要以识别变更。存储失败后保留角色 ID 的阻断标记，避免释放实例后绕过失败保护。
 - 历史日志独立追加存储；运行实例和 `list()` 的最近日志窗口仍有上限，裁剪窗口不会删除数据库历史。暂未设置历史日志自动过期策略。
-- `list()`、任务历史查询和持久化引用检查均为异步读取。HTTP 查询继续直接使用 `CharacterQueries`，会话 ID 从在线实例补充。
+- `CharacterReadPort` 负责内部按需读取：单个角色仅加载自身配置、状态、当前 Run 检查点和最近 500 条日志；服务引用检查只查询是否存在匹配角色。`list()` 通过数据库关联查询组装视图，会话 ID 从在线实例补充。
+- `CharacterQueries` 同时提供内部读取和 HTTP 查询；`TaskQueries` 负责计划与历史的数据库查询、筛选、排序和分页。日常查询不再加载联合存档。`ManagementStore` 将这两个查询端口与现有联合写入端口装配到同一数据库。
 
 启动恢复会逐个规范化已保存记录和任务检查点，临时恢复对象随处理结束释放；只有需要自动上线且满足在线数量限制的角色进入注册表。
 
@@ -25,7 +26,7 @@ PostgreSQL 是角色配置、已提交状态、恢复检查点和历史日志的
 - **纯业务规则与领域校验（Domain）**：校验角色配置、动作权限（`permissions`）、技能（`skills`）、模型与轮询间隔等规则，管理内存运行日志窗口的清洗与追加。
 - **进程内运行态与世界会话宿主（Runtime）**：维护在线角色的内存注册表（`AICharacterRegistry`），驱动 Colyseus 房间会话（`AICharacterHost`）、AgentRuntime 执行循环、世界事件接收（`handleWorldEvent`）与定时唤醒调度（`AICharacterWakeScheduler`）。
 - **跨模块协作与防腐适配（Integrations）**：将角色运行态 `Job` 适配为 `tasks` 模块所需的 `TaskExecutionState`，以及协调 `tts` 模块的语音服务校验、会话绑定与领域事件通知。
-- **数据库读写与快照转换（Persistence）**：提供面向 HTTP 读路径的 PostgreSQL 直查（`CharacterQueries`），以及面向联合事务（`DatabaseManagementArchive`）的配置/状态/日志持久化转换与内存快照比对（`CharacterSnapshots`）。
+- **数据库读写与快照转换（Persistence）**：提供面向内部管理和 HTTP 读路径的 PostgreSQL 直查（`CharacterQueries`），以及面向联合事务（`DatabaseManagementArchive`）的配置/状态/日志持久化转换与内存快照比对（`CharacterSnapshots`）。
 
 `ai-characters` 模块不负责：
 

@@ -1,8 +1,4 @@
-import {
-  createAgentRuntime,
-  runtimeView,
-  type TaskLease,
-} from '@voxel/agent-runtime';
+import { createAgentRuntime, type TaskLease } from '@voxel/agent-runtime';
 import {
   duePlans,
   endedRun,
@@ -14,18 +10,14 @@ import { validatePlan } from '../domain/validation';
 import { PlanService } from '../persistence/plan-store';
 import { TaskScheduler } from './scheduler.service';
 
-import type { TaskPlanSummary, WorldEvent } from '@voxel/shared';
+import type { WorldEvent } from '@voxel/shared';
 import { isRepeating } from '@voxel/shared';
 import type { PlanQueryFilter } from '@voxel/shared/management';
 import { CommandQueue } from '../../../core/concurrency/command-queue';
 import { AppError } from '../../../core/errors/app-error';
 import { object } from '../../../core/http/validation';
 import { hasPlanTokenLimit } from '../domain/limits';
-import type {
-  TaskExecutionState,
-  TaskHostPort,
-  TaskQuerySnapshot,
-} from '../ports';
+import type { TaskExecutionState, TaskHostPort, TaskQueryPort } from '../ports';
 import {
   captureTask,
   commitExecution,
@@ -50,46 +42,20 @@ export class TaskCoordinator {
 
   constructor(
     private readonly host: TaskHostPort,
-    private readonly readArchive: () => Promise<TaskQuerySnapshot | undefined>,
+    private readonly queries: TaskQueryPort,
   ) {
     this.planScheduler = new TaskScheduler(() => this.dispatchDue());
   }
 
-  private async queryState() {
-    const archive = await this.readArchive();
-    const plans = new PlanService();
-    if (archive)
-      Object.assign(plans, {
-        plans: archive.plans,
-        runs: archive.runs,
-        requests: archive.requests,
-      });
-    const characters = new Map(
-      archive?.characters.map((character) => [character.id, character]) ?? [],
-    );
-    return { plans, characters };
-  }
-
   async publicPlans(id?: string, metadata = false) {
-    const { plans: stored, characters } = await this.queryState();
-    const plans = stored.views(id).map((p) => ({
-      ...p,
-      characterName: p.characterId
-        ? (characters.get(p.characterId)?.name ?? p.characterName)
-        : p.characterName,
-    }));
-    return metadata
-      ? plans.map((plan) => ({
-          ...plan,
-          resourceVersion: this.host.resourceVersion(),
-          taskIdentity: plan.characterId
-            ? characters.get(plan.characterId)?.runtime
-              ? (runtimeView(characters.get(plan.characterId)!.runtime!)
-                  .identity ?? null)
-              : null
-            : null,
-        }))
-      : plans;
+    const resourceVersion = this.host.resourceVersion();
+    return (await this.queries.plans(id)).map(
+      ({ value, characterName, taskIdentity }) => ({
+        ...value,
+        characterName: characterName ?? value.characterName,
+        ...(metadata ? { resourceVersion, taskIdentity } : {}),
+      }),
+    );
   }
 
   async publicRuns(
@@ -98,23 +64,18 @@ export class TaskCoordinator {
     offset?: number,
     metadata = false,
   ) {
-    const { plans, characters } = await this.queryState();
-    if (id) plans.assertBinding(plan, id);
-    const page = plans.history(plan, offset);
-    if (!metadata) return page;
-    const annotate = (run: (typeof page.items)[number]) => ({
-      ...run,
-      resourceVersion: this.host.resourceVersion(),
-      taskIdentity: run.characterId
-        ? characters.get(run.characterId)?.runtime
-          ? (runtimeView(characters.get(run.characterId)!.runtime!).identity ??
-            null)
-          : null
-        : null,
+    const resourceVersion = this.host.resourceVersion();
+    const page = await this.queries.runs(plan, offset, id);
+    const annotate = ({
+      value,
+      taskIdentity,
+    }: (typeof page.items)[number]) => ({
+      ...value,
+      ...(metadata ? { resourceVersion, taskIdentity } : {}),
     });
     return {
       ...page,
-      resourceVersion: this.host.resourceVersion(),
+      ...(metadata ? { resourceVersion } : {}),
       items: page.items.map(annotate),
       active: page.active.map(annotate),
     };
@@ -143,48 +104,18 @@ export class TaskCoordinator {
       !['immediate', 'once', 'interval', 'daily', 'weekly'].includes(p.timing)
     )
       throw new AppError('执行方式无效。');
-    const { plans, characters } = await this.queryState();
-    let all = plans.plans.filter(
-      (plan) =>
-        (!p.characterId || plan.characterId === p.characterId) &&
-        (!p.search ||
-          plan.name
-            .toLocaleLowerCase()
-            .includes(p.search.toLocaleLowerCase())) &&
-        (!p.state ||
-          (p.state === 'unassigned'
-            ? !plan.characterId && plan.state === 'paused'
-            : plan.state === p.state)) &&
-        (!p.timing || plan.timing.kind === p.timing),
-    );
-    if (!p.state) all = all.filter((plan) => plan.state !== 'archived');
-    all.sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
-    const offset = p.offset ?? 0;
-    return {
-      items: all.slice(offset, offset + 20).map(
-        (plan): TaskPlanSummary => ({
-          id: plan.id,
-          name: plan.name,
-          timing: structuredClone(plan.timing),
-          timeZone: plan.timeZone,
-          state: plan.state,
-          characterId: plan.characterId,
-          characterName: plan.characterId
-            ? (characters.get(plan.characterId)?.name ?? plan.characterName)
-            : plan.characterName,
-        }),
-      ),
-      total: all.length,
-      nextOffset: offset + 20 < all.length ? offset + 20 : undefined,
-    };
+    return this.queries.planPage(p);
   }
 
   async publicPlan(id: string) {
-    const p = (await this.publicPlans(undefined, true)).find(
-      (p) => p.id === id,
-    );
-    if (!p) throw new AppError('计划不存在。', 404);
-    return p;
+    const resourceVersion = this.host.resourceVersion();
+    const { value, characterName, taskIdentity } = await this.queries.plan(id);
+    return {
+      ...value,
+      characterName: characterName ?? value.characterName,
+      resourceVersion,
+      taskIdentity,
+    };
   }
 
   async reassignPlan(id: string, characterId: string, value: unknown = {}) {
@@ -196,16 +127,16 @@ export class TaskCoordinator {
   }
 
   async taskPlans(id: string) {
-    const { plans, characters } = await this.queryState();
-    if (!characters.has(id)) throw new AppError('Agent 不存在。', 404);
-    return plans.views(id);
+    return (await this.queries.plans(id, true)).map(({ value }) => value);
   }
 
   async taskRuns(id: string, planId: string, offset = 0) {
-    const { plans, characters } = await this.queryState();
-    if (!characters.has(id)) throw new AppError('Agent 不存在。', 404);
-    plans.assertBinding(planId, id);
-    return plans.history(planId, offset);
+    const page = await this.queries.runs(planId, offset, id, true);
+    return {
+      ...page,
+      items: page.items.map(({ value }) => value),
+      active: page.active.map(({ value }) => value),
+    };
   }
 
   private withExecution<T>(id: string, action: () => Promise<T>) {

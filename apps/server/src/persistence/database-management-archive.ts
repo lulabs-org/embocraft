@@ -3,11 +3,11 @@ import { getDatabaseClient } from '../core/database/client';
 import { AppError } from '../core/errors/app-error';
 import {
   applyManagementChange,
-  type ArchivePort,
   type ManagementArchive,
   type ManagementChange,
 } from './management-archive';
 import {
+  CharacterQueries,
   captureCharacter,
   restoreCharacter,
   saveCharacterConfiguration,
@@ -16,6 +16,7 @@ import {
 } from '../modules/ai-characters/persistence';
 import { stableJson } from '../core/database/stable-json';
 import {
+  TaskQueries,
   captureRun,
   restoreRun,
   saveRun,
@@ -27,6 +28,8 @@ import {
   savePlan,
   type SavedPlan,
 } from '../modules/tasks/persistence';
+
+import type { ManagementStore } from './management-store';
 
 type SavedSnapshot = {
   characters: Map<string, SavedCharacter>;
@@ -116,15 +119,16 @@ function snapshot(
 }
 
 /** Commits one character/task snapshot as a transaction of changed rows. */
-export class DatabaseManagementArchive implements ArchivePort {
-  constructor(private readonly customDb?: PrismaClient) {}
+export class DatabaseManagementArchive implements ManagementStore {
+  readonly characters: CharacterQueries;
+  readonly tasks: TaskQueries;
+  constructor(private readonly customDb?: PrismaClient) {
+    this.characters = new CharacterQueries(customDb);
+    this.tasks = new TaskQueries(customDb);
+  }
 
   private get db(): PrismaClient {
     return this.customDb ?? getDatabaseClient();
-  }
-
-  async readSnapshot(): Promise<ManagementArchive | undefined> {
-    return this.load();
   }
 
   private async read(tx: Prisma.TransactionClient) {

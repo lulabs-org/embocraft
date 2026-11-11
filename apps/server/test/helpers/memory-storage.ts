@@ -1,3 +1,8 @@
+import type { ManagementStore } from '../../src/persistence/management-store';
+import {
+  MemoryCharacterReads,
+  MemoryTaskQueries,
+} from './memory-management-queries';
 import { AppError } from '../../src/core/errors/app-error';
 import {
   toProviderView,
@@ -99,7 +104,12 @@ export const voicePersistence = () =>
 export const asrPersistence = () => new MemoryPersistence<SavedService[]>([]);
 
 /** Serialized in memory so restart, corrupt data and failed commits remain testable. */
-export class MemoryArchive implements ArchivePort {
+export class MemoryArchive implements ManagementStore {
+  readonly characters: MemoryCharacterReads;
+  readonly tasks = new MemoryTaskQueries(() => this.load());
+  constructor(providerName?: (id: string) => string) {
+    this.characters = new MemoryCharacterReads(() => this.load(), providerName);
+  }
   json?: string;
   saveError?: Error;
   async load(): ReturnType<ArchivePort['load']> {
@@ -121,7 +131,7 @@ export class MemoryProviderRepository implements ProviderRepository {
   private values: SavedProvider[] = [];
   private queue: Promise<unknown> = Promise.resolve();
 
-  readonly archive = new MemoryArchive();
+  readonly archive = new MemoryArchive((id) => this.getRuntime(id).name);
   constructor(
     readonly storage = new MemoryPersistence<SavedProvider[] | undefined>(
       undefined,
