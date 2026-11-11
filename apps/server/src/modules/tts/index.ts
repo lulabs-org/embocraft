@@ -2,15 +2,16 @@ export { createTtsRouter } from './routes/tts.routes';
 export { DatabaseVoiceServicePersistence } from './persistence/database-voice-services';
 export {
   createDefaultSpeechStatus,
-  TtsService,
+  createTtsService,
   ttsService,
 } from './composition';
+export { TtsService } from './services/tts.service';
 export { validateVoiceService } from './domain/voice-service-validation';
 export { PiperModels } from './services/piper-models.service';
 export {
   createDefaultSpeechSynthesizer,
-  PiperTts,
-} from './services/piper.service';
+  SpeachesTtsAdapter,
+} from './adapters/speaches-tts.adapter';
 export type {
   ResolvedSpeech,
   SpeechSynthesizer,

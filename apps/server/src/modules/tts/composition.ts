@@ -6,27 +6,25 @@ import type {
   SpeechModelQuery,
   VoiceServicePersistence,
 } from './ports';
-import { createDefaultSpeechSynthesizer } from './services/piper.service';
+import { createDefaultSpeechSynthesizer } from './adapters/speaches-tts.adapter';
 import { PiperModels } from './services/piper-models.service';
 import type { SpeechSynthesizer } from './services/speech-synthesizer';
-import { TtsService as TtsApplicationService } from './services/tts.service';
+import { TtsService } from './services/tts.service';
 
 const queryModels: SpeechModelQuery = (connection, signal) =>
   new SpeachesModels(connection).list(signal);
 
-/** Compatibility facade with the module's default implementations. */
-export class TtsService extends TtsApplicationService {
-  constructor(
-    storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
-    factory: SpeechAdapterFactory = createSpeechAdapter,
-    defaultSpeech: () => SpeechSynthesizer = createDefaultSpeechSynthesizer,
-    models: SpeechModelQuery = queryModels,
-  ) {
-    super(storage, factory, defaultSpeech, models);
-  }
+/** Assemble the TTS application service with the module's default dependencies. */
+export function createTtsService(
+  storage: VoiceServicePersistence = new DatabaseVoiceServicePersistence(),
+  factory: SpeechAdapterFactory = createSpeechAdapter,
+  defaultSpeech: () => SpeechSynthesizer = createDefaultSpeechSynthesizer,
+  models: SpeechModelQuery = queryModels,
+) {
+  return new TtsService(storage, factory, defaultSpeech, models);
 }
 
-export const ttsService = new TtsService();
+export const ttsService = createTtsService();
 
 /** Bind the deployment's default readiness check when the route is installed. */
 export function createDefaultSpeechStatus() {

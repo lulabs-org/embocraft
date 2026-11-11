@@ -1,10 +1,10 @@
 export {
-  AICharacterManager,
   AICharacterOrchestrator,
-  bindCharacterManager,
-  getActiveCharacterManager,
+  bindCharacterOrchestrator,
+  getActiveCharacterOrchestrator,
   type AICharacterDependencies,
 } from './application/character-orchestrator';
+export { createAICharacterOrchestrator } from './composition';
 export {
   CharacterLogService,
   type CharacterLogQueryOptions,
@@ -14,10 +14,7 @@ export {
   restoreAICharacterLogs,
 } from './domain/activity-log';
 export { validateAICharacter } from './domain/character-settings';
-export {
-  executionState,
-  taskExecutionState,
-} from './integrations/task-execution-adapter';
+export { taskExecutionState } from './integrations/task-execution-adapter';
 export { CharacterVoiceCoordinator } from './integrations/voice-coordinator';
 export {
   CharacterQueries,

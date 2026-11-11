@@ -4,7 +4,10 @@ import type { ChatData } from '@voxel/shared';
 import assert from 'node:assert/strict';
 import { controlRun, startTask } from '../../../../tests/support/managed-tasks';
 import { toolResponse } from '../../../../tests/support/pi-response';
-import { AICharacterManager } from '../../src/modules/ai-characters';
+import {
+  createAICharacterOrchestrator,
+  type AICharacterOrchestrator,
+} from '../../src/modules/ai-characters';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
@@ -14,7 +17,7 @@ import { createTestServer } from '../helpers/test-server';
 const origin = 'http://127.0.0.1:5188';
 const preview = process.env.TASK_PREVIEW === '1';
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
-let manager: AICharacterManager | undefined;
+let manager: AICharacterOrchestrator | undefined;
 let human: Session | undefined;
 let other: Session | undefined;
 let calls = 0;
@@ -174,7 +177,7 @@ try {
     return toolResponse([complete], 120);
   };
   const dependencies: NonNullable<
-    ConstructorParameters<typeof AICharacterManager>[3]
+    Parameters<typeof createAICharacterOrchestrator>[3]
   > = {
     session: (url) => new Session(url),
     model: (_config, provider) => ({ endpoint: provider, request: request }),
@@ -312,7 +315,7 @@ try {
     );
     const beforeRestore = calls;
     await manager.close();
-    manager = new AICharacterManager(
+    manager = createAICharacterOrchestrator(
       store,
       server.url,
       store.archive,
@@ -364,7 +367,7 @@ try {
     assert(!room.blocks.has('3,3,2'));
     const lastCalls = calls;
     await manager.close();
-    manager = new AICharacterManager(
+    manager = createAICharacterOrchestrator(
       store,
       server.url,
       store.archive,

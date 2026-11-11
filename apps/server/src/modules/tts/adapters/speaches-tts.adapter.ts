@@ -6,10 +6,10 @@ import type { SpeechSynthesizer } from '../services/speech-synthesizer';
 
 /** Default voice for actors without a managed voice-service binding. */
 export function createDefaultSpeechSynthesizer(): SpeechSynthesizer {
-  return new PiperTts();
+  return new SpeachesTtsAdapter();
 }
 
-export class PiperTts implements SpeechSynthesizer {
+export class SpeachesTtsAdapter implements SpeechSynthesizer {
   constructor(
     private options: {
       model?: string;

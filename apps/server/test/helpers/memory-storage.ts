@@ -95,7 +95,7 @@ export const voicePersistence = () =>
       ...validateVoiceService({
         name: 'Speaches 语音服务',
         type: 'speaches',
-        voice: '',
+        voice: 'huayan',
         speed: 1,
       }),
       id: 'local-default',

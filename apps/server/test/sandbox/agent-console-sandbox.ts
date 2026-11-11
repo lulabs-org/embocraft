@@ -10,13 +10,13 @@ import { Session, until } from '@voxel/agent-runtime';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AICharacterManager } from '../../src/modules/ai-characters';
+import { AICharacterOrchestrator } from '../../src/modules/ai-characters';
 
 process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5189';
 const dir = await mkdtemp(join(tmpdir(), 'agent-console-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
-let manager: AICharacterManager | undefined;
+let manager: AICharacterOrchestrator | undefined;
 let calls = 0;
 try {
   const providers = new MemoryProviderRepository();

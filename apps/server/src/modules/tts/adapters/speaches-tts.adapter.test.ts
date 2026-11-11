@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { PiperTts } from './speaches-tts.adapter';
+import { SpeachesTtsAdapter } from './speaches-tts.adapter';
 
 import { DEFAULT_PIPER_MODEL, PIPER_MODELS } from '@voxel/shared';
 
@@ -29,7 +29,7 @@ const wav = () => {
 
 it('requests the model voice, speed and 16k PCM WAV and validates the returned duration', async () => {
   const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(wav()));
-  const result = await new PiperTts(
+  const result = await new SpeachesTtsAdapter(
     { speed: 0.8 },
     'http://speech/v1',
     request,
@@ -48,7 +48,7 @@ it('requests the model voice, speed and 16k PCM WAV and validates the returned d
 
 it('synthesizes an arbitrary discovered model using its selected voice ID', async () => {
   const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(wav()));
-  await new PiperTts(
+  await new SpeachesTtsAdapter(
     { model: 'vendor/new-tts', voice: 'speaker:2', speed: 1.2 },
     'http://speech/v1',
     request,
@@ -59,7 +59,7 @@ it('synthesizes an arbitrary discovered model using its selected voice ID', asyn
     speed: 1.2,
   });
   await expect(
-    new PiperTts(
+    new SpeachesTtsAdapter(
       { model: 'vendor/new-tts' },
       'http://speech/v1',
       request,
@@ -74,7 +74,7 @@ it.each(PIPER_MODELS)(
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(wav()));
-    await new PiperTts(
+    await new SpeachesTtsAdapter(
       { model: model.id },
       'http://speech/v1',
       request,
@@ -88,7 +88,7 @@ it.each(PIPER_MODELS)(
 
 it('reports missing models and unreachable services, rejects invalid/oversized audio and honors cancellation', async () => {
   const request = vi.fn<typeof fetch>();
-  const tts = new PiperTts({}, 'http://speech/v1', request);
+  const tts = new SpeachesTtsAdapter({}, 'http://speech/v1', request);
   request.mockResolvedValueOnce(new Response('', { status: 404 }));
   await expect(
     tts.synthesize('你好', new AbortController().signal),

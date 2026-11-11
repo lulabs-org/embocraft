@@ -27,8 +27,10 @@ vi.mock('./api', () => ({
     runs: vi.fn(),
     save: vi.fn(),
     control: vi.fn(),
-    controlRun: vi.fn(),
   },
+}));
+vi.mock('../execution/api', () => ({
+  controlTaskRun: vi.fn(),
   displayedTaskIdentity: () => null,
 }));
 const plan = (id: string): PublicPlanView => ({

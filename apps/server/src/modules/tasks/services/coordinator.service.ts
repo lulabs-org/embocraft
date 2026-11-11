@@ -1,13 +1,8 @@
 import { createAgentRuntime, type TaskLease } from '@voxel/agent-runtime';
-import {
-  duePlans,
-  endedRun,
-  newPlan,
-  nextOccurrence,
-  runView,
-} from '../domain/model';
+import { duePlans, endedRun, newPlan, runView } from '../domain/model';
+import { nextOccurrence } from '../domain/timing';
 import { validatePlan } from '../domain/validation';
-import { PlanService } from '../persistence/plan-store';
+import { TaskPlanService } from './plan.service';
 import { TaskScheduler } from './scheduler.service';
 
 import type { WorldEvent } from '@voxel/shared';
@@ -29,8 +24,8 @@ import {
   taskBusy,
 } from './execution.service';
 export class TaskCoordinator {
-  readonly plans = new PlanService();
-  readonly committedPlans = new PlanService();
+  readonly plans = new TaskPlanService();
+  readonly committedPlans = new TaskPlanService();
   readonly planScheduler: TaskScheduler;
   private changingPlans = new Set<string>();
   private readonly messageCommands = new CommandQueue({

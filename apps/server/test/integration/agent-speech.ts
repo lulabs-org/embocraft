@@ -2,7 +2,7 @@ import { delay, Session, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
 import { validatePcmWav } from '../../src/core/audio/pcm-wav';
 import { AgentSpeech } from '../../src/modules/world/services/agent-speech.service';
-import { PiperTts } from '../../src/modules/tts/services/piper.service';
+import { SpeachesTtsAdapter } from '../../src/modules/tts/adapters/speaches-tts.adapter';
 import { createTestServer } from '../helpers/test-server';
 
 import type { AgentSpeechEvent } from '@voxel/shared';
@@ -15,7 +15,7 @@ try {
   const room = server.world,
     url = server.httpUrl;
   let synthesisCount = 0;
-  const tts = new PiperTts();
+  const tts = new SpeachesTtsAdapter();
   room.agentSpeech.close();
   room.agentSpeech = new AgentSpeech(
     () => room.state.players.values(),

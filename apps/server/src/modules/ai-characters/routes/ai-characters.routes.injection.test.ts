@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { expect, it, vi } from 'vitest';
-import { bindCharacterManager } from '../application/character-orchestrator';
+import { bindCharacterOrchestrator } from '../application/character-orchestrator';
 import type {
   AICharacterRoutePort,
   CharacterDetail,
@@ -20,7 +20,7 @@ it('uses the query port supplied to the router for lists, details, and logs', as
       total: 1,
     })),
   };
-  const release = bindCharacterManager({
+  const release = bindCharacterOrchestrator({
     events: { version: 7 },
     sessionId: () => 'session',
   } as unknown as AICharacterRoutePort);

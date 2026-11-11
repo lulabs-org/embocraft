@@ -1,14 +1,14 @@
 import { controlRun } from '../../../../tests/support/managed-tasks';
 import { MemoryProviderRepository } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
-/** Opt-in paid-model acceptance test. Uses real AICharacterManager, chat, WebSocket and physics. */
+/** Opt-in paid-model acceptance test. Uses real AICharacterOrchestrator, chat, WebSocket and physics. */
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import {
-  AICharacterManager,
-  executionState,
+  AICharacterOrchestrator,
+  taskExecutionState,
 } from '../../src/modules/ai-characters';
 import { reserveRun } from '../../src/modules/tasks/services/execution.service';
 
@@ -33,7 +33,7 @@ const output = resolve(
 process.env.DATABASE_URL = '';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-navigation-live-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
-let manager: AICharacterManager | undefined,
+let manager: AICharacterOrchestrator | undefined,
   human: Session | undefined,
   observer: Session | undefined;
 const results: unknown[] = [];
@@ -42,7 +42,7 @@ const evidence = {
   provider: provider.type,
   inference: 'real provider; no response fixtures or intent injection',
   world:
-    'isolated real Colyseus/WebSocket/physics; production AICharacterManager chat wake and persistence',
+    'isolated real Colyseus/WebSocket/physics; production AICharacterOrchestrator chat wake and persistence',
   results,
 };
 const record = async () => {
@@ -130,7 +130,7 @@ try {
         timeZone: 'UTC',
       });
       reserveRun(
-        executionState(manager.jobs.get(managed.id)!),
+        taskExecutionState(manager.jobs.get(managed.id)!),
         prior,
         'manual',
         Date.now(),

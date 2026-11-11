@@ -11,6 +11,7 @@ import { toAsrServiceView } from './model';
 describe('Bailian settings validation & endpoints', () => {
   const draft = {
     ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
     name: '模型 A',
     apiKey: 'secret-for-test',
   };
@@ -94,13 +95,37 @@ describe('Whisper settings validation', () => {
 });
 
 describe('General ASR Service entity validation & view', () => {
+  it('requires an explicit provider and rejects the obsolete default model alias', () => {
+    expect(() =>
+      validateAsrService({
+        ...DEFAULT_BAILIAN_ASR,
+        name: 'ASR',
+        apiKey: 'key',
+      }),
+    ).toThrow('识别服务类型');
+    expect(() =>
+      validateAsrService({
+        ...DEFAULT_WHISPER_ASR,
+        provider: 'whisper',
+        name: 'ASR',
+        model: 'default',
+      }),
+    ).toThrow('识别模型');
+  });
+
   it('validates service names and generates IDs', () => {
     expect(() =>
-      validateAsrService({ ...DEFAULT_BAILIAN_ASR, name: '', apiKey: 'key' }),
+      validateAsrService({
+        ...DEFAULT_BAILIAN_ASR,
+        provider: 'bailian' as const,
+        name: '',
+        apiKey: 'key',
+      }),
     ).toThrow('名称');
 
     const created = validateAsrService({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: '百炼服务',
       apiKey: 'key',
     });
@@ -108,7 +133,12 @@ describe('General ASR Service entity validation & view', () => {
     expect(created.name).toBe('百炼服务');
 
     const updated = validateAsrService(
-      { ...DEFAULT_BAILIAN_ASR, name: '新名称', apiKey: 'new-key' },
+      {
+        ...DEFAULT_BAILIAN_ASR,
+        provider: 'bailian' as const,
+        name: '新名称',
+        apiKey: 'new-key',
+      },
       created,
     );
     expect(updated.id).toBe(created.id);
@@ -118,6 +148,7 @@ describe('General ASR Service entity validation & view', () => {
   it('rejects provider changes on existing services', () => {
     const existing = validateAsrService({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: '百炼',
       apiKey: 'key',
     });
@@ -137,6 +168,7 @@ describe('General ASR Service entity validation & view', () => {
   it('masks apiKey in toAsrServiceView', () => {
     const service = validateAsrService({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: '百炼',
       apiKey: 'super-secret',
     });

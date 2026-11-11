@@ -55,5 +55,3 @@ export function taskExecutionState(job: Job): TaskExecutionState {
   states.set(job, state);
   return state;
 }
-
-export { taskExecutionState as executionState };

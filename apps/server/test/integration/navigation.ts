@@ -14,7 +14,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { controlRun } from '../../../../tests/support/managed-tasks';
-import { AICharacterManager } from '../../src/modules/ai-characters';
+import { AICharacterOrchestrator } from '../../src/modules/ai-characters';
 import { createTestServer } from '../helpers/test-server';
 
 import { key } from '@voxel/shared';
@@ -24,7 +24,7 @@ import { toolResponse } from '../../../../tests/support/pi-response';
 process.env.DATABASE_URL = '';
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 const dir = await mkdtemp(join(tmpdir(), 'voxel-navigation-'));
-let manager: AICharacterManager | undefined;
+let manager: AICharacterOrchestrator | undefined;
 let agent: Session | undefined, human: Session | undefined;
 try {
   server = await createTestServer({

@@ -1,6 +1,6 @@
 import type { TaskPlan } from '@voxel/shared';
 import type { StoredRun } from '../domain/types';
-import type { PlanService } from './plan-store';
+import type { TaskPlanService } from '../services/plan.service';
 import type { TaskExecutionState } from '../ports';
 import { captureTask } from '../services/execution.service';
 
@@ -18,7 +18,7 @@ export class TaskSnapshots {
     for (const execution of executions) captureTask(execution);
   }
 
-  capture(plans: PlanService): TaskSnapshot {
+  capture(plans: TaskPlanService): TaskSnapshot {
     return {
       plans: structuredClone(plans.plans),
       runs: structuredClone(plans.runs),
@@ -26,7 +26,7 @@ export class TaskSnapshots {
     };
   }
 
-  restore(plans: PlanService, snapshot: TaskSnapshot) {
+  restore(plans: TaskPlanService, snapshot: TaskSnapshot) {
     Object.assign(plans, {
       plans: snapshot.plans,
       runs: snapshot.runs,
@@ -34,7 +34,7 @@ export class TaskSnapshots {
     });
   }
 
-  reject(snapshot: TaskSnapshot, committed: PlanService) {
+  reject(snapshot: TaskSnapshot, committed: TaskPlanService) {
     const changedPlans = snapshot.plans.filter(
       (p) =>
         JSON.stringify(p) !==

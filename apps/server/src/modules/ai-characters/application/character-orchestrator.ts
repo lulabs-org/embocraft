@@ -1,14 +1,13 @@
-import {
+import type {
   Session,
-  type AgentConfig,
-  type RuntimeModelOptions,
+  AgentConfig,
+  RuntimeModelOptions,
 } from '@voxel/agent-runtime';
 import { type AICharacterSettings, type AICharacterView } from '@voxel/shared';
 import type { ManagementPersistence } from '../../../application/management-commit';
 import { createManagementPersistence } from '../../../application/management-persistence';
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
-import { DatabaseManagementArchive } from '../../../persistence/database-management-archive';
 import type {
   CharacterChanges,
   CharacterRecord,
@@ -16,11 +15,7 @@ import type {
 import type { ManagementStore } from '../../../persistence/management-store';
 import { migrateArchive } from '../../../persistence/migrate-archive';
 import { bindConsoleSyncEvents, ConsoleSyncEvents } from '../../console-sync';
-import {
-  providerRepository,
-  type ProviderRuntimePort,
-  type SavedProvider,
-} from '../../providers';
+import { type ProviderRuntimePort, type SavedProvider } from '../../providers';
 import {
   bindTaskService,
   markOffline,
@@ -29,7 +24,7 @@ import {
 } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/character-settings';
-import { executionState } from '../integrations/task-execution-adapter';
+import { taskExecutionState } from '../integrations/task-execution-adapter';
 import { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
 import { CharacterSnapshots } from '../persistence/character-snapshots';
 import type { AICharacterRoutePort } from '../ports';
@@ -45,21 +40,22 @@ import { CharacterOperations } from './character-operations';
 import { characterSettings } from '../persistence/character-record';
 import { restoreAICharacterJob } from './character-restore';
 
-let activeCharacterManager: AICharacterRoutePort | undefined;
+let activeCharacterOrchestrator: AICharacterRoutePort | undefined;
 
-export function bindCharacterManager(
+export function bindCharacterOrchestrator(
   manager: AICharacterRoutePort,
 ): () => void {
-  activeCharacterManager = manager;
+  activeCharacterOrchestrator = manager;
   return () => {
-    if (activeCharacterManager === manager) activeCharacterManager = undefined;
+    if (activeCharacterOrchestrator === manager)
+      activeCharacterOrchestrator = undefined;
   };
 }
 
-export function getActiveCharacterManager(): AICharacterRoutePort {
-  if (!activeCharacterManager)
+export function getActiveCharacterOrchestrator(): AICharacterRoutePort {
+  if (!activeCharacterOrchestrator)
     throw new AppError('AI 角色管理服务尚未就绪。', 503);
-  return activeCharacterManager;
+  return activeCharacterOrchestrator;
 }
 
 export class AICharacterOrchestrator {
@@ -84,10 +80,10 @@ export class AICharacterOrchestrator {
   private shutdownPresence = new Map<string, Job['view']['status']>();
 
   constructor(
-    private readonly providers: ProviderRuntimePort = providerRepository,
-    private serverUrl: string | (() => string) = '',
+    private readonly providers: ProviderRuntimePort,
+    private serverUrl: string | (() => string),
     private dependencies: AICharacterDependencies,
-    private archive: ManagementStore = new DatabaseManagementArchive(),
+    private archive: ManagementStore,
   ) {
     this.operations = new CharacterOperations(
       this.jobs,
@@ -117,7 +113,7 @@ export class AICharacterOrchestrator {
         tasks.captureExecutions(
           this.participatingJobs()
             .filter((job) => !exclude?.includes(job.view.id))
-            .map(executionState),
+            .map(taskExecutionState),
         ),
       captureCharacters: () =>
         characters.capture(
@@ -168,15 +164,15 @@ export class AICharacterOrchestrator {
         execution: (id) => {
           const job = this.operations.get(id);
           if (!job) throw new AppError('请先让角色上线。', 409);
-          return executionState(job);
+          return taskExecutionState(job);
         },
         withExecution: (id, action) => this.operations.run(id, action),
         readCharacter: async (id) => await this.record(id),
         findExecution: (id) => {
           const job = this.operations.get(id);
-          return job ? executionState(job) : undefined;
+          return job ? taskExecutionState(job) : undefined;
         },
-        executions: () => [...this.jobs.values()].map(executionState),
+        executions: () => [...this.jobs.values()].map(taskExecutionState),
         save: () => this.save(),
         schedule: (id) => {
           const job = this.jobs.get(id);
@@ -223,7 +219,7 @@ export class AICharacterOrchestrator {
       save: (changes) => this.save(changes),
       detachAgent: (...args) => this.tasks.detachAgent(...args),
     });
-    const releaseCharacterBinding = bindCharacterManager(this);
+    const releaseCharacterBinding = bindCharacterOrchestrator(this);
     const releaseTaskBinding = bindTaskService(this.tasks);
     const releaseSyncEvents = bindConsoleSyncEvents(this.events);
     this.releaseBindings = () => {
@@ -312,7 +308,7 @@ export class AICharacterOrchestrator {
       );
       // Keep only serialized recovery data; do not retain offline execution instances.
       if (voiceWarning) appendAICharacterLog(job.view, voiceWarning);
-      this.persistence.tasks.captureExecutions([executionState(job)]);
+      this.persistence.tasks.captureExecutions([taskExecutionState(job)]);
       profiles[view.id] = characterSettings(job.view);
       recovered.push({
         ...view,
@@ -447,7 +443,7 @@ export class AICharacterOrchestrator {
         const job = this.operations.get(id)!;
         if (job.view.status !== 'stopped') {
           job.view.status = 'stopped';
-          markOffline(executionState(job));
+          markOffline(taskExecutionState(job));
           await this.save();
         }
         return this.get(id);
@@ -491,24 +487,6 @@ export class AICharacterOrchestrator {
     await Promise.allSettled([...this.jobs.values()].map((j) => j.done));
     await this.save();
     this.events.close();
-  }
-}
-
-/** Manager wrapper with explicit persistence supplied by the host. */
-export class AICharacterManager extends AICharacterOrchestrator {
-  constructor(
-    providers: ProviderRuntimePort = providerRepository,
-    serverUrl: string | (() => string) = '',
-    archive: ManagementStore = new DatabaseManagementArchive(),
-    dependencies: AICharacterDependencies = {
-      session: (url) => new Session(url),
-      model: (_config, provider) => ({
-        endpoint: { type: provider.type, baseUrl: provider.baseUrl },
-        request: fetch,
-      }),
-    },
-  ) {
-    super(providers, serverUrl, dependencies, archive);
   }
 }
 

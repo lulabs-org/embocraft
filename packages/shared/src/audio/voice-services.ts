@@ -3,8 +3,7 @@ export type VoiceServiceType =
   | 'browser'
   | 'bailian'
   | 'compatible';
-export type TtsProviderType = VoiceServiceType;
-/** Legacy profile migration and unmanaged default voice; never a discovery catalog. */
+/** Piper models available for the deployment's unmanaged default voice. */
 export const PIPER_MODELS = [
   {
     id: 'speaches-ai/piper-zh_CN-huayan-medium',
@@ -26,7 +25,7 @@ export const PIPER_MODELS = [
   },
 ] as const;
 export const DEFAULT_PIPER_MODEL = PIPER_MODELS[0].id;
-export type TtsProviderSettings = {
+export type VoiceServiceSettings = {
   name: string;
   type: VoiceServiceType;
   baseUrl: string;
@@ -35,17 +34,14 @@ export type TtsProviderSettings = {
   speed: number;
   voiceLanguage?: string;
 };
-export type VoiceServiceSettings = TtsProviderSettings;
 
-export type TtsProviderView = TtsProviderSettings & {
+export type VoiceServiceView = VoiceServiceSettings & {
   id: string;
   capability: 'tts';
   hasApiKey: boolean;
 };
-export type VoiceServiceView = TtsProviderView;
 
-export type TtsProviderDraft = TtsProviderSettings & { apiKey: string };
-export type VoiceServiceDraft = TtsProviderDraft;
+export type VoiceServiceDraft = VoiceServiceSettings & { apiKey: string };
 
 export type SpeachesConnectionDraft = {
   baseUrl: string;

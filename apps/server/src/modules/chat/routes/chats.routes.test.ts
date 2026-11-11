@@ -5,10 +5,10 @@ import { createServer, type Server } from 'node:http';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TestAsrService } from '../../../../test/helpers/memory-storage';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
-import type { AsrService, LocalSpeech } from '../../asr';
+import type { AsrService, WhisperAdapter } from '../../asr';
 
 const mocked = vi.hoisted(() => ({
-  speech: undefined as unknown as LocalSpeech,
+  speech: undefined as unknown as WhisperAdapter,
   asrService: undefined as unknown as AsrService,
 }));
 
@@ -16,11 +16,11 @@ vi.mock('../../asr', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../asr')>();
   return {
     ...actual,
-    localSpeech: {
-      normalize: (...args: Parameters<LocalSpeech['normalize']>) =>
-        (mocked.speech ?? actual.localSpeech).normalize(...args),
-      transcribe: (...args: Parameters<LocalSpeech['transcribe']>) =>
-        (mocked.speech ?? actual.localSpeech).transcribe(...args),
+    whisperAdapter: {
+      normalize: (...args: Parameters<WhisperAdapter['normalize']>) =>
+        (mocked.speech ?? actual.whisperAdapter).normalize(...args),
+      transcribe: (...args: Parameters<WhisperAdapter['transcribe']>) =>
+        (mocked.speech ?? actual.whisperAdapter).transcribe(...args),
     },
     asrService: {
       acquire: (id: string) =>
@@ -39,7 +39,7 @@ let releaseChat: (() => void) | undefined;
 afterEach(async () => {
   releaseChat?.();
   releaseChat = undefined;
-  mocked.speech = undefined as unknown as LocalSpeech;
+  mocked.speech = undefined as unknown as WhisperAdapter;
   mocked.asrService = undefined as unknown as AsrService;
   vi.unstubAllEnvs();
   if (server) {
@@ -146,7 +146,7 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   const speech = {
     normalize: vi.fn().mockResolvedValue({ bytes, durationMs: 1000 }),
     transcribe,
-  } as unknown as LocalSpeech;
+  } as unknown as WhisperAdapter;
   const release = vi.fn();
   const settings = {
     ...DEFAULT_WHISPER_ASR,

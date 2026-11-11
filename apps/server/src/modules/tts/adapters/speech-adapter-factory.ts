@@ -3,12 +3,12 @@ import type { SavedVoice } from '../domain/voice-service-validation';
 import type { SpeechSynthesizer } from '../services/speech-synthesizer';
 import { BailianTts } from './bailian-tts.adapter';
 import { CompatibleTts } from './compatible-tts.adapter';
-import { PiperTts } from './speaches-tts.adapter';
+import { SpeachesTtsAdapter } from './speaches-tts.adapter';
 
 export function createSpeechAdapter(value: SavedVoice): SpeechSynthesizer {
   switch (value.type) {
     case 'speaches':
-      return new PiperTts(value);
+      return new SpeachesTtsAdapter(value);
     case 'bailian':
       return new BailianTts(value);
     case 'compatible':

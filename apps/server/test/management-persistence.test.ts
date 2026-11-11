@@ -6,12 +6,12 @@ import {
   AICharacterRegistry,
   AICharacterWakeScheduler,
   CharacterSnapshots,
-  executionState,
+  taskExecutionState,
   protectCharactersAfterStorageFailure,
 } from '../src/modules/ai-characters';
 import { ConsoleSyncEvents } from '../src/modules/console-sync';
 import {
-  PlanService,
+  TaskPlanService,
   TaskSnapshots,
   newPlan,
   newRun,
@@ -23,8 +23,8 @@ import type {
 import { createManagementPersistence } from '../src/application/management-persistence';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
-  const plans = new PlanService();
-  const committed = new PlanService();
+  const plans = new TaskPlanService();
+  const committed = new TaskPlanService();
   const events = new ConsoleSyncEvents();
   const jobs = new AICharacterRegistry();
   for (const id of ['a', 'b']) {
@@ -74,7 +74,7 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
       characters,
       tasks,
       captureExecutions: () =>
-        tasks.captureExecutions([...jobs.values()].map(executionState)),
+        tasks.captureExecutions([...jobs.values()].map(taskExecutionState)),
       captureCharacters: () =>
         characters.capture(
           jobs,
@@ -109,7 +109,7 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
   };
 }
 
-function addTask(plans: PlanService) {
+function addTask(plans: TaskPlanService) {
   const plan = {
     ...newPlan(
       {

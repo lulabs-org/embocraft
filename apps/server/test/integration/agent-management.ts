@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { toolResponse } from '../../../../tests/support/pi-response';
-import { AICharacterManager } from '../../src/modules/ai-characters';
+import {
+  createAICharacterOrchestrator,
+  type AICharacterOrchestrator,
+} from '../../src/modules/ai-characters';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
@@ -18,7 +21,7 @@ process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5187';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-manager-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
-let manager: AICharacterManager | undefined;
+let manager: AICharacterOrchestrator | undefined;
 let calls = 0;
 const observations: Observation[] = [];
 let speaker: Session | undefined;
@@ -685,7 +688,7 @@ try {
     ),
   );
   const beforeRestore = calls;
-  manager = new AICharacterManager(
+  manager = createAICharacterOrchestrator(
     store,
     url.replace('http', 'ws'),
     store.archive,

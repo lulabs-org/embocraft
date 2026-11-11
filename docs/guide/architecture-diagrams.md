@@ -94,7 +94,7 @@ graph TD
     Create --> VS["ttsService<br/>tts/services/tts.service"]
     Create --> AS["asrService<br/>asr/services/asr.service"]
 
-    Create --> ACM["AICharacterManager<br/>ai-characters"]
+    Create --> ACM["AICharacterOrchestrator<br/>ai-characters"]
 
     Create --> App["Express 中间件与路由"]
     Create --> Sockets["SocketRoutes Map"]
@@ -163,21 +163,21 @@ graph TB
 
 ```mermaid
 graph LR
-    Routes["routes/ai-characters.routes.ts<br/>REST 管理接口"] --> Orch["services/orchestrator.service.ts<br/>AICharacterOrchestrator"]
-    Manager["services/character-manager.service.ts<br/>AICharacterManager"] --> Orch
-    Orch --> Manage["services/character-management.service.ts<br/>角色管理"]
-    Orch --> Exec["services/character-execution.service.ts<br/>执行、唤醒与停止"]
+    Routes["routes/ai-characters.routes.ts<br/>REST 管理接口"] --> Orch["application/character-orchestrator.ts<br/>AICharacterOrchestrator"]
+    Composition["composition.ts<br/>createAICharacterOrchestrator"] --> Orch
+    Orch --> Manage["application/character-management.ts<br/>角色管理"]
+    Orch --> Exec["runtime/character-execution.ts<br/>执行、唤醒与停止"]
     Manage --> Exec
-    Exec --> Host["services/character-host.service.ts<br/>单角色世界会话"]
-    Orch --> Voice["services/voice-coordinator.service.ts"]
-    Orch --> Restore["services/character-restore · character-snapshots"]
+    Exec --> Host["runtime/character-host.ts<br/>单角色世界会话"]
+    Orch --> Voice["integrations/voice-coordinator.ts"]
+    Orch --> Restore["application/character-restore · persistence/character-snapshots"]
     Orch --> Joint["application/management-persistence.ts<br/>联合提交协调"]
     Routes --> Queries["persistence/queries.ts<br/>注入的角色查询"]
-    Host --> Ctx["services/execution-context.ts"]
-    Orch --> Wake["services/wake-scheduler.service.ts"]
-    Host --> WEH["services/world-event-handler.ts"]
+    Host --> Ctx["runtime/execution-context.ts"]
+    Orch --> Wake["runtime/wake-scheduler.ts"]
+    Host --> WEH["runtime/world-event-handler.ts"]
     Host --> Log["domain/activity-log"]
-    Host --> TA["services/task-execution-adapter.ts"]
+    Host --> TA["integrations/task-execution-adapter.ts"]
     Ctx -->|Session / AgentRunner| RTPkg["@voxel/agent-runtime"]
     WEH -->|recordEvent / TaskService| RTPkg
     TA --> TaskMod["modules/tasks"]

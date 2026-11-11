@@ -5,6 +5,7 @@ import { SpeechModelsService } from './speech-models.service';
 
 it('reuses the saved key for the same Speaches endpoint and passes the cancellation signal to discovery', async () => {
   const saved = validateVoiceService({
+    voice: 'huayan',
     name: 'Private Speaches',
     type: 'speaches',
     baseUrl: 'https://speech.example/v1',
@@ -35,6 +36,7 @@ it('reuses the saved key for the same Speaches endpoint and passes the cancellat
 
 it('rejects invalid input and changed endpoints before querying models', async () => {
   const saved = validateVoiceService({
+    voice: 'huayan',
     name: 'Private Speaches',
     type: 'speaches',
     baseUrl: 'https://speech.example/v1',

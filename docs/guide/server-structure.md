@@ -87,20 +87,22 @@ apps/server/
         │   ├── domain/                  # 智能体领域实体、状态规则与纯计算
         │   │   ├── validation.ts        # 角色配置合法性纯校验
         │   │   └── activity-log.ts      # 动作日志格式纯函数
-        │   ├── services/                # 核心编排服务与 Actor 运行时
-        │   │   ├── character-manager.service.ts # 智能体总管服务（AICharacterManager）
-        │   │   ├── orchestrator.service.ts # 协调服务装配、恢复与关闭
-        │   │   ├── character-management.service.ts # 角色配置与管理操作
-        │   │   ├── character-execution.service.ts # 执行、唤醒、停止与存储失败保护
-        │   │   ├── character-restore.ts # 从存档恢复角色运行时
-        │   │   ├── character-snapshots.ts # 捕获运行时快照与判断保存失败影响
-        │   │   ├── character-host.service.ts # 单智能体 Actor 宿主与执行上下文
-        │   │   ├── wake-scheduler.service.ts # 定时与事件唤醒调度器
-        │   │   ├── voice-coordinator.service.ts # 语音协同调度服务
-        │   │   ├── character-job.ts     # 托管运行时状态、集合与状态判定
+        │   ├── composition.ts           # createAICharacterOrchestrator 默认依赖装配
+        │   ├── application/             # 生命周期编排与角色管理
+        │   │   ├── character-orchestrator.ts # AICharacterOrchestrator：协调装配、恢复与关闭
+        │   │   ├── character-management.ts # 角色配置与管理操作
+        │   │   ├── character-operations.ts # 离线角色命令作用域
+        │   │   └── character-restore.ts  # 从存档恢复角色运行时
+        │   ├── runtime/                 # Actor 运行时
+        │   │   ├── character-execution.ts # 执行、唤醒、停止与存储失败保护
+        │   │   ├── character-host.ts    # 单智能体 Actor 宿主
+        │   │   ├── wake-scheduler.ts    # 定时与事件唤醒调度器
+        │   │   ├── character-registry.ts # 托管运行时状态、集合与状态判定
         │   │   ├── execution-context.ts # 会话与 Runner 执行上下文契约
-        │   │   ├── task-execution-adapter.ts # 将角色运行时状态适配为 Tasks 执行状态
         │   │   └── world-event-handler.ts # 世界事件接收与角色唤醒协调
+        │   ├── integrations/
+        │   │   ├── voice-coordinator.ts # 语音协同调度服务
+        │   │   └── task-execution-adapter.ts # taskExecutionState 任务状态适配
         │   ├── persistence/             # 数据库查询与存档记录映射
         │   │   ├── queries.ts           # 数据库查询、详情组装与日志分页
         │   │   ├── character-storage.ts # 角色配置、状态和日志数据库映射
@@ -132,20 +134,23 @@ apps/server/
         │   │   └── capabilities.routes.ts # /voice/capabilities 运行时能力探针
         │   ├── sockets/
         │   │   └── asr.socket.ts        # /voice/asr/realtime 实时流式识别
-        │   └── index.ts                 # createAsrRouter、AsrService、asrService、installAsrSocket、LocalSpeech 等
+        │   └── index.ts                 # createAsrRouter、AsrService、asrService、installAsrSocket、WhisperAdapter 等
         │
         ├── tts/                         # ── 2b. 语音合成（TTS）与音色服务 ──
         │   ├── services/
-        │   │   ├── tts.service.ts       # TtsService / ttsService：无状态配置、试听与合成服务
-        │   │   ├── piper.service.ts     # PiperTts 合成
-        │   │   ├── remote.service.ts    # RemoteTts 远程合成
+        │   │   ├── tts.service.ts       # TtsService：配置、试听与合成应用服务
         │   │   ├── piper-models.service.ts # Piper 模型就绪查询
         │   │   └── speech-synthesizer.ts # 合成接口与结果类型
+        │   ├── composition.ts           # createTtsService 与默认实例 ttsService
+        │   ├── adapters/
+        │   │   ├── speaches-tts.adapter.ts # SpeachesTtsAdapter
+        │   │   ├── compatible-tts.adapter.ts # CompatibleTts
+        │   │   └── bailian-tts.adapter.ts # BailianTts
         │   ├── persistence/
         │   │   └── database-voice-services.ts
         │   ├── routes/
         │   │   └── tts.routes.ts        # createTtsRouter()：零参挂载 /voice/tts 管理与试听路由
-        │   └── index.ts                 # createTtsRouter、TtsService、ttsService、PiperTts 等
+        │   └── index.ts                 # createTtsRouter、TtsService、ttsService、SpeachesTtsAdapter 等
         │
         ├── chat/                        # ── 3. 世界聊天与空间语音中继 ──
         │   ├── domain/
@@ -203,6 +208,7 @@ apps/server/
         │   │   ├── types.ts            # 计划、执行历史与查询类型
         │   │   └── command-policy.ts    # 幂等命令指纹的请求体规整纯函数
         │   ├── services/                # 业务流程与调度引擎
+        │   │   ├── plan.service.ts        # 计划业务操作与执行历史内存状态
         │   │   ├── coordinator.service.ts # 跨角色任务协调器
         │   │   ├── scheduler.service.ts   # 计划触发与时间窗口调度器
         │   │   └── execution.service.ts   # 任务单次执行与重试流水线
@@ -212,8 +218,7 @@ apps/server/
         │   │   ├── task-storage-helpers.ts # 时间、计数器与 JSON 转换
         │   │   ├── index.ts             # 联合事务使用的任务持久化门面
         │   │   ├── snapshots.ts         # 存档快照序列化
-        │   │   ├── restore.ts           # 历史快照还原
-        │   │   └── plan-store.ts        # 计划与执行历史内存状态仓储
+        │   │   └── restore.ts           # 历史快照还原
         │   ├── routes/                  # HTTP REST API
         │   │   └── tasks.routes.ts      # /tasks 与 /task-runs 路由
         │   ├── ports.ts                 # TaskPort、TaskHostPort 与 TaskExecutionState 契约
@@ -317,7 +322,7 @@ import { errorHandler } from './core/http/middleware/error-handler';
 
 // 各模块从 index.ts 引入路由工厂与 Socket 安装函数；角色路由接收查询端口
 import {
-  AICharacterManager,
+  createAICharacterOrchestrator,
   CharacterQueries,
   createAICharacterRouter,
 } from './modules/ai-characters';
@@ -359,7 +364,7 @@ import { GatewayAuth, installGatewaySocket } from './modules/gateway';
   - 生产环境下，智能体角色（`AgentCharacter`）、执行计划（`AgentPlan`）、运行实例（`AgentRun`）及请求幂等键（`AgentRequest`）等跨模块状态快照，由 `DatabaseManagementArchive` 在同一事务中提交至 PostgreSQL 表中；角色、计划和执行元数据使用结构化列，运行时检查点与嵌套配置保留 JSON；
   - 采用确定性键排序序列化（`stableJson`）计算脏数据变更集合，仅对产生实质变更的行执行批量 upsert / delete，兼顾事务完整性与高效 IO。
 - **跨模块快照协调与写屏障（`src/application/management-commit.ts`）**：
-  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`PlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各自模块内；
+  - `ManagementPersistence` 统一聚合协调智能体运行时（`AICharacterRegistry`）与规划服务（`TaskPlanService`）的内存数据快照，实现业务逻辑与底层持久化驱动解耦；角色和任务私有的快照捕获与恢复继续保留在各自模块内；
   - `persist()` 捕获快照并加入 Promise 串行保存队列，保存成功后提交角色和任务的可见状态，再调用注入的提交通知回调；角色编排器将回调连接到 `ManagementEvents.commit()`，持久化协调器不依赖事件总线实现；`storageRevision` 在保存失败时递增，用于标记失败代次。`flush(since)` 等待已排队的保存，并检查失败代次，不主动创建新快照，也不代表每次成功提交的版本号。
 - **角色 HTTP 查询（`ai-characters/persistence/queries.ts`）**：
   - 路由通过注入的查询接口获取角色列表、详情和日志分页；配置、当前执行、待执行任务、用量和日志都来自数据库，只有连接 ID 和事件版本由路由补充。关联读取使用 `RepeatableRead` 事务；角色快照不再维护 HTTP 响应缓存。写操作在 `flush(since)` 成功后复用数据库查询返回结果。
@@ -421,9 +426,9 @@ graph LR
 - **共享音频基础设施（`core/audio/`）**：
   `pcm-wav.ts` 在内存中校验 PCM WAV 格式、时长与音量，复用通用 `AppError` 保留错误状态、文案及 `no-speech` 代码；`normalize.ts` 协调 FFmpeg 转换、临时文件及 PCM 校验，`command.ts` 负责子进程执行；`speaches-models.ts` 与 `voice-service-connection.ts` 提供 Speaches 模型发现和连接参数校验。默认语音服务地址统一由 `core/config/env.ts` 解析。该目录只依赖 `core`。
 - **ASR 模块（`modules/asr/`）**：
-  `engines/` 保留 `LocalSpeech`（`localSpeech`）的 Whisper 识别与 `bridgeBailianAsr`/OpenAI/Gemini 流式协议；`services/` 负责 `AsrService`（`asrService`）、`RealtimeAsrService` 与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责数据库适配；`routes/asr.routes.ts` 的零参 `createAsrRouter()` 挂载 `capabilities → transcribe → asr` 路由，管理鉴权由 `server.ts` 前置；`sockets/asr.socket.ts` 的 `installAsrSocket` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
+  `engines/` 保留 `WhisperAdapter`（`whisperAdapter`）的 Whisper 识别与 `bridgeBailianAsr`/OpenAI/Gemini 流式协议；`services/` 负责 `AsrService`（`asrService`）、`RealtimeAsrService` 与 `SpeechScheduler`/`scheduleSpeech` 的队列管理；`persistence/` 负责数据库适配；`routes/asr.routes.ts` 的零参 `createAsrRouter()` 挂载 `capabilities → transcribe → asr` 路由，管理鉴权由 `server.ts` 前置；`sockets/asr.socket.ts` 的 `installAsrSocket` 注册 `/voice/asr/realtime`。`/voice/capabilities` 经 `tts` 门面读取 `PiperModels` 状态。
 - **TTS 模块（`modules/tts/`）**：
-  `services/` 保留 `TtsService`（`ttsService`）、`PiperTts`、`RemoteTts`、`PiperModels` 与 `SpeechSynthesizer` 契约，不在模块内持有世界会话绑定状态；删除保护与音色更新通知通过 `core/events/domain-events.ts` 事件总线及 PostgreSQL 外键约束完成；`persistence/` 负责数据库适配；`routes/tts.routes.ts` 的零参 `createTtsRouter()` 直接调用 `ttsService`，由 `server.ts` 经 management 管线挂载 `/voice/tts`。
+  `services/` 定义 `TtsService`、`PiperModels` 与 `SpeechSynthesizer` 契约，`composition.ts` 通过 `createTtsService()` 装配 `ttsService`，`adapters/` 实现 Speaches、百炼和 OpenAI 兼容合成协议。模块不持有世界会话绑定状态；删除保护与音色更新通知通过 `core/events/domain-events.ts` 事件总线及 PostgreSQL 外键约束完成；`persistence/` 负责数据库适配；`routes/tts.routes.ts` 的零参 `createTtsRouter()` 直接调用 `ttsService`，由 `server.ts` 经 management 管线挂载 `/voice/tts`。
 - **世界内语音协作（`modules/world/services/`）**：
   `agent-speech.service.ts` 保留 `AgentSpeech` 的队列、听众筛选、取消与音频缓存，由 `WorldRoom` 装配；聊天路由只依赖本地声明的 `AgentSpeechClips` 读取契约，避免 `chat → world` 循环依赖。`spatial-signaling.service.ts` 提供 WebRTC 信令校验与转发。
 - 两个 Store 仍包含原有校验与运行时协调职责；鉴权、Origin 策略、JSON/原始音频限制、装配顺序、识别占用、音色绑定、删除保护及连接生命周期保持不变。

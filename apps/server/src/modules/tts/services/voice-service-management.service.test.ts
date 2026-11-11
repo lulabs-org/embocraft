@@ -5,7 +5,11 @@ import type { VoiceServicePersistence } from '../ports';
 import { VoiceServiceManagement } from './voice-service-management.service';
 
 it('checks deletion again inside the transaction before removing the voice', async () => {
-  const voice = validateVoiceService({ name: 'Voice', type: 'speaches' });
+  const voice = validateVoiceService({
+    voice: 'huayan',
+    name: 'Voice',
+    type: 'speaches',
+  });
   const remove = vi.fn();
   let inTransaction = false;
   const storage: VoiceServicePersistence = {

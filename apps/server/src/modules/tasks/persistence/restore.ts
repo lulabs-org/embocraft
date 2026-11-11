@@ -5,7 +5,8 @@ import {
 } from '@voxel/agent-runtime';
 
 import { isRepeating } from '@voxel/shared';
-import { duePlans, endedRun, newRun, nextOccurrence } from '../domain/model';
+import { duePlans, endedRun, newRun } from '../domain/model';
+import { nextOccurrence } from '../domain/timing';
 import type { TaskExecutionState } from '../ports';
 import { captureTask } from '../services/execution.service';
 

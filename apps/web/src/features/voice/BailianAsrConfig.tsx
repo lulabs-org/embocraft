@@ -38,7 +38,7 @@ export function BailianAsrConfig({
     draft.provider !== 'browser' &&
     (draft.provider === 'openai' || draft.provider === 'gemini'
       ? saved?.provider === draft.provider
-      : (saved?.provider === 'bailian' || saved?.provider === undefined) &&
+      : saved?.provider === 'bailian' &&
         saved?.region === draft.region &&
         saved?.workspaceId === draft.workspaceId);
   return (
@@ -67,7 +67,7 @@ export function BailianAsrConfig({
         <label>
           {t('console.asr.serviceType')}
           <select
-            value={draft.provider ?? 'bailian'}
+            value={draft.provider}
             disabled={!!saved}
             onChange={(e) =>
               manager.changeProvider(e.target.value as AsrProvider)

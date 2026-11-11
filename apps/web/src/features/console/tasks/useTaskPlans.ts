@@ -9,7 +9,8 @@ import type {
 import type { PublicPlanView, PlanQueryFilter } from '@voxel/shared/management';
 import { useI18n } from '../../../i18n/context';
 import { refreshOnGatewayChange } from '../../../network/gateway';
-import { tasksApi, displayedTaskIdentity, type PlanPage } from './api';
+import { tasksApi, type PlanPage } from './api';
+import { displayedTaskIdentity, controlTaskRun } from '../execution/api';
 export function useTaskPlans({
   characters,
   active,
@@ -144,7 +145,7 @@ export function useTaskPlans({
     const owner = characters.find((a) => a.id === run.characterId);
     try {
       await mutate(() =>
-        tasksApi.controlRun(
+        controlTaskRun(
           run.id,
           operation,
           { ...limits },

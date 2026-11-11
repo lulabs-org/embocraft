@@ -4,7 +4,11 @@ import { validateVoiceService } from '../domain/voice-service-validation';
 import { SpeechService } from './speech.service';
 
 it('reads the current saved configuration when a resolved synthesizer runs', async () => {
-  const first = validateVoiceService({ name: 'Voice', type: 'speaches' });
+  const first = validateVoiceService({
+    voice: 'huayan',
+    name: 'Voice',
+    type: 'speaches',
+  });
   let current = first;
   const factory = vi.fn(() => ({
     synthesize: async () => ({ bytes: Buffer.from('audio'), durationMs: 1 }),
@@ -25,7 +29,11 @@ it('reads the current saved configuration when a resolved synthesizer runs', asy
 });
 
 it('shares the concurrency limit between direct and resolved synthesis', async () => {
-  const voice = validateVoiceService({ name: 'Voice', type: 'speaches' });
+  const voice = validateVoiceService({
+    voice: 'huayan',
+    name: 'Voice',
+    type: 'speaches',
+  });
   const pending: Array<() => void> = [];
   const service = new SpeechService(
     async () => voice,
@@ -79,7 +87,11 @@ it('returns browser parameters without exposing server synthesis', async () => {
 });
 
 it('uses the latest saved server configuration and fails if it was deleted', async () => {
-  const voice = validateVoiceService({ name: 'Voice', type: 'speaches' });
+  const voice = validateVoiceService({
+    voice: 'huayan',
+    name: 'Voice',
+    type: 'speaches',
+  });
   let current = voice;
   let deleted = false;
   const factory = vi.fn(() => ({
@@ -102,7 +114,11 @@ it('uses the latest saved server configuration and fails if it was deleted', asy
 });
 
 it('does not start synthesis after cancellation while reading configuration', async () => {
-  const voice = validateVoiceService({ name: 'Voice', type: 'speaches' });
+  const voice = validateVoiceService({
+    voice: 'huayan',
+    name: 'Voice',
+    type: 'speaches',
+  });
   let release!: () => void;
   const factory = vi.fn();
   const service = new SpeechService(async () => {

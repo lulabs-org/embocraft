@@ -9,7 +9,7 @@ export {
 export { createTaskRouter } from './routes/tasks.routes';
 
 // 3. 仓储与内存存储服务
-export { TaskPlanService, PlanService } from './persistence/plan-store';
+export { TaskPlanService } from './services/plan.service';
 export { restoreTaskExecution, restoreTaskMemory } from './persistence/restore';
 export { TaskSnapshots } from './persistence/snapshots';
 
@@ -24,11 +24,10 @@ export {
   newPlan,
   newRun,
   duePlans,
-  wallClockInstant,
-  nextOccurrence,
   settleTaskUsage,
   syncPlanStateFromRun,
 } from './domain/model';
+export { nextOccurrence } from './domain/timing';
 
 // 6. 输入校验
 export { validatePlan } from './domain/validation';

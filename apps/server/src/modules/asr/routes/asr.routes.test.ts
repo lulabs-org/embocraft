@@ -28,7 +28,7 @@ vi.mock('../engines', async (importOriginal) => {
   const speech = new actual.WhisperAdapter();
   return {
     ...actual,
-    localSpeech: speech,
+    whisperAdapter: speech,
   };
 });
 
@@ -51,7 +51,7 @@ vi.mock('../services/asr.service', async (importOriginal) => {
   };
 });
 
-import { localSpeech } from '../engines';
+import { whisperAdapter } from '../engines';
 import { createAsrSocket } from '../sockets/asr.socket';
 import { createAsrRouter } from './asr.routes';
 
@@ -78,7 +78,7 @@ beforeEach(async () => {
   mocked.store = store;
 
   const app = express();
-  vi.spyOn(localSpeech, 'status').mockResolvedValue({
+  vi.spyOn(whisperAdapter, 'status').mockResolvedValue({
     available: true,
     reason: 'local',
   });
@@ -141,6 +141,7 @@ it('requires management auth and allowed origin for reading and saving masked co
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: '测试服务',
       apiKey: 'private-test-key',
     }),
@@ -159,6 +160,7 @@ it('requires management auth and allowed origin for reading and saving masked co
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: '测试服务',
       region: 'other',
       apiKey: 'key',
@@ -171,6 +173,7 @@ it('rejects missing credentials and other origins before opening paid tasks', as
   expect((await socket()).message.type).toBe('error');
   await store.save({
     ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
     name: '测试服务',
     apiKey: 'private-test-key',
   });
@@ -192,6 +195,7 @@ it('does not echo malformed configuration bodies or secrets', async () => {
 it('dispatches live sockets and bounds concurrent upstream tasks', async () => {
   const service = await store.save({
     ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
     name: '测试服务',
     apiKey: 'private-test-key',
   });
@@ -210,6 +214,7 @@ it('dispatches live sockets and bounds concurrent upstream tasks', async () => {
 it('releases all ASR service references when the shared transport closes connections', async () => {
   const service = await store.save({
     ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
     name: 'Closing ASR',
     apiKey: 'fixture-only',
   });
@@ -238,11 +243,13 @@ it('releases all ASR service references when the shared transport closes connect
 it('routes each selected service to its own model and key, rejects missing or deleted IDs, and guards deletion', async () => {
   const a = await store.save({
     ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
     name: '模型 A',
     apiKey: 'key-a',
   });
   const b = await store.save({
     ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
     name: '模型 B',
     apiKey: 'key-b',
     model: 'paraformer-realtime-v2',
@@ -287,6 +294,7 @@ it('supports separate create, edit and delete HTTP resources and cross-origin pr
       headers,
       body: JSON.stringify({
         ...DEFAULT_BAILIAN_ASR,
+        provider: 'bailian' as const,
         name,
         model,
         apiKey: `key-${name}`,

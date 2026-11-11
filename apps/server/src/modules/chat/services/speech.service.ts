@@ -1,10 +1,10 @@
 import { AppError } from '../../../core/errors/app-error';
 import {
   asrService,
-  localSpeech,
+  whisperAdapter,
   scheduleSpeech,
   type AsrService,
-  type LocalSpeech,
+  type WhisperAdapter,
 } from '../../asr';
 import type { WorldChat } from './chat.service';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
@@ -31,7 +31,7 @@ type SpatialInput = Omit<AudioInput, 'route' | 'language'> & {
 /** Coordinates ASR with chat authorization and ticket lifetimes. */
 export class ChatSpeechService {
   constructor(
-    private speech: LocalSpeech = localSpeech,
+    private speech: WhisperAdapter = whisperAdapter,
     private asrSettings: AsrService = asrService,
   ) {}
 

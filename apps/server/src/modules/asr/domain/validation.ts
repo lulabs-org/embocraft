@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  DEFAULT_WHISPER_ASR,
-  type BailianAsrDraft,
-  type WhisperAsrDraft,
-} from '@voxel/shared';
+import { type BailianAsrDraft, type WhisperAsrDraft } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
 import type { SavedService } from './model';
@@ -87,6 +83,7 @@ export function validateWhisperSettings(
 ): WhisperAsrDraft {
   if (
     typeof value.model !== 'string' ||
+    value.model === 'default' ||
     !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,199}$/.test(value.model) ||
     value.model
       .split('/')
@@ -108,7 +105,7 @@ export function validateWhisperSettings(
     throw new AppError('提示词不能超过 500 字或包含空字符。');
   return {
     ...validateWhisperConnection(value, previous),
-    model: value.model === 'default' ? DEFAULT_WHISPER_ASR.model : value.model,
+    model: value.model,
     temperature: value.temperature,
     prompt: value.prompt.trim(),
   };
@@ -149,7 +146,7 @@ export function validateAsrService(
   if (!input || typeof input !== 'object' || Array.isArray(input))
     throw new AppError('识别服务配置无效。');
   const value = input as Record<string, unknown>;
-  const provider = value.provider ?? 'bailian';
+  const provider = value.provider;
   if (
     provider !== 'whisper' &&
     provider !== 'bailian' &&
@@ -157,7 +154,7 @@ export function validateAsrService(
     provider !== 'gemini'
   )
     throw new AppError('请选择支持的识别服务类型。');
-  if (previous && provider !== (previous.provider ?? 'bailian'))
+  if (previous && provider !== previous.provider)
     throw new AppError('已有服务不能更改类型，请添加新的服务。');
 
   const settings =
@@ -174,10 +171,7 @@ export function validateAsrService(
         : {
             ...validateBailianSettings(
               input,
-              previous?.provider === 'bailian' ||
-                previous?.provider === undefined
-                ? previous
-                : undefined,
+              previous?.provider === 'bailian' ? previous : undefined,
             ),
             provider: 'bailian' as const,
           };

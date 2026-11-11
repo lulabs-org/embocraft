@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabaseClient } from '../src/core/database/client';
 import {
-  AICharacterManager,
+  createAICharacterOrchestrator,
   CharacterQueries,
 } from '../src/modules/ai-characters';
 import { AsrService } from '../src/modules/asr/services/asr.service';
@@ -20,7 +20,7 @@ import { DatabaseAsrServicePersistence } from '../src/modules/asr/persistence/da
 import { AppError } from '../src/core/errors/app-error';
 import { domainEvents } from '../src/core/events/domain-events';
 import { DatabaseVoiceServicePersistence } from '../src/modules/tts/persistence/database-voice-services';
-import { TtsService } from '../src/modules/tts';
+import { createTtsService } from '../src/modules/tts';
 import { bootstrapProviders } from './helpers/provider-seed';
 import { DatabaseProviderRepository } from '../src/modules/providers';
 import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
@@ -62,7 +62,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const providers = new DatabaseProviderRepository(db!);
     await bootstrapProviders(providers);
     const archive = new DatabaseManagementArchive(db!);
-    const manager = new AICharacterManager(providers, '', archive);
+    const manager = createAICharacterOrchestrator(providers, '', archive);
     try {
       await manager.load();
       const load = vi
@@ -140,7 +140,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       ],
       requests: { 'actor:keep': 'keep' },
     });
-    const manager = new AICharacterManager(providers, '', archive);
+    const manager = createAICharacterOrchestrator(providers, '', archive);
     await manager.load();
     try {
       await db!.agentPlan.update({
@@ -1423,8 +1423,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
       name: 'Changed in database',
     });
 
-    const ttsA = new TtsService(new DatabaseVoiceServicePersistence(db!));
-    const ttsB = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const ttsA = createTtsService(new DatabaseVoiceServicePersistence(db!));
+    const ttsB = createTtsService(new DatabaseVoiceServicePersistence(db!));
     const [voiceA, voiceB] = await Promise.all([
       ttsA.save({ name: 'First TTS', type: 'browser', voice: 'one' }),
       ttsB.save({ name: 'Second TTS', type: 'browser', voice: 'two' }),
@@ -1475,8 +1475,8 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         position: index,
       })),
     });
-    const first = new TtsService(new DatabaseVoiceServicePersistence(db!));
-    const second = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const first = createTtsService(new DatabaseVoiceServicePersistence(db!));
+    const second = createTtsService(new DatabaseVoiceServicePersistence(db!));
     const results = await Promise.allSettled([
       first.save({ name: 'First', type: 'browser', voice: 'one' }),
       second.save({ name: 'Second', type: 'browser', voice: 'two' }),
@@ -1825,7 +1825,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   it('restarts a managed character from its Run checkpoint without replaying unknown actions', async () => {
     const providers = new DatabaseProviderRepository(db!);
     await bootstrapProviders(providers);
-    const manager = new AICharacterManager(
+    const manager = createAICharacterOrchestrator(
       providers,
       'ws://fixture',
       new DatabaseManagementArchive(db!),
@@ -1882,7 +1882,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     saved.characters[0].currentRunId = run.id;
     saved.characters[0].runtime = runtime.snapshot();
     await archive.save(saved);
-    const restarted = new AICharacterManager(
+    const restarted = createAICharacterOrchestrator(
       providers,
       'ws://fixture',
       new DatabaseManagementArchive(db!),
@@ -1912,7 +1912,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
 
   it('starts TTS with Piper, preserves ordered services and secrets, and remembers an empty catalog', async () => {
     await db!.ttsProvider.create({ data: DEFAULT_TTS_PROVIDER });
-    const store = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const store = createTtsService(new DatabaseVoiceServicePersistence(db!));
 
     expect((await store.list()).map((voice) => voice.id)).toEqual([
       'local-default',
@@ -1929,7 +1929,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     expect(JSON.stringify(await store.list())).not.toContain('tts-secret');
     expect((await store.get(cloud.id)).apiKey).toBe('tts-secret');
     await store.save({ ...cloud, name: 'Cloud Updated', apiKey: '' }, cloud.id);
-    const restored = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const restored = createTtsService(new DatabaseVoiceServicePersistence(db!));
 
     expect((await restored.list()).map((voice) => voice.id)).toEqual([
       'local-default',
@@ -1955,7 +1955,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     }
     await restored.remove(cloud.id);
     await restored.remove('local-default');
-    const empty = new TtsService(new DatabaseVoiceServicePersistence(db!));
+    const empty = createTtsService(new DatabaseVoiceServicePersistence(db!));
 
     expect(await empty.list()).toEqual([]);
   });
@@ -2003,12 +2003,18 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     });
     const cloud = await store.save({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: 'Bailian',
       apiKey: 'asr-secret',
     });
     expect(JSON.stringify(await store.list())).not.toContain('asr-secret');
     await store.save(
-      { ...DEFAULT_BAILIAN_ASR, name: 'Bailian Updated', apiKey: '' },
+      {
+        ...DEFAULT_BAILIAN_ASR,
+        provider: 'bailian' as const,
+        name: 'Bailian Updated',
+        apiKey: '',
+      },
       cloud.id,
     );
     const restored = new AsrService(new DatabaseAsrServicePersistence(db!));
@@ -2038,10 +2044,12 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
         throw new Error('postgresql://user:secret@localhost/test');
       },
     } as unknown as PrismaClient;
-    const tts = new TtsService(new DatabaseVoiceServicePersistence(failingDb));
+    const tts = createTtsService(
+      new DatabaseVoiceServicePersistence(failingDb),
+    );
 
     const voiceError = await tts
-      .save({ name: 'Local', type: 'piper', speed: 1 })
+      .save({ voice: 'huayan', name: 'Local', type: 'speaches', speed: 1 })
       .then(
         () => undefined,
         (error: unknown) => error as Error,
@@ -2060,6 +2068,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     const asrError = await asr
       .save({
         ...DEFAULT_BAILIAN_ASR,
+        provider: 'bailian' as const,
         name: 'Bailian',
         apiKey: 'secret',
       })
@@ -2227,7 +2236,7 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   it('does not publish a character when the database rejects its joint commit', async () => {
     const providers = new DatabaseProviderRepository(db!);
     await bootstrapProviders(providers);
-    const manager = new AICharacterManager(
+    const manager = createAICharacterOrchestrator(
       providers,
       'ws://fixture',
       new DatabaseManagementArchive(db!),

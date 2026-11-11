@@ -9,7 +9,7 @@ import {
   aiCharacterProfileInput,
   validateAICharacter,
 } from '../domain/character-settings';
-import { executionState } from '../integrations/task-execution-adapter';
+import { taskExecutionState } from '../integrations/task-execution-adapter';
 import type { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
 import type { CharacterExecutionService } from '../runtime/character-execution';
 import {
@@ -116,7 +116,7 @@ export class CharacterManagementService {
           409,
         );
       this.context.scheduler.cancel(job.view.id);
-      if (!restoring) markJoined(executionState(job));
+      if (!restoring) markJoined(taskExecutionState(job));
       Object.assign(job.view, settings, {
         providerName: provider.name,
         status: 'joining',
@@ -201,7 +201,7 @@ export class CharacterManagementService {
         settings.model !== job.view.model
       ) {
         this.context.scheduler.cancel(job.view.id);
-        modelChanged(executionState(job));
+        modelChanged(taskExecutionState(job));
         job.runtime.clearMessages();
       } else if (
         JSON.stringify(aiCharacterPermissions(settings)) !==
@@ -211,7 +211,7 @@ export class CharacterManagementService {
         this.context.scheduler.cancel(job.view.id);
         job.runtime.clearMessages();
         pauseTaskForHost(
-          executionState(job),
+          taskExecutionState(job),
           '角色技能或动作权限已修改，进度已保留，请确认后继续。',
         );
         appendAICharacterLog(

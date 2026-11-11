@@ -4,6 +4,7 @@ import { TestAsrService as AsrService } from '../../../../test/helpers/memory-st
 import { bailianAsrEndpoint, validateBailianSettings } from '../domain';
 const draft = {
   ...DEFAULT_BAILIAN_ASR,
+  provider: 'bailian' as const,
   name: '模型 A',
   apiKey: 'secret-for-test',
 };
@@ -190,12 +191,11 @@ it('persists multiple Whisper parameter profiles alongside cloud profiles', asyn
   expect((await restored.get(b.id)).name).toBe('Whisper B');
 });
 
-it('drops unused local engine fields and normalizes an existing default model without losing profiles', async () => {
+it('persists an explicit Whisper model and drops unused local engine fields', async () => {
   const store = new AsrService();
 
   const saved = await store.save({
     ...DEFAULT_WHISPER_ASR,
-    model: 'default',
     provider: 'whisper',
     name: 'Existing',
     threads: 8,

@@ -51,7 +51,7 @@ apps/server/src/modules/asr/
 ### 现存历史包袱与边界问题：
 
 1. **命名历史包袱**：
-   - `LocalSpeech`：实际是 Speaches / OpenAI 兼容 Whisper HTTP 客户端，支持本地与远程地址，并非仅本地。
+   - `WhisperAdapter`：实际是 Speaches / OpenAI 兼容 Whisper HTTP 客户端，支持本地与远程地址，并非仅本地。
    - `speech-scheduler.service.ts`：实际仅是 Whisper 批处理请求的限流排队器，并非全局语音调度器。每个 `WhisperAdapter` 串行执行，最多等待 4 个最终转录任务；执行中不排队预览请求。
 2. **职责聚合过多**：
    - `AsrService` 兼具了数据库持久化协调、运行中租约锁控制（`acquire`/`release` 防止误删正在识别的配置）以及远程模型探测（`models()`）。

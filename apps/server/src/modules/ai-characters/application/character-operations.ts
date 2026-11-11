@@ -1,6 +1,6 @@
 import { AppError } from '../../../core/errors/app-error';
 import type { CharacterReadPort } from '../ports';
-import type { PlanService } from '../../tasks';
+import type { TaskPlanService } from '../../tasks';
 import { restoreTaskMemory } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
 import {
@@ -17,7 +17,7 @@ export class CharacterOperations {
   constructor(
     private readonly jobs: AICharacterRegistry,
     private readonly queries: CharacterReadPort,
-    private readonly plans: () => PlanService,
+    private readonly plans: () => TaskPlanService,
     private readonly release: (job: Job) => void,
   ) {}
 

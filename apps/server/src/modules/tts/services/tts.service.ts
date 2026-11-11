@@ -8,11 +8,7 @@ import { SpeechService } from './speech.service';
 import type { ResolvedSpeech, SpeechSynthesizer } from './speech-synthesizer';
 import { VoiceServiceManagement } from './voice-service-management.service';
 
-export { validateVoiceService } from '../domain/voice-service-validation';
-export type { SavedVoice } from '../domain/voice-service-validation';
-export type { VoiceServicePersistence } from '../ports';
-
-/** Application facade for the existing TTS module consumers. */
+/** Coordinates voice configuration, model discovery and speech synthesis. */
 export class TtsService {
   private readonly management: VoiceServiceManagement;
   private readonly modelDiscovery: SpeechModelsService;

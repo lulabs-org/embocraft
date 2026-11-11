@@ -12,7 +12,10 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { toolResponse } from '../../../../tests/support/pi-response';
-import { AICharacterManager } from '../../src/modules/ai-characters';
+import {
+  createAICharacterOrchestrator,
+  type AICharacterOrchestrator,
+} from '../../src/modules/ai-characters';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
@@ -67,7 +70,7 @@ await providers.save(
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 const humans: Session[] = [],
   bots: Session[] = [];
-let manager: AICharacterManager | undefined;
+let manager: AICharacterOrchestrator | undefined;
 let calls = 0;
 try {
   const dependencies = {
@@ -247,8 +250,9 @@ try {
   if (process.env.REAL_TTS === '1') {
     if (process.env.REAL_TTS_MODEL) {
       const saved = await api('/voice/tts/services/local-default', 'PUT', {
-        name: 'Piper integration voice',
-        type: 'piper',
+        voice: process.env.REAL_TTS_VOICE || 'huayan',
+        name: 'Speaches integration voice',
+        type: 'speaches',
         model: process.env.REAL_TTS_MODEL,
         speed: 1,
       });
@@ -272,7 +276,7 @@ try {
 
   assert.equal((await server.voiceServices.get(b.id)).voice, 'beta');
 
-  const restored = new AICharacterManager(
+  const restored = createAICharacterOrchestrator(
     providers,
     url.replace('http', 'ws'),
     providers.archive,

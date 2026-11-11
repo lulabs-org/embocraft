@@ -68,36 +68,3 @@ export function createManagementRouter(
   router.use(routePaths, managementErrors);
   return router;
 }
-
-/**
- * @deprecated 建议改用 createManagementRouter 或 installManagementJsonRoutes
- */
-export class ManagementScope {
-  private readonly routePaths: string | string[];
-
-  constructor(
-    private readonly app: Router,
-    private readonly paths: string | readonly string[],
-    authenticate: RequestHandler,
-  ) {
-    this.routePaths = paths as string | string[];
-    app.use(this.routePaths, authenticate, ...managementBody);
-  }
-
-  close() {
-    this.app.use(this.routePaths, (_req, res) => {
-      res.status(404).json({ error: '管理接口不存在，请确认前后端版本一致。' });
-    });
-    this.app.use(this.routePaths, managementErrors);
-  }
-}
-
-/** Full policy for the existing 32 KiB management APIs; ASR has its own contract. */
-export function installManagementJsonRoutes(
-  router: Router,
-  paths: string | readonly string[],
-  authenticate: RequestHandler,
-  install: (router: Router) => void,
-) {
-  router.use(createManagementRouter(paths, authenticate, install));
-}

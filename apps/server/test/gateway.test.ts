@@ -9,7 +9,7 @@ import {
   type SocketLike,
 } from '@voxel/shared/management';
 import { GatewayAuth, gatewaySocket } from '../src/modules/gateway';
-import { ConsoleSyncEvents as ServerManagementEvents } from '../src/modules/console-sync';
+import { ConsoleSyncEvents } from '../src/modules/console-sync';
 import { EventEmitter } from 'node:events';
 describe('gateway command boundary', () => {
   it('coalesces concurrent commands and rejects reused IDs with different payloads', async () => {
@@ -172,7 +172,7 @@ it('rejects missing handshake, unsupported version, Origin, malformed/oversize f
 });
 
 it('sends refresh then ordered changes, rejects commands and cleans up subscriptions', () => {
-  const events = new ServerManagementEvents();
+  const events = new ConsoleSyncEvents();
   const socket = serverSocket(events);
   socket.frame(hello);
   events.publish('characters', ['a']);

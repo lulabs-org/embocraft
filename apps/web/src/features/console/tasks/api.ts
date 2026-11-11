@@ -11,9 +11,6 @@ import type {
 } from '@voxel/shared/management';
 import { consoleFetch } from '../request';
 
-export { displayedTaskIdentity } from '../execution/api';
-import { controlTaskRun } from '../execution/api';
-
 export type PlanPage = {
   items: TaskPlanSummary[];
   total: number;
@@ -69,7 +66,7 @@ export const tasksApi = {
     });
   },
 
-  delete: (planId: string, _characterId?: string) =>
+  delete: (planId: string) =>
     consoleFetch<void>(`/tasks/${encodeURIComponent(planId)}`, {
       method: 'DELETE',
     }),
@@ -105,6 +102,4 @@ export const tasksApi = {
       { signal },
     );
   },
-
-  controlRun: controlTaskRun,
 };

@@ -158,5 +158,3 @@ export class TaskPlanService {
     };
   }
 }
-
-export { TaskPlanService as PlanService };

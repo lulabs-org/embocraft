@@ -175,5 +175,3 @@ export const env = {
   readServer: readServerConfig,
   readSpeech: readSpeechConfig,
 } as const;
-
-export default env;
