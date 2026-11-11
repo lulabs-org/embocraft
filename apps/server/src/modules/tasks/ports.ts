@@ -3,17 +3,45 @@ import type {
   AICharacterSettings,
   AICharacterView,
   TaskPlan,
+  TaskPlanSummary,
+  TaskRun,
 } from '@voxel/shared';
-import type { StoredRun } from './domain/types';
 import type { PlanQueryFilter } from './domain/types';
 import type { PlanService } from './persistence/plan-store';
 
-export type TaskQuerySnapshot = {
-  plans: TaskPlan[];
-  runs: StoredRun[];
-  requests: Record<string, string>;
-  characters: { id: string; name?: string; runtime?: RuntimeState }[];
+export type TaskQueryResult<T> = {
+  value: T;
+  taskIdentity: NonNullable<
+    RuntimeState['execution']['task']['identity']
+  > | null;
 };
+
+export type TaskPlanResult = TaskQueryResult<TaskPlan> & {
+  characterName?: string;
+};
+export type TaskRunPageResult = {
+  items: TaskQueryResult<TaskRun>[];
+  active: TaskQueryResult<TaskRun>[];
+  total: number;
+  nextOffset?: number;
+};
+
+export interface TaskQueryPort {
+  plans(
+    characterId?: string,
+    requireCharacter?: boolean,
+  ): Promise<TaskPlanResult[]>;
+  plan(id: string): Promise<TaskPlanResult>;
+  planPage(
+    filter: PlanQueryFilter,
+  ): Promise<{ items: TaskPlanSummary[]; total: number; nextOffset?: number }>;
+  runs(
+    planId: string,
+    offset?: number,
+    characterId?: string,
+    requireCharacter?: boolean,
+  ): Promise<TaskRunPageResult>;
+}
 
 /**
  * Tasks / Plans 领域的管理接口契约（由 TaskCoordinator 实现）

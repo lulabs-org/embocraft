@@ -1,3 +1,4 @@
+import { MemoryTaskQueries } from '../../../../test/helpers/memory-management-queries';
 import { emptyState, newTask } from '@voxel/agent-runtime/testing';
 
 import { expect, it, vi } from 'vitest';
@@ -205,8 +206,9 @@ it('reads public plans and runs from the injected committed storage rather than 
     runs: [storedRun({ planId: 'plan', characterId: 'actor' })],
     requests: {},
   };
-  const tasks = new TaskCoordinator(host, async () =>
-    structuredClone(snapshot),
+  const tasks = new TaskCoordinator(
+    host,
+    new MemoryTaskQueries(async () => structuredClone(snapshot)),
   );
   expect(tasks.committedPlans.plans).toHaveLength(0);
   expect((await tasks.planPage({})).items[0]).toMatchObject({
@@ -222,4 +224,38 @@ it('reads public plans and runs from the injected committed storage rather than 
   await expect(tasks.publicRuns('other', 'plan')).rejects.toThrow(
     '计划执行角色已改变',
   );
+});
+
+it('does not stamp a query with an event version advanced after its database snapshot began', async () => {
+  const { host } = fixture();
+  const { TaskCoordinator } = await import('./coordinator.service');
+  const { storedPlan } = await import('../../../../test/helpers/task-records');
+  let version = 10;
+  host.resourceVersion = () => version;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queries = new MemoryTaskQueries(async () => {
+    await gate;
+    return {
+      version: 3,
+      characters: [],
+      plans: [storedPlan()],
+      runs: [],
+      requests: {},
+    };
+  });
+  const tasks = new TaskCoordinator(host, queries);
+  const pending = Promise.all([
+    tasks.publicPlan('plan'),
+    tasks.publicPlans(undefined, true),
+    tasks.publicRuns(undefined, 'plan', 0, true),
+  ]);
+  version = 11;
+  release();
+  const [plan, plans, runs] = await pending;
+  expect(plan.resourceVersion).toBe(10);
+  expect(plans[0].resourceVersion).toBe(10);
+  expect(runs.resourceVersion).toBe(10);
 });

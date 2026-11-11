@@ -1,10 +1,21 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getDatabaseClient } from '../../../core/database/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
-import type { AICharacterSettings, TaskRun } from '@voxel/shared';
+import {
+  AI_CHARACTER_LOG_LIMIT,
+  type AICharacterSettings,
+  type AICharacterView,
+  type TaskRun,
+} from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 
-import type { CharacterDetail, CharacterQueryPort } from '../ports';
+import type {
+  CharacterDetail,
+  CharacterQueryPort,
+  CharacterReadPort,
+} from '../ports';
+
+import { restoreCharacter } from './character-storage';
 
 const include = {
   provider: { select: { name: true } },
@@ -92,8 +103,34 @@ function detail(row: CharacterRow): CharacterDetail {
   };
 }
 
-/** HTTP reads go straight to PostgreSQL, independently of runtime recovery snapshots. */
-export class CharacterQueries implements CharacterQueryPort {
+const viewInclude = {
+  ...include,
+  runs: { ...include.runs, orderBy: { position: 'asc' as const } },
+  logs: {
+    orderBy: { sequence: 'desc' as const },
+    take: AI_CHARACTER_LOG_LIMIT,
+    select: { time: true, text: true },
+  },
+} satisfies Prisma.AgentCharacterInclude;
+
+function internalView(
+  row: Prisma.AgentCharacterGetPayload<{ include: typeof viewInclude }>,
+): AICharacterView {
+  const { logs, ...base } = row;
+  const { taskIdentity: _identity, ...view } = detail(base);
+  return {
+    ...view,
+    taskRequiresReassignment:
+      row.state?.runtimeVersion == null
+        ? undefined
+        : view.taskRequiresReassignment,
+    queuedTasks: view.queuedTasks ?? [],
+    logEntries: logs.slice().reverse(),
+  };
+}
+
+/** Targeted management and HTTP reads, independent of the full recovery archive. */
+export class CharacterQueries implements CharacterQueryPort, CharacterReadPort {
   constructor(private readonly customDb?: PrismaClient) {}
 
   private get db(): PrismaClient {
@@ -116,6 +153,96 @@ export class CharacterQueries implements CharacterQueryPort {
       { isolationLevel: 'RepeatableRead' },
     );
     return rows.map(detail);
+  }
+
+  async record(id: string) {
+    return this.db.$transaction(
+      async (tx) => {
+        const row = await tx.agentCharacter.findUnique({
+          where: { id },
+          include: {
+            state: {
+              include: {
+                currentRun: {
+                  select: {
+                    id: true,
+                    characterId: true,
+                    characterIdSnapshot: true,
+                    checkpoint: true,
+                  },
+                },
+              },
+            },
+            logs: {
+              orderBy: { sequence: 'desc' },
+              take: AI_CHARACTER_LOG_LIMIT,
+            },
+          },
+        });
+        if (!row) throw new AppError('Agent 不存在。', 404);
+        const run = row.state?.currentRun;
+        if (run?.checkpoint && run.checkpoint.version !== 4)
+          throw new Error('Unsupported execution checkpoint.');
+        const selected = run
+          ? {
+              characterId:
+                run.characterIdSnapshot ?? run.characterId ?? undefined,
+              runtime: run.checkpoint
+                ? {
+                    execution: run.checkpoint
+                      .execution as unknown as RuntimeState['execution'],
+                  }
+                : undefined,
+            }
+          : undefined;
+        return restoreCharacter(
+          { ...row, logs: row.logs.reverse() },
+          new Map(run && selected ? [[run.id, selected]] : []),
+        );
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  async view(id: string): Promise<AICharacterView> {
+    return this.db.$transaction(
+      async (tx) => {
+        const row = await tx.agentCharacter.findUnique({
+          where: { id },
+          include: viewInclude,
+        });
+        if (!row) throw new AppError('Agent 不存在。', 404);
+        return internalView(row);
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  async views(): Promise<AICharacterView[]> {
+    return this.db.$transaction(
+      async (tx) => {
+        const rows = await tx.agentCharacter.findMany({
+          orderBy: { position: 'desc' },
+          include: viewInclude,
+        });
+        return rows.map(internalView);
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  async hasProviderReference(id: string) {
+    return !!(await this.db.agentCharacter.findFirst({
+      where: { providerId: id },
+      select: { id: true },
+    }));
+  }
+
+  async hasVoiceServiceReference(id: string) {
+    return !!(await this.db.agentCharacter.findFirst({
+      where: { voiceServiceId: id },
+      select: { id: true },
+    }));
   }
 
   async logs(id: string, limit: number, offset: number) {

@@ -1,24 +1,19 @@
 import {
   Session,
-  runtimeView,
   type AgentConfig,
   type RuntimeModelOptions,
 } from '@voxel/agent-runtime';
-import {
-  AI_CHARACTER_LOG_LIMIT,
-  type AICharacterSettings,
-  type AICharacterView,
-} from '@voxel/shared';
+import { type AICharacterSettings, type AICharacterView } from '@voxel/shared';
 import type { ManagementPersistence } from '../../../application/management-commit';
 import { createManagementPersistence } from '../../../application/management-persistence';
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
 import { DatabaseManagementArchive } from '../../../persistence/database-management-archive';
 import type {
-  ArchivePort,
   CharacterChanges,
   CharacterRecord,
 } from '../../../persistence/management-archive';
+import type { ManagementStore } from '../../../persistence/management-store';
 import { migrateArchive } from '../../../persistence/migrate-archive';
 import { bindConsoleSyncEvents, ConsoleSyncEvents } from '../../console-sync';
 import {
@@ -92,11 +87,11 @@ export class AICharacterOrchestrator {
     private readonly providers: ProviderRuntimePort = providerRepository,
     private serverUrl: string | (() => string) = '',
     private dependencies: AICharacterDependencies,
-    private archive: ArchivePort = new DatabaseManagementArchive(),
+    private archive: ManagementStore = new DatabaseManagementArchive(),
   ) {
     this.operations = new CharacterOperations(
       this.jobs,
-      this.archive,
+      this.archive.characters,
       () => this.plans,
       (job) => this.releaseOffline(job),
     );
@@ -210,10 +205,7 @@ export class AICharacterOrchestrator {
         isClosing: () => this.closing,
         assertWritable: (id) => this.assertWritable(id),
       },
-      () =>
-        this.archive instanceof DatabaseManagementArchive
-          ? this.archive.readSnapshot()
-          : this.archive.load(),
+      this.archive.tasks,
     );
     this.management = new CharacterManagementService({
       jobs: this.jobs,
@@ -405,68 +397,22 @@ export class AICharacterOrchestrator {
     this.persistence.characters.forget(job.view.id);
   }
 
-  private async record(id: string): Promise<CharacterRecord> {
-    const record = (await this.archive.load())?.characters.find(
-      (record) => record.id === id,
-    );
-    if (!record) throw new AppError('Agent 不存在。', 404);
-    return record;
+  private record(id: string): Promise<CharacterRecord> {
+    return this.archive.characters.record(id);
   }
 
   async list(): Promise<AICharacterView[]> {
-    const archive = await this.archive.load();
-    return Promise.all(
-      (archive?.characters ?? [])
-        .slice()
-        .reverse()
-        .map(async (record) => {
-          const state = record.runtime
-            ? runtimeView(record.runtime)
-            : undefined;
-          const run = archive?.runs.find(
-            (run) => run.id === record.currentRunId,
-          );
-          return {
-            ...characterSettings(record),
-            id: record.id,
-            createdAt: record.createdAt,
-            status: record.status,
-            logEntries: record.logEntries.slice(-AI_CHARACTER_LOG_LIMIT),
-            providerName: (await this.providers.getRuntime(record.providerId))
-              .name,
-            sessionId: this.sessionId(record.id),
-            task: state?.task,
-            usage: state?.usage,
-            lastResponse: state?.lastResponse,
-            taskRequiresReassignment: state?.requiresReassignment,
-            taskExecution: run
-              ? {
-                  runId: run.id,
-                  limits: run.snapshot.limits,
-                  source: run.source,
-                  action: state?.action,
-                }
-              : undefined,
-            queuedTasks: archive!.runs
-              .filter(
-                (run) =>
-                  run.characterId === record.id && run.status === 'queued',
-              )
-              .map((run) => ({
-                id: run.id,
-                goal: run.snapshot.goal,
-                scheduledAt: run.scheduledAt,
-                coalescedTriggers: run.coalescedTriggers ?? 0,
-              })),
-          };
-        }),
-    );
+    return (await this.archive.characters.views()).map((view) => ({
+      ...view,
+      sessionId: this.sessionId(view.id),
+    }));
   }
 
   private async get(id: string) {
-    const view = (await this.list()).find((view) => view.id === id);
-    if (!view) throw new AppError('Agent 不存在。', 404);
-    return view;
+    return {
+      ...(await this.archive.characters.view(id)),
+      sessionId: this.sessionId(id),
+    };
   }
 
   async create(value: unknown) {
@@ -512,17 +458,14 @@ export class AICharacterOrchestrator {
 
   async hasProviderReference(id: string) {
     return (
-      (await this.archive.load())?.characters.some(
-        (record) => record.providerId === id,
-      ) || this.participatingJobs().some((job) => job.view.providerId === id)
+      (await this.archive.characters.hasProviderReference(id)) ||
+      this.participatingJobs().some((job) => job.view.providerId === id)
     );
   }
 
   async hasVoiceServiceReference(id: string) {
     return (
-      (await this.archive.load())?.characters.some(
-        (record) => record.voiceServiceId === id,
-      ) ||
+      (await this.archive.characters.hasVoiceServiceReference(id)) ||
       this.participatingJobs().some(
         (job) => job.updating || job.view.voiceServiceId === id,
       )
@@ -554,7 +497,7 @@ export class AICharacterManager extends AICharacterOrchestrator {
   constructor(
     providers: ProviderRuntimePort = providerRepository,
     serverUrl: string | (() => string) = '',
-    archive: ArchivePort = new DatabaseManagementArchive(),
+    archive: ManagementStore = new DatabaseManagementArchive(),
     dependencies: AICharacterDependencies = {
       session: (url) => new Session(url),
       model: (_config, provider) => ({

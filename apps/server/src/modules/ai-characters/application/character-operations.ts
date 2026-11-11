@@ -1,5 +1,5 @@
 import { AppError } from '../../../core/errors/app-error';
-import type { ArchivePort } from '../../../persistence/management-archive';
+import type { CharacterReadPort } from '../ports';
 import type { PlanService } from '../../tasks';
 import { restoreTaskMemory } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
@@ -16,7 +16,7 @@ export class CharacterOperations {
 
   constructor(
     private readonly jobs: AICharacterRegistry,
-    private readonly archive: ArchivePort,
+    private readonly queries: CharacterReadPort,
     private readonly plans: () => PlanService,
     private readonly release: (job: Job) => void,
   ) {}
@@ -32,10 +32,7 @@ export class CharacterOperations {
     let job = this.jobs.get(id);
     try {
       if (!job) {
-        const record = (await this.archive.load())?.characters.find(
-          (record) => record.id === id,
-        );
-        if (!record) throw new AppError('Agent 不存在。', 404);
+        const record = await this.queries.record(id);
         const { runtime, currentRunId, ...view } = record;
         job = createCharacterJob(
           {

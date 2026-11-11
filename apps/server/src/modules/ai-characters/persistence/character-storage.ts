@@ -104,7 +104,10 @@ export function restoreCharacter(
     state: AgentCharacterState | null;
     logs: AgentCharacterLog[];
   },
-  runs: ReadonlyMap<string, { characterId?: string; runtime?: RuntimeState }>,
+  runs: ReadonlyMap<
+    string,
+    { characterId?: string; runtime?: Pick<RuntimeState, 'execution'> }
+  >,
 ): CharacterRecord {
   if (!row.state) throw new Error('Character recovery state is missing.');
   const {

@@ -1,3 +1,4 @@
+import { MemoryTaskQueries } from './memory-management-queries';
 import { createAgentRuntime } from '@voxel/agent-runtime';
 import { emptyState, newTask } from '@voxel/agent-runtime/testing';
 
@@ -36,7 +37,10 @@ export function taskExecutionFixture() {
     isClosing: () => false,
     assertWritable: () => {},
   };
-  const tasks = new TaskCoordinator(host, async () => undefined);
+  const tasks = new TaskCoordinator(
+    host,
+    new MemoryTaskQueries(async () => undefined),
+  );
   const runtime = createAgentRuntime({
     state: {
       version: 4 as const,

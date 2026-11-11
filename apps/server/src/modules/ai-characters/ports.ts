@@ -1,5 +1,19 @@
-import type { AICharacterLogEntry, AICharacterSummary } from '@voxel/shared';
+import type {
+  AICharacterLogEntry,
+  AICharacterSummary,
+  AICharacterView,
+} from '@voxel/shared';
 import type { TaskIdentity } from '@voxel/shared/management';
+import type { CharacterRecord } from './persistence/character-record';
+
+/** Internal reads are independent of the joint write/recovery archive. */
+export interface CharacterReadPort {
+  record(id: string): Promise<CharacterRecord>;
+  view(id: string): Promise<AICharacterView>;
+  views(): Promise<AICharacterView[]>;
+  hasProviderReference(id: string): Promise<boolean>;
+  hasVoiceServiceReference(id: string): Promise<boolean>;
+}
 
 export type CharacterDetail = AICharacterSummary & {
   taskIdentity: TaskIdentity | null;

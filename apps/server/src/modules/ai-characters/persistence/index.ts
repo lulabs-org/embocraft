@@ -7,3 +7,5 @@ export {
   type SavedCharacter,
 } from './character-storage';
 export { CharacterSnapshots } from './character-snapshots';
+export { CharacterQueries } from './character-queries';
+export type { CharacterReadPort } from '../ports';

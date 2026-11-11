@@ -6,3 +6,5 @@ export {
   type SavedPlan,
 } from './plan-storage';
 export { captureRun, restoreRun, saveRun, type SavedRun } from './run-storage';
+export { TaskQueries } from './task-queries';
+export type { TaskQueryPort } from '../ports';
