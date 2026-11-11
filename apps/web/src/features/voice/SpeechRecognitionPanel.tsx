@@ -33,8 +33,12 @@ export function SpeechRecognitionPanel({
   const service = asr.id;
   const isBrowser = asr.draft.provider === 'browser';
   const isWhisper = asr.draft.provider === 'whisper';
-  const whisperServiceId =
-    asr.selected?.provider === 'whisper' ? service : undefined;
+  const isSenseVoice = asr.draft.provider === 'sense-voice';
+  const serverServiceId =
+    asr.selected?.provider === 'whisper' ||
+    asr.selected?.provider === 'sense-voice'
+      ? service
+      : undefined;
   const selectedModel =
     asr.selected && asr.selected.provider !== 'browser'
       ? asr.selected.model
@@ -81,7 +85,7 @@ export function SpeechRecognitionPanel({
     };
   }, [active, connection, live, browser, service, release]);
   useEffect(() => {
-    if (!active || !isWhisper) return;
+    if (!active || (!isWhisper && !isSenseVoice)) return;
     const abort = new AbortController();
     setChecking(true);
     setCheckError('');
@@ -92,7 +96,7 @@ export function SpeechRecognitionPanel({
       setCheckError(t('console.asr.serviceFailed'));
     }, 10000);
     void voiceApi
-      .capabilities(abort.signal, whisperServiceId)
+      .capabilities(abort.signal, serverServiceId)
       .then((value) => {
         if (!abort.signal.aborted) setCapabilities(value);
       })
@@ -113,13 +117,16 @@ export function SpeechRecognitionPanel({
   }, [
     active,
     isWhisper,
+    isSenseVoice,
     retry,
-    whisperServiceId,
+    serverServiceId,
     selectedModel,
     asr.selected,
     t,
   ]);
   const busy = state !== 'idle';
+  // Whisper 与 SenseVoice 都通过 capabilities.local 报告状态；SenseVoice 没有
+  // 密钥，若在此要求 hasApiKey 会把它错误地禁用。
   const ready =
     active &&
     !!asr.selected &&
@@ -129,9 +136,12 @@ export function SpeechRecognitionPanel({
       ? browser.available
       : asr.loaded &&
         !asr.loading &&
-        (asr.selected.provider === 'whisper'
+        (asr.selected.provider === 'whisper' ||
+        asr.selected.provider === 'sense-voice'
           ? capabilities?.local.available && !checking && !checkError
-          : asr.selected.provider !== 'browser' && asr.selected.hasApiKey));
+          : asr.selected.provider !== 'browser' &&
+            'hasApiKey' in asr.selected &&
+            asr.selected.hasApiKey));
   const chooseService = (id: string) => {
     if (id === service) return;
     stop();
@@ -196,16 +206,16 @@ export function SpeechRecognitionPanel({
         },
         undefined,
         undefined,
-        !isWhisper
+        !isWhisper && !isSenseVoice
           ? (events) => new BailianSpeechSession(service, language, events)
-          : whisperServiceId
+          : serverServiceId
             ? (events) =>
                 new LiveSpeechSession(
                   speechTransport(
                     language,
                     undefined,
                     undefined,
-                    whisperServiceId,
+                    serverServiceId,
                   ),
                   events,
                 )
@@ -274,35 +284,41 @@ export function SpeechRecognitionPanel({
             </p>
           )}
           <BailianAsrConfig manager={asr} disabled={busy}>
-            {!isBrowser && asr.selected?.provider === 'whisper' && (
-              <section className="console-panel-section asr-service-status">
-                <div className="asr-service-status-row">
-                  <h4>{t('console.asr.whisperStatusHeading')}</h4>
-                  <span role="status" aria-live="polite">
-                    {checking
-                      ? t('console.asr.checkingService')
-                      : checkError
-                        ? t('console.asr.serviceFailed')
-                        : capabilities?.local.available
-                          ? t('console.asr.serviceReady')
-                          : t('console.asr.serviceNotReady')}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={checking || busy}
-                    onClick={() => {
-                      setChecking(true);
-                      setRetry((value) => value + 1);
-                    }}
-                  >
-                    {t('console.asr.recheck')}
-                  </button>
-                </div>
-                {capabilities && !capabilities.local.available && (
-                  <p className="agent-hint">{capabilities.local.reason}</p>
-                )}
-              </section>
-            )}
+            {!isBrowser &&
+              (asr.selected?.provider === 'whisper' ||
+                asr.selected?.provider === 'sense-voice') && (
+                <section className="console-panel-section asr-service-status">
+                  <div className="asr-service-status-row">
+                    <h4>
+                      {asr.selected?.provider === 'sense-voice'
+                        ? t('console.asr.senseVoiceStatusHeading')
+                        : t('console.asr.whisperStatusHeading')}
+                    </h4>
+                    <span role="status" aria-live="polite">
+                      {checking
+                        ? t('console.asr.checkingService')
+                        : checkError
+                          ? t('console.asr.serviceFailed')
+                          : capabilities?.local.available
+                            ? t('console.asr.serviceReady')
+                            : t('console.asr.serviceNotReady')}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={checking || busy}
+                      onClick={() => {
+                        setChecking(true);
+                        setRetry((value) => value + 1);
+                      }}
+                    >
+                      {t('console.asr.recheck')}
+                    </button>
+                  </div>
+                  {capabilities && !capabilities.local.available && (
+                    <p className="agent-hint">{capabilities.local.reason}</p>
+                  )}
+                </section>
+              )}
             <section
               className="voice-preview asr-preview"
               aria-label={t('console.asr.tryAsrHeading')}

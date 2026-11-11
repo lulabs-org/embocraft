@@ -7,6 +7,11 @@ export {
   type AsrBridge,
 } from './services/realtime-asr.service';
 export { WhisperAdapter as LocalSpeech, localSpeech } from './engines';
+export {
+  settingsFor,
+  speechRouter,
+  SpeechRouter,
+} from './engines/speech-router';
 export { scheduleSpeech } from './services/speech-scheduler.service';
 export {
   ASR_USES,
@@ -17,4 +22,5 @@ export {
   type SavedService,
 } from './domain';
 export * from './ports';
+export type { SpeechSettings } from './ports';
 export * from './engines';

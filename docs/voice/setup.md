@@ -100,7 +100,8 @@ graph LR
 
 ```mermaid
 graph TD
-    ASR[语音识别 ASR 引擎] --> Whisper[自托管 Whisper<br>多模型 / 参数调优 / 自托管服务]
+    ASR[语音识别 ASR 引擎] --> SenseVoice[本地 SenseVoice<br>项目服务器离线推理 / 无密钥]
+    ASR --> Whisper[自托管 Whisper<br>多模型 / 参数调优 / 自 托管服务]
     ASR --> AliyunASR[阿里云实时识别<br>Fun-ASR / Paraformer / 流式毫秒级反馈]
     ASR --> BrowserASR[浏览器原生识别<br>Web Speech API / 33 种语言]
 ```
@@ -138,7 +139,20 @@ graph TD
 
 前端音量门槛仅用于分句，不能替代语音服务的人声检测。上述措施减少误识别，不能保证所有背景声都被过滤。
 
-### 3. 浏览器语音识别（Web Speech API）
+### 3. 本地 SenseVoice 离线识别
+
+项目服务器直接加载 sherpa-onnx 的 SenseVoice 模型，录音不出服务器，也不需要地址或 API Key。把 `sherpa-onnx-sense-voice-*` 模型目录放入 `models/`（含 `tokens.txt` 与 `model.int8.onnx` 或 `model.onnx`）后，控制台即可添加 **本地 SenseVoice** 服务并选择语言（自动 / 中文 / 英文）。
+
+| 环境变量            | 默认值           | 作用说明                                                                             |
+| :------------------ | :--------------- | :----------------------------------------------------------------------------------- |
+| `ASR_PROVIDER`      | `auto`           | `auto` 有模型时优先 SenseVoice，否则回退 Whisper；也可强制 `whisper` / `sense-voice` |
+| `ASR_MODEL_DIR`     | 项目根 `models/` | 模型包搜索目录                                                                       |
+| `SENSE_VOICE_MODEL` | 第一份已装模型   | 默认使用的模型目录名                                                                 |
+| `ASR_THREADS`       | `2`              | 推理线程数（1–16）                                                                   |
+
+保存的本地 SenseVoice 服务不保存密钥，公开列表也不会出现 `hasApiKey`；聊天录音与附近语音选中该服务时直接走项目服务器推理。首次识别会加载 ONNX 图，可能需要几秒；同一进程内只保留一个识别会话并串行解码。若未安装模型，能力探测会提示放置目录，不影响 Whisper 回退。
+
+### 4. 浏览器语音识别（Web Speech API）
 
 - **完全本地触发**：调用浏览器 `SpeechRecognition` API，无需项目后端参与，不消耗服务器算力。
 - **多语言矩阵**：内置支持全球 **33 种主要语言与方言**（普通话、粤语、英语、日语、韩语、法语、西语等）。

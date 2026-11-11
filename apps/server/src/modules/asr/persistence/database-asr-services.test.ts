@@ -151,6 +151,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: null,
         temperature: null,
         prompt: null,
+        language: null,
       },
       update: {
         position: 0,
@@ -163,6 +164,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: null,
         temperature: null,
         prompt: null,
+        language: null,
       },
     });
 
@@ -180,6 +182,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: 'http://localhost:8000',
         temperature: 0,
         prompt: '',
+        language: null,
       },
       update: {
         position: 1,
@@ -192,6 +195,7 @@ describe('DatabaseAsrServicePersistence', () => {
         baseUrl: 'http://localhost:8000',
         temperature: 0,
         prompt: '',
+        language: null,
       },
     });
   });

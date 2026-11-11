@@ -29,6 +29,8 @@ vi.mock('../src/modules/asr', async (importOriginal) => {
 import { LocalSpeech as WhisperSpeech } from '../src/modules/asr';
 import { bindChatRuntime } from '../src/modules/chat';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
+import { ChatSpeechService } from '../src/modules/chat/services/speech.service';
+import type { SpeechRouter } from '../src/modules/asr/engines/speech-router';
 import { createChatRouter } from '../src/modules/chat/routes/chats.routes';
 import {
   pcmWav,
@@ -101,11 +103,19 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
           },
     );
   });
+  vi.stubEnv('ASR_PROVIDER', 'whisper');
   vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5173');
   mocked.speech = new WhisperSpeech('http://asr.test/v1', upstream);
   mocked.asrService = new TestAsrService();
   const app = express();
-  app.use(createChatRouter());
+  // 将所有请求都路由到打桩的 Whisper 实例，而不是共享引擎。
+  app.use(
+    createChatRouter(
+      new ChatSpeechService({
+        engineFor: async () => mocked.speech,
+      } as unknown as SpeechRouter),
+    ),
+  );
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

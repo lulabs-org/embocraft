@@ -37,6 +37,8 @@ describe('transcription HTTP boundary', () => {
   let server: Server, url: string, store: TestAsrService;
   const { transcribe } = mocked;
   beforeEach(async () => {
+    // 路由测试固定走打桩的 Whisper 引擎，避免加载真实模型会话。
+    vi.stubEnv('ASR_PROVIDER', 'whisper');
     vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5187');
     transcribe.mockReset().mockResolvedValue('hello');
     vi.spyOn(localSpeech, 'status').mockResolvedValue({

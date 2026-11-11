@@ -42,10 +42,11 @@ function parseChatRoute(query: express.Request['query']) {
 }
 
 /** 创建独立的 Chat 路由 Router 实例 */
-export function createChatRouter(): Router {
+export function createChatRouter(
+  speechService = new ChatSpeechService(),
+): Router {
   const router = express.Router();
   const origin = env.webOrigin();
-  const speechService = new ChatSpeechService();
   router.use(
     '/chat',
     createOriginGuard({

@@ -72,6 +72,8 @@ const authHeaders = {
 };
 
 beforeEach(async () => {
+  // 路由测试固定走打桩的 Whisper 引擎，避免加载真实模型会话。
+  vi.stubEnv('ASR_PROVIDER', 'whisper');
   vi.stubEnv('WEB_ORIGIN', origin);
   bridge.mockClear();
   store = new TestAsrService();
@@ -340,7 +342,7 @@ it('rejects Whisper profiles on the cloud socket without starting a cloud task',
   });
   expect((await socket(local.id)).message).toMatchObject({
     type: 'error',
-    message: expect.stringContaining('Whisper'),
+    message: expect.stringContaining('服务器音频识别接口'),
   });
   expect(bridge).not.toHaveBeenCalled();
   await store.remove(local.id);

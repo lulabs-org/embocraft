@@ -1,7 +1,10 @@
 import { AppError } from '../errors/app-error';
 
-/** Validate bounded mono PCM16 audio, including duration and audible content. */
-export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {
+/**
+ * 解析受限的单声道 16 kHz WAV 的 PCM 数据，并校验音量与时长。
+ * 返回采样数据是因为进程内引擎直接解码，浏览器已录好的音频无需再做容器封装转换。
+ */
+export function readPcmWav(wav: Buffer, maxSeconds = 20.5) {
   if (
     wav.toString('ascii', 0, 4) !== 'RIFF' ||
     wav.toString('ascii', 8, 12) !== 'WAVE'
@@ -41,5 +44,10 @@ export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {
       400,
       'no-speech',
     );
-  return Math.round(seconds * 1000);
+  return { pcm, durationMs: Math.round(seconds * 1000) };
+}
+
+/** 仅返回时长的兼容视图，供原样转发原始字节的调用方使用。 */
+export function validatePcmWav(wav: Buffer, maxSeconds = 20.5) {
+  return readPcmWav(wav, maxSeconds).durationMs;
 }

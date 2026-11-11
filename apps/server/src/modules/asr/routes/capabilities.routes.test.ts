@@ -43,6 +43,8 @@ describe('audio capabilities HTTP boundary', () => {
   const { status, ttsStatus } = mocked;
   const origin = 'http://127.0.0.1:5187';
   beforeEach(async () => {
+    // 路由测试固定走打桩的 Whisper 引擎，避免加载真实模型会话。
+    vi.stubEnv('ASR_PROVIDER', 'whisper');
     vi.stubEnv('WEB_ORIGIN', origin);
     ttsStatus.mockReset().mockResolvedValue({
       available: false,
@@ -70,10 +72,13 @@ describe('audio capabilities HTTP boundary', () => {
   it('advertises ASR and TTS readiness without requiring an admin token', async () => {
     const response = await fetch(url);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    const body = await response.json();
+    expect(body).toMatchObject({
       local: { available: true, reason: 'ready' },
       agentSpeech: { available: false, reason: '请安装 Piper 模型。' },
     });
+    // 返回已安装的 SenseVoice 模型包，供控制台选择。
+    expect(Array.isArray(body.senseVoiceModels)).toBe(true);
     expect(ttsStatus).toHaveBeenCalledTimes(1);
   });
 

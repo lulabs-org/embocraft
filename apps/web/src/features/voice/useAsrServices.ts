@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_BAILIAN_ASR,
+  DEFAULT_SENSE_VOICE_ASR,
   DEFAULT_WHISPER_ASR,
   type AsrServiceView,
 } from '@voxel/shared';
@@ -16,6 +17,7 @@ import {
   type WebAsrService,
 } from './browser-asr-services';
 
+/** 新建配置从服务商默认值开始；服务器内的 SenseVoice 引擎只需一个名称。 */
 const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }
@@ -29,22 +31,27 @@ const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
               : 'gemini-3.5-transcribe-live',
           apiKey: '',
         }
-      : provider === 'whisper'
-        ? {
-            ...DEFAULT_WHISPER_ASR,
-            provider,
-            name: '',
-            baseUrl: '',
-            apiKey: '',
-            model: '',
-          }
-        : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+      : provider === 'sense-voice'
+        ? { ...DEFAULT_SENSE_VOICE_ASR, provider, name: '' }
+        : provider === 'whisper'
+          ? {
+              ...DEFAULT_WHISPER_ASR,
+              provider,
+              name: '',
+              baseUrl: '',
+              apiKey: '',
+              model: '',
+            }
+          : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
+/** 服务器内引擎不携带密钥，因此编辑时保留全部字段。 */
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
-  draft.provider === 'browser' ? draft : { ...draft, apiKey: '' };
+  draft.provider === 'browser' || draft.provider === 'sense-voice'
+    ? draft
+    : { ...draft, apiKey: '' };
 const formFor = (id: string, saved?: WebAsrService) => ({
   id,
   draft: saved
-    ? saved.provider === 'browser'
+    ? saved.provider === 'browser' || saved.provider === 'sense-voice'
       ? { ...saved }
       : { ...saved, apiKey: '' }
     : fresh(),

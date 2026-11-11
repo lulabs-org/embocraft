@@ -1,10 +1,11 @@
-import { AppError } from '../../../core/errors/app-error';
 import {
   asrService,
-  localSpeech,
   scheduleSpeech,
+  settingsFor,
+  speechRouter,
   type AsrService,
-  type LocalSpeech,
+  type SpeechRouter,
+  type SpeechSettings,
 } from '../../asr';
 import type { WorldChat } from './chat.service';
 import { DEFAULT_WHISPER_ASR } from '@voxel/shared';
@@ -31,7 +32,7 @@ type SpatialInput = Omit<AudioInput, 'route' | 'language'> & {
 /** Coordinates ASR with chat authorization and ticket lifetimes. */
 export class ChatSpeechService {
   constructor(
-    private speech: LocalSpeech = localSpeech,
+    private speech: SpeechRouter = speechRouter,
     private asrSettings: AsrService = asrService,
   ) {}
 
@@ -48,44 +49,41 @@ export class ChatSpeechService {
   }: AudioInput) {
     chat.beginUpload(actor, route);
     try {
-      const normalized = await this.speech.normalize(
-        bytes,
-        contentType,
-        signal,
-      );
-      let text = '';
+      const selected = serviceId
+        ? await this.asrSettings.acquire(serviceId)
+        : undefined;
       try {
-        const selected = serviceId
-          ? await this.asrSettings.acquire(serviceId)
-          : undefined;
+        const profile = selected?.settings;
+        // 已保存的配置固定使用自己的引擎；未指定配置的上传按 ASR_PROVIDER 选择。
+        const engine = await this.speech.engineFor(profile);
+        const normalized = await engine.normalize(bytes, contentType, signal);
+        let text = '';
         try {
-          if (selected && selected.settings.provider !== 'whisper')
-            throw new AppError('录制语音只能使用 Whisper 识别服务。');
-          text = await scheduleSpeech(this.speech).transcribe(
+          text = await scheduleSpeech(engine).transcribe(
             normalized.bytes,
             'audio/wav',
             language,
             signal,
             false,
-            selected?.settings.provider === 'whisper'
-              ? selected.settings
-              : undefined,
+            settingsFor(profile),
           );
-        } finally {
-          selected?.release();
+        } catch {
+          // 转写失败不能丢弃录音：音频仍以空文本发布；
+          // 只有真正的取消才继续中止上传。
+          signal.throwIfAborted();
         }
-      } catch {
         signal.throwIfAborted();
+        chat.authenticate(token);
+        return chat.publishAudio(
+          actor,
+          route,
+          normalized.bytes,
+          normalized.durationMs,
+          text,
+        );
+      } finally {
+        selected?.release();
       }
-      signal.throwIfAborted();
-      chat.authenticate(token);
-      return chat.publishAudio(
-        actor,
-        route,
-        normalized.bytes,
-        normalized.durationMs,
-        text,
-      );
     } finally {
       chat.endUpload(actor);
     }
@@ -107,25 +105,29 @@ export class ChatSpeechService {
       ? await this.asrSettings.acquire(serviceId)
       : undefined;
     try {
-      if (selected && selected.settings.provider !== 'whisper')
-        throw new AppError('请选择 Whisper 服务。');
+      const profile = selected?.settings;
+      const engine = await this.speech.engineFor(profile);
       const signal = AbortSignal.any([
         requestSignal,
         partial ? chat.previewSpatial(actor, id) : chat.claimSpatial(actor, id),
       ]);
-      const text = await scheduleSpeech(this.speech).transcribe(
+      // 附近语音会直接发布，因此 Whisper 固定温度为 0；
+      // SenseVoice 没有采样温度，直接使用保存的识别语言。
+      const settings: SpeechSettings | undefined =
+        profile?.provider === 'whisper'
+          ? { ...profile, temperature: 0 }
+          : profile?.provider === 'sense-voice'
+            ? profile
+            : engine.provider === 'whisper'
+              ? { ...DEFAULT_WHISPER_ASR, temperature: 0 }
+              : undefined;
+      const text = await scheduleSpeech(engine).transcribe(
         bytes,
         contentType,
         language,
         signal,
         partial,
-        {
-          ...(selected?.settings.provider === 'whisper'
-            ? selected.settings
-            : DEFAULT_WHISPER_ASR),
-          // Nearby transcripts are published automatically, without a review step.
-          temperature: 0,
-        },
+        settings,
       );
       signal.throwIfAborted();
       chat.authenticate(token);

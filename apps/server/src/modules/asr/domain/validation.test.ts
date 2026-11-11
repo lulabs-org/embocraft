@@ -141,8 +141,8 @@ describe('General ASR Service entity validation & view', () => {
       apiKey: 'super-secret',
     });
     const view = toAsrServiceView(service);
-    expect(view.hasApiKey).toBe(true);
-    expect((view as Record<string, unknown>).apiKey).toBeUndefined();
+    expect(view).toMatchObject({ hasApiKey: true });
+    expect(view).not.toHaveProperty('apiKey');
   });
 });
 
@@ -169,8 +169,8 @@ describe('live transcription settings', () => {
         validateAsrService(
           { provider, model, name: 'Edited', apiKey: '' },
           saved,
-        ).apiKey,
-      ).toBe('secret');
+        ),
+      ).toMatchObject({ apiKey: 'secret' });
       expect(() =>
         validateAsrService({ provider, model, name: 'Live', apiKey: '' }),
       ).toThrow('API Key');

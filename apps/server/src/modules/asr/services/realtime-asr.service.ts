@@ -89,8 +89,11 @@ export class RealtimeAsrService {
         return;
       }
       const { settings } = acquired;
-      if (settings.provider === 'whisper')
-        throw new AppError('Whisper 服务请使用服务器音频识别接口。');
+      if (
+        settings.provider === 'whisper' ||
+        settings.provider === 'sense-voice'
+      )
+        throw new AppError('该服务请使用服务器音频识别接口。');
       if (settings.provider === 'openai' || settings.provider === 'gemini')
         this.liveBridge(client, settings, language);
       else this.bridge(client, settings, language);

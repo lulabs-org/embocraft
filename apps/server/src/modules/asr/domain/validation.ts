@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import {
   DEFAULT_WHISPER_ASR,
   type BailianAsrDraft,
+  type SenseVoiceAsrSettings,
+  type SenseVoiceLanguage,
   type WhisperAsrDraft,
 } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
@@ -139,7 +141,37 @@ function validateLiveSettings(
 }
 
 // ============================================================================
-// 3. 通用 ASR 服务实体校验与组装
+// 3. 本地 SenseVoice 配置校验
+// ============================================================================
+
+/** k2-fsa SenseVoice 模型包的目录名，例如 sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17。 */
+const SENSE_VOICE_MODEL = /^sherpa-onnx-sense-voice[a-zA-Z0-9._-]{0,90}$/;
+
+/** 离线配置只选择已安装的模型包与识别语言，不会下载任何内容。 */
+export function validateSenseVoiceSettings(value: {
+  [key: string]: unknown;
+}): SenseVoiceAsrSettings {
+  if (typeof value.model !== 'string')
+    throw new AppError('请选择 SenseVoice 模型。');
+  if (
+    value.model !== 'default' &&
+    (!SENSE_VOICE_MODEL.test(value.model) || value.model.includes('..'))
+  )
+    throw new AppError('请选择服务器已安装的 SenseVoice 模型。');
+  if (
+    value.language !== 'auto' &&
+    value.language !== 'zh' &&
+    value.language !== 'en'
+  )
+    throw new AppError('请选择自动、中文或英文识别语言。');
+  return {
+    model: value.model,
+    language: value.language as SenseVoiceLanguage,
+  };
+}
+
+// ============================================================================
+// 4. 通用 ASR 服务实体校验与组装
 // ============================================================================
 
 export function validateAsrService(
@@ -154,7 +186,8 @@ export function validateAsrService(
     provider !== 'whisper' &&
     provider !== 'bailian' &&
     provider !== 'openai' &&
-    provider !== 'gemini'
+    provider !== 'gemini' &&
+    provider !== 'sense-voice'
   )
     throw new AppError('请选择支持的识别服务类型。');
   if (previous && provider !== (previous.provider ?? 'bailian'))
@@ -163,24 +196,29 @@ export function validateAsrService(
   const settings =
     provider === 'openai' || provider === 'gemini'
       ? validateLiveSettings(value, provider, previous)
-      : provider === 'whisper'
+      : provider === 'sense-voice'
         ? {
-            ...validateWhisperSettings(
-              value,
-              previous?.provider === 'whisper' ? previous : undefined,
-            ),
-            provider: 'whisper' as const,
+            ...validateSenseVoiceSettings(value),
+            provider: 'sense-voice' as const,
           }
-        : {
-            ...validateBailianSettings(
-              input,
-              previous?.provider === 'bailian' ||
-                previous?.provider === undefined
-                ? previous
-                : undefined,
-            ),
-            provider: 'bailian' as const,
-          };
+        : provider === 'whisper'
+          ? {
+              ...validateWhisperSettings(
+                value,
+                previous?.provider === 'whisper' ? previous : undefined,
+              ),
+              provider: 'whisper' as const,
+            }
+          : {
+              ...validateBailianSettings(
+                input,
+                previous?.provider === 'bailian' ||
+                  previous?.provider === undefined
+                  ? previous
+                  : undefined,
+              ),
+              provider: 'bailian' as const,
+            };
 
   const name = value.name;
   if (

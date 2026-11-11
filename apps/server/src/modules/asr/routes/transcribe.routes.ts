@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { localSpeech } from '../engines';
+import { settingsFor, speechRouter } from '../engines/speech-router';
 import { asrService } from '../services/asr.service';
 import { scheduleSpeech } from '../services/speech-scheduler.service';
 import { MAX_AUDIO_BYTES } from '../../../core/audio/normalize';
@@ -91,17 +91,16 @@ export function installTranscribeRoutes(router: Router) {
             ? undefined
             : await asrService.acquire(String(req.query.serviceId));
         release = selected?.release;
-        if (selected && selected.settings.provider !== 'whisper')
-          throw new AppError('请选择 Whisper 服务。');
-        const text = await scheduleSpeech(localSpeech).transcribe(
+        // 已保存的配置固定使用自己的引擎；未指定配置的请求按 ASR_PROVIDER 选择。
+        const profile = selected?.settings;
+        const engine = await speechRouter.engineFor(profile);
+        const text = await scheduleSpeech(engine).transcribe(
           Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
           req.headers['content-type'] ?? '',
           String(req.query.language ?? 'zh'),
           controller.signal,
           req.query.partial === '1',
-          selected?.settings.provider === 'whisper'
-            ? selected.settings
-            : undefined,
+          settingsFor(profile),
         );
         if (!controller.signal.aborted) res.json({ text });
       } catch (error) {

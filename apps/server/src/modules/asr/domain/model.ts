@@ -8,6 +8,7 @@ export const SUPPORTED_ASR_PROVIDERS = [
   'bailian',
   'openai',
   'gemini',
+  'sense-voice',
 ] as const;
 export type SupportedAsrProvider = (typeof SUPPORTED_ASR_PROVIDERS)[number];
 
@@ -25,6 +26,8 @@ export function toAsrServiceView({
   uses: _uses,
   ...value
 }: SavedService): AsrServiceView {
+  // 服务器内引擎本身不持有密钥，因此按保存时的配置原样返回。
+  if (value.provider === 'sense-voice') return value;
   const { apiKey, ...settings } = value;
   return { ...settings, hasApiKey: !!apiKey };
 }

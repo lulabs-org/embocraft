@@ -12,6 +12,8 @@ import { managementRequest } from '@voxel/shared/management';
 
 export type SpeechCapabilities = {
   local: { available: boolean; reason: string };
+  /** 服务器已安装的离线 SenseVoice 模型包，供控制台模型选择器使用。 */
+  senseVoiceModels?: string[];
 };
 
 async function asrRequest<T>(

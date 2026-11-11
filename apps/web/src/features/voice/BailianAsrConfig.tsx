@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { BailianAsrDraft } from '@voxel/shared';
+import type { BailianAsrDraft, BailianAsrView } from '@voxel/shared';
 import { useI18n } from '../../i18n/context';
 import type { AsrProvider } from './browser-asr-services';
 import { SpeachesAsrConfig } from './SpeachesAsrConfig';
@@ -28,19 +28,29 @@ export function BailianAsrConfig({
   } = manager;
   const [editingKey, setEditingKey] = useState(false);
   useEffect(() => setEditingKey(false), [saved]);
+  /** 阿里云记录上的 provider 为可选字段，会妨碍类型收窄，因此显式断言。 */
+  const savedBailian =
+    saved && (saved.provider === 'bailian' || saved.provider === undefined)
+      ? (saved as BailianAsrView & { id: string; name: string })
+      : undefined;
   const hasSavedKey =
-    saved?.provider !== 'whisper' &&
-    saved?.provider !== 'browser' &&
-    !!saved?.hasApiKey;
+    saved &&
+    (saved.provider === 'bailian' ||
+      saved.provider === undefined ||
+      saved.provider === 'openai' ||
+      saved.provider === 'gemini')
+      ? !!saved.hasApiKey
+      : false;
   const canKeepKey =
     hasSavedKey &&
     draft.provider !== 'whisper' &&
+    draft.provider !== 'sense-voice' &&
     draft.provider !== 'browser' &&
     (draft.provider === 'openai' || draft.provider === 'gemini'
       ? saved?.provider === draft.provider
       : (saved?.provider === 'bailian' || saved?.provider === undefined) &&
-        saved?.region === draft.region &&
-        saved?.workspaceId === draft.workspaceId);
+        savedBailian?.region === draft.region &&
+        savedBailian?.workspaceId === draft.workspaceId);
   return (
     <form
       onSubmit={(e) => {
@@ -75,6 +85,9 @@ export function BailianAsrConfig({
           >
             <option value="whisper">{t('console.asr.typeWhisper')}</option>
             <option value="bailian">{t('console.asr.typeBailian')}</option>
+            <option value="sense-voice">
+              {t('console.asr.typeSenseVoice')}
+            </option>
             <option value="openai">OpenAI GPT Live Transcribe</option>
             <option value="gemini">Gemini Live Transcription</option>
             <option value="browser">{t('console.asr.typeBrowser')}</option>
@@ -156,6 +169,36 @@ export function BailianAsrConfig({
                 ? t('console.voice.keyLeaveBlankHint')
                 : t('console.voice.keyServerOnly')}
             </small>
+          </>
+        ) : draft.provider === 'sense-voice' ? (
+          <>
+            <label>
+              {t('console.asr.recognitionModel')}
+              <input
+                value={draft.model}
+                maxLength={100}
+                placeholder="default"
+                onChange={(e) => change({ model: e.target.value })}
+              />
+            </label>
+            <label>
+              {t('console.asr.primaryLanguage')}
+              <select
+                value={draft.language}
+                onChange={(e) => change({ language: e.target.value })}
+              >
+                <option value="auto">
+                  {t('console.asr.senseVoiceLanguageAuto')}
+                </option>
+                <option value="zh">
+                  {t('console.asr.senseVoiceLanguageZh')}
+                </option>
+                <option value="en">
+                  {t('console.asr.senseVoiceLanguageEn')}
+                </option>
+              </select>
+            </label>
+            <small>{t('console.asr.senseVoiceServerNote')}</small>
           </>
         ) : (
           <>
@@ -258,7 +301,9 @@ export function BailianAsrConfig({
         <p className="agent-hint">{t('console.asr.browserHint')}</p>
       ) : draft.provider === 'whisper' ? (
         <p className="agent-hint">{t('console.asr.whisperHint')}</p>
-      ) : draft.provider === 'openai' || draft.provider === 'gemini' ? null : (
+      ) : draft.provider === 'openai' ||
+        draft.provider === 'gemini' ? null : draft.provider ===
+        'sense-voice' ? null : (
         <a
           className="console-help-link"
           href="https://help.aliyun.com/zh/model-studio/real-time-speech-recognition-user-guide"
@@ -277,7 +322,9 @@ export function BailianAsrConfig({
             disabled={
               !dirty ||
               manager.loading ||
-              (draft.provider === 'whisper' && !draft.model)
+              ((draft.provider === 'whisper' ||
+                draft.provider === 'sense-voice') &&
+                !draft.model)
             }
           >
             {busy ? t('common.loading') : t('console.asr.saveServiceButton')}

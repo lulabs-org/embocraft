@@ -85,7 +85,7 @@ describe('RealtimeAsrService', async () => {
 
     await expect(
       service.startSession(client, 'whisper-service', 'zh'),
-    ).rejects.toThrow(new AppError('Whisper 服务请使用服务器音频识别接口。'));
+    ).rejects.toThrow(new AppError('该服务请使用服务器音频识别接口。'));
     expect(release).toHaveBeenCalledOnce();
     expect(bridge).not.toHaveBeenCalled();
     expect(service.runningSessions).toBe(0);

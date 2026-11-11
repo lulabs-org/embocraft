@@ -5,7 +5,8 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { createDefaultSpeechStatus } from '../../tts';
-import { localSpeech } from '../engines';
+import { listSenseVoiceModels } from '../engines';
+import { settingsFor, speechRouter } from '../engines/speech-router';
 import { asrService } from '../services/asr.service';
 
 export function installCapabilitiesRoutes(router: Router) {
@@ -65,12 +66,17 @@ export function installCapabilitiesRoutes(router: Router) {
           req.query.serviceId === undefined
             ? undefined
             : await asrService.get(String(req.query.serviceId));
-        if (selected && selected.provider !== 'whisper')
-          throw new AppError('请选择 Whisper 服务。');
+        // 云端配置不是服务器内引擎，engineFor 会直接拒绝。
+        const engine = await speechRouter.engineFor(selected);
+        // 已安装模型列表是全局信息，因此即使还没保存 SenseVoice 配置，
+        // 控制台也能提供已安装的模型。
+        const [local, senseVoiceModels] = await Promise.all([
+          engine.status(settingsFor(selected)),
+          listSenseVoiceModels(),
+        ]);
         res.json({
-          local: await localSpeech.status(
-            selected?.provider === 'whisper' ? selected : undefined,
-          ),
+          local,
+          senseVoiceModels: senseVoiceModels.map((model) => model.name),
           agentSpeech: await defaultSpeechStatus(),
         });
       } catch (error) {

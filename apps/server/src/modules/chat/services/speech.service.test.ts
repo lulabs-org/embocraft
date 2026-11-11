@@ -6,8 +6,13 @@ import {
   TestAsrService,
 } from '../../../../test/helpers/memory-storage';
 import type { LocalSpeech } from '../../asr';
+import type { SpeechRouter } from '../../asr/engines/speech-router';
 import { WorldChat } from './chat.service';
 import { ChatSpeechService } from './speech.service';
+
+/** 路由有单独的测试，因此聊天测试统一固定同一个引擎。 */
+const engines = (speech: LocalSpeech) =>
+  ({ engineFor: async () => speech }) as unknown as SpeechRouter;
 
 const player = (id: string): Player => ({
   id,
@@ -37,7 +42,7 @@ function setup() {
     normalize,
     transcribe,
     speech,
-    service: new ChatSpeechService(speech, new TestAsrService()),
+    service: new ChatSpeechService(engines(speech), new TestAsrService()),
   };
 }
 
@@ -122,7 +127,7 @@ describe('chat speech coordination', () => {
     const store = {
       acquire: vi.fn(() => ({ settings, release })),
     } as unknown as AsrService;
-    const service = new ChatSpeechService(speech, store);
+    const service = new ChatSpeechService(engines(speech), store);
     const id = chat.beginSpatial('actor');
     await service.transcribeSpatial({
       chat,
@@ -159,7 +164,7 @@ describe('chat speech coordination', () => {
     const store = {
       acquire: vi.fn(() => ({ settings, release })),
     } as unknown as AsrService;
-    const service = new ChatSpeechService(speech, store);
+    const service = new ChatSpeechService(engines(speech), store);
     const data = await service.publishAudio({
       chat,
       actor: 'actor',

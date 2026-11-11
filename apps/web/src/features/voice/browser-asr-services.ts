@@ -12,6 +12,7 @@ export type WebAsrService = AsrServiceView | BrowserAsrService;
 export type AsrProvider =
   | 'bailian'
   | 'whisper'
+  | 'sense-voice'
   | 'browser'
   | 'openai'
   | 'gemini';

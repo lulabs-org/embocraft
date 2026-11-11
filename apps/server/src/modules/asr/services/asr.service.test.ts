@@ -284,7 +284,9 @@ it.each([
       chat: { id: service.id, provider },
       spatial: { id: service.id, provider },
     });
-    expect((await restored.get(service.id)).apiKey).toBe('private-key');
+    expect(await restored.get(service.id)).toMatchObject({
+      apiKey: 'private-key',
+    });
     expect(JSON.stringify(await restored.list())).not.toContain('private-key');
   },
 );

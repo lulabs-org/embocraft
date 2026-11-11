@@ -1,5 +1,9 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import type { AsrUse, BailianAsrSettings } from '@voxel/shared';
+import type {
+  AsrUse,
+  BailianAsrSettings,
+  SenseVoiceLanguage,
+} from '@voxel/shared';
 import { getDatabaseClient } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
@@ -14,12 +18,16 @@ function providerData(value: SavedService) {
     name: value.name,
     provider: value.provider ?? 'bailian',
     model: value.model,
-    apiKey: encryptSecret(value.apiKey ?? ''),
+    // 服务器内引擎不保存密钥，该列统一留空。
+    apiKey: encryptSecret(
+      value.provider === 'sense-voice' ? '' : (value.apiKey ?? ''),
+    ),
     region: isBailian ? value.region : null,
     workspaceId: isBailian ? value.workspaceId : null,
     baseUrl: isWhisper ? (value.baseUrl ?? '') : null,
     temperature: isWhisper ? (value.temperature ?? 0) : null,
     prompt: isWhisper ? (value.prompt ?? '') : null,
+    language: value.provider === 'sense-voice' ? value.language : null,
   };
 }
 
@@ -28,7 +36,8 @@ function configuration(value: SavedService) {
     value.name,
     value.provider ?? 'bailian',
     value.model,
-    value.apiKey ?? '',
+    // 服务器内引擎从不持久化密钥，因此按空值比较。
+    value.provider === 'sense-voice' ? '' : (value.apiKey ?? ''),
   ];
   if (value.provider === 'whisper')
     return JSON.stringify([
@@ -39,6 +48,8 @@ function configuration(value: SavedService) {
     ]);
   if (value.provider === 'bailian' || value.provider === undefined)
     return JSON.stringify([...common, value.region, value.workspaceId ?? '']);
+  if (value.provider === 'sense-voice')
+    return JSON.stringify([...common, value.language]);
   return JSON.stringify(common);
 }
 
@@ -68,6 +79,17 @@ export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
           provider: row.provider,
           model: row.model,
           apiKey: decryptSecret(row.apiKey),
+          ...(uses ? { uses } : {}),
+        };
+      }
+      if (row.provider === 'sense-voice') {
+        // 服务器内引擎不解密密钥；历史记录默认使用中文。
+        return {
+          id: row.id,
+          name: row.name,
+          provider: 'sense-voice',
+          model: row.model,
+          language: (row.language || 'zh') as SenseVoiceLanguage,
           ...(uses ? { uses } : {}),
         };
       }

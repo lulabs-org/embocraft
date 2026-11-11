@@ -1,5 +1,4 @@
-import type { WhisperAsrDraft } from '@voxel/shared';
-import { WhisperAdapter } from '../engines';
+import type { SpeechSettings, SpeechTranscriberPort } from '../ports';
 import { AppError } from '../../../core/errors/app-error';
 
 type Job = { run: () => Promise<void>; cancel: () => void };
@@ -7,14 +6,14 @@ type Job = { run: () => Promise<void>; cancel: () => void };
 export class SpeechScheduler {
   private running = false;
   private queue: Job[] = [];
-  constructor(private speech: WhisperAdapter) {}
+  constructor(private speech: SpeechTranscriberPort) {}
   transcribe(
     audio: Buffer,
     type: string,
     language: string,
     signal: AbortSignal,
     partial = false,
-    settings?: WhisperAsrDraft,
+    settings?: SpeechSettings,
   ): Promise<string> {
     if (signal.aborted) return Promise.reject(signal.reason);
     if ((partial && this.running) || this.queue.length >= 4)
@@ -75,8 +74,8 @@ export class SpeechScheduler {
     }
   }
 }
-const schedulers = new WeakMap<WhisperAdapter, SpeechScheduler>();
-export function scheduleSpeech(speech: WhisperAdapter) {
+const schedulers = new WeakMap<SpeechTranscriberPort, SpeechScheduler>();
+export function scheduleSpeech(speech: SpeechTranscriberPort) {
   let scheduler = schedulers.get(speech);
   if (!scheduler) {
     scheduler = new SpeechScheduler(speech);

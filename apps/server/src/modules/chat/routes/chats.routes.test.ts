@@ -31,6 +31,8 @@ vi.mock('../../asr', async (importOriginal) => {
 
 import { bindChatRuntime } from '../services/chat-runtime.service';
 import { WorldChat } from '../services/chat.service';
+import { ChatSpeechService } from '../services/speech.service';
+import type { SpeechRouter } from '../../asr/engines/speech-router';
 import { createChatRouter } from './chats.routes';
 
 let server: Server | undefined;
@@ -162,7 +164,15 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   const app = express();
   const origin = 'http://127.0.0.1:5173';
   vi.stubEnv('WEB_ORIGIN', origin);
-  app.use(createChatRouter());
+  // 注入打桩引擎，确保测试不会访问真实的 ASR 后端。
+  app.use(
+    createChatRouter(
+      new ChatSpeechService(
+        { engineFor: async () => speech } as unknown as SpeechRouter,
+        store,
+      ),
+    ),
+  );
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
