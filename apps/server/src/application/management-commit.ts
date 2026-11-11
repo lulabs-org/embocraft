@@ -1,5 +1,6 @@
 import type { AICharacterView } from '@voxel/shared';
 import { AppError } from '../core/errors/app-error';
+import { taskChanges } from '../persistence/management-archive';
 import type {
   ArchivePort,
   CharacterChanges,
@@ -15,6 +16,7 @@ export type ManagementSnapshotPorts<Characters, Tasks> = {
   captureExecutions(exclude?: string[]): void;
   captureCharacters(): { records: CharacterRecord[]; views: AICharacterView[] };
   captureTasks(): TaskSnapshot;
+  captureCommittedTasks(): TaskSnapshot;
   rejectTasks(snapshot: TaskSnapshot): Set<string | undefined>;
   rejectCharacters(
     records: CharacterRecord[],
@@ -80,7 +82,14 @@ export class ManagementPersistence<Characters, Tasks> {
       .catch(() => {})
       .then(async () => {
         try {
-          snapshot = await this.archive.commit({ ...snapshot, ...changes });
+          snapshot = await this.archive.commit({
+            ...snapshot,
+            ...changes,
+            taskChanges: taskChanges(
+              this.snapshots.captureCommittedTasks(),
+              snapshot,
+            ),
+          });
         } catch (error) {
           this.storageRevision++;
           const affected = this.snapshots.rejectTasks(snapshot);

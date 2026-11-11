@@ -118,7 +118,15 @@ export class MemoryArchive implements ManagementStore {
   async commit(change: ManagementChange): Promise<ManagementArchive> {
     const next = applyManagementChange(await this.load(), change);
     await this.save(next);
-    return next;
+    return change.taskChanges
+      ? {
+          version: 3,
+          characters: next.characters,
+          plans: change.plans,
+          runs: change.runs,
+          requests: change.requests,
+        }
+      : next;
   }
   async save(records: ManagementArchive): Promise<void> {
     if (this.saveError) throw this.saveError;

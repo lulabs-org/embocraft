@@ -16,7 +16,10 @@ import {
   newPlan,
   newRun,
 } from '../src/modules/tasks';
-import type { ManagementArchive } from '../src/persistence/management-archive';
+import type {
+  ManagementArchive,
+  ManagementChange,
+} from '../src/persistence/management-archive';
 import { createManagementPersistence } from '../src/application/management-persistence';
 
 function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
@@ -82,6 +85,7 @@ function fixture(save: (snapshot: ManagementArchive) => Promise<void>) {
           presence,
         ),
       captureTasks: () => tasks.capture(plans),
+      captureCommittedTasks: () => tasks.capture(committed),
       rejectTasks: (snapshot) => tasks.reject(snapshot, committed),
       affectedCharacters: (records, affected) =>
         characters.affectedByFailure(records, affected),
@@ -174,6 +178,13 @@ it('serializes joint snapshots and exposes both domains before publishing commit
     })),
   );
   expect(pending[1].snapshot.plans[0].goal).toBe('new goal');
+  const firstChange = pending[0].snapshot as ManagementChange;
+  const secondChange = pending[1].snapshot as ManagementChange;
+  expect(firstChange.taskChanges?.plans[0].before).toBeUndefined();
+  expect(secondChange.taskChanges?.plans[0].before?.goal).toBe('观察');
+  expect(secondChange.taskChanges?.plans[0].after?.goal).toBe('new goal');
+  expect(secondChange.taskChanges?.runs).toEqual([]);
+  expect(secondChange.taskChanges?.requests).toEqual([]);
   pending[1].resolve();
   await second;
   expect(f.persistence.characters.committedCharacterName('a')).toBe('changed');

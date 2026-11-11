@@ -1,6 +1,6 @@
 import { createAgentRuntime } from '@voxel/agent-runtime';
 import { testAgentConfig } from '../../../tests/support/agent-config';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   DEFAULT_BAILIAN_ASR,
   DEFAULT_WHISPER_ASR,
@@ -24,7 +24,10 @@ import { TtsService } from '../src/modules/tts';
 import { bootstrapProviders } from './helpers/provider-seed';
 import { DatabaseProviderRepository } from '../src/modules/providers';
 import { DEFAULT_TTS_PROVIDER } from '../prisma/seed-data';
-import type { ManagementArchive } from '../src/persistence/management-archive';
+import {
+  taskChanges,
+  type ManagementArchive,
+} from '../src/persistence/management-archive';
 import { DatabaseManagementArchive } from '../src/persistence/database-management-archive';
 import { createServer } from '../src/server';
 import { newPlan, newRun } from '../src/modules/tasks';
@@ -111,6 +114,329 @@ describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
     } finally {
       await manager.close();
     }
+  });
+
+  it('production commits preserve untouched database tasks and avoid restoring unrelated history', async () => {
+    const providers = new DatabaseProviderRepository(db!);
+    await bootstrapProviders(providers);
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [
+        storedCharacter({ providerId: 'ollama', model: 'qwen2.5:3b' }),
+      ],
+      plans: [
+        storedPlan({ id: 'keep', characterId: 'actor' }),
+        storedPlan({ id: 'removed', characterId: 'actor' }),
+      ],
+      runs: [
+        storedRun({
+          id: 'history',
+          planId: 'keep',
+          characterId: 'actor',
+          status: 'completed',
+          runtime: createAgentRuntime().executionSnapshot(),
+        }),
+      ],
+      requests: { 'actor:keep': 'keep' },
+    });
+    const manager = new AICharacterManager(providers, '', archive);
+    await manager.load();
+    try {
+      await db!.agentPlan.update({
+        where: { id: 'keep' },
+        data: { name: 'Database edit' },
+      });
+      await db!.agentPlan.delete({ where: { id: 'removed' } });
+      const existing = await db!.agentPlan.findUniqueOrThrow({
+        where: { id: 'keep' },
+      });
+      await db!.agentPlan.create({
+        data: {
+          ...existing,
+          scheduleSpec: existing.scheduleSpec as Prisma.InputJsonValue,
+          limits: existing.limits as Prisma.InputJsonValue,
+          id: 'external',
+          position: 100,
+        },
+      });
+      await db!.agentRequest.create({
+        data: { key: 'actor:external', planId: 'external' },
+      });
+      await db!.agentRunCheckpoint.update({
+        where: { runId: 'history' },
+        data: { version: 999 },
+      });
+      await manager.update('actor', {
+        roleDescription: 'Only update character',
+      });
+      const created = await manager.tasks.createTaskPlan('actor', {
+        name: 'New schedule',
+        goal: 'Observe',
+        timing: { kind: 'interval', everyMs: 60000 },
+        timeZone: 'UTC',
+      });
+      expect(
+        await db!.agentPlan.findUnique({ where: { id: created.id } }),
+      ).toMatchObject({ position: 101 });
+      expect(
+        await db!.agentPlan.findUnique({ where: { id: 'keep' } }),
+      ).toMatchObject({ name: 'Database edit', position: 0 });
+      expect(
+        await db!.agentPlan.findUnique({ where: { id: 'removed' } }),
+      ).toBeNull();
+      expect(
+        await db!.agentPlan.findUnique({ where: { id: 'external' } }),
+      ).toMatchObject({ position: 100 });
+      expect(await db!.agentRequest.count()).toBe(2);
+      expect(
+        await db!.agentRunCheckpoint.findUnique({
+          where: { runId: 'history' },
+        }),
+      ).toMatchObject({ version: 999 });
+      expect(manager.jobs.size).toBe(0);
+    } finally {
+      await manager.close();
+    }
+    expect(
+      await db!.agentPlan.findUnique({ where: { id: 'keep' } }),
+    ).toMatchObject({ name: 'Database edit' });
+  });
+
+  it.each(['plan', 'run', 'request'] as const)(
+    'rejects a stale %s change without committing other participants',
+    async (kind) => {
+      await bootstrapProviders(new DatabaseProviderRepository(db!));
+      const archive = new DatabaseManagementArchive(db!);
+      await archive.save({
+        version: 3,
+        characters: [storedCharacter()],
+        plans: [
+          storedPlan({ characterId: 'actor' }),
+          storedPlan({ id: 'other', characterId: 'actor' }),
+        ],
+        runs: [
+          storedRun({
+            planId: 'plan',
+            characterId: 'actor',
+            status: 'completed',
+          }),
+        ],
+        requests: { request: 'plan' },
+      });
+      const before = (await archive.load())!;
+      const after = structuredClone(before);
+      after.plans[0].name = 'Local edit';
+      after.runs[0].totalTokens = 42;
+      delete after.requests.request;
+      if (kind === 'plan')
+        await db!.agentPlan.update({
+          where: { id: 'plan' },
+          data: { name: 'Concurrent edit' },
+        });
+      if (kind === 'run')
+        await db!.agentRun.update({
+          where: { id: 'run' },
+          data: { reason: 'Concurrent edit' },
+        });
+      if (kind === 'request')
+        await db!.agentRequest.update({
+          where: { key: 'request' },
+          data: { planId: 'other' },
+        });
+      await expect(
+        archive.commit({
+          ...after,
+          profiles: { actor: { name: 'Uncommitted name' } },
+          taskChanges: taskChanges(before, after),
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect((await archive.characters.record('actor')).name).toBe(
+        before.characters[0].name,
+      );
+      expect(
+        await db!.agentRun.findUnique({ where: { id: 'run' } }),
+      ).toMatchObject({ totalTokens: 0n });
+      expect(await db!.tokenUsage.count()).toBe(0);
+      expect(
+        await db!.agentPlan.findUnique({ where: { id: 'plan' } }),
+      ).toMatchObject({
+        name: kind === 'plan' ? 'Concurrent edit' : before.plans[0].name,
+      });
+      expect(
+        await db!.agentRequest.findUnique({ where: { key: 'request' } }),
+      ).not.toBeNull();
+    },
+  );
+
+  it('serializes competing task commits and accounts tokens only for the winning transaction', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter()],
+      plans: [storedPlan({ characterId: 'actor' })],
+      runs: [
+        storedRun({
+          planId: 'plan',
+          characterId: 'actor',
+          status: 'completed',
+        }),
+      ],
+      requests: {},
+    });
+    const before = (await archive.load())!;
+    const changes = [10, 20].map((tokens) => {
+      const next = structuredClone(before);
+      next.plans[0].spentTokens = tokens;
+      next.runs[0].totalTokens = tokens;
+      return {
+        ...next,
+        characters: [],
+        taskChanges: taskChanges(before, next),
+      };
+    });
+    const results = await Promise.allSettled(
+      changes.map((change) =>
+        new DatabaseManagementArchive(db!).commit(change),
+      ),
+    );
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === 'rejected'),
+    ).toMatchObject({ reason: { status: 409 } });
+    const winner = results.findIndex((result) => result.status === 'fulfilled');
+    const tokens = winner === 0 ? 10n : 20n;
+    expect(
+      await db!.agentPlan.findUnique({ where: { id: 'plan' } }),
+    ).toMatchObject({ spentTokens: tokens });
+    expect(
+      await db!.agentRun.findUnique({ where: { id: 'run' } }),
+    ).toMatchObject({ totalTokens: tokens });
+    expect(await db!.tokenUsage.findMany()).toMatchObject([{ tokens }]);
+  });
+
+  it('rolls back character, plan, execution and usage writes when a later task insert fails', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter()],
+      plans: [storedPlan({ characterId: 'actor' })],
+      runs: [
+        storedRun({
+          planId: 'plan',
+          characterId: 'actor',
+          status: 'completed',
+          requestId: 'same',
+        }),
+      ],
+      requests: {},
+    });
+    const before = (await archive.load())!;
+    const next = structuredClone(before);
+    next.plans[0].spentTokens = 10;
+    next.runs[0].totalTokens = 10;
+    next.runs.push(
+      storedRun({
+        id: 'duplicate',
+        planId: 'plan',
+        characterId: 'actor',
+        requestId: 'same',
+      }),
+    );
+    await expect(
+      archive.commit({
+        ...next,
+        profiles: { actor: { name: 'Uncommitted' } },
+        taskChanges: taskChanges(before, next),
+      }),
+    ).rejects.toMatchObject({ status: 500 });
+    expect(await archive.load()).toEqual(before);
+    expect(await db!.tokenUsage.count()).toBe(0);
+  });
+
+  it('rejects character removal when a new database plan was not included in the detach operation', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter()],
+      plans: [storedPlan({ characterId: 'actor' })],
+      runs: [],
+      requests: {},
+    });
+    const before = (await archive.load())!;
+    await archive.save({
+      ...before,
+      plans: [
+        ...before.plans,
+        storedPlan({ id: 'external', characterId: 'actor' }),
+      ],
+    });
+    const next = structuredClone(before);
+    delete next.plans[0].characterId;
+    next.plans[0].state = 'paused';
+    await expect(
+      archive.commit({
+        ...next,
+        characters: [],
+        remove: ['actor'],
+        taskChanges: taskChanges(before, next),
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await db!.agentCharacter.count()).toBe(1);
+    expect(await db!.agentPlan.count({ where: { characterId: 'actor' } })).toBe(
+      2,
+    );
+  });
+
+  it('deletes only explicit task records, preserves ordering gaps and rejects resurrection after a stale update', async () => {
+    await bootstrapProviders(new DatabaseProviderRepository(db!));
+    const archive = new DatabaseManagementArchive(db!);
+    await archive.save({
+      version: 3,
+      characters: [storedCharacter()],
+      plans: [storedPlan({ id: 'first' }), storedPlan({ id: 'second' })],
+      runs: [
+        storedRun({ id: 'first', planId: 'first' }),
+        storedRun({ id: 'second', planId: 'second' }),
+      ],
+      requests: { first: 'first', second: 'second' },
+    });
+    const before = (await archive.load())!;
+    const next = structuredClone(before);
+    next.plans.shift();
+    next.runs.shift();
+    delete next.requests.first;
+    await archive.commit({
+      ...next,
+      characters: [],
+      taskChanges: taskChanges(before, next),
+    });
+    expect(await db!.agentPlan.findMany()).toMatchObject([
+      { id: 'second', position: 1 },
+    ]);
+    expect(await db!.agentRun.findMany()).toMatchObject([
+      { id: 'second', position: 1 },
+    ]);
+    expect(await db!.agentRequest.findMany()).toMatchObject([
+      { key: 'second' },
+    ]);
+    const stale = structuredClone(before);
+    stale.plans[0].name = 'Stale update';
+    await expect(
+      archive.commit({
+        ...stale,
+        characters: [],
+        taskChanges: taskChanges(before, stale),
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      await db!.agentPlan.findUnique({ where: { id: 'first' } }),
+    ).toBeNull();
   });
 
   it('checkpoint commits preserve database configuration and omitted offline characters, and never resurrect deletions', async () => {

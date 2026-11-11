@@ -126,6 +126,7 @@ export class AICharacterOrchestrator {
           this.shutdownPresence,
         ),
       captureTasks: () => tasks.capture(this.plans),
+      captureCommittedTasks: () => tasks.capture(this.committedPlans),
       rejectTasks: (snapshot) => tasks.reject(snapshot, this.committedPlans),
       affectedCharacters: (records, affected) =>
         characters.affectedByFailure(records, affected),
@@ -298,6 +299,7 @@ export class AICharacterOrchestrator {
       return;
     }
     this.persistence.tasks.restore(this.plans, saved);
+    this.persistence.tasks.restore(this.committedPlans, structuredClone(raw!));
     const autoJoin: string[] = [];
     const recovered: CharacterRecord[] = [];
     const profiles: NonNullable<CharacterChanges['profiles']> = {};
