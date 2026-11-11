@@ -20,16 +20,12 @@ export function AICharacterLogViewer({ job }: { job: AICharacterSummary }) {
       className="agents-activity"
       aria-label={t('console.characters.tabActivity')}
     >
-      {job.lastResponse && (
-        <div className="agents-progress">
-          <span className="agents-section-label">
-            {t('console.characters.lastReplyTitle')}
-          </span>
-          <p>{job.lastResponse}</p>
-        </div>
-      )}
       <div className="agents-task-heading">
-        <h4>{t('console.characters.activityLogsHeading')}</h4>
+        <p className="agent-hint">
+          {t('console.characters.activityLogsLimit', {
+            limit: AI_CHARACTER_LOG_LIMIT,
+          })}
+        </p>
         <button
           type="button"
           className="agents-log-refresh"
@@ -39,11 +35,6 @@ export function AICharacterLogViewer({ job }: { job: AICharacterSummary }) {
           {t('console.characters.logsRefresh')}
         </button>
       </div>
-      <p className="agent-hint">
-        {t('console.characters.activityLogsLimit', {
-          limit: AI_CHARACTER_LOG_LIMIT,
-        })}
-      </p>
       {loading ? (
         <p className="agents-list-empty">
           {t('console.characters.logsLoading')}

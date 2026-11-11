@@ -1,6 +1,9 @@
-.agents-activity h4 {
-  font-size: 12px;
-  margin: 8px 0;
+.agents-activity .agents-task-heading > .agent-hint {
+  margin: 0;
+}
+.agents-log-refresh {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .agents-log-list {
   list-style: none;

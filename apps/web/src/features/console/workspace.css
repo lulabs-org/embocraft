@@ -303,12 +303,6 @@
   background: #edf2e6;
   color: var(--color-action);
 }
-.console-panel .console-help-link {
-  display: inline-block;
-  font-size: 11px;
-  color: #4b6b55;
-  text-underline-offset: 3px;
-}
 @media (max-width: 700px) {
   .console-panel,
   .console-agent-panel > .agents-detail,
