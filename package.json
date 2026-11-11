@@ -18,6 +18,7 @@
     "db:deploy": "pnpm --filter @voxel/server exec prisma migrate deploy",
     "db:seed": "pnpm --filter @voxel/server exec prisma db seed",
     "db:studio": "pnpm --filter @voxel/server exec prisma studio",
+    "voice:sensevoice": "node scripts/fetch-sense-voice.mjs",
     "agent:ctl": "tsx scripts/agent/agent-control.ts"
   },
   "devDependencies": {

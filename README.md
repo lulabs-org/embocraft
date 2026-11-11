@@ -55,7 +55,7 @@ Once started, open http://127.0.0.1:5173 in your browser. You can open two separ
 
 ### 2. One-Click Full-Stack Docker Deployment
 
-This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, and an integrated Speaches voice container (Whisper ASR + Piper TTS):
+This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, and an integrated Speaches voice container (Whisper ASR + Piper TTS), with optional in-server SenseVoice for fully offline speech recognition:
 
 ```sh
 # Start all services with one command
@@ -65,6 +65,15 @@ pnpm docker:up
 # Stop container services
 pnpm docker:down
 ```
+
+Offline speech recognition (SenseVoice) runs inside the server container and needs no API key. Download the model pack before building so the server image can bake it in:
+
+```sh
+pnpm voice:sensevoice   # Downloads the ~150 MiB pack from k2-fsa releases into models/
+pnpm docker:up          # Or: docker compose up -d --build
+```
+
+Only `models/.gitkeep` is tracked; model packs never enter git. Without a downloaded pack the image still builds (the step prints a skip notice) and recognition falls back to the shared Speaches Whisper service.
 
 After launch:
 
@@ -119,7 +128,7 @@ For in-depth architectural layering, module dependency contracts, and design bou
 | **AI Agent**            | [AI Player Integration](docs/agent/players.md)                 | DeepSeek model integration, reasoning toolchain, and task loop               |
 |                         | [Agent Gateway](docs/agent/gateway.md)                         | Admin tokens, HTTP control endpoints, and WebSocket state subscription       |
 |                         | [Unified Event Runtime](docs/agent/runtime.md)                 | Task executor, checkpoint persistence, and token budget protection           |
-| **Voice Services**      | [Voice Service Management](docs/voice/setup.md)                | Whisper ASR and Piper TTS model installation and configuration               |
+| **Voice Services**      | [Voice Service Management](docs/voice/setup.md)                | SenseVoice / Whisper ASR and Piper TTS model installation and configuration  |
 | **Changelog**           | [Validation Records](docs/changelog/validation.md)             | Dual-browser regression, network recovery, and acceptance tests              |
 |                         | [Pi Migration](docs/changelog/pi-migration.md)                 | Evolution records for Agent runtime architecture                             |
 

@@ -5,7 +5,7 @@
 ::: tip 核心架构概览
 
 - **TTS 语音合成**：支持本地轻量 Piper 引擎、阿里云百炼 Qwen-TTS、兼容 OpenAI Speech API 以及前端浏览器 Web Speech 原生朗读。
-- **ASR 语音识别**：支持本地自托管 Whisper、阿里云实时语音识别（Fun-ASR / Paraformer）以及前端 Web Speech 识别。
+- **ASR 语音识别**：支持本地离线 SenseVoice、本地自托管 Whisper、阿里云实时语音识别（Fun-ASR / Paraformer）以及前端 Web Speech 识别。
 - **零秘钥泄露**：配置文件以 `0600` 权限保存在服务端，浏览器仅接收脱敏元数据（`hasApiKey: boolean`）。
   :::
 
@@ -141,7 +141,7 @@ graph TD
 
 ### 3. 本地 SenseVoice 离线识别
 
-项目服务器直接加载 sherpa-onnx 的 SenseVoice 模型，录音不出服务器，也不需要地址或 API Key。把 `sherpa-onnx-sense-voice-*` 模型目录放入 `models/`（含 `tokens.txt` 与 `model.int8.onnx` 或 `model.onnx`）后，控制台即可添加 **本地 SenseVoice** 服务并选择语言（自动 / 中文 / 英文）。
+项目服务器直接加载 sherpa-onnx 的 SenseVoice 模型，录音不出服务器，也不需要地址或 API Key。运行 `pnpm voice:sensevoice` 可从 k2-fsa 发布页下载默认模型包（约 150 MiB）并解压到 `models/`；也可以手动把 `sherpa-onnx-sense-voice-*` 模型目录放入 `models/`（含 `tokens.txt` 与 `model.int8.onnx` 或 `model.onnx`）。模型就绪后，控制台即可添加 **本地 SenseVoice** 服务并选择语言（自动 / 中文 / 英文）。Docker 部署时模型由 `Dockerfile.server` 打进 server 镜像（构建上下文只放行 `models/sherpa-onnx-sense-voice-*`），运行时无需再挂载；未下载模型时镜像照常构建并自动回退 Whisper。
 
 | 环境变量            | 默认值           | 作用说明                                                                             |
 | :------------------ | :--------------- | :----------------------------------------------------------------------------------- |
