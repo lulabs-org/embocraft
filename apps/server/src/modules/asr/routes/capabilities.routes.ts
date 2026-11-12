@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { createDefaultSpeechStatus } from '../../tts';
-import { localSpeech } from '../engines';
+import { whisperAdapter } from '../engines';
 import { asrService } from '../services/asr.service';
 
 export function installCapabilitiesRoutes(router: Router) {
@@ -68,7 +68,7 @@ export function installCapabilitiesRoutes(router: Router) {
         if (selected && selected.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
         res.json({
-          local: await localSpeech.status(
+          local: await whisperAdapter.status(
             selected?.provider === 'whisper' ? selected : undefined,
           ),
           agentSpeech: await defaultSpeechStatus(),

@@ -22,7 +22,12 @@ it('uses distinct ASR resource URLs, encodes IDs, and handles deletion without p
     .mockResolvedValueOnce(new Response('{}'))
     .mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal('fetch', request);
-  const draft = { ...DEFAULT_BAILIAN_ASR, name: 'A', apiKey: 'test-key' };
+  const draft = {
+    ...DEFAULT_BAILIAN_ASR,
+    provider: 'bailian' as const,
+    name: 'A',
+    apiKey: 'test-key',
+  };
   await voiceApi.listAsrServices(signal);
   await voiceApi.saveAsrService(draft, signal);
   await voiceApi.saveAsrService({ ...draft, apiKey: '' }, signal, 'A/B');

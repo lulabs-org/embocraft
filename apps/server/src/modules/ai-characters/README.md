@@ -42,11 +42,12 @@ PostgreSQL 是角色配置、已提交状态、恢复检查点和历史日志的
 ```text
 apps/server/src/modules/ai-characters/
 ├── README.md                                  # 模块职责边界、分层设计与目录规范文档
+├── composition.ts                             # createAICharacterOrchestrator 默认依赖装配
 ├── index.ts                                   # 模块唯一对外门面
 ├── ports.ts                                   # 跨模块与 HTTP 层契约（CharacterQueryPort、AICharacterRoutePort、CharacterDetail）
 │
 ├── application/                               # 角色管理用例与模块生命周期编排
-│   ├── character-orchestrator.ts              # 模块生命周期根协调器（含 AICharacterManager 与运行时实例绑定）
+│   ├── character-orchestrator.ts              # AICharacterOrchestrator 与运行时实例绑定
 │   ├── character-management.ts                # 角色 CRUD 与上下线用例（create / update / remove / join / setVoice）
 │   ├── character-operations.ts                # 单次命令的角色加载、互斥与释放
 │   ├── character-restore.ts                   # 启动时从存档恢复角色 Job 与自动上线判定
@@ -109,7 +110,7 @@ routes/ ──> ports.ts + application/
 
 | 原路径                                     | 重构后路径                                           | 说明                                                                             |
 | :----------------------------------------- | :--------------------------------------------------- | :------------------------------------------------------------------------------- |
-| `services/orchestrator.service.ts`         | `application/character-orchestrator.ts`              | 合并原 `AICharacterOrchestrator`、`AICharacterManager` 与活跃实例绑定            |
+| `services/orchestrator.service.ts`         | `application/character-orchestrator.ts`              | 统一 `AICharacterOrchestrator` 与活跃实例绑定，默认依赖由 `composition.ts` 装配            |
 | `services/character-manager.service.ts`    | `application/character-orchestrator.ts`              | 并入 `character-orchestrator.ts`，消除冗余单文件包装                             |
 | `services/character-runtime.service.ts`    | `ports.ts` / `application/character-orchestrator.ts` | `AICharacterRoutePort` 迁入 `ports.ts`；绑定函数迁入 `character-orchestrator.ts` |
 | `services/character-management.service.ts` | `application/character-management.ts`                | 角色 CRUD 与上下线用例编排                                                       |

@@ -1,5 +1,5 @@
 import type { AICharacterSettings } from '@voxel/shared';
-import type { PlanService } from '../../tasks';
+import type { TaskPlanService } from '../../tasks';
 import { restoreAICharacterLogs } from '../domain/activity-log';
 import { validateAICharacter } from '../domain/character-settings';
 import { AppError } from '../../../core/errors/app-error';
@@ -7,13 +7,13 @@ import { isMissingApiKey, type ProviderRuntimePort } from '../../providers';
 import type { CharacterRecord } from '../persistence/character-record';
 import { createCharacterJob, type Job } from '../runtime/character-registry';
 import { restoreTaskExecution, restoreTaskMemory } from '../../tasks';
-import { executionState } from '../integrations/task-execution-adapter';
+import { taskExecutionState } from '../integrations/task-execution-adapter';
 
 export async function restoreAICharacterJob(
   view: CharacterRecord,
   providers: ProviderRuntimePort,
   checkVoice: (settings: AICharacterSettings) => void | Promise<void>,
-  ledger: PlanService,
+  ledger: TaskPlanService,
 ): Promise<{ job: Job; voiceWarning?: string; shouldAutoJoin: boolean }> {
   const provider = await providers.getRuntime(view.providerId);
   const settings = validateAICharacter(view, provider, {
@@ -50,7 +50,7 @@ export async function restoreAICharacterJob(
     restoreTaskMemory(view.runtime),
   );
 
-  restoreTaskExecution(executionState(job));
+  restoreTaskExecution(taskExecutionState(job));
 
   const shouldAutoJoin =
     !missingApiKey &&

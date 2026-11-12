@@ -18,8 +18,8 @@ vi.mock('../engines', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../engines')>();
   return {
     ...actual,
-    localSpeech: {
-      status: (...args: Parameters<typeof actual.localSpeech.status>) =>
+    whisperAdapter: {
+      status: (...args: Parameters<typeof actual.whisperAdapter.status>) =>
         mocked.status(...args),
     },
   };
@@ -107,6 +107,7 @@ describe('audio capabilities HTTP boundary', () => {
     });
     const cloud = await store.save({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: 'Cloud',
       apiKey: 'fixture',
     });

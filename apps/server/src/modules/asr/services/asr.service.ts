@@ -93,7 +93,7 @@ export class AsrService {
         ? {
             id: selected.id,
             name: selected.name,
-            provider: selected.provider ?? 'bailian',
+            provider: selected.provider,
           }
         : null;
     };

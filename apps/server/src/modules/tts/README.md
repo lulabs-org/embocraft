@@ -22,7 +22,7 @@ TTS 模块不负责：
 
 ## 2. 当前问题
 
-1. **已初步拆分**：`services/tts.service.ts` 原先同时处理配置 CRUD、供应商校验、模型发现、合成、并发控制和跨模块通知。现在配置规则、配置管理、模型发现和语音执行分别位于 `domain/voice-service-validation.ts`、`services/voice-service-management.service.ts`、`services/speech-models.service.ts` 和 `services/speech.service.ts`；`TtsService` 仍是兼容门面，默认实现改由 `composition.ts` 装配。
+1. **已初步拆分**：`services/tts.service.ts` 原先同时处理配置 CRUD、供应商校验、模型发现、合成、并发控制和跨模块通知。现在配置规则、配置管理、模型发现和语音执行分别位于 `domain/voice-service-validation.ts`、`services/voice-service-management.service.ts`、`services/speech-models.service.ts` 和 `services/speech.service.ts`；`TtsService` 是唯一应用服务类，`composition.ts` 的 `createTtsService()` 装配默认依赖并创建 `ttsService`。
 2. **已初步处理**：World 通过 `ttsService.resolveSpeech()` 统一解析未绑定、空绑定和已保存服务。未绑定默认语音仍不经过已保存服务的进程内并发限制；是否统一限额需另行评估。
 3. **已初步处理**：`ResolvedSpeech` 区分浏览器朗读和服务端合成；World 根据分支播放。配置变更仍依赖进程内通知取消相关任务，不提供跨进程或提交与通知之间的原子保证。
 4. **已初步处理**：服务端供应商协议已拆分到 `adapters/`，由工厂选择 Speaches、百炼或 OpenAI 兼容实现；配置规则仍位于领域校验中。
@@ -43,8 +43,8 @@ apps/server/src/modules/tts/
 ├── domain/                                       # 无网络、数据库和文件 I/O 的模型与规则
 │   ├── voice-service.ts                          # 配置模型、类型、脱敏视图和播放方式
 │   ├── voice-service.test.ts                     # 配置模型、脱敏转换与播放方式单元测试
-│   ├── voice-service-validation.ts               # 配置与兼容旧数据的规则
-│   └── voice-service-validation.test.ts          # 配置输入校验与旧数据兼容规则单元测试
+│   ├── voice-service-validation.ts               # 当前服务类型、模型与显式音色的校验规则
+│   └── voice-service-validation.test.ts          # 配置输入校验单元测试
 │
 ├── services/                                     # 组织业务用例，不处理供应商 HTTP 细节
 │   ├── voice-service-management.service.ts       # 配置 CRUD、数量限制、删除前检查和变更通知
@@ -93,7 +93,7 @@ World / Agent ──┼──> TTS 公开用例 ──> TTS 领域规则和端�
 - `adapters/`、`persistence/` 实现端口；它们可以使用 `fetch`、Prisma、环境配置和音频转换等技术能力。
 - `routes/` 负责 HTTP 输入、状态码、音频输出和请求断开时的取消；管理鉴权仍由服务端挂载层执行。
 - `composition.ts` 负责创建并连接默认实现。`createTtsRouter()` 继续保持项目要求的零参公开工厂；内部测试可以直接构造应用服务并传入替身。
-- `index.ts` 只公开路由工厂和其他模块需要的应用能力与类型；World、Agent 和 ASR 不直接导入 `PiperTts`、Prisma 仓储或供应商适配器。
+- `index.ts` 只公开路由工厂和其他模块需要的应用能力与类型；World、Agent 和 ASR 不直接导入 `SpeachesTtsAdapter`、Prisma 仓储或供应商适配器。
 
 不要求抽象掉所有公共库，也不为了使用端口而包装每个函数。端口用于隔离应用流程真正依赖的外部能力，尤其是持久化、供应商调用及跨模块删除协调。
 
@@ -151,7 +151,7 @@ World 的绑定有三种需要区分的状态：`undefined` 走未绑定的默�
 
 ```text
 Console → 管理鉴权 → TTS 路由 → 配置管理用例
-                                    ├─ 校验输入、兼容旧数据
+                                    ├─ 校验当前配置
                                     ├─ 仓储事务：读取 / 计数 / 写入
                                     └─ 提交后通知配置变更
 ```
@@ -173,7 +173,7 @@ World → 按 Agent 绑定解析语音方式
 
 World 保留自己的队列、收听范围、片段缓存与访问检查。TTS 负责合成执行的资源约束；限额是按进程、服务还是供应商划分，需要明确配置和产品语义。现有通过 `ttsService` 的服务端合成最多两并发，而未绑定的默认语音工厂创建的合成器不经过该计数。是否改变这一差异需要单独评估。
 
-当前 `ttsService` 校验文字并设置 60 秒超时；`PiperTts` 自身也有这些保护，直接使用的默认路径依赖其实现。将校验和超时集中到应用用例之前，必须确认默认路径与所有其他调用都经过该用例，并验证原有取消、错误和超时行为。供应商适配器仍可保留与协议或资源安全有关的必要检查。
+当前 `ttsService` 校验文字并设置 60 秒超时；`SpeachesTtsAdapter` 自身也有这些保护，直接使用的默认路径依赖其实现。将校验和超时集中到应用用例之前，必须确认默认路径与所有其他调用都经过该用例，并验证原有取消、错误和超时行为。供应商适配器仍可保留与协议或资源安全有关的必要检查。
 
 ### 6.3 模型发现和状态
 
@@ -193,7 +193,7 @@ World 保留自己的队列、收听范围、片段缓存与访问检查。TTS �
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `services/tts.service.ts`                | 保留应用门面；默认实现已由 `composition.ts` 装配                                                       |
 | `services/speech-synthesizer.ts`         | 播放方式放入领域模型；服务端合成能力放入端口或公开类型                                                 |
-| `services/piper.service.ts`              | 兼容导出；实现与测试已迁至 `adapters/speaches-tts.adapter.ts`，保留请求、超时、响应大小和 WAV 校验行为 |
+| `adapters/speaches-tts.adapter.ts` | `SpeachesTtsAdapter` 直接实现 Speaches 合成协议，保留请求、超时、响应大小和 WAV 校验行为 |
 | `services/remote.service.ts`             | 已拆分为百炼与 OpenAI 兼容协议适配器，保留百炼音频 URL 的限制和音频标准化                              |
 | `services/piper-models.service.ts`       | 默认就绪检查已共享限长读取并通过公开能力提供；可继续评估将就绪判断迁入模型用例                         |
 | `persistence/voice-service-types.ts`     | 已移除；领域配置归 `domain/`，仓储与事务契约归 `ports.ts`                                              |
@@ -210,12 +210,12 @@ World 保留自己的队列、收听范围、片段缓存与访问检查。TTS �
 5. **明确删除协作**：验证并发时序后引入显式检查和提交后通知；保留数据库外键、事务与运行时取消保护。
 6. **收窄模块门面**：移除外部对具体实现的依赖，并检查跨模块引用和依赖方向。
 
-第 2–3 阶段可以暂时保留 `ttsService` 聚合门面及必要的兼容方法，逐步迁移 `server.ts` 的 `_internals.voiceServices`、`voice-binding.test.ts`、`agent-lifecycle.test.ts` 等调用方和测试。过渡门面不应成为新功能的默认入口；第 6 阶段依据实际消费者决定收窄或移除，避免为了测试暂时兼容而长期暴露不必要能力。
+当前调用方统一使用 `TtsService`，默认依赖通过 `createTtsService()` 装配。服务类不再通过继承包装或旧路径转导出；单元测试可直接注入端口实现，集成测试通过工厂创建完整服务。
 
 验收至少覆盖：
 
 - 现有 `/voice/tts/defaults`、`/voice/tts/models`、`/voice/tts/services`、试听接口以及 `/voice/capabilities` 的路径、响应和鉴权不发生非预期变化。
-- 新增、更新、删除和列表的数量限制、密钥脱敏及复用、旧 `piper` 配置兼容、数据库外键保护保持有效。
+- 新增、更新、删除和列表的数量限制、密钥脱敏及复用、当前 `speaches` 类型与显式音色校验、数据库外键保护保持有效。
 - 已绑定服务和未绑定默认服务、浏览器朗读和服务端合成、配置变化时取消、调用方断开及超时均按原有约定工作。
 - 覆盖未绑定、空串及已保存 ID 三种状态；覆盖解析与执行之间发生更新、删除、绑定变化或取消的交错，并验证选择的快照或重新读取语义。
 - 各供应商请求、错误映射、百炼音频 URL 限制、响应大小限制、WAV 处理和模型发现行为得到验证。

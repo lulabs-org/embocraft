@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { validateVoiceService } from '../domain/voice-service-validation';
 import { BailianTts } from './bailian-tts.adapter';
 import { CompatibleTts } from './compatible-tts.adapter';
-import { PiperTts } from './speaches-tts.adapter';
+import { SpeachesTtsAdapter } from './speaches-tts.adapter';
 import { createSpeechAdapter } from './speech-adapter-factory';
 
 it('selects the server adapter for each validated service and rejects browser synthesis', () => {
@@ -14,7 +14,7 @@ it('selects the server adapter for each validated service and rejects browser sy
   };
   expect(
     createSpeechAdapter(validateVoiceService({ ...common, type: 'speaches' })),
-  ).toBeInstanceOf(PiperTts);
+  ).toBeInstanceOf(SpeachesTtsAdapter);
   expect(
     createSpeechAdapter(
       validateVoiceService({

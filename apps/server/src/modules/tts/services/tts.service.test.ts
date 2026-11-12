@@ -6,7 +6,7 @@ import {
   MemoryVoicePersistence,
   voicePersistence,
 } from '../../../../test/helpers/memory-storage';
-import { TtsService } from '../composition';
+import { createTtsService } from '../composition';
 import { validateVoiceService } from '../domain/voice-service-validation';
 
 const mocked = vi.hoisted(() => ({
@@ -29,7 +29,7 @@ const local = (name = 'Local', voice = '') => ({
   name,
   type: 'speaches',
   model: voice === 'Samantha' ? PIPER_MODELS[1].id : DEFAULT_PIPER_MODEL,
-  voice: '',
+  voice: voice === 'Samantha' ? PIPER_MODELS[1].voice : PIPER_MODELS[0].voice,
   speed: 1,
 });
 
@@ -71,13 +71,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('loads legacy Piper profiles as Speaches without changing IDs, names or models', async () => {
-  const service = new TtsService();
+it('preserves Speaches IDs, names, models and voices across edits and reloads', async () => {
+  const service = createTtsService();
   mocked.persistence.value = JSON.parse(
     JSON.stringify([
       {
-        ...local('My Piper voice', 'Samantha'),
-        type: 'piper',
+        ...local('My Speaches voice', 'Samantha'),
         id: 'existing-voice',
         baseUrl: '',
         apiKey: '',
@@ -87,21 +86,36 @@ it('loads legacy Piper profiles as Speaches without changing IDs, names or model
 
   expect((await service.list())[0]).toMatchObject({
     id: 'existing-voice',
-    name: 'My Piper voice',
+    name: 'My Speaches voice',
     type: 'speaches',
     model: PIPER_MODELS[1].id,
+    voice: PIPER_MODELS[1].voice,
     baseUrl: '',
   });
   await service.save(
     { ...(await service.list())[0], speed: 0.8 },
     'existing-voice',
   );
-  const restored = new TtsService();
+  const restored = createTtsService();
 
   expect(await restored.get('existing-voice')).toMatchObject({
+    voice: PIPER_MODELS[1].voice,
     type: 'speaches',
     speed: 0.8,
   });
+});
+
+it('rejects obsolete Piper service types and requires an explicit managed voice', async () => {
+  const service = createTtsService();
+  const before = await service.list();
+  for (const patch of [
+    { type: 'piper' },
+    { voice: '' },
+    { voice: undefined },
+  ]) {
+    await expect(service.save({ ...local(), ...patch })).rejects.toThrow();
+  }
+  expect(await service.list()).toEqual(before);
 });
 
 it('accepts private Speaches endpoints and optional credentials while rejecting unsafe URL forms', () => {
@@ -141,7 +155,7 @@ it('persists the Speaches endpoint and uses it for both previews and synthesizer
     .fn<typeof fetch>()
     .mockImplementation(async () => new Response(wav()));
   vi.stubGlobal('fetch', request);
-  const service = new TtsService();
+  const service = createTtsService();
 
   const selected = await service.save({
     ...local(),
@@ -152,7 +166,7 @@ it('persists the Speaches endpoint and uses it for both previews and synthesizer
   });
   expect(selected.baseUrl).toBe('http://custom-speech:8000/v1');
   expect(JSON.stringify(selected)).not.toContain('speaches-test-key');
-  const restored = new TtsService();
+  const restored = createTtsService();
 
   await restored.save({ ...selected, apiKey: '' }, selected.id);
   await restored.synthesize(
@@ -189,7 +203,7 @@ it('persists the Speaches endpoint and uses it for both previews and synthesizer
 });
 
 it('persists multiple configurations privately, masks credentials, and preserves a blank key on edit', async () => {
-  const service = new TtsService();
+  const service = createTtsService();
 
   const cloud = await service.save(remote);
   const localVoice = await service.save(local('中文', 'Tingting'));
@@ -206,7 +220,7 @@ it('persists multiple configurations privately, masks credentials, and preserves
   }
   expect(changed).toEqual([cloud.id]);
   expect((await service.get(cloud.id)).apiKey).toBe(remote.apiKey);
-  const restored = new TtsService();
+  const restored = createTtsService();
 
   expect(await restored.list()).toHaveLength(3);
   expect((await restored.get(localVoice.id)).model).toBe(DEFAULT_PIPER_MODEL);
@@ -235,7 +249,7 @@ it('rejects credential reuse for a different endpoint and invalid configuration'
 });
 
 it('guards deletion via tts.service.removing event and emits tts.service.changed on removal', async () => {
-  const service = new TtsService();
+  const service = createTtsService();
   let referenced = true;
   const changed: string[] = [];
   const offGuard = domainEvents.on('tts.service.removing', ({ serviceId }) => {
@@ -260,7 +274,7 @@ it('guards deletion via tts.service.removing event and emits tts.service.changed
 
 it('routes previews and synthesizers through the saved voice and speed', async () => {
   const calls: string[] = [];
-  const service = new TtsService(undefined, (config) => ({
+  const service = createTtsService(undefined, (config) => ({
     synthesize: async (text) => {
       calls.push(`${config.model}:${config.speed}:${text}`);
       return { bytes: wav(), durationMs: 1000 };
@@ -285,7 +299,7 @@ it('routes previews and synthesizers through the saved voice and speed', async (
 
 it('cancels previews and bounds concurrent synthesis', async () => {
   const pending: (() => void)[] = [];
-  const service = new TtsService(undefined, () => ({
+  const service = createTtsService(undefined, () => ({
     synthesize: async () => {
       await new Promise<void>((resolve) => pending.push(resolve));
       return { bytes: wav(), durationMs: 1000 };
@@ -310,7 +324,7 @@ it('cancels previews and bounds concurrent synthesis', async () => {
 
 it('keeps the unmanaged default voice independent of saved-service concurrency', async () => {
   const pending: (() => void)[] = [];
-  const service = new TtsService(undefined, () => ({
+  const service = createTtsService(undefined, () => ({
     synthesize: async () => {
       await new Promise<void>((resolve) => pending.push(resolve));
       return { bytes: wav(), durationMs: 1000 };
@@ -346,7 +360,7 @@ it('keeps the unmanaged default voice independent of saved-service concurrency',
 
 it('persists browser profiles without credentials and never runs server synthesis', async () => {
   const factory = vi.fn();
-  const service = new TtsService(undefined, factory);
+  const service = createTtsService(undefined, factory);
 
   const saved = await service.save({
     ...remote,
@@ -368,14 +382,14 @@ it('persists browser profiles without credentials and never runs server synthesi
     service.synthesize(saved.id, '你好', new AbortController().signal),
   ).rejects.toThrow('浏览器');
   expect(factory).not.toHaveBeenCalled();
-  const restored = new TtsService();
+  const restored = createTtsService();
 
   expect((await restored.get(saved.id)).voiceLanguage).toBe('zh-CN');
 });
 
 it('resolves unbound, empty and saved bindings through their existing paths', async () => {
   const defaultSpeech = { synthesize: vi.fn() };
-  const service = new TtsService(undefined, undefined, () => defaultSpeech);
+  const service = createTtsService(undefined, undefined, () => defaultSpeech);
   const browser = await service.save({
     name: 'Browser',
     type: 'browser',

@@ -7,8 +7,6 @@ import type {
 import { assertApiKeyConfigured } from '../domain/validation';
 import { fetchProviderModels } from './model-catalog';
 
-export type { ProviderHealth } from '../ports';
-
 /** Probe connectivity and whether the upstream exposes its model catalog. */
 export class ProviderHealthChecker implements ProviderHealthPort {
   constructor(

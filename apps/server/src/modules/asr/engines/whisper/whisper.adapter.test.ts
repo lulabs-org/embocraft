@@ -248,7 +248,7 @@ describe('WhisperAdapter', () => {
         prompt === undefined
           ? undefined
           : {
-              model: 'default',
+              model: 'Systran/faster-whisper-base',
               temperature: 0,
               prompt,
             };

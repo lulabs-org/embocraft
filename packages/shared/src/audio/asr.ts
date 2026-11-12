@@ -36,16 +36,14 @@ export type LiveAsrView = {
     hasApiKey: boolean;
   };
 }[LiveAsrProvider];
-export type AsrProviderDraft =
+export type AsrServiceDraft =
   | LiveAsrDraft
-  | (BailianAsrDraft & { provider?: 'bailian'; name: string })
+  | (BailianAsrDraft & { provider: 'bailian'; name: string })
   | (WhisperAsrDraft & { provider: 'whisper'; name: string });
-export type AsrProviderView =
+export type AsrServiceView =
   | LiveAsrView
-  | (BailianAsrView & { provider?: 'bailian'; id: string; name: string })
+  | (BailianAsrView & { provider: 'bailian'; id: string; name: string })
   | (WhisperAsrView & { provider: 'whisper'; id: string; name: string });
-export type AsrServiceDraft = AsrProviderDraft;
-export type AsrServiceView = AsrProviderView;
 export const DEFAULT_BAILIAN_ASR: BailianAsrSettings = {
   region: 'beijing',
   workspaceId: '',

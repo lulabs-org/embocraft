@@ -1,7 +1,7 @@
 import { consoleSync } from '../../console-sync';
 import express, { type Request, type Router } from 'express';
 import { CharacterLogService } from '../application/character-log-query';
-import { getActiveCharacterManager } from '../application/character-orchestrator';
+import { getActiveCharacterOrchestrator } from '../application/character-orchestrator';
 import type {
   AICharacterRoutePort,
   CharacterDetail,
@@ -35,7 +35,7 @@ export function createAICharacterRouter(
       req,
       req.method === 'DELETE' ? 'plans' : String(req.params.id ?? 'registry'),
       async () => {
-        const manager = getActiveCharacterManager();
+        const manager = getActiveCharacterOrchestrator();
         const path = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
         manager.assertWritable(
           ['stop'].includes(String(path.split('/').at(-1))) ||
@@ -83,7 +83,7 @@ export function createAICharacterRouter(
   router.get(
     '/ai-characters',
     route(async (_req, res) => {
-      const manager = getActiveCharacterManager();
+      const manager = getActiveCharacterOrchestrator();
       const version = manager.events.version;
       res.json(
         (await characterQueries.list()).map((character) =>
@@ -117,7 +117,7 @@ export function createAICharacterRouter(
   router.get(
     '/ai-characters/:id',
     route(async (req, res) => {
-      const manager = getActiveCharacterManager();
+      const manager = getActiveCharacterOrchestrator();
       // Capture before the async read: a concurrent commit must not be stamped as seen.
       const version = manager.events.version;
       const character = await characterQueries.get(String(req.params.id));

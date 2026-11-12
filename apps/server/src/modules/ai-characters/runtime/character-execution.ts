@@ -2,7 +2,7 @@ import { AppError } from '../../../core/errors/app-error';
 import type { ProviderRuntimePort, SavedProvider } from '../../providers';
 import { markOffline } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
-import { executionState } from '../integrations/task-execution-adapter';
+import { taskExecutionState } from '../integrations/task-execution-adapter';
 import type { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
 import { AICharacterHost } from './character-host';
 import {
@@ -200,7 +200,7 @@ export class CharacterExecutionService {
         job.session = undefined;
         delete job.view.sessionId;
         job.view.status = 'stopped';
-        markOffline(executionState(job));
+        markOffline(taskExecutionState(job));
         try {
           await this.context.persist();
         } finally {

@@ -14,12 +14,15 @@ import {
   testObservation,
 } from '../../../tests/support/model-fixture';
 import { toolResponse } from '../../../tests/support/pi-response';
-import { AICharacterManager } from '../src/modules/ai-characters';
+import {
+  createAICharacterOrchestrator,
+  type AICharacterOrchestrator,
+} from '../src/modules/ai-characters';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
 } from './helpers/memory-storage';
-let store: MemoryProviderRepository, manager: AICharacterManager;
+let store: MemoryProviderRepository, manager: AICharacterOrchestrator;
 
 let now: number;
 const response = (
@@ -56,7 +59,7 @@ function session() {
 }
 let currentSession: ReturnType<typeof session>;
 function build() {
-  return new AICharacterManager(store, 'ws://fixture', store.archive, {
+  return createAICharacterOrchestrator(store, 'ws://fixture', store.archive, {
     session: () => {
       currentSession = session();
       return currentSession as unknown as Session;
@@ -614,44 +617,49 @@ it('persists an independently disabled plan total while retaining per-run limits
 
 it('retains multiple Pi tool batches within the same model call in actual action history', async () => {
   await manager.close();
-  manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
-    session: () => {
-      const s = session();
-      s.observe = async () => ({
-        id: 'o',
-        revision: 1,
-        radius: 8,
-        self: {
-          id: 'fixture-player',
-          name: 'AI',
-          kind: 'ai-agent',
-          connected: true,
-          x: 0,
-          y: 2.5,
-          z: 0,
-          yaw: 0,
-        },
-        players: [],
-        blocks: [],
-        events: [],
-        allowedActions: [],
-      });
-      return s as unknown as Session;
-    },
-    model: () => ({
-      endpoint: undefined,
-      request: async () =>
-        toolResponse([
-          { name: 'chat', arguments: { text: '完成' } },
-          {
-            name: 'complete_task',
-            arguments: {
-              summary: '完成',
-            },
+  manager = createAICharacterOrchestrator(
+    store,
+    'ws://fixture',
+    store.archive,
+    {
+      session: () => {
+        const s = session();
+        s.observe = async () => ({
+          id: 'o',
+          revision: 1,
+          radius: 8,
+          self: {
+            id: 'fixture-player',
+            name: 'AI',
+            kind: 'ai-agent',
+            connected: true,
+            x: 0,
+            y: 2.5,
+            z: 0,
+            yaw: 0,
           },
-        ]),
-    }),
-  });
+          players: [],
+          blocks: [],
+          events: [],
+          allowedActions: [],
+        });
+        return s as unknown as Session;
+      },
+      model: () => ({
+        endpoint: undefined,
+        request: async () =>
+          toolResponse([
+            { name: 'chat', arguments: { text: '完成' } },
+            {
+              name: 'complete_task',
+              arguments: {
+                summary: '完成',
+              },
+            },
+          ]),
+      }),
+    },
+  );
   const id = await role();
   const plan = await manager.tasks.createTaskPlan(id, {
     ...draft(),

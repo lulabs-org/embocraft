@@ -1,8 +1,4 @@
-import {
-  DEFAULT_PIPER_MODEL,
-  PIPER_MODELS,
-  type VoiceServiceDraft,
-} from '@voxel/shared';
+import { DEFAULT_PIPER_MODEL, type VoiceServiceDraft } from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
@@ -22,8 +18,7 @@ export function validateVoiceService(
       throw new AppError(`${key} 格式无效。`);
     return v.trim();
   };
-  // Existing catalogs and older clients used the engine name for this service.
-  const type = input.type === 'piper' ? 'speaches' : input.type;
+  const type = input.type;
   if (
     type !== 'speaches' &&
     type !== 'browser' &&
@@ -43,12 +38,10 @@ export function validateVoiceService(
     (!model || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]*$/.test(model))
   )
     throw new AppError('请填写有效的语音模型 ID。');
-  // Old Piper profiles had no voice field; retain their exact existing voice.
-  const voice =
-    str('voice', type === 'browser' || type === 'speaches' ? 200 : 100) ||
-    (type === 'speaches'
-      ? (PIPER_MODELS.find((item) => item.id === model)?.voice ?? '')
-      : '');
+  const voice = str(
+    'voice',
+    type === 'browser' || type === 'speaches' ? 200 : 100,
+  );
   if (type !== 'browser' && !voice) throw new AppError('请选择或填写音色。');
   const voiceLanguage =
     type === 'browser' ? str('voiceLanguage', 40) : undefined;

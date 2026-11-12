@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createDatabaseClient } from '../../src/core/database/client';
 import { createServer } from '../../src/server';
 import type { AICharacterDependencies } from '../../src/modules/ai-characters';
-import type { AsrBridge, LocalSpeech } from '../../src/modules/asr';
+import type { AsrBridge, WhisperAdapter } from '../../src/modules/asr';
 
 export type TestServerOptions = {
   directory?: string;
@@ -12,7 +12,7 @@ export type TestServerOptions = {
   origin?: string;
   agentDependencies?: AICharacterDependencies;
   asrBridge?: AsrBridge;
-  speech?: LocalSpeech;
+  speech?: WhisperAdapter;
   [key: string]: unknown;
 };
 

@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { expect, it, vi } from 'vitest';
 
 vi.mock('../src/modules/asr/engines', () => ({
-  localSpeech: {
+  whisperAdapter: {
     status: async () => ({ available: true, reason: 'ASR ready' }),
   },
 }));

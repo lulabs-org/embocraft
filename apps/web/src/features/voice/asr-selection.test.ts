@@ -69,6 +69,14 @@ it('treats the former server default as unselected', () => {
   ).toEqual({ id: '', name: '', provider: 'whisper' });
 });
 
+it('requires a provider instead of treating incomplete choices as Bailian', () => {
+  expect(toAsrChoice({ id: 'old', name: 'Incomplete ASR' })).toEqual({
+    id: '',
+    name: '',
+    provider: 'whisper',
+  });
+});
+
 const builtInWhisper = {
   id: 'saved-whisper-id',
   name: '自托管 Whisper',

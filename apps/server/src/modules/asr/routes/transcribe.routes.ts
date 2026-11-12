@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { errorHandler } from '../../../core/http/middleware/error-handler';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { localSpeech } from '../engines';
+import { whisperAdapter } from '../engines';
 import { asrService } from '../services/asr.service';
 import { scheduleSpeech } from '../services/speech-scheduler.service';
 import { MAX_AUDIO_BYTES } from '../../../core/audio/normalize';
@@ -93,7 +93,7 @@ export function installTranscribeRoutes(router: Router) {
         release = selected?.release;
         if (selected && selected.settings.provider !== 'whisper')
           throw new AppError('请选择 Whisper 服务。');
-        const text = await scheduleSpeech(localSpeech).transcribe(
+        const text = await scheduleSpeech(whisperAdapter).transcribe(
           Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
           req.headers['content-type'] ?? '',
           String(req.query.language ?? 'zh'),

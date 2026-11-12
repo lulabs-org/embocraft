@@ -5,7 +5,7 @@ import {
   TestAsrService as AsrService,
   TestAsrService,
 } from '../../../../test/helpers/memory-storage';
-import type { LocalSpeech } from '../../asr';
+import type { WhisperAdapter } from '../../asr';
 import { WorldChat } from './chat.service';
 import { ChatSpeechService } from './speech.service';
 
@@ -28,7 +28,7 @@ function setup() {
   const bytes = Buffer.from('audio');
   const normalize = vi.fn().mockResolvedValue({ bytes, durationMs: 1000 });
   const transcribe = vi.fn().mockResolvedValue('hello');
-  const speech = { normalize, transcribe } as unknown as LocalSpeech;
+  const speech = { normalize, transcribe } as unknown as WhisperAdapter;
   return {
     chat,
     token,

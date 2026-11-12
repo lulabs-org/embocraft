@@ -3,7 +3,7 @@ import { createAgentRuntime } from '@voxel/agent-runtime';
 import type { AICharacterView } from '@voxel/shared';
 
 import type { SavedProvider } from '../../providers';
-import type { PlanService } from '../../tasks';
+import type { TaskPlanService } from '../../tasks';
 
 export interface HostedAICharacter {
   run(provider: SavedProvider, run?: boolean): Promise<void>;
@@ -16,7 +16,7 @@ export type Job = {
   session?: Session;
   done?: Promise<void>;
   runtime: AgentRuntime;
-  ledger: PlanService;
+  ledger: TaskPlanService;
   currentRunId?: string;
   taskMutating?: boolean;
   updating?: boolean;

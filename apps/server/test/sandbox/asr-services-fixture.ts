@@ -1,7 +1,7 @@
 import { createTestServer } from '../helpers/test-server';
-import { LocalSpeech } from '../../src/modules/asr';
+import { WhisperAdapter } from '../../src/modules/asr';
 // UI fixture only: temporary settings, deterministic transcription, no cloud/model credentials.
-const speech = new LocalSpeech();
+const speech = new WhisperAdapter();
 speech.status = async () => ({ available: true, reason: 'sandbox fixture' });
 speech.transcribe = async () => '这是受控测试沙箱的识别结果。';
 const server = await createTestServer({

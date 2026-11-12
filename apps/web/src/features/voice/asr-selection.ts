@@ -15,12 +15,13 @@ const unselectedAsrChoice: AsrChoice = {
 export function toAsrChoice(value: unknown): AsrChoice {
   if (!value || typeof value !== 'object') return unselectedAsrChoice;
   const choice = value as Partial<AsrChoice>;
-  const provider = choice.provider ?? 'bailian';
+  const provider = choice.provider;
   if (
     typeof choice.id !== 'string' ||
     !choice.id ||
     typeof choice.name !== 'string' ||
     !choice.name ||
+    !provider ||
     !['whisper', 'bailian', 'browser', 'openai', 'gemini'].includes(provider)
   )
     return unselectedAsrChoice;

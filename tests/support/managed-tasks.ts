@@ -1,8 +1,8 @@
-import type { AICharacterManager } from '../../apps/server/src/modules/ai-characters';
+import type { AICharacterOrchestrator } from '../../apps/server/src/modules/ai-characters';
 
 /** Test setup names every new task explicitly; it never pauses or replaces an existing execution. */
 export async function startTask(
-  manager: AICharacterManager,
+  manager: AICharacterOrchestrator,
   id: string,
   value: {
     goal: string;
@@ -27,7 +27,7 @@ export async function startTask(
 
 /** Resolve the ID as test setup; the production command always targets the specified run. */
 export async function controlRun(
-  manager: AICharacterManager,
+  manager: AICharacterOrchestrator,
   id: string,
   operation: 'pause' | 'cancel' | 'resume',
   value: Record<string, unknown> = {},

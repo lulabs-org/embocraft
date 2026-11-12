@@ -6,8 +6,15 @@ import {
   testObservation,
   type ModelResponder,
 } from '../../../tests/support/model-fixture';
-import { AICharacterManager } from '../src/modules/ai-characters';
-import { TtsService, ttsService } from '../src/modules/tts';
+import {
+  createAICharacterOrchestrator,
+  type AICharacterOrchestrator,
+} from '../src/modules/ai-characters';
+import {
+  createTtsService,
+  type TtsService,
+  ttsService,
+} from '../src/modules/tts';
 import {
   bootstrapProviders,
   MemoryProviderRepository,
@@ -42,9 +49,10 @@ vi.mock('../src/modules/tts', async (importOriginal) => {
   };
 });
 
-let store: MemoryProviderRepository, manager: AICharacterManager | undefined;
+let store: MemoryProviderRepository,
+  manager: AICharacterOrchestrator | undefined;
 beforeEach(async () => {
-  mockTts = new TtsService(voicePersistence());
+  mockTts = createTtsService(voicePersistence());
   store = new MemoryProviderRepository();
   await bootstrapProviders(store);
   await store.save(
@@ -95,10 +103,15 @@ function setup(
     { name: 'complete_task', arguments: { summary: '测试决策' } },
   ]),
 ) {
-  manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
-    session: () => s as unknown as Session,
-    model: scriptedModelFactory(() => ({ respond: decide })),
-  });
+  manager = createAICharacterOrchestrator(
+    store,
+    'ws://fixture',
+    store.archive,
+    {
+      session: () => s as unknown as Session,
+      model: scriptedModelFactory(() => ({ respond: decide })),
+    },
+  );
   return manager;
 }
 
@@ -126,7 +139,7 @@ it.each([
   },
 );
 async function createWithTask(
-  m: AICharacterManager,
+  m: AICharacterOrchestrator,
   value: Record<string, unknown>,
 ) {
   const { goal = 'Wait', ...profile } = value;
@@ -207,7 +220,11 @@ it('saves task heartbeat independently without resetting or resuming progress', 
   expect(decide).toHaveBeenCalledTimes(1);
 });
 it('protects a new voice binding while an Agent update is waiting for the world', async () => {
-  const next = await ttsService.save({ name: 'Next', type: 'piper' });
+  const next = await ttsService.save({
+    voice: 'huayan',
+    name: 'Next',
+    type: 'speaches',
+  });
   const session = fakeSession();
   const m = setup(session);
   const job = await createWithTask(m, { ...settings, voiceReplies: true });
@@ -380,7 +397,7 @@ it('stops a pending join while the provider is being queried', async () => {
   const session = fakeSession();
   let waitForProvider = false;
   let release!: () => void;
-  manager = new AICharacterManager(
+  manager = createAICharacterOrchestrator(
     {
       getRuntime: async (id) => {
         if (waitForProvider) {
@@ -1091,17 +1108,22 @@ it('applies task budgets on assignment and renewal, rejecting invalid budgets be
 it('uses newly saved provider configuration on the next decision without resetting progress', async () => {
   const s = fakeSession();
   const configs: unknown[] = [];
-  manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
-    session: () => s as unknown as Session,
-    model: scriptedModelFactory((config) => {
-      configs.push(config);
-      return {
-        respond: async () => [
-          { name: 'complete_task', arguments: { summary: 'done' } },
-        ],
-      };
-    }),
-  });
+  manager = createAICharacterOrchestrator(
+    store,
+    'ws://fixture',
+    store.archive,
+    {
+      session: () => s as unknown as Session,
+      model: scriptedModelFactory((config) => {
+        configs.push(config);
+        return {
+          respond: async () => [
+            { name: 'complete_task', arguments: { summary: 'done' } },
+          ],
+        };
+      }),
+    },
+  );
   const job = await manager.create({ ...settings, maxTokens: 777 });
   await vi.waitFor(async () =>
     expect((await manager!.list())[0].status).toBe('idle'),
@@ -1265,10 +1287,15 @@ it.each(['cancel', 'pause'] as const)(
         await checkpoint?.();
       },
     );
-    manager = new AICharacterManager(store, 'ws://fixture', store.archive, {
-      session: () => s as unknown as Session,
-      model: () => ({}),
-    });
+    manager = createAICharacterOrchestrator(
+      store,
+      'ws://fixture',
+      store.archive,
+      {
+        session: () => s as unknown as Session,
+        model: () => ({}),
+      },
+    );
     const job = await createWithTask(manager, settings);
     await vi.waitFor(() => expect(entered).toBe(true));
     await controlRun(manager, job.id, operation);

@@ -1,7 +1,7 @@
 import { createTestServer } from '../helpers/test-server';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { LocalSpeech } from '../../src/modules/asr';
+import { WhisperAdapter } from '../../src/modules/asr';
 import {
   LiveSpeechSession,
   speechTransport,
@@ -9,7 +9,7 @@ import {
 
 // Isolated production assembly; no database, microphone, cloud provider or paid model is used.
 const realFile = process.env.ASR_TEST_WAV;
-const speech = new LocalSpeech();
+const speech = new WhisperAdapter();
 if (!realFile) {
   speech.status = async () => ({ available: true, reason: 'fixture' });
   speech.transcribe = async (bytes) =>

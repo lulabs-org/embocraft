@@ -64,8 +64,8 @@ Agent 共用运行时继续位于 `packages/agent-runtime`，不迁入服务端�
 音频能力按职责拆为 `core/audio`、`modules/asr`、`modules/tts` 三部分，空间语音与 Agent 发声归入 `modules/world`：
 
 - `core/audio/` 只放无业务状态的共享基础设施：`pcm-wav.ts`（无 I/O 的 PCM WAV 格式、时长与音量校验）、`normalize.ts`/`command.ts`（FFmpeg、子进程与临时文件处理）、`speaches-models.ts`（Speaches 模型与音色发现）以及 `voice-service-connection.ts`（ASR/TTS 共用的连接参数校验）。该目录只依赖 `core`。
-- `modules/asr/` 按 `persistence/`、`services/`、`routes/`、`sockets/` 分层。`routes/asr.routes.ts` 暴露零参 `createAsrRouter()`，挂载 `capabilities → transcribe → asr` 路由，管理鉴权由 `server.ts` 统一前置；`sockets/asr.socket.ts` 的 `installAsrSocket` 注册 `/voice/asr/realtime`。门面导出 `createAsrRouter`、`AsrService`、`asrService`、`DatabaseAsrServicePersistence`、`installAsrSocket`、`AsrBridge`、`LocalSpeech`、`localSpeech` 与 `scheduleSpeech`。`/voice/capabilities` 同时报告 Whisper 与 Piper 状态，经 `tts` 门面读取 `PiperModels`。
-- `modules/tts/` 按 `persistence/`、`services/`、`routes/` 分层，合成契约位于 `services/speech-synthesizer.ts`，无状态领域服务位于 `services/tts.service.ts`（`TtsService` / `ttsService`）。`routes/tts.routes.ts` 的零参 `createTtsRouter()` 通过 management 管线注册 `/voice/tts`。门面导出 `createTtsRouter`、`TtsService`、`ttsService`、`DatabaseVoiceServicePersistence`、`PiperTts`、`PiperModels` 与 `SpeechSynthesizer`。跨模块音色绑定与变更通过 `core/events/domain-events.ts` 事件总线协作，`tts` 不依赖 `asr`、`chat`、`ai-characters` 或 `world`。
+- `modules/asr/` 按 `persistence/`、`services/`、`routes/`、`sockets/` 分层。`routes/asr.routes.ts` 暴露零参 `createAsrRouter()`，挂载 `capabilities → transcribe → asr` 路由，管理鉴权由 `server.ts` 统一前置；`sockets/asr.socket.ts` 的 `installAsrSocket` 注册 `/voice/asr/realtime`。门面导出 `createAsrRouter`、`AsrService`、`asrService`、`DatabaseAsrServicePersistence`、`installAsrSocket`、`AsrBridge`、`WhisperAdapter`、`whisperAdapter` 与 `scheduleSpeech`。`/voice/capabilities` 同时报告 Whisper 与 Piper 状态，经 `tts` 门面读取 `PiperModels`。
+- `modules/tts/` 按 `persistence/`、`services/`、`routes/` 分层，合成契约位于 `services/speech-synthesizer.ts`，应用服务类 `TtsService` 位于 `services/tts.service.ts`，`composition.ts` 通过 `createTtsService()` 创建默认实例 `ttsService`。`routes/tts.routes.ts` 的零参 `createTtsRouter()` 通过 management 管线注册 `/voice/tts`。门面导出 `createTtsRouter`、`TtsService`、`ttsService`、`DatabaseVoiceServicePersistence`、`SpeachesTtsAdapter`、`PiperModels` 与 `SpeechSynthesizer`。跨模块音色绑定与变更通过 `core/events/domain-events.ts` 事件总线协作，`tts` 不依赖 `asr`、`chat`、`ai-characters` 或 `world`。
 - 两个服务仍包含原有校验与运行时协调职责，支持注入持久化适配器；生产使用 PostgreSQL，测试使用内存实现或 `vi.mock`。默认数据、串行写入、数据库事务、识别占用、音色绑定及删除保护行为保持不变。
 
 `AgentSpeech` 位于 `modules/world/services/agent-speech.service.ts`，负责语音合成队列、空间听众筛选和音频缓存访问。`WorldRoom` 装配它并通过 `bindChatRuntime` 单向绑定到 `chat` 模块，在聊天消息送达后入队，在关闭语音、离线、音色服务变更或房间销毁时取消或清理，避免 `chat → world` 的循环依赖。空间信令由 `modules/world/services/spatial-signaling.service.ts` 提供，通过 `WorldRoom` 消息转发，没有独立 Socket 端点。Agent 核心调度不依赖这些服务。
@@ -125,7 +125,7 @@ UI 沙箱统一放在 `test/sandbox`。新增 `asr-services-fixture.ts` 提供�
 
 任务计划、执行历史、预算与调度规则由 `modules/tasks/services/coordinator.service.ts` 的 `TaskCoordinator` 与 `execution.service.ts` 管理；计划调度器位于同目录的 `scheduler.service.ts`。`ai-characters/services/wake-scheduler.service.ts` 只推进 Agent 消息唤醒、等待检查和本地跟随。HTTP/WebSocket 共用同一份计划集合、执行历史和计划调度器。
 
-`tasks/persistence/plan-store.ts` 保留任务写入和调度所需的内存状态，继续导出 `TaskPlanService` 和别名 `PlanService`；快照与恢复仍由该目录负责。
+`tasks/services/plan.service.ts` 管理计划暂停、恢复、归档、改派与额度调整，并保留任务写入和调度所需的内存状态，导出 `TaskPlanService`；数据库映射、快照与恢复由 `tasks/persistence/` 负责。
 
 查询通过 `TaskQueryPort` 注入 `tasks/persistence/task-queries.ts`：计划详情按 ID 读取，列表筛选、排序、计数和每页 20 条的分页在数据库执行；历史按计划查询并排除聊天执行，活跃执行独立于历史分页返回。关联读取与计数/分页使用 `RepeatableRead`，角色名称取当前配置，历史执行保留原角色归属和名称。
 

@@ -17,8 +17,8 @@
 +-----------------------------------------------------------------------------------+
 | Node.js 后端服务 (voxel-server)                                                    |
 |                                                                                   |
-|  - ASR 转录调度 (SpeechSchedulerService / LocalSpeechService)                      |
-|  - TTS 语音生成 (PiperTts)                                                         |
+|  - ASR 转录调度 (SpeechScheduler / WhisperAdapter)                                |
+|  - TTS 语音生成 (SpeachesTtsAdapter)                                              |
 |  - 默认端点解析: speechEndpoint()；ASR / TTS 可按服务覆盖地址                            |
 +----------------------------------------+------------------------------------------+
                                          | HTTP (内网 http://speech:8000/v1)
@@ -62,13 +62,10 @@ services:
       WHISPER__TTL: -1
       # 提升 Docker Desktop 或网络代理环境下 Hugging Face 下载稳定性
       HF_HUB_DISABLE_XET: '1'
-    networks:
-      default:
-        aliases: [whisper]  # 兼容保留旧版 whisper 别名解析
     volumes:
       - speech_cache:/home/ubuntu/.cache/huggingface/hub
     ports:
-      - '${SPEECH_PORT:-${WHISPER_PORT:-8000}}:8000'
+      - '${SPEECH_PORT:-8000}:8000'
 
   server:
     # ...
@@ -123,10 +120,10 @@ function readSpeechConfig(env: EnvLookup = process.env) {
 
 控制台「文本转语音（TTS）」中的服务类型为 **Speaches 语音服务**，Piper 是该服务内使用的合成引擎。每份配置可填写独立的 `API Base URL`（包含 `/v1`）和可选的 `API Key`；地址留空时使用上面的部署默认值。地址由后端访问：同一 Compose 网络内可填写 `http://speech:8000/v1`，独立部署可填写后端可达的局域网 HTTP 地址或 HTTPS 地址。此配置不修改 ASR 或其他 TTS 服务。
 
-保存的地址与密钥同时用于试听和绑定角色的语音回复；密钥只保存在后端，并通过 Bearer 认证发送。修改地址时不会自动复用旧密钥。现有 `type: 'piper'` 配置读取后会转换为 `type: 'speaches'`，保留服务 ID、自定义名称、模型及角色绑定。模型和音色列表从当前连接的 `GET /v1/models?task=text-to-speech` 动态读取，只展示服务已安装的 TTS 模型；不会触发模型下载。后台管理接口 `POST /voice/tts/models` 支持未保存的地址、密钥，以及用于复用已保存密钥的 `serviceId`。前端在连接变化后重新加载，并支持手动刷新；加载失败、列表为空或原模型不再可用时保留原选择并显示提示，不回退到固定模型列表。模型提供多个音色时可以选择；未提供音色元数据时可填写服务支持的音色 ID。合成请求直接使用保存的模型和音色 ID，原三种 Piper 音色映射仅用于兼容旧配置。
+保存的地址与密钥同时用于试听和绑定角色的语音回复；密钥只保存在后端，并通过 Bearer 认证发送。修改地址时不会自动复用旧密钥。配置统一使用 `type: 'speaches'`，并明确填写模型和音色 ID。模型和音色列表从当前连接的 `GET /v1/models?task=text-to-speech` 动态读取，只展示服务已安装的 TTS 模型；不会触发模型下载。后台管理接口 `POST /voice/tts/models` 支持未保存的地址、密钥，以及用于复用已保存密钥的 `serviceId`。前端在连接变化后重新加载，并支持手动刷新；加载失败、列表为空或原模型不再可用时保留原选择并显示提示，不回退到固定模型列表。模型提供多个音色时可以选择；未提供音色元数据时可填写服务支持的音色 ID。合成请求直接使用保存的模型和音色 ID；托管配置不会根据模型名推断缺失的音色。
 
-### (2) 语音合成调用 (`PiperTts`)
-位于 `apps/server/src/modules/tts/services/piper.service.ts`：
+### (2) 语音合成调用 (`SpeachesTtsAdapter`)
+位于 `apps/server/src/modules/tts/adapters/speaches-tts.adapter.ts`：
 ```typescript
 const response = await fetch(`${this.endpoint}/audio/speech`, {
   method: 'POST',
@@ -142,11 +139,11 @@ const response = await fetch(`${this.endpoint}/audio/speech`, {
 });
 ```
 
-### (3) 语音识别调用 (`WhisperAdapter` / `LocalSpeech`)
+### (3) 语音识别调用 (`WhisperAdapter`)
 位于 `apps/server/src/modules/asr/engines/whisper/whisper.adapter.ts`：
 控制台「语音识别（ASR）」中的 **Speaches 识别服务** 支持独立的 `API Base URL` 和可选 `API Key`。留空使用部署默认地址，界面会通过管理接口 `GET /voice/asr/defaults` 显示实际默认值。模型列表通过 `POST /voice/asr/models` 从当前连接的 `GET /v1/models?task=automatic-speech-recognition` 获取，支持未保存的连接和手动刷新，不使用固定模型列表，也不会因查询触发下载。
 
-保存的连接同时用于服务状态检查、录音试用、聊天语音和附近语音的识别请求。构建 `FormData` 上传录音至所选服务的 `/audio/transcriptions`，使用保存的模型、温度和提示词。密钥仅保存在服务端，修改地址须重新填写密钥；旧配置的服务 ID、用途分配及模型保持兼容，未配置地址时继续使用部署默认值。
+保存的连接同时用于服务状态检查、录音试用、聊天语音和附近语音的识别请求。构建 `FormData` 上传录音至所选服务的 `/audio/transcriptions`，使用保存的模型、温度和提示词。密钥仅保存在服务端，修改地址须重新填写密钥；服务配置必须明确提供 `provider` 和实际模型 ID，不接受 `default` 模型别名；未配置地址时使用部署默认值。
 
 ---
 

@@ -9,7 +9,7 @@ import {
   executionConfigOverrides,
 } from '../../tasks';
 import { appendAICharacterLog } from '../domain/activity-log';
-import { executionState } from '../integrations/task-execution-adapter';
+import { taskExecutionState } from '../integrations/task-execution-adapter';
 import type { Job } from './character-registry';
 import type { ExecutionContext } from './execution-context';
 import { handleWorldEvent } from './world-event-handler';
@@ -33,7 +33,7 @@ export class AICharacterHost {
         ? message.split(provider.apiKey).join('[已隐藏]')
         : message;
       appendAICharacterLog(job.view, safe);
-      const record = currentRun(executionState(job));
+      const record = currentRun(taskExecutionState(job));
       if (record) record.logs = [...record.logs, safe].slice(-40);
       ctx.persist();
     };
@@ -41,7 +41,7 @@ export class AICharacterHost {
     let finalStatus: AICharacterView['status'] = 'idle';
 
     try {
-      captureTask(executionState(job));
+      captureTask(taskExecutionState(job));
       await ctx.save();
       if (job.abort.signal.aborted || ctx.closing()) return;
 
@@ -52,7 +52,7 @@ export class AICharacterHost {
       const config: AgentConfig = {
         ...inferenceDefaults,
         ...job.view,
-        ...executionConfigOverrides(executionState(job)),
+        ...executionConfigOverrides(taskExecutionState(job)),
         apiKey: provider.apiKey,
       };
 
@@ -128,7 +128,7 @@ export class AICharacterHost {
           hooks: {
             beforeNewTask: (_task, previousMemory) =>
               beginChatExecution(
-                executionState(job),
+                taskExecutionState(job),
                 previousMemory,
                 config,
                 ctx.save,

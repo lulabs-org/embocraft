@@ -8,11 +8,10 @@ import type { AsrRepositoryPort } from '../ports';
 
 function providerData(value: SavedService) {
   const isWhisper = value.provider === 'whisper';
-  const isBailian =
-    value.provider === 'bailian' || value.provider === undefined;
+  const isBailian = value.provider === 'bailian';
   return {
     name: value.name,
-    provider: value.provider ?? 'bailian',
+    provider: value.provider,
     model: value.model,
     apiKey: encryptSecret(value.apiKey ?? ''),
     region: isBailian ? value.region : null,
@@ -24,12 +23,7 @@ function providerData(value: SavedService) {
 }
 
 function configuration(value: SavedService) {
-  const common = [
-    value.name,
-    value.provider ?? 'bailian',
-    value.model,
-    value.apiKey ?? '',
-  ];
+  const common = [value.name, value.provider, value.model, value.apiKey ?? ''];
   if (value.provider === 'whisper')
     return JSON.stringify([
       ...common,
@@ -37,7 +31,7 @@ function configuration(value: SavedService) {
       value.temperature ?? 0,
       value.prompt ?? '',
     ]);
-  if (value.provider === 'bailian' || value.provider === undefined)
+  if (value.provider === 'bailian')
     return JSON.stringify([...common, value.region, value.workspaceId ?? '']);
   return JSON.stringify(common);
 }
@@ -84,6 +78,8 @@ export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
           ...(uses ? { uses } : {}),
         };
       }
+      if (row.provider !== 'bailian')
+        throw new Error('Unsupported ASR provider.');
       return {
         id: row.id,
         name: row.name,

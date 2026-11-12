@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { aiCharactersApi } from './ai-characters/api';
 import { providersApi } from './providers/api';
 import { tasksApi } from './tasks';
+import { controlTaskRun } from './execution/api';
 import { voiceApi } from './voice/api';
 import { initialAICharacter } from './ai-characters/model';
 import { freshProvider } from './providers/model';
@@ -200,13 +201,13 @@ it('routes task plan queries and controls through HTTP REST endpoints', async ()
   );
 
   http.mockResolvedValueOnce(new Response(null, { status: 204 }));
-  await tasksApi.delete('p', 'agent-1');
+  await tasksApi.delete('p');
   expect(http).toHaveBeenLastCalledWith(
     'https://world.example/tasks/p',
     expect.objectContaining({ method: 'DELETE' }),
   );
 
-  await tasksApi.controlRun('run-99', 'resume', {}, identity);
+  await controlTaskRun('run-99', 'resume', {}, identity);
   expect(http).toHaveBeenLastCalledWith(
     'https://world.example/task-runs/run-99/resume',
     expect.objectContaining({
@@ -233,7 +234,9 @@ it('retains authenticated HTTP voice management and actionable HTTP errors', asy
   http.mockResolvedValueOnce(
     new Response(JSON.stringify({ error: '音色不可用' }), { status: 503 }),
   );
-  await expect(voiceApi.listVoiceServices(signal)).rejects.toThrow('音色不可用');
+  await expect(voiceApi.listVoiceServices(signal)).rejects.toThrow(
+    '音色不可用',
+  );
 });
 
 it('uses the TTS domain for service CRUD and binary preview', async () => {

@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { LocalSpeech } from '../src/modules/asr';
+import { WhisperAdapter } from '../src/modules/asr';
 import { PiperModels } from '../src/modules/tts/services/piper-models.service';
 import { DatabaseManagementArchive } from '../src/persistence/database-management-archive';
 import { createTestServer } from './helpers/test-server';
@@ -13,12 +13,12 @@ const headers = {
 };
 
 it('assembles public audio endpoints separately from protected management routes', async () => {
-  vi.spyOn(LocalSpeech.prototype, 'status').mockResolvedValue({
+  vi.spyOn(WhisperAdapter.prototype, 'status').mockResolvedValue({
     available: true,
     reason: 'fixture',
   });
   const transcribe = vi
-    .spyOn(LocalSpeech.prototype, 'transcribe')
+    .spyOn(WhisperAdapter.prototype, 'transcribe')
     .mockResolvedValue('fixture text');
   vi.spyOn(PiperModels.prototype, 'status').mockResolvedValue({
     available: false,

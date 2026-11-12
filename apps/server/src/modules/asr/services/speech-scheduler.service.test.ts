@@ -1,11 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { SpeechScheduler } from './speech-scheduler.service';
-import { WhisperAdapter as LocalSpeech } from '../engines';
+import { WhisperAdapter } from '../engines';
 const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
 it('drops previews under load but processes queued final sentences in order', async () => {
-  const speech = new LocalSpeech();
+  const speech = new WhisperAdapter();
   let done!: (text: string) => void;
   const infer = vi
     .spyOn(speech, 'transcribe')
@@ -47,7 +47,7 @@ it('drops previews under load but processes queued final sentences in order', as
   expect(infer).toHaveBeenCalledTimes(2);
 });
 it('cancels queued work before it can run', async () => {
-  const speech = new LocalSpeech();
+  const speech = new WhisperAdapter();
   let done!: (text: string) => void;
   const infer = vi.spyOn(speech, 'transcribe').mockImplementation(
     () =>
@@ -78,7 +78,7 @@ it('cancels queued work before it can run', async () => {
   expect(infer).toHaveBeenCalledOnce();
 });
 it('bounds the final queue and does not retry unknown outcomes', async () => {
-  const speech = new LocalSpeech();
+  const speech = new WhisperAdapter();
   let fail!: (error: Error) => void;
   const infer = vi
     .spyOn(speech, 'transcribe')

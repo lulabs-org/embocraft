@@ -26,7 +26,7 @@ import type { SocketRoutes } from './core/transport/socket-routes';
 import { RoutedWebSocketTransport } from './core/transport/websocket.transport';
 
 import {
-  AICharacterManager,
+  createAICharacterOrchestrator,
   CharacterQueries,
   createAICharacterRouter,
 } from './modules/ai-characters';
@@ -51,7 +51,7 @@ export async function createServer() {
   const db = createDatabaseClient(config.databaseUrl);
   setDatabaseClient(db);
   let serverUrls: ServerUrls | undefined;
-  const characters = new AICharacterManager(
+  const characters = createAICharacterOrchestrator(
     undefined,
     () => serverUrls?.wsUrl ?? '',
   );

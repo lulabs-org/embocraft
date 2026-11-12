@@ -7,7 +7,7 @@ import type {
   TaskRun,
 } from '@voxel/shared';
 import type { PlanQueryFilter } from './domain/types';
-import type { PlanService } from './persistence/plan-store';
+import type { TaskPlanService } from './services/plan.service';
 
 export type TaskQueryResult<T> = {
   value: T;
@@ -86,7 +86,7 @@ export interface TaskExecutionState {
   view: AICharacterSettings &
     Pick<AICharacterView, 'id' | 'status' | 'logEntries'>;
   readonly runtime: AgentRuntime;
-  readonly ledger: PlanService;
+  readonly ledger: TaskPlanService;
   currentRunId: string | undefined;
   taskMutating?: boolean;
   readonly updating?: boolean;

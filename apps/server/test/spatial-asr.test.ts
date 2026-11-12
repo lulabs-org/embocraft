@@ -2,11 +2,11 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Player } from '@voxel/shared';
-import type { AsrService, LocalSpeech } from '../src/modules/asr';
+import type { AsrService } from '../src/modules/asr';
 import { TestAsrService } from './helpers/memory-storage';
 
 const mocked = vi.hoisted(() => ({
-  speech: undefined as unknown as LocalSpeech,
+  speech: undefined as unknown as WhisperAdapter,
   asrService: undefined as unknown as AsrService,
 }));
 
@@ -14,10 +14,10 @@ vi.mock('../src/modules/asr', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/modules/asr')>();
   return {
     ...actual,
-    localSpeech: {
-      normalize: (...args: Parameters<LocalSpeech['normalize']>) =>
+    whisperAdapter: {
+      normalize: (...args: Parameters<WhisperAdapter['normalize']>) =>
         mocked.speech.normalize(...args),
-      transcribe: (...args: Parameters<LocalSpeech['transcribe']>) =>
+      transcribe: (...args: Parameters<WhisperAdapter['transcribe']>) =>
         mocked.speech.transcribe(...args),
     },
     asrService: {
@@ -26,7 +26,7 @@ vi.mock('../src/modules/asr', async (importOriginal) => {
   };
 });
 
-import { LocalSpeech as WhisperSpeech } from '../src/modules/asr';
+import { WhisperAdapter } from '../src/modules/asr';
 import { bindChatRuntime } from '../src/modules/chat';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
 import { createChatRouter } from '../src/modules/chat/routes/chats.routes';
@@ -102,7 +102,7 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
     );
   });
   vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5173');
-  mocked.speech = new WhisperSpeech('http://asr.test/v1', upstream);
+  mocked.speech = new WhisperAdapter('http://asr.test/v1', upstream);
   mocked.asrService = new TestAsrService();
   const app = express();
   app.use(createChatRouter());

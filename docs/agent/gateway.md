@@ -7,7 +7,7 @@ flowchart TD
   Web[Web 控制台] --> HTTP[领域 HTTP 路由]
   CLI[agent:ctl 命令行] --> HTTP
   HTTP --> Commands[HTTP 命令去重与回执]
-  Commands --> Characters[AICharacterManager]
+  Commands --> Characters[AICharacterOrchestrator]
   Commands --> Tasks[TaskCoordinator]
   Commands --> Providers[DatabaseProviderRepository]
   Tasks --> Host[TaskHostPort / Agent 宿主]

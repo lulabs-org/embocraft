@@ -15,7 +15,7 @@ vi.mock('../engines', async (importOriginal) => {
   const speech = new actual.WhisperAdapter();
   return {
     ...actual,
-    localSpeech: speech,
+    whisperAdapter: speech,
   };
 });
 
@@ -30,7 +30,7 @@ vi.mock('../services/asr.service', async (importOriginal) => {
   };
 });
 
-import { localSpeech } from '../engines';
+import { whisperAdapter } from '../engines';
 import { installTranscribeRoutes } from './transcribe.routes';
 
 describe('transcription HTTP boundary', () => {
@@ -39,11 +39,11 @@ describe('transcription HTTP boundary', () => {
   beforeEach(async () => {
     vi.stubEnv('WEB_ORIGIN', 'http://127.0.0.1:5187');
     transcribe.mockReset().mockResolvedValue('hello');
-    vi.spyOn(localSpeech, 'status').mockResolvedValue({
+    vi.spyOn(whisperAdapter, 'status').mockResolvedValue({
       available: true,
       reason: 'ready',
     });
-    vi.spyOn(localSpeech, 'transcribe').mockImplementation(transcribe);
+    vi.spyOn(whisperAdapter, 'transcribe').mockImplementation(transcribe);
     store = new TestAsrService();
     mocked.store = store;
 
@@ -134,6 +134,7 @@ describe('transcription HTTP boundary', () => {
     });
     const cloud = await store.save({
       ...DEFAULT_BAILIAN_ASR,
+      provider: 'bailian' as const,
       name: 'cloud',
       apiKey: 'test',
     });

@@ -9,7 +9,7 @@ import type { ManagementArchive } from '../../src/persistence/management-archive
 import type { CharacterReadPort } from '../../src/modules/ai-characters/ports';
 import type { TaskQueryPort } from '../../src/modules/tasks/ports';
 import type { PlanQueryFilter } from '../../src/modules/tasks/domain/types';
-import { PlanService } from '../../src/modules/tasks/persistence/plan-store';
+import { TaskPlanService } from '../../src/modules/tasks/services/plan.service';
 
 type Read = () => Promise<ManagementArchive | undefined>;
 
@@ -88,7 +88,7 @@ export class MemoryTaskQueries implements TaskQueryPort {
   constructor(private readonly read: Read) {}
   private async state() {
     const archive = await this.read();
-    const plans = new PlanService();
+    const plans = new TaskPlanService();
     if (archive)
       Object.assign(plans, {
         plans: archive.plans,
