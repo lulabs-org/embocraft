@@ -312,18 +312,23 @@ export function useChatController(connection: Connection, expanded = true) {
         setMode('dictating');
         browserDictation.start(language, callbacks);
       } else {
+        // Whisper 与 SenseVoice 都走服务器音频接口；云端实时识别才使用长连接会话。
+        // 两者不可互换：实时会话无法携带分段音频，服务器引擎也不提供 WebSocket 通道。
+        const serverEngine =
+          service.provider === 'whisper' || service.provider === 'sense-voice';
         void dictation.start(
           language,
           callbacks,
           undefined,
           undefined,
-          service.provider !== 'whisper'
-            ? (events) => new BailianSpeechSession(service.id, language, events)
-            : (events) =>
+          serverEngine
+            ? (events) =>
                 new LiveSpeechSession(
                   speechTransport(language, undefined, undefined, service.id),
                   events,
-                ),
+                )
+            : (events) =>
+                new BailianSpeechSession(service.id, language, events),
         );
       }
     } else {

@@ -169,6 +169,33 @@ it('publishes browser recognition only after a confirmed final result', async ()
   expect(browser.cancel).toHaveBeenCalled();
 });
 
+// 服务器内引擎必须走分段 HTTP 识别接口；若误入实时长连接，附近语音会收不到字幕。
+it.each(['whisper', 'sense-voice'] as const)(
+  'routes %s spatial recognition through the server audio transport',
+  async (provider) => {
+    const t = setup();
+    const start = vi.spyOn(LiveRecorder.prototype, 'start').mockResolvedValue();
+    try {
+      await t.transcriber.start(t.stream, {
+        id: 'saved-server-asr',
+        name: 'Server ASR',
+        provider,
+      });
+      // 第 4 个参数是语音传输实现；存在即说明没有回退到实时会话工厂。
+      expect(start).toHaveBeenCalledWith(
+        'auto',
+        expect.any(Object),
+        t.stream,
+        expect.objectContaining({ begin: expect.any(Function) }),
+      );
+      expect(t.request).not.toHaveBeenCalled();
+    } finally {
+      t.transcriber.stop();
+      start.mockRestore();
+    }
+  },
+);
+
 it.each(['openai', 'gemini'] as const)(
   'routes %s spatial recognition through the streaming session',
   async (provider) => {

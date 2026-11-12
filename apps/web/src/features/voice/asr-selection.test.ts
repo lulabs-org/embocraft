@@ -93,6 +93,26 @@ it('loads server assignments in a fresh browser and replaces stale remote cache'
   ).toEqual(builtInWhisper);
 });
 
+// 回归：SenseVoice 分配曾被前端白名单丢弃，导致界面误报“未配置识别服务”。
+it('keeps a server SenseVoice assignment for chat, nearby and recorded voice', async () => {
+  const senseVoice = {
+    id: 'saved-sense-voice',
+    name: '本地中文识别',
+    provider: 'sense-voice' as const,
+  };
+  vi.spyOn(voiceApi, 'asrAssignments').mockResolvedValue({
+    chat: senseVoice,
+    spatial: senseVoice,
+    clip: senseVoice,
+  });
+  await refreshAsrSelections();
+  expect(JSON.parse(localStorage.getItem('voxel.asr-selection.v2')!)).toEqual({
+    chat: senseVoice,
+    spatial: senseVoice,
+    clip: senseVoice,
+  });
+});
+
 it('preserves a personal browser engine override while syncing server assignments', async () => {
   const local = {
     id: 'browser-id',

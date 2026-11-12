@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import type { Player } from '@voxel/shared';
 import { installReactMount } from '../../../../test/helpers/react-mount';
-import { BrowserRecognitionSession, LiveRecorder } from '../../../audio';
+import {
+  BrowserRecognitionSession,
+  LiveRecorder,
+  LiveSpeechSession,
+} from '../../../audio';
 import type { LiveSpeechEvents } from '../../../audio/services/live-speech';
 import { Connection } from '../../../network/connection';
 import { i18n } from '../../../i18n';
@@ -34,7 +38,9 @@ beforeEach(async () => {
   connection.status = 'connected';
   connection.players = [peer];
 });
-async function start(provider: 'browser' | 'whisper' | 'bailian' = 'browser') {
+async function start(
+  provider: 'browser' | 'whisper' | 'sense-voice' | 'bailian' = 'browser',
+) {
   chooseAsrService('chat', { id: 'test-asr', name: 'Test ASR', provider });
   vi.spyOn(BrowserRecognitionSession.prototype, 'start').mockImplementation(
     (_language, callbacks) => {
@@ -47,7 +53,8 @@ async function start(provider: 'browser' | 'whisper' | 'bailian' = 'browser') {
       callbacks.onState('listening', '');
     },
   );
-  const finish =
+  // 浏览器结束是同步回调，实时会话结束返回 Promise；统一签名才能按需替换实现。
+  const finish: MockInstance<() => void | Promise<void>> =
     provider === 'browser'
       ? vi
           .spyOn(BrowserRecognitionSession.prototype, 'finish')
@@ -104,6 +111,18 @@ it.each(['browser', 'whisper'] as const)(
     expect(controller.status).toBe('');
     expect(controller.recipients).toEqual([peer]);
     expect(controller.dictationSending).toBe(false);
+  },
+);
+
+// 听写与附近语音同源：服务器引擎使用分段接口，只有云端实时商建立长连接。
+it.each(['whisper', 'sense-voice'] as const)(
+  'routes %s dictation through the server audio transport',
+  async (provider) => {
+    await start(provider);
+    const factory = vi
+      .mocked(LiveRecorder.prototype.start)
+      .mock.calls.at(-1)?.[4];
+    expect(factory?.(events)).toBeInstanceOf(LiveSpeechSession);
   },
 );
 

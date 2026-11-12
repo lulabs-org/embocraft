@@ -37,13 +37,16 @@ export class SpatialTranscriber {
     this.stop();
     const generation = this.generation;
     this.report({ text: '', partial: '', error: '' });
-    const language =
-      choice?.language ??
-      (choice?.provider === 'browser' ||
-      (choice?.provider && choice.provider !== 'whisper')
-        ? 'zh-CN'
-        : 'auto');
-    const external = !!choice && choice.provider !== 'whisper';
+    // Whisper 与 SenseVoice 都走服务器音频接口，只有云端实时识别需要固定中文语言。
+    const realtime =
+      choice &&
+      choice.provider !== 'whisper' &&
+      choice.provider !== 'sense-voice'
+        ? choice
+        : undefined;
+    const language = choice?.language ?? (realtime ? 'zh-CN' : 'auto');
+    // 实时识别返回文字后才需要手动发布；服务器引擎由识别请求直接发布。
+    const external = !!realtime;
     const confirmed = (text: string) => {
       if (generation !== this.generation) return;
       if (!text) {
@@ -99,17 +102,24 @@ export class SpatialTranscriber {
       this.browser.start(language, events);
       return;
     }
+    // 服务器引擎先申请空间语音票据，识别成功即由服务端直接发布字幕，
+    // 因此这里不需要再调 publishText，否则会重复广播。
+    if (!realtime) {
+      await this.live.start(
+        language,
+        events,
+        stream,
+        speechTransport(language, this.token, this.request, choice?.id),
+      );
+      return;
+    }
     await this.live.start(
       language,
       events,
       stream,
-      choice && choice.provider !== 'whisper'
-        ? undefined
-        : speechTransport(language, this.token, this.request, choice?.id),
-      choice && choice.provider !== 'whisper'
-        ? (sessionEvents) =>
-            new BailianSpeechSession(choice.id, language, sessionEvents)
-        : undefined,
+      undefined,
+      (sessionEvents) =>
+        new BailianSpeechSession(realtime.id, language, sessionEvents),
     );
   }
   private async publishText(text: string, generation: number) {

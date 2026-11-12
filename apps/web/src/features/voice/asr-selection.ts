@@ -16,12 +16,21 @@ export function toAsrChoice(value: unknown): AsrChoice {
   if (!value || typeof value !== 'object') return unselectedAsrChoice;
   const choice = value as Partial<AsrChoice>;
   const provider = choice.provider ?? 'bailian';
+  // 白名单决定服务器分配能否落地：未知 provider 会被静默当作未选中，
+  // 因此新增引擎（如 sense-voice）必须同步加入，否则界面会误报“服务器尚未配置识别服务”。
   if (
     typeof choice.id !== 'string' ||
     !choice.id ||
     typeof choice.name !== 'string' ||
     !choice.name ||
-    !['whisper', 'bailian', 'browser', 'openai', 'gemini'].includes(provider)
+    ![
+      'whisper',
+      'sense-voice',
+      'bailian',
+      'browser',
+      'openai',
+      'gemini',
+    ].includes(provider)
   )
     return unselectedAsrChoice;
   return {
@@ -36,9 +45,10 @@ export function toAsrChoice(value: unknown): AsrChoice {
 
 const forUse = (use: AsrUse, value: unknown) => {
   const choice = toAsrChoice(value);
-  return use === 'clip' && choice.provider !== 'whisper'
-    ? unselectedAsrChoice
-    : choice;
+  // 语音消息与 Whisper 一样由服务器音频接口识别，因此 SenseVoice 也可用于录制语音。
+  const serverEngine =
+    choice.provider === 'whisper' || choice.provider === 'sense-voice';
+  return use === 'clip' && !serverEngine ? unselectedAsrChoice : choice;
 };
 
 let volatileSelections: Record<AsrUse, AsrChoice> | undefined;

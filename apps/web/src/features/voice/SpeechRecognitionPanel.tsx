@@ -246,12 +246,16 @@ export function SpeechRecognitionPanel({
               .map((value) => ({
                 id: value.id,
                 name: value.name,
+                // 服务器内引擎没有 hasApiKey，列表说明使用中文类型名与模型名，
+                // 否则 SenseVoice 会沿用百炼标签，容易被误认为云端服务。
                 detail:
                   value.provider === 'browser'
                     ? `${t('console.asr.typeBrowser')} · ${browserLanguages.find(([code]) => code === value.language)?.[1] ?? value.language}`
                     : value.provider === 'whisper'
                       ? `Speaches · ${value.model}`
-                      : `${value.provider === 'openai' ? 'OpenAI' : value.provider === 'gemini' ? 'Gemini' : t('console.asr.typeBailian')} · ${value.model}`,
+                      : value.provider === 'sense-voice'
+                        ? `${t('console.asr.typeSenseVoice')} · ${value.model}`
+                        : `${value.provider === 'openai' ? 'OpenAI' : value.provider === 'gemini' ? 'Gemini' : t('console.asr.typeBailian')} · ${value.model}`,
               }))
               .map((item) => (
                 <button
