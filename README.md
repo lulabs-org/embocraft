@@ -55,7 +55,7 @@ Once started, open http://127.0.0.1:5173 in your browser. You can open two separ
 
 ### 2. One-Click Full-Stack Docker Deployment
 
-This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, and an integrated Speaches voice container (Whisper ASR + Piper TTS), with optional in-server SenseVoice for fully offline speech recognition:
+This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, and an integrated Speaches voice container (Whisper ASR + Piper TTS). SenseVoice is optional and runs in an external OpenAI-compatible ASR container that you deploy and configure yourself:
 
 ```sh
 # Start all services with one command
@@ -66,14 +66,14 @@ pnpm docker:up
 pnpm docker:down
 ```
 
-Offline speech recognition (SenseVoice) runs inside the server container and needs no API key. Download the model pack before building so the server image can bake it in:
+SenseVoice follows the same HTTP path as Whisper: point `SENSE_VOICE_API_URL` at your own OpenAI-compatible SenseVoice service (for example FunASR with `/v1/audio/transcriptions`) and leave it empty to fall back to the shared Speaches Whisper service when `ASR_PROVIDER=auto`:
 
 ```sh
-pnpm voice:sensevoice   # Downloads the ~150 MiB pack from k2-fsa releases into models/
-pnpm docker:up          # Or: docker compose up -d --build
+# Deploy the SenseVoice container yourself, then expose its URL to the server
+SENSE_VOICE_API_URL=http://sensevoice:8000/v1 pnpm docker:up
 ```
 
-Only `models/.gitkeep` is tracked; model packs never enter git. Without a downloaded pack the image still builds (the step prints a skip notice) and recognition falls back to the shared Speaches Whisper service.
+The server image ships no ASR models or native runtime; model packs never enter git or the server build context. Each saved SenseVoice profile may also override the URL, model ID and optional API key from the console.
 
 After launch:
 

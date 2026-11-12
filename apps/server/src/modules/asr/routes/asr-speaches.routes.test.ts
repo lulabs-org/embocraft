@@ -38,6 +38,7 @@ it('protects discovery, reuses saved keys only for the same endpoint, and never 
     expect(defaults.headers.get('cache-control')).toBe('no-store');
     expect(await defaults.json()).toEqual({
       baseUrl: 'http://deployment-speech:8000/v1',
+      senseVoiceBaseUrl: '',
     });
     const saved = await voices.save({
       name: 'Private Speaches',

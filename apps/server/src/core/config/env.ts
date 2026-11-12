@@ -133,18 +133,16 @@ function readSpeechConfig(env: EnvLookup = process.env) {
     asrProvider !== 'sense-voice'
   )
     throw new Error('ASR_PROVIDER 仅支持 auto、whisper 或 sense-voice。');
-  const threads = Number(env.ASR_THREADS ?? 2);
-  // 解码与游戏循环共用 CPU，因此线程数保持较小且有上限。
-  if (!Number.isInteger(threads) || threads < 1 || threads > 16)
-    throw new Error('ASR_THREADS 须为 1–16 的整数。');
   return {
     speechApiUrl: (
       env.SPEECH_API_URL?.trim() || DEFAULT_SPEECH_API_URL
     ).replace(/\/+$/, ''),
     asrProvider,
-    asrModelDir: env.ASR_MODEL_DIR?.trim() || resolve(repositoryRoot, 'models'),
-    senseVoiceModel: env.SENSE_VOICE_MODEL?.trim() ?? '',
-    asrThreads: threads,
+    // SenseVoice 由独立容器提供；留空时 auto 回退 Whisper，保存的配置仍可单独填写地址。
+    senseVoiceApiUrl: (env.SENSE_VOICE_API_URL?.trim() ?? '').replace(
+      /\/+$/,
+      '',
+    ),
   };
 }
 export type AsrProviderName = ReturnType<

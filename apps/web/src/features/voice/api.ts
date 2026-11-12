@@ -12,7 +12,7 @@ import { managementRequest } from '@voxel/shared/management';
 
 export type SpeechCapabilities = {
   local: { available: boolean; reason: string };
-  /** 服务器已安装的离线 SenseVoice 模型包，供控制台模型选择器使用。 */
+  /** 外部 SenseVoice 服务通过 /v1/models 暴露的模型 ID；不可达时为空。 */
   senseVoiceModels?: string[];
 };
 
@@ -39,7 +39,12 @@ async function asrRequest<T>(
 
 export const voiceApi = {
   speachesDefaults: (signal?: AbortSignal) =>
-    managementRequest<{ baseUrl: string }>(
+    managementRequest<{ baseUrl: string; senseVoiceBaseUrl?: string }>(
+      `${serverHttpUrl()}/voice/asr/defaults`,
+      { token: getGatewayToken(), signal },
+    ),
+  asrDefaults: (signal?: AbortSignal) =>
+    managementRequest<{ baseUrl: string; senseVoiceBaseUrl: string }>(
       `${serverHttpUrl()}/voice/asr/defaults`,
       { token: getGatewayToken(), signal },
     ),

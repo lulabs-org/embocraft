@@ -47,7 +47,10 @@ export class AsrService {
           service.uses &&
           (!Array.isArray(service.uses) ||
             service.uses.some((use) => !ASR_USES.includes(use)) ||
-            (service.provider !== 'whisper' && service.uses.includes('clip'))),
+            // Whisper 与 SenseVoice 都经服务器音频接口，支持语音消息转文字。
+            (service.provider !== 'whisper' &&
+              service.provider !== 'sense-voice' &&
+              service.uses.includes('clip'))),
       )
     )
       throw new AppError('ASR 服务分配格式无效。', 500);
@@ -84,11 +87,15 @@ export class AsrService {
   private assignmentsFor(values: SavedService[]): AsrAssignments {
     // Older databases need no console visit or name-based client initialization.
     const whisper = values.find((service) => service.provider === 'whisper');
+    const senseVoice = values.find(
+      (service) => service.provider === 'sense-voice',
+    );
     const choice = (use: AsrUse) => {
+      // 语音消息只能使用服务器音频接口，回退时也只考虑 Whisper 或 SenseVoice。
+      const fallback =
+        use === 'clip' ? (whisper ?? senseVoice) : (whisper ?? values[0]);
       const selected =
-        values.find((service) => service.uses?.includes(use)) ??
-        whisper ??
-        (use === 'clip' ? undefined : values[0]);
+        values.find((service) => service.uses?.includes(use)) ?? fallback;
       return selected
         ? {
             id: selected.id,
@@ -110,8 +117,12 @@ export class AsrService {
       return this.storage.update((saved) => {
         const values = this.validateSaved(saved);
         const selected = this.find(values, id);
-        if (use === 'clip' && selected.provider !== 'whisper')
-          throw new AppError('语音消息转文字需要 Whisper 服务。');
+        if (
+          use === 'clip' &&
+          selected.provider !== 'whisper' &&
+          selected.provider !== 'sense-voice'
+        )
+          throw new AppError('语音消息转文字需要 Whisper 或 SenseVoice 服务。');
         const next = values.map((service) => ({
           ...service,
           uses: [

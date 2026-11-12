@@ -7,6 +7,8 @@ vi.mock('../src/modules/asr/engines', () => ({
   localSpeech: {
     status: async () => ({ available: true, reason: 'ASR ready' }),
   },
+  // 能力接口会并行读取外部 SenseVoice 模型列表；测试用空列表保持契约稳定。
+  senseVoiceSpeech: { listModels: async () => [] },
 }));
 vi.mock('../src/modules/asr/services/asr.service', () => ({ asrService: {} }));
 
@@ -63,6 +65,7 @@ it.each([
       expect(result.status).toBe(200);
       expect(await result.json()).toEqual({
         local: { available: true, reason: 'ASR ready' },
+        senseVoiceModels: [],
         agentSpeech: expected,
       });
       expect(request).toHaveBeenCalledOnce();

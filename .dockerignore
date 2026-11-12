@@ -5,12 +5,8 @@ node_modules
 .vscode
 .playwright-cli
 .pnpm-store
-# 只把 SenseVoice 模型包放进构建上下文供 Dockerfile.server 打包；
-# 其余模型（TTS、KWS、声纹等）与压缩包仍排除。
-models/*
-!models/.gitkeep
-!models/sherpa-onnx-sense-voice-*
-models/sherpa-onnx-sense-voice-*.tar.bz2
+# 模型全部由外部语音容器管理，server 镜像不再需要任何本地模型文件。
+models
 **/dist
 dist
 output

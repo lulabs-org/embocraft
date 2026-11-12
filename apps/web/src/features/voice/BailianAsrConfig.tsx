@@ -3,6 +3,7 @@ import type { BailianAsrDraft, BailianAsrView } from '@voxel/shared';
 import { useI18n } from '../../i18n/context';
 import type { AsrProvider } from './browser-asr-services';
 import { SpeachesAsrConfig } from './SpeachesAsrConfig';
+import { SenseVoiceAsrConfig } from './SenseVoiceAsrConfig';
 import { browserLanguages } from './browser-asr-languages';
 import type { useAsrServices } from './useAsrServices';
 
@@ -171,35 +172,12 @@ export function BailianAsrConfig({
             </small>
           </>
         ) : draft.provider === 'sense-voice' ? (
-          <>
-            <label>
-              {t('console.asr.recognitionModel')}
-              <input
-                value={draft.model}
-                maxLength={100}
-                placeholder="default"
-                onChange={(e) => change({ model: e.target.value })}
-              />
-            </label>
-            <label>
-              {t('console.asr.primaryLanguage')}
-              <select
-                value={draft.language}
-                onChange={(e) => change({ language: e.target.value })}
-              >
-                <option value="auto">
-                  {t('console.asr.senseVoiceLanguageAuto')}
-                </option>
-                <option value="zh">
-                  {t('console.asr.senseVoiceLanguageZh')}
-                </option>
-                <option value="en">
-                  {t('console.asr.senseVoiceLanguageEn')}
-                </option>
-              </select>
-            </label>
-            <small>{t('console.asr.senseVoiceServerNote')}</small>
-          </>
+          <SenseVoiceAsrConfig
+            draft={draft}
+            saved={saved?.provider === 'sense-voice' ? saved : undefined}
+            active={manager.active}
+            onChange={change}
+          />
         ) : (
           <>
             <label>

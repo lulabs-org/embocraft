@@ -110,12 +110,15 @@ export class WhisperAdapter implements BatchTranscriberPort {
       contentType = contentTypeOrOptions;
       actualLanguage = language!;
       actualSignal = signal!;
-      actualSettings = settings;
+      actualSettings = settings as WhisperAsrDraft | undefined;
     } else {
       contentType = contentTypeOrOptions.contentType;
       actualLanguage = contentTypeOrOptions.language;
       actualSignal = contentTypeOrOptions.signal;
-      actualSettings = contentTypeOrOptions.settings;
+      // 路由器保证 Whisper 只会收到 Whisper 配置；联合类型在此显式收窄。
+      actualSettings = contentTypeOrOptions.settings as
+        | WhisperAsrDraft
+        | undefined;
     }
 
     const format = audioFormats[contentType.split(';')[0].trim().toLowerCase()];

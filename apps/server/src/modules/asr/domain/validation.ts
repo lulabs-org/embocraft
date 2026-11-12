@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import {
+  DEFAULT_SENSE_VOICE_ASR,
   DEFAULT_WHISPER_ASR,
   type BailianAsrDraft,
-  type SenseVoiceAsrSettings,
+  type SenseVoiceAsrDraft,
   type SenseVoiceLanguage,
   type WhisperAsrDraft,
 } from '@voxel/shared';
@@ -141,32 +142,49 @@ function validateLiveSettings(
 }
 
 // ============================================================================
-// 3. 本地 SenseVoice 配置校验
+// 3. 外部 SenseVoice 服务配置校验
 // ============================================================================
 
-/** k2-fsa SenseVoice 模型包的目录名，例如 sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17。 */
-const SENSE_VOICE_MODEL = /^sherpa-onnx-sense-voice[a-zA-Z0-9._-]{0,90}$/;
+/** 外部服务按模型 ID 选择权重，例如 iic/SenseVoiceSmall 或 sensevoice。 */
+const SENSE_VOICE_MODEL = /^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,199}$/;
 
-/** 离线配置只选择已安装的模型包与识别语言，不会下载任何内容。 */
-export function validateSenseVoiceSettings(value: {
-  [key: string]: unknown;
-}): SenseVoiceAsrSettings {
-  if (typeof value.model !== 'string')
-    throw new AppError('请选择 SenseVoice 模型。');
+/** 地址与密钥复用语音服务的连接校验；SenseVoice 容器与本机部署都允许 HTTP。 */
+export function validateSenseVoiceSettings(
+  value: Record<string, unknown>,
+  previous?: SenseVoiceAsrDraft,
+): SenseVoiceAsrDraft {
   if (
-    value.model !== 'default' &&
-    (!SENSE_VOICE_MODEL.test(value.model) || value.model.includes('..'))
+    typeof value.model !== 'string' ||
+    !SENSE_VOICE_MODEL.test(value.model) ||
+    value.model
+      .split('/')
+      .some((part) => !part || part === '.' || part === '..')
   )
-    throw new AppError('请选择服务器已安装的 SenseVoice 模型。');
+    throw new AppError('请填写有效的 SenseVoice 模型 ID。');
   if (
     value.language !== 'auto' &&
     value.language !== 'zh' &&
     value.language !== 'en'
   )
     throw new AppError('请选择自动、中文或英文识别语言。');
+  const { baseUrl, apiKey } = validateVoiceConnection(
+    value,
+    'speaches',
+    previous
+      ? {
+          type: 'speaches',
+          baseUrl: previous.baseUrl ?? '',
+          apiKey: previous.apiKey ?? '',
+        }
+      : undefined,
+    'SenseVoice',
+  );
   return {
-    model: value.model,
+    ...(baseUrl ? { baseUrl } : {}),
+    model:
+      value.model === 'default' ? DEFAULT_SENSE_VOICE_ASR.model : value.model,
     language: value.language as SenseVoiceLanguage,
+    apiKey,
   };
 }
 
@@ -198,7 +216,10 @@ export function validateAsrService(
       ? validateLiveSettings(value, provider, previous)
       : provider === 'sense-voice'
         ? {
-            ...validateSenseVoiceSettings(value),
+            ...validateSenseVoiceSettings(
+              value,
+              previous?.provider === 'sense-voice' ? previous : undefined,
+            ),
             provider: 'sense-voice' as const,
           }
         : provider === 'whisper'

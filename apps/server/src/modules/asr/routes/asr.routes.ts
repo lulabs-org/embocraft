@@ -93,7 +93,7 @@ export function createAsrRouter(): Router {
    *   get:
    *     security:
    *       - ManagementBearer: []
-   *     summary: 获取当前部署的 Speaches 默认识别接口地址
+   *     summary: 获取部署默认的 Whisper 与 SenseVoice 服务地址
    *     tags: [ASR]
    *     responses:
    *       200:
@@ -101,7 +101,10 @@ export function createAsrRouter(): Router {
    */
   router.get('/voice/asr/defaults', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ baseUrl: env.speechEndpoint() });
+    res.json({
+      baseUrl: env.speechEndpoint(),
+      senseVoiceBaseUrl: env.readSpeech().senseVoiceApiUrl,
+    });
   });
 
   /**

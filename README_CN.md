@@ -66,6 +66,8 @@ pnpm docker:up
 pnpm docker:down
 ```
 
+如需 SenseVoice 识别，请自行部署 OpenAI 兼容的 SenseVoice 容器（例如 FunASR 的 `/v1/audio/transcriptions`），并在启动时设置 `SENSE_VOICE_API_URL`；server 镜像不打包模型，地址留空时 `ASR_PROVIDER=auto` 自动回退到内置 Whisper 服务。
+
 启动完成后：
 
 - **Web 前端**：访问 `http://localhost`

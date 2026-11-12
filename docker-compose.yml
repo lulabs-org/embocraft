@@ -75,15 +75,11 @@ services:
       AGENT_GATEWAY_TOKEN: '${AGENT_GATEWAY_TOKEN:-}'
       AGENT_GATEWAY_ALLOWED_ORIGINS: '${AGENT_GATEWAY_ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}'
       SPEECH_API_URL: '${SPEECH_API_URL:-http://speech:8000/v1}'
-      # 本地 SenseVoice：模型已由 Dockerfile.server 打进镜像，故模型目录指向 /app/models。
+      # SenseVoice 由使用者自行部署的 OpenAI 兼容容器提供；留空时 auto 回退 Whisper。
       ASR_PROVIDER: '${ASR_PROVIDER:-auto}'
-      ASR_MODEL_DIR: '${ASR_MODEL_DIR:-/app/models}'
-      SENSE_VOICE_MODEL: '${SENSE_VOICE_MODEL:-sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17}'
-      ASR_THREADS: '${ASR_THREADS:-2}'
+      SENSE_VOICE_API_URL: '${SENSE_VOICE_API_URL:-}'
     volumes:
       - server_data:/app/.data
-      # 镜像已内置默认模型；如需额外模型包，可只读挂载（会覆盖镜像内的 /app/models）：
-      # - ./models:/app/models:ro
     ports:
       - '${SERVER_PORT:-2567}:2567'
 

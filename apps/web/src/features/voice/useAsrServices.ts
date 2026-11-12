@@ -17,7 +17,7 @@ import {
   type WebAsrService,
 } from './browser-asr-services';
 
-/** 新建配置从服务商默认值开始；服务器内的 SenseVoice 引擎只需一个名称。 */
+/** 新建配置从服务商默认值开始；SenseVoice 与 Whisper 一样填写外部服务地址。 */
 const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
   provider === 'browser'
     ? { provider, name: '', language: 'zh-CN' }
@@ -32,7 +32,13 @@ const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
           apiKey: '',
         }
       : provider === 'sense-voice'
-        ? { ...DEFAULT_SENSE_VOICE_ASR, provider, name: '' }
+        ? {
+            ...DEFAULT_SENSE_VOICE_ASR,
+            provider,
+            name: '',
+            baseUrl: '',
+            apiKey: '',
+          }
         : provider === 'whisper'
           ? {
               ...DEFAULT_WHISPER_ASR,
@@ -43,15 +49,13 @@ const fresh = (provider: AsrProvider = 'bailian'): WebAsrDraft =>
               model: '',
             }
           : { ...DEFAULT_BAILIAN_ASR, provider, name: '', apiKey: '' };
-/** 服务器内引擎不携带密钥，因此编辑时保留全部字段。 */
+/** 浏览器配置不含密钥；其余外部服务在编辑时清空密钥，由用户确认是否沿用。 */
 const clearSecret = (draft: WebAsrDraft): WebAsrDraft =>
-  draft.provider === 'browser' || draft.provider === 'sense-voice'
-    ? draft
-    : { ...draft, apiKey: '' };
+  draft.provider === 'browser' ? draft : { ...draft, apiKey: '' };
 const formFor = (id: string, saved?: WebAsrService) => ({
   id,
   draft: saved
-    ? saved.provider === 'browser' || saved.provider === 'sense-voice'
+    ? saved.provider === 'browser'
       ? { ...saved }
       : { ...saved, apiKey: '' }
     : fresh(),

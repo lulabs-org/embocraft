@@ -1,7 +1,7 @@
 import type WebSocket from 'ws';
 import type {
   BailianAsrDraft,
-  SenseVoiceAsrSettings,
+  SenseVoiceAsrDraft,
   SpeachesModel,
   WhisperAsrDraft,
 } from '@voxel/shared';
@@ -11,7 +11,7 @@ export interface BatchTranscribeOptions {
   contentType: string;
   language: string;
   signal: AbortSignal;
-  settings?: WhisperAsrDraft;
+  settings?: SpeechSettings;
 }
 
 export interface EngineStatus {
@@ -19,11 +19,11 @@ export interface EngineStatus {
   reason?: string;
 }
 
-/** 项目服务器自行运行的引擎所接受的配置；云端配置使用各自的传输通道。 */
-export type SpeechSettings = WhisperAsrDraft | SenseVoiceAsrSettings;
+/** 服务器可选的批处理引擎配置；云端实时服务使用各自的传输通道。 */
+export type SpeechSettings = WhisperAsrDraft | SenseVoiceAsrDraft;
 
 /**
- * 进程内识别引擎：Whisper 走 HTTP，SenseVoice 走 sherpa-onnx。
+ * 批处理语音识别引擎：Whisper 与 SenseVoice 都请求外部 HTTP 服务。
  * 聊天录音与附近语音字幕共用该接口，具体配置由路由器匹配。
  */
 export interface SpeechTranscriberPort {
@@ -46,7 +46,7 @@ export interface SpeechTranscriberPort {
   ): Promise<string>;
 }
 
-/** 向后兼容的别名；批量识别接口现已覆盖本地 SenseVoice。 */
+/** 向后兼容的别名；批处理识别接口同时覆盖 Whisper 与 SenseVoice。 */
 export type BatchTranscriberPort = SpeechTranscriberPort;
 
 /**

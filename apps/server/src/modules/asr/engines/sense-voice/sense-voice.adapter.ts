@@ -1,9 +1,7 @@
-import type {
-  OfflineRecognizerConfig,
-  OfflineRecognizerResult,
-  Waveform,
-} from 'sherpa-onnx-node';
-import type { SenseVoiceAsrSettings } from '@voxel/shared';
+import {
+  DEFAULT_SENSE_VOICE_ASR,
+  type SenseVoiceAsrDraft,
+} from '@voxel/shared';
 import { env } from '../../../../core/config/env';
 import { AppError } from '../../../../core/errors/app-error';
 import {
@@ -12,159 +10,150 @@ import {
   normalizeRecording,
 } from '../../../../core/audio/normalize';
 import { readPcmWav } from '../../../../core/audio/pcm-wav';
-import { runCommand, type CommandRunner } from '../../../../core/audio/command';
 import type {
   BatchTranscribeOptions,
   EngineStatus,
   SpeechSettings,
   SpeechTranscriberPort,
 } from '../../ports';
-import {
-  listSenseVoiceModels,
-  resolveSenseVoiceModel,
-  senseVoiceRoot,
-  type SenseVoiceModel,
-} from './sense-voice.models';
 
-const SAMPLE_RATE = 16000;
 const MAX_TEXT = 240;
 
-/** sherpa-onnx 离线识别器的精简视图，便于测试注入替身。 */
-export type SenseVoiceStream = { acceptWaveform(waveform: Waveform): void };
-export type SenseVoiceDecoder = {
-  setConfig(config: OfflineRecognizerConfig): void;
-  createStream(hotwords?: string): SenseVoiceStream;
-  decodeAsync(stream: SenseVoiceStream): Promise<OfflineRecognizerResult>;
-};
-export type SherpaOfflineModule = {
-  OfflineRecognizer: {
-    createAsync(config: OfflineRecognizerConfig): Promise<SenseVoiceDecoder>;
-  };
-};
-
-async function loadSherpaModule() {
-  const namespace = (await import(
-    'sherpa-onnx-node'
-  )) as unknown as SherpaOfflineModule & { default?: SherpaOfflineModule };
-  // CommonJS 互操作会把导出对象直接暴露，或挂在 default 下。
-  return namespace.OfflineRecognizer ? namespace : namespace.default!;
+/**
+ * 外部 SenseVoice 服务返回的常见形态是 `{ text }`；仅接受这一种，
+ * 避免把服务端错误页或调试字段误当成识别结果广播出去。
+ */
+function readTranscript(value: unknown): string {
+  if (!value || typeof value !== 'object')
+    throw new AppError('SenseVoice 返回了无效的识别结果。', 502);
+  const text = (value as { text?: unknown }).text;
+  if (typeof text !== 'string')
+    throw new AppError('SenseVoice 返回了无效的识别结果。', 502);
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized || /^\[.*\]$/.test(normalized))
+    throw new AppError('没有识别到文字，请重试。', 400, 'no-speech');
+  if (normalized.length > MAX_TEXT)
+    throw new AppError('识别超过 240 字，请分成更短的句子。');
+  return normalized;
 }
 
-/** 已保存配置优先；没有配置时回退到游戏的中/英文选择。 */
-function languageCode(
-  language: string,
-  settings?: Partial<SenseVoiceAsrSettings>,
-) {
-  if (settings?.language) return settings.language;
-  return language === 'en' ? 'en' : 'zh';
-}
-
-function toFloat32Pcm(pcm: Buffer) {
-  const samples = new Float32Array(pcm.length / 2);
-  for (let i = 0; i < samples.length; i++)
-    samples[i] = pcm.readInt16LE(i * 2) / 32768;
-  return samples;
+/** 外部服务按模型 ID 选择权重；`default` 映射到部署文档推荐的 SenseVoice 模型。 */
+function modelName(settings?: SenseVoiceAsrDraft) {
+  const model = settings?.model?.trim();
+  return !model || model === 'default' ? DEFAULT_SENSE_VOICE_ASR.model : model;
 }
 
 /**
- * 基于 sherpa-onnx 的本地离线语音识别（SenseVoice）。
- * 所有请求共用一个 ONNX 会话：加载 int8 图会占用数百 MB，因此切换语言时
- * 直接更新已加载的会话，而不是再创建一个识别器。
+ * 外部 OpenAI 兼容的 SenseVoice 识别适配器。
+ * 推理、模型下载与资源占用都在独立容器内完成，本进程只负责归一化音频、
+ * 拼接请求并解析文本；地址与密钥可按服务配置覆盖，未配置时回退部署默认值。
  */
 export class SenseVoiceAdapter implements SpeechTranscriberPort {
   readonly provider = 'sense-voice' as const;
-  private recognizer?: SenseVoiceDecoder;
-  private loading?: Promise<SenseVoiceDecoder>;
-  private loadedModel?: string;
-  private config?: OfflineRecognizerConfig;
-  private queue: Promise<unknown> = Promise.resolve();
+  private busy = false;
   constructor(
-    private modelRoot = senseVoiceRoot(),
-    private threads = env.readSpeech().asrThreads,
-    private runner: CommandRunner = runCommand,
-    private loadSherpa: () => Promise<SherpaOfflineModule> = loadSherpaModule,
+    private apiUrl?: string,
+    private fetcher: typeof fetch = fetch,
   ) {}
 
-  /** 会话由模型目录决定，与服务级配置无关。 */
-  private async model(settings?: Partial<SenseVoiceAsrSettings>) {
-    return resolveSenseVoiceModel(settings?.model ?? 'default', this.modelRoot);
+  private connection(settings?: SenseVoiceAsrDraft) {
+    const baseUrl = (
+      settings?.baseUrl?.trim() ||
+      this.apiUrl ||
+      env.readSpeech().senseVoiceApiUrl
+    ).replace(/\/+$/, '');
+    if (!baseUrl)
+      throw new AppError(
+        '请配置 SenseVoice 识别服务地址（控制台 Base URL 或 SENSE_VOICE_API_URL）。',
+        503,
+      );
+    return {
+      baseUrl,
+      headers: settings?.apiKey
+        ? { Authorization: `Bearer ${settings.apiKey}` }
+        : undefined,
+    };
   }
 
-  /** 就绪检查只验证模型文件；计算图在首次识别时才加载。 */
   async status(
     settings?: SpeechSettings,
-    _signal?: AbortSignal,
+    signal?: AbortSignal,
   ): Promise<EngineStatus> {
     try {
-      const model = await this.model(settings as SenseVoiceAsrSettings);
-      return {
-        available: true,
-        reason: `本地 SenseVoice（${model.name}）已就绪，录音只在项目服务器内识别，不上传到任何第三方。首次识别会加载模型，可能需要几秒。`,
+      const connection = this.connection(settings as SenseVoiceAsrDraft);
+      const base = connection.baseUrl.replace(/\/v1$/, '');
+      const options = {
+        headers: connection.headers,
+        redirect: 'error' as const,
+        signal: AbortSignal.any([
+          AbortSignal.timeout(3000),
+          ...(signal ? [signal] : []),
+        ]),
       };
-    } catch (error) {
-      if (error instanceof AppError)
-        return { available: false, reason: error.message };
+      options.signal.throwIfAborted();
+      const health = await this.fetcher(`${base}/health`, options).catch(
+        () => null,
+      );
+      if (health && health.ok)
+        return {
+          available: true,
+          reason:
+            'SenseVoice 识别服务可连接。模型在外部容器内离线运行，录音只发送到该服务。',
+        };
+      const models = await this.fetcher(
+        `${connection.baseUrl}/models`,
+        options,
+      ).catch(() => null);
+      if (models && models.ok)
+        return {
+          available: true,
+          reason:
+            'SenseVoice 识别服务可连接。模型在外部容器内离线运行，录音只发送到该服务。',
+        };
       return {
         available: false,
         reason:
-          '本地 SenseVoice 推理组件不可用，请确认服务器已安装 sherpa-onnx-node。',
+          '无法连接 SenseVoice 识别服务，请检查容器地址、模型和访问权限。',
       };
-    }
-  }
-
-  async listModels() {
-    return listSenseVoiceModels(this.modelRoot);
-  }
-
-  private async ensure(model: SenseVoiceModel, language: string) {
-    if (this.recognizer && this.loadedModel === model.model) {
-      this.applyLanguage(language);
-      return this.recognizer;
-    }
-    this.loading ??= (async () => {
-      const sherpa = await this.loadSherpa();
-      const config: OfflineRecognizerConfig = {
-        featConfig: { sampleRate: SAMPLE_RATE, featureDim: 80 },
-        modelConfig: {
-          senseVoice: {
-            model: model.model,
-            language,
-            useInverseTextNormalization: 1,
-          },
-          tokens: model.tokens,
-          numThreads: this.threads,
-          provider: 'cpu',
-          debug: 0,
-        },
-      };
-      const recognizer = await sherpa.OfflineRecognizer.createAsync(config);
-      this.recognizer = recognizer;
-      this.config = config;
-      this.loadedModel = model.model;
-      this.loading = undefined;
-      return recognizer;
-    })();
-    try {
-      return await this.loading;
     } catch (error) {
-      this.loading = undefined;
-      throw error;
+      return {
+        available: false,
+        reason:
+          error instanceof AppError
+            ? error.message
+            : '无法连接 SenseVoice 识别服务，请检查容器地址、模型和访问权限。',
+      };
     }
   }
 
-  /** 可以放心调用：它只改写已加载计算图中的语言条件标记。 */
-  private applyLanguage(language: string) {
-    if (!this.recognizer || !this.config?.modelConfig?.senseVoice) return;
-    if (this.config.modelConfig.senseVoice.language === language) return;
-    this.config.modelConfig.senseVoice.language = language;
-    this.recognizer.setConfig(this.config);
+  /** 只读取远端已安装模型供控制台展示，不触发任何下载。 */
+  async listModels(signal?: AbortSignal): Promise<{ name: string }[]> {
+    try {
+      const { baseUrl, headers } = this.connection();
+      const response = await this.fetcher(`${baseUrl}/models`, {
+        headers,
+        redirect: 'error',
+        signal: AbortSignal.any([
+          AbortSignal.timeout(5000),
+          ...(signal ? [signal] : []),
+        ]),
+      });
+      if (!response.ok) return [];
+      const value = (await response.json()) as { data?: unknown };
+      if (!Array.isArray(value.data)) return [];
+      const names = value.data.flatMap((item) => {
+        const id = (item as { id?: unknown })?.id;
+        return typeof id === 'string' && id ? [id] : [];
+      });
+      return [...new Set(names)].sort().map((name) => ({ name }));
+    } catch {
+      return [];
+    }
   }
 
   async normalize(audio: Buffer, contentType: string, signal: AbortSignal) {
+    // 浏览器快照已是 16 kHz 单声道 PCM，直接转发给外部服务，省去 FFmpeg 进程开销。
     const format = audioFormats[contentType.split(';')[0].trim().toLowerCase()];
-    if (!format || !audio.length || audio.length > MAX_AUDIO_BYTES)
-      throw new AppError('音频格式或大小无效。');
-    // 浏览器上传的快照已是 16 kHz 单声道 PCM，无需再经过 FFmpeg 转换。
     if (format === 'wav') {
       try {
         const { durationMs } = readPcmWav(audio);
@@ -175,13 +164,7 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
         signal.throwIfAborted();
       }
     }
-    return normalizeRecording(
-      audio,
-      contentType,
-      signal,
-      'ffmpeg',
-      this.runner,
-    );
+    return normalizeRecording(audio, contentType, signal);
   }
 
   /** 同时接受选项对象和调度器使用的按位置传参形式。 */
@@ -191,57 +174,100 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
     language?: string,
     signal?: AbortSignal,
     settings?: SpeechSettings,
-  ) {
+  ): Promise<string> {
     const options =
       typeof contentTypeOrOptions === 'string'
         ? {
             contentType: contentTypeOrOptions,
             language: language!,
             signal: signal!,
-            settings: settings as SenseVoiceAsrSettings | undefined,
+            settings: settings as SenseVoiceAsrDraft | undefined,
           }
         : {
             ...contentTypeOrOptions,
             settings: contentTypeOrOptions.settings as
-              | SenseVoiceAsrSettings
+              | SenseVoiceAsrDraft
               | undefined,
           };
+    const format =
+      audioFormats[options.contentType.split(';')[0].trim().toLowerCase()];
+    if (!format)
+      throw new AppError(
+        '不支持的音频格式，请使用 WAV、WebM、MP4 或 Ogg。',
+        415,
+      );
+    if (!audio.length || audio.length > MAX_AUDIO_BYTES)
+      throw new AppError('音频不能为空且不能超过 5 MiB。', 413);
     if (!['auto', 'zh', 'en'].includes(options.language))
       throw new AppError('只支持自动、中文或英文识别。');
-    options.signal.throwIfAborted();
-    const normalized = await this.normalize(
-      audio,
-      options.contentType,
-      options.signal,
-    );
-    const { pcm } = readPcmWav(normalized.bytes);
-    const model = await this.model(options.settings);
-    const requested = languageCode(options.language, options.settings);
-    return this.serialize(async () => {
+    if (this.busy)
+      throw new AppError('服务器正在识别另一段录音，请稍后重试。', 429);
+
+    this.busy = true;
+    try {
       options.signal.throwIfAborted();
-      const recognizer = await this.ensure(model, requested);
+      const status = await this.status(options.settings, options.signal);
       options.signal.throwIfAborted();
-      const stream = recognizer.createStream();
-      stream.acceptWaveform({
-        samples: toFloat32Pcm(pcm),
-        sampleRate: SAMPLE_RATE,
-      });
-      // 解码在原生线程池中执行，世界循环不会被阻塞。
-      const text = (await recognizer.decodeAsync(stream)).text
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (!text)
-        throw new AppError('没有识别到文字，请重试。', 400, 'no-speech');
-      if (text.length > MAX_TEXT)
-        throw new AppError(`识别超过 ${MAX_TEXT} 字，请分成更短的句子。`);
-      return text;
-    });
+      if (!status.available)
+        throw new AppError(status.reason ?? 'SenseVoice 服务不可用', 503);
+      const normalized = await this.normalize(
+        audio,
+        options.contentType,
+        options.signal,
+      );
+      return await this.transcribeRemote(
+        normalized.bytes,
+        options.language,
+        options.signal,
+        options.settings,
+      );
+    } catch (error) {
+      if (error instanceof AppError || options.signal.aborted) throw error;
+      throw new AppError('请求 SenseVoice 识别服务失败或超时。', 502);
+    } finally {
+      this.busy = false;
+    }
   }
 
-  /** 一个 ONNX 会话一次只解码一句话。 */
-  private serialize<T>(task: () => Promise<T>) {
-    const run = this.queue.then(task, task);
-    this.queue = run.catch(() => undefined);
-    return run;
+  private async transcribeRemote(
+    audio: Buffer,
+    language: string,
+    signal: AbortSignal,
+    settings?: SenseVoiceAsrDraft,
+  ) {
+    const form = new FormData();
+    form.append(
+      'file',
+      new Blob([new Uint8Array(audio)], { type: 'audio/wav' }),
+      'audio.wav',
+    );
+    form.append('model', modelName(settings));
+    // auto 交给模型自行检测；显式语言才传参，兼容不支持该字段的服务端。
+    if (language !== 'auto') form.append('language', language);
+    form.append('response_format', 'json');
+
+    const connection = this.connection(settings);
+    const response = await this.fetcher(
+      `${connection.baseUrl}/audio/transcriptions`,
+      {
+        method: 'POST',
+        body: form,
+        signal,
+        headers: connection.headers,
+        redirect: 'error',
+      },
+    ).catch((error) => {
+      if (signal.aborted) throw error;
+      throw new AppError('请求 SenseVoice 识别服务失败或超时。', 502);
+    });
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new AppError(
+        `SenseVoice 识别服务返回错误 (HTTP ${response.status})。`,
+        502,
+      );
+    }
+    return readTranscript(await response.json());
   }
 }

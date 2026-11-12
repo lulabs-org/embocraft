@@ -5,7 +5,7 @@
 ::: tip 核心架构概览
 
 - **TTS 语音合成**：支持本地轻量 Piper 引擎、阿里云百炼 Qwen-TTS、兼容 OpenAI Speech API 以及前端浏览器 Web Speech 原生朗读。
-- **ASR 语音识别**：支持本地离线 SenseVoice、本地自托管 Whisper、阿里云实时语音识别（Fun-ASR / Paraformer）以及前端 Web Speech 识别。
+- **ASR 语音识别**：支持外部 SenseVoice 服务、本地自托管 Whisper、阿里云实时语音识别（Fun-ASR / Paraformer）以及前端 Web Speech 识别。
 - **零秘钥泄露**：配置文件以 `0600` 权限保存在服务端，浏览器仅接收脱敏元数据（`hasApiKey: boolean`）。
   :::
 
@@ -100,7 +100,7 @@ graph LR
 
 ```mermaid
 graph TD
-    ASR[语音识别 ASR 引擎] --> SenseVoice[本地 SenseVoice<br>项目服务器离线推理 / 无密钥]
+    ASR[语音识别 ASR 引擎] --> SenseVoice[外部 SenseVoice<br>OpenAI 兼容容器 / 用户自行部署]
     ASR --> Whisper[自托管 Whisper<br>多模型 / 参数调优 / 自 托管服务]
     ASR --> AliyunASR[阿里云实时识别<br>Fun-ASR / Paraformer / 流式毫秒级反馈]
     ASR --> BrowserASR[浏览器原生识别<br>Web Speech API / 33 种语言]
@@ -110,14 +110,14 @@ graph TD
 
 “附近语音”“语音输入”“语音消息转文字”的服务器识别服务分配统一保存到数据库，管理员保存一次后，所有浏览器均可读取。游戏页面在打开、恢复网络和重新获得焦点时自动读取分配，无需登录或打开控制台。公开读取接口仅返回服务 ID、名称和类型，不返回密钥或模型参数；修改接口仍需管理员认证。
 
-旧数据库未指定分配时优先使用已有 Whisper 服务，不依赖服务名称。没有 Whisper 时，附近语音和语音输入使用首个已有识别服务；语音消息转文字仍需 Whisper。删除已分配服务后按相同规则回退。浏览器自带 Web Speech 的配置与个人分配继续只保存在当前浏览器，且优先于服务器分配。
+旧数据库未指定分配时优先使用已有 Whisper 服务，不依赖服务名称。没有 Whisper 时，附近语音和语音输入使用首个已有识别服务；语音消息转文字需要 Whisper 或 SenseVoice。删除已分配服务后按相同规则回退。浏览器自带 Web Speech 的配置与个人分配继续只保存在当前浏览器，且优先于服务器分配。
 
 ### 1. 阿里云实时语音识别
 
 - **模型选项**：`fun-asr-realtime`（默认推荐）与 `paraformer-realtime-v2`。
 - **通信协议**：通过项目服务端 WebSocket 代理流式连接阿里云 DashScope，规避前端直接暴露 API Key。
 - **断句与确认**：流式推送实时 `partial` 临时字幕（带智能文本纠错），收到服务端 `sentence_end` 事件时正式提交整句结果。
-- **计费与适用范围**：录音经项目服务器发送给阿里云，按服务商规则计费。保存识别服务后，可分别指定聊天输入和附近语音使用的服务；聊天语音录制需要支持文件转写的 Whisper 服务。
+- **计费与适用范围**：录音经项目服务器发送给阿里云，按服务商规则计费。保存识别服务后，可分别指定聊天输入和附近语音使用的服务；聊天语音录制需要支持文件转写的 Whisper 或 SenseVoice 服务。
 
 ### 2. 自托管 Whisper 引擎
 
@@ -139,18 +139,18 @@ graph TD
 
 前端音量门槛仅用于分句，不能替代语音服务的人声检测。上述措施减少误识别，不能保证所有背景声都被过滤。
 
-### 3. 本地 SenseVoice 离线识别
+### 3. 外部 SenseVoice 识别服务
 
-项目服务器直接加载 sherpa-onnx 的 SenseVoice 模型，录音不出服务器，也不需要地址或 API Key。运行 `pnpm voice:sensevoice` 可从 k2-fsa 发布页下载默认模型包（约 150 MiB）并解压到 `models/`；也可以手动把 `sherpa-onnx-sense-voice-*` 模型目录放入 `models/`（含 `tokens.txt` 与 `model.int8.onnx` 或 `model.onnx`）。模型就绪后，控制台即可添加 **本地 SenseVoice** 服务并选择语言（自动 / 中文 / 英文）。Docker 部署时模型由 `Dockerfile.server` 打进 server 镜像（构建上下文只放行 `models/sherpa-onnx-sense-voice-*`），运行时无需再挂载；未下载模型时镜像照常构建并自动回退 Whisper。
+SenseVoice 与 Whisper 一样通过 OpenAI 兼容的 `/v1/audio/transcriptions` 接口调用独立容器，项目 server 进程不再加载 ONNX 模型或原生插件。使用者可自行部署 FunASR（`funasr-server`、`modelscope/funasr` 等兼容服务），然后在控制台填写地址、模型 ID（如 `iic/SenseVoiceSmall`）、可选 API Key 与识别语言；地址留空时跟随部署默认值。
 
-| 环境变量            | 默认值           | 作用说明                                                                             |
-| :------------------ | :--------------- | :----------------------------------------------------------------------------------- |
-| `ASR_PROVIDER`      | `auto`           | `auto` 有模型时优先 SenseVoice，否则回退 Whisper；也可强制 `whisper` / `sense-voice` |
-| `ASR_MODEL_DIR`     | 项目根 `models/` | 模型包搜索目录                                                                       |
-| `SENSE_VOICE_MODEL` | 第一份已装模型   | 默认使用的模型目录名                                                                 |
-| `ASR_THREADS`       | `2`              | 推理线程数（1–16）                                                                   |
+| 环境变量 | 默认值 | 作用说明 |
+| :------------------ | :----- | :------------------------------------------------------------------------------- |
+| `ASR_PROVIDER` | `auto` | 配置了 `SENSE_VOICE_API_URL` 时优先 SenseVoice，否则回退 Whisper；也可强制 `whisper` / `sense-voice` |
+| `SENSE_VOICE_API_URL` | 空 | 外部 SenseVoice 服务地址（含 `/v1`）；留空时每份 SenseVoice 配置需自行填写地址 |
 
-保存的本地 SenseVoice 服务不保存密钥，公开列表也不会出现 `hasApiKey`；聊天录音与附近语音选中该服务时直接走项目服务器推理。首次识别会加载 ONNX 图，可能需要几秒；同一进程内只保留一个识别会话并串行解码。若未安装模型，能力探测会提示放置目录，不影响 Whisper 回退。
+Docker 部署时 server 镜像不打包任何 ASR 模型；`docker-compose.yml` 默认把 `SENSE_VOICE_API_URL` 透传给服务端，容器由使用者自行部署并确保与 server 在同一网络，例如 `SENSE_VOICE_API_URL=http://sensevoice:8000/v1`。服务字段为空或不可达时，`auto` 不会选用 SenseVoice，语音识别回退到 Speaches Whisper。
+
+识别请求会先归一化为 16 kHz 单声道 WAV（浏览器录音快照直接转发，不再调用 FFmpeg），显式选择中文/英文时才发送 `language`，`auto` 交给模型检测。模型下载、首次加载与资源占用全部由外部容器承担；能力探测通过该服务的 `/health` 或 `/v1/models` 判断是否就绪，保存的服务配置只保留地址、模型、语言与可选密钥，公开列表仅返回 `hasApiKey`。
 
 ### 4. 浏览器语音识别（Web Speech API）
 

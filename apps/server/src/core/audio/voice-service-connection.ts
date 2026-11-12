@@ -8,6 +8,8 @@ export function validateVoiceConnection(
   input: Record<string, unknown>,
   type: VoiceServiceType,
   previous?: Connection,
+  /** 错误文案中使用的服务名称；SenseVoice 等外部 ASR 复用同一连接校验。 */
+  label = 'Speaches',
 ): Connection {
   if (type === 'browser') return { type, baseUrl: '', apiKey: '' };
   const str = (key: string, max: number) => {
@@ -41,7 +43,7 @@ export function validateVoiceConnection(
     )
       throw new AppError(
         type === 'speaches'
-          ? 'Speaches 接口须为 HTTP 或 HTTPS 地址，不能包含凭据或查询参数。'
+          ? `${label} 接口须为 HTTP 或 HTTPS 地址，不能包含凭据或查询参数。`
           : '语音接口须为 HTTPS 或本机 HTTP 地址，不能包含凭据或查询参数。',
       );
     baseUrl = url.href.replace(/\/+$/, '');

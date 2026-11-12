@@ -26,8 +26,7 @@ export function toAsrServiceView({
   uses: _uses,
   ...value
 }: SavedService): AsrServiceView {
-  // 服务器内引擎本身不持有密钥，因此按保存时的配置原样返回。
-  if (value.provider === 'sense-voice') return value;
+  // 外部服务可能配置密钥；与 Whisper 一样只返回是否已配置。
   const { apiKey, ...settings } = value;
   return { ...settings, hasApiKey: !!apiKey };
 }

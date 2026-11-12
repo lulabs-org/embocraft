@@ -36,26 +36,31 @@ export type LiveAsrView = {
     hasApiKey: boolean;
   };
 }[LiveAsrProvider];
-/** 运行在项目服务器内的离线 SenseVoice；无需地址、模型下载或 API Key。 */
+/** 外部 OpenAI 兼容的 SenseVoice 识别服务；模型与推理资源由该服务自行管理。 */
 export type SenseVoiceLanguage = 'auto' | 'zh' | 'en';
 export type SenseVoiceAsrSettings = {
+  baseUrl?: string;
   model: string;
   language: SenseVoiceLanguage;
 };
+export type SenseVoiceAsrDraft = SenseVoiceAsrSettings & { apiKey?: string };
+export type SenseVoiceAsrView = SenseVoiceAsrSettings & {
+  hasApiKey?: boolean;
+};
 export const DEFAULT_SENSE_VOICE_ASR: SenseVoiceAsrSettings = {
-  model: 'default',
+  model: 'iic/SenseVoiceSmall',
   language: 'zh',
 };
 export type AsrProviderDraft =
   | LiveAsrDraft
   | (BailianAsrDraft & { provider?: 'bailian'; name: string })
   | (WhisperAsrDraft & { provider: 'whisper'; name: string })
-  | (SenseVoiceAsrSettings & { provider: 'sense-voice'; name: string });
+  | (SenseVoiceAsrDraft & { provider: 'sense-voice'; name: string });
 export type AsrProviderView =
   | LiveAsrView
   | (BailianAsrView & { provider?: 'bailian'; id: string; name: string })
   | (WhisperAsrView & { provider: 'whisper'; id: string; name: string })
-  | (SenseVoiceAsrSettings & {
+  | (SenseVoiceAsrView & {
       provider: 'sense-voice';
       id: string;
       name: string;

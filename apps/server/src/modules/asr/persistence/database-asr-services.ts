@@ -12,19 +12,18 @@ import type { AsrRepositoryPort } from '../ports';
 
 function providerData(value: SavedService) {
   const isWhisper = value.provider === 'whisper';
+  // Whisper 与 SenseVoice 都连接外部 HTTP 服务，因此都需要保存地址与可选密钥。
+  const isRemote = isWhisper || value.provider === 'sense-voice';
   const isBailian =
     value.provider === 'bailian' || value.provider === undefined;
   return {
     name: value.name,
     provider: value.provider ?? 'bailian',
     model: value.model,
-    // 服务器内引擎不保存密钥，该列统一留空。
-    apiKey: encryptSecret(
-      value.provider === 'sense-voice' ? '' : (value.apiKey ?? ''),
-    ),
+    apiKey: encryptSecret(value.apiKey ?? ''),
     region: isBailian ? value.region : null,
     workspaceId: isBailian ? value.workspaceId : null,
-    baseUrl: isWhisper ? (value.baseUrl ?? '') : null,
+    baseUrl: isRemote ? (value.baseUrl ?? '') : null,
     temperature: isWhisper ? (value.temperature ?? 0) : null,
     prompt: isWhisper ? (value.prompt ?? '') : null,
     language: value.provider === 'sense-voice' ? value.language : null,
@@ -36,8 +35,7 @@ function configuration(value: SavedService) {
     value.name,
     value.provider ?? 'bailian',
     value.model,
-    // 服务器内引擎从不持久化密钥，因此按空值比较。
-    value.provider === 'sense-voice' ? '' : (value.apiKey ?? ''),
+    value.apiKey ?? '',
   ];
   if (value.provider === 'whisper')
     return JSON.stringify([
@@ -49,7 +47,7 @@ function configuration(value: SavedService) {
   if (value.provider === 'bailian' || value.provider === undefined)
     return JSON.stringify([...common, value.region, value.workspaceId ?? '']);
   if (value.provider === 'sense-voice')
-    return JSON.stringify([...common, value.language]);
+    return JSON.stringify([...common, value.baseUrl ?? '', value.language]);
   return JSON.stringify(common);
 }
 
@@ -83,13 +81,15 @@ export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
         };
       }
       if (row.provider === 'sense-voice') {
-        // 服务器内引擎不解密密钥；历史记录默认使用中文。
+        // 外部服务与 Whisper 一样保存地址和可选密钥；历史记录默认使用中文。
         return {
           id: row.id,
           name: row.name,
           provider: 'sense-voice',
           model: row.model,
+          baseUrl: row.baseUrl ?? '',
           language: (row.language || 'zh') as SenseVoiceLanguage,
+          apiKey: decryptSecret(row.apiKey),
           ...(uses ? { uses } : {}),
         };
       }
@@ -150,8 +150,13 @@ export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
     }
     const assignments = values.flatMap((value) =>
       (value.uses ?? []).map((use) => {
-        if (use === 'clip' && value.provider !== 'whisper')
-          throw new Error('Clip recognition requires Whisper.');
+        // Whisper 与 SenseVoice 都走服务器音频接口，均支持语音消息转文字。
+        if (
+          use === 'clip' &&
+          value.provider !== 'whisper' &&
+          value.provider !== 'sense-voice'
+        )
+          throw new Error('Clip recognition requires Whisper or SenseVoice.');
         return { use, providerId: value.id };
       }),
     );

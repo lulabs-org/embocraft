@@ -5,7 +5,7 @@ import { AppError } from '../../../core/errors/app-error';
 import { asyncRoute } from '../../../core/http/middleware/async-route';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
 import { createDefaultSpeechStatus } from '../../tts';
-import { listSenseVoiceModels } from '../engines';
+import { senseVoiceSpeech } from '../engines';
 import { settingsFor, speechRouter } from '../engines/speech-router';
 import { asrService } from '../services/asr.service';
 
@@ -68,11 +68,13 @@ export function installCapabilitiesRoutes(router: Router) {
             : await asrService.get(String(req.query.serviceId));
         // 云端配置不是服务器内引擎，engineFor 会直接拒绝。
         const engine = await speechRouter.engineFor(selected);
-        // 已安装模型列表是全局信息，因此即使还没保存 SenseVoice 配置，
-        // 控制台也能提供已安装的模型。
+        // 已安装模型列表来自外部 SenseVoice 服务；仅在实际使用 SenseVoice 时查询，
+        // 避免 Whisper 部署因 SenseVoice 不可达而多等一次超时。
         const [local, senseVoiceModels] = await Promise.all([
           engine.status(settingsFor(selected)),
-          listSenseVoiceModels(),
+          engine.provider === 'sense-voice'
+            ? senseVoiceSpeech.listModels()
+            : Promise.resolve([]),
         ]);
         res.json({
           local,
