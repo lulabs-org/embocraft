@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ChatStore } from './chat-store';
 import type { PrismaClient } from '@prisma/client';
-import * as database from '../../../core/database/client';
 
 describe('ChatStore', () => {
   it('records player and chat messages with recipients in db', async () => {
@@ -62,24 +61,23 @@ describe('ChatStore', () => {
     });
   });
 
-  it('handles gracefully when db is not provided', async () => {
-    const getClient = vi
-      .spyOn(database, 'getDatabaseClient')
-      .mockImplementation(() => {
-        throw new Error('database unavailable');
-      });
-    const store = new ChatStore(undefined);
-    expect(
-      await store.recordPlayer({ name: 'Alice', kind: 'human' }),
-    ).toBeUndefined();
-    await expect(
-      store.recordMessage({
-        senderName: 'Alice',
-        scope: 'public',
-        kind: 'text',
-        text: 'Hello',
-      }),
-    ).resolves.not.toThrow();
-    getClient.mockRestore();
+  it('reports write failures while keeping chat available', async () => {
+    const error = new Error('database unavailable');
+    const failingDb = {
+      player: { upsert: vi.fn().mockRejectedValue(error) },
+    } as unknown as PrismaClient;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const store = new ChatStore(failingDb);
+      expect(
+        await store.recordPlayer({ name: 'Alice', kind: 'human' }),
+      ).toBeUndefined();
+      expect(log).toHaveBeenCalledWith(
+        'Failed to record player persistence:',
+        error,
+      );
+    } finally {
+      log.mockRestore();
+    }
   });
 });

@@ -1,10 +1,10 @@
+import '../helpers/database-env';
 import { delay, Session, until } from '@voxel/agent-runtime';
 import type { ChatData } from '@voxel/shared';
 import assert from 'node:assert/strict';
 import { WhisperAdapter } from '../../src/modules/asr';
 import { createTestServer } from '../helpers/test-server';
 
-process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5187';
 const speech = new WhisperAdapter();
 const server = await createTestServer({

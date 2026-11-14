@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import {
   createAgentRuntime,
   houseBlocks,
@@ -10,7 +11,6 @@ import assert from 'node:assert/strict';
 import { toolResponse } from '../../../../tests/support/pi-response';
 import { createTestServer } from '../helpers/test-server';
 
-process.env.DATABASE_URL = '';
 const server = await createTestServer();
 let session: Session | undefined;
 try {

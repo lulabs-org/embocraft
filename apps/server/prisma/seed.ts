@@ -1,4 +1,4 @@
-import { createDatabaseClient } from '../src/core/database/client';
+import { db as prisma } from '../src/core/database/client';
 import {
   DEFAULT_ASR_PROVIDER,
   DEFAULT_CHARACTER,
@@ -9,7 +9,6 @@ import type { Prisma } from '@prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required for seeding.');
-const prisma = createDatabaseClient(connectionString);
 
 async function main() {
   for (const provider of DEFAULT_PROVIDERS) {

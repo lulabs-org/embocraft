@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { delay, Session, until } from '@voxel/agent-runtime';
 
 import type {
@@ -24,7 +25,6 @@ import { createTestServer } from '../helpers/test-server';
 
 import { validatePcmWav } from '../../src/core/audio/pcm-wav';
 
-process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5191';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-voice-integration-'));
 const pcm = Buffer.alloc(32044);

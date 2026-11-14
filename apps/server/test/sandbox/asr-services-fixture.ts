@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { createTestServer } from '../helpers/test-server';
 import { WhisperAdapter } from '../../src/modules/asr';
 // UI fixture only: temporary settings, deterministic transcription, no cloud/model credentials.

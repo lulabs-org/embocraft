@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { toolResponse } from '../../../../tests/support/pi-response';
 import {
   bootstrapProviders,
@@ -12,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AICharacterOrchestrator } from '../../src/modules/ai-characters';
 
-process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5189';
 const dir = await mkdtemp(join(tmpdir(), 'agent-console-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;

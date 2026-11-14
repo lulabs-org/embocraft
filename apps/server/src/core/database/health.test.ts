@@ -14,8 +14,7 @@ const db = vi.hoisted(() => ({
   asrProvider: { findFirst: vi.fn() },
   asrAssignment: { findFirst: vi.fn() },
 }));
-const createClient = vi.hoisted(() => vi.fn());
-vi.mock('@prisma/client', () => ({ PrismaClient: createClient }));
+vi.mock('./client', () => ({ db }));
 
 const localUrl =
   'postgresql://voxel:secret@127.0.0.1:55432/voxel?schema=public';
@@ -23,7 +22,6 @@ const localUrl =
 describe('database startup diagnostics', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    createClient.mockImplementation(() => db);
     db.$connect.mockResolvedValue(undefined);
     db.$disconnect.mockResolvedValue(undefined);
     db.world.findFirst.mockResolvedValue(null);
@@ -44,7 +42,7 @@ describe('database startup diagnostics', () => {
     vi.restoreAllMocks();
   });
 
-  it('checks connectivity and schema without modifying the world', async () => {
+  it('checks connectivity and schema while keeping the shared client connected', async () => {
     await checkStartupDatabase();
     expect(db.$connect).toHaveBeenCalledOnce();
     expect(db.world.findFirst).toHaveBeenCalledWith({ select: { id: true } });
@@ -63,16 +61,17 @@ describe('database startup diagnostics', () => {
     expect(db.asrAssignment.findFirst).toHaveBeenCalledWith({
       select: { use: true },
     });
-    expect(db.$disconnect).toHaveBeenCalledOnce();
+    expect(db.$disconnect).not.toHaveBeenCalled();
   });
 
-  it('sanitizes client construction failures before a connection exists', async () => {
-    createClient.mockImplementation(() => {
-      throw new Error(`sensitive connection: ${localUrl}`);
-    });
-    await expect(checkStartupDatabase()).rejects.toThrow('数据库启动检查失败');
-    await expect(checkStartupDatabase()).rejects.not.toThrow('secret');
-    expect(db.$disconnect).not.toHaveBeenCalled();
+  it('sanitizes connection failures and releases the shared client', async () => {
+    db.$connect.mockRejectedValue(
+      new Error(`sensitive connection: ${localUrl}`),
+    );
+    const error = await checkStartupDatabase().catch((error: Error) => error);
+    expect((error as Error).message).toContain('数据库启动检查失败');
+    expect((error as Error).message).not.toContain('secret');
+    expect(db.$disconnect).toHaveBeenCalledOnce();
   });
 
   it('rejects an unreachable database with manual recovery steps and no credentials', async () => {
@@ -103,10 +102,10 @@ describe('database startup diagnostics', () => {
     await expect(checkStartupDatabase()).rejects.toThrow('身份验证');
   });
 
-  it('requires a configured database without creating a client', async () => {
+  it('requires a configured database before connecting', async () => {
     vi.stubEnv('DATABASE_URL', '');
     await expect(checkStartupDatabase()).rejects.toThrow('DATABASE_URL');
-    expect(createClient).not.toHaveBeenCalled();
+    expect(db.$connect).not.toHaveBeenCalled();
   });
 
   it('does not suggest starting the project database for an external database', () => {

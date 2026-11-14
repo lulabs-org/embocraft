@@ -1,6 +1,5 @@
 import { env } from '../config/env';
-import type { PrismaClient } from '@prisma/client';
-import { createDatabaseClient } from './client';
+import { db } from './client';
 
 export function databaseStartupMessage(error: unknown, databaseUrl: string) {
   const value = error as { code?: string; errorCode?: string } | null;
@@ -63,15 +62,14 @@ export function databaseStartupMessage(error: unknown, databaseUrl: string) {
   ].join('\n');
 }
 
-export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
+export async function checkStartupDatabase() {
+  const databaseUrl = env.databaseUrl();
   if (!databaseUrl) {
     throw new Error(
       '[启动失败] 必须配置 DATABASE_URL 并运行 pnpm db:migrate。',
     );
   }
-  let db: PrismaClient | undefined;
   try {
-    db = createDatabaseClient(databaseUrl);
     await db.$connect();
     // Read-only check before Colyseus creates a room and logs initialization errors.
     await db.world.findFirst({ select: { id: true } });
@@ -84,10 +82,9 @@ export async function checkStartupDatabase(databaseUrl = env.databaseUrl()) {
     await db.asrProvider.findFirst({ select: { id: true } });
     await db.asrAssignment.findFirst({ select: { use: true } });
   } catch (error) {
+    await db.$disconnect().catch(() => {});
     // Raw database errors can contain credentials; expose only the sanitized message.
     // eslint-disable-next-line preserve-caught-error
     throw new Error(databaseStartupMessage(error, databaseUrl));
-  } finally {
-    await db?.$disconnect().catch(() => {});
   }
 }

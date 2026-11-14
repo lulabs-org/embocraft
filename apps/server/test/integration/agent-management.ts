@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { Session, until, type Observation } from '@voxel/agent-runtime';
 
 import assert from 'node:assert/strict';
@@ -17,7 +18,6 @@ import {
 import { createTestServer } from '../helpers/test-server';
 
 import type { AICharacterView } from '@voxel/shared';
-process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5187';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-manager-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;

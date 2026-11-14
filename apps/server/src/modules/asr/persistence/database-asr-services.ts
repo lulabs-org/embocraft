@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { AsrUse, BailianAsrSettings } from '@voxel/shared';
-import { getDatabaseClient } from '../../../core/database/client';
+import { db as sharedDb } from '../../../core/database/client';
 import { decryptSecret, encryptSecret } from '../../../core/database/secrets';
 import { AppError } from '../../../core/errors/app-error';
 import type { SavedService } from '../domain';
@@ -38,11 +38,7 @@ function configuration(value: SavedService) {
 
 /** Persists ASR definitions; active recordings stay in AsrService. */
 export class DatabaseAsrServicePersistence implements AsrRepositoryPort {
-  constructor(private readonly customDb?: PrismaClient) {}
-
-  private get db(): PrismaClient {
-    return this.customDb ?? getDatabaseClient();
-  }
+  constructor(private readonly db: PrismaClient = sharedDb) {}
 
   private async read(
     db: Pick<Prisma.TransactionClient, 'asrProvider'>,

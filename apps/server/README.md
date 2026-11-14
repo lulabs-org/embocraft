@@ -8,9 +8,8 @@
 - `createServer` 检查数据库配置、加载本地服务配置并装配 Agent、世界、HTTP 和 WebSocket。`listen()` 绑定端口、创建世界，然后恢复 Agent；端口为 0 时，内部 Agent 连接使用实际分配的端口。
 - `close()` 可重复调用。先关闭 Agent 与 Colyseus 房间，再终止 ASR WebSocket、HTTP/SSE 连接并释放存储；启动失败也走同一清理路径。
 - 仍为单进程单世界模型。Colyseus 的 matchMaker 与房间占用状态属于进程；不要在同一进程同时创建多个服务器。测试中的多个世界应顺序关闭后再创建，或放在独立进程中。
-- PostgreSQL 启动与迁移继续由开发者显式执行。配置了数据库但不可用时给出诊断和恢复命令，不自动启动数据库；生产启动未配置 `DATABASE_URL` 时会报错。测试可注入存储与归档依赖使用内存世界。
-- 数据库客户端与 Pg 连接池统一由 `core/database/client.ts` 创建。`core/database/health.ts` 使用独立短连接完成启动探活并释放；`createServer` 创建一个运行时客户端，供默认的 World、Provider、联合存档及 TTS/ASR 存储共享，待 Agent、房间和网络连接关闭后统一断开，不使用进程级单例。
-- `WorldStore(url)` 保留独立创建和关闭客户端的行为，`WorldStore('')` 保留内存模式；通过第二个参数注入客户端时只借用连接，`close()` 不断开它，由注入方负责释放。`ServerOptions.worldStore` 等测试注入接口保持不变。
+- PostgreSQL 启动与迁移继续由开发者显式执行。配置了数据库但不可用时给出诊断和恢复命令，不自动启动数据库；生产启动未配置 `DATABASE_URL` 时会报错。数据库集成测试使用专用测试库，业务单元测试可显式提供测试存储与归档。
+- `core/database/client.ts` 直接创建并导出一个 Prisma 客户端 `db`，各存储默认使用它；不再提供客户端工厂、全局指针管理或代理访问。入口先加载环境变量，再加载服务器模块。启动检查复用 `db`；检查失败时释放连接，正常关闭时待 Agent、房间和网络连接停止后调用 `db.$disconnect()`。World 存储只使用 PostgreSQL，不自行创建或关闭连接，也不回退到内存。测试在加载客户端前设置专用的 `TEST_DATABASE_URL`，单元测试可向存储构造函数传入测试客户端。
 
 ## 依赖方向
 

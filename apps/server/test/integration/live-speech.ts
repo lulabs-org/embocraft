@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { createTestServer } from '../helpers/test-server';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
