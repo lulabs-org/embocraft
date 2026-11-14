@@ -2,7 +2,6 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { expect, it, vi } from 'vitest';
-import { bindCharacterOrchestrator } from '../application/character-orchestrator';
 import type {
   AICharacterRoutePort,
   CharacterDetail,
@@ -10,7 +9,7 @@ import type {
 } from '../ports';
 import { createAICharacterRouter } from './ai-characters.routes';
 
-it('uses the query port supplied to the router for lists, details, and logs', async () => {
+it('uses the supplied query and management ports without sharing another router’s manager', async () => {
   const detail = { id: 'character', taskIdentity: null } as CharacterDetail;
   const queries: CharacterQueryPort = {
     list: vi.fn(async () => [detail]),
@@ -20,12 +19,20 @@ it('uses the query port supplied to the router for lists, details, and logs', as
       total: 1,
     })),
   };
-  const release = bindCharacterOrchestrator({
+  const manager = {
     events: { version: 7 },
     sessionId: () => 'session',
-  } as unknown as AICharacterRoutePort);
+  } as unknown as AICharacterRoutePort;
   const app = express();
-  app.use(createAICharacterRouter(queries));
+  app.use(
+    '/other',
+    createAICharacterRouter(queries, {
+      ...manager,
+      events: { version: 12 },
+      sessionId: () => 'other-session',
+    }),
+  );
+  app.use(createAICharacterRouter(queries, manager));
   const server = app.listen(0, '127.0.0.1');
   try {
     await once(server, 'listening');
@@ -48,8 +55,14 @@ it('uses the query port supplied to the router for lists, details, and logs', as
     expect(queries.list).toHaveBeenCalledOnce();
     expect(queries.get).toHaveBeenCalledWith('character');
     expect(queries.logs).toHaveBeenCalledWith('character', 1, 0);
+    expect(
+      await (await fetch(`${base}/other/ai-characters/character`)).json(),
+    ).toEqual({
+      ...detail,
+      sessionId: 'other-session',
+      resourceVersion: 12,
+    });
   } finally {
-    release();
     server.closeAllConnections();
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),

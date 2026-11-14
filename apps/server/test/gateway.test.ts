@@ -8,7 +8,12 @@ import {
   UnknownOutcome,
   type SocketLike,
 } from '@voxel/shared/management';
-import { GatewayAuth, gatewaySocket } from '../src/modules/gateway';
+import {
+  GatewayAuth,
+  gatewaySocket,
+  installGatewaySocket,
+} from '../src/modules/gateway';
+import type { SocketRoutes } from '../src/core/transport/socket-routes';
 import { ConsoleSyncEvents } from '../src/modules/console-sync';
 import { EventEmitter } from 'node:events';
 describe('gateway command boundary', () => {
@@ -141,6 +146,43 @@ const hello = {
   client: 'web',
   token: 'fixture-gateway-token-for-tests',
 };
+it('keeps gateway installations subscribed to their own event sources', () => {
+  const auth = new GatewayAuth({
+    token: hello.token,
+    origins: ['http://localhost'],
+  });
+  const events = [new ConsoleSyncEvents(), new ConsoleSyncEvents()];
+  const routes: SocketRoutes[] = [new Map(), new Map()];
+  const sockets = [new ServerSocket(), new ServerSocket()];
+  for (let i = 0; i < routes.length; i++) {
+    installGatewaySocket(routes[i], auth, events[i]);
+  }
+  try {
+    for (let i = 0; i < routes.length; i++) {
+      routes[i].get('/ai-characters/gateway')!(
+        sockets[i] as unknown as Parameters<typeof gatewaySocket>[2],
+        { headers: { origin: 'http://localhost' } } as Parameters<
+          typeof gatewaySocket
+        >[3],
+      );
+      sockets[i].frame(hello);
+    }
+    events[0].publish('characters', ['first']);
+    expect(sockets[0].frames.at(-1)).toMatchObject({
+      event: 'changed',
+      data: { characterIds: ['first'] },
+    });
+    expect(sockets[1].frames).toHaveLength(2);
+    events[1].publish('characters', ['second']);
+    expect(sockets[1].frames.at(-1)).toMatchObject({
+      event: 'changed',
+      data: { characterIds: ['second'] },
+    });
+    expect(sockets[0].frames).toHaveLength(3);
+  } finally {
+    for (const socket of sockets) socket.close(1000);
+  }
+});
 it('rejects missing handshake, unsupported version, Origin, malformed/oversize frames and handshake timeout', () => {
   vi.useFakeTimers();
   try {

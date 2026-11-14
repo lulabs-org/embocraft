@@ -27,7 +27,6 @@ vi.mock('../src/modules/asr', async (importOriginal) => {
 });
 
 import { WhisperAdapter } from '../src/modules/asr';
-import { bindChatRuntime } from '../src/modules/chat';
 import { WorldChat } from '../src/modules/chat/services/chat.service';
 import { createChatRouter } from '../src/modules/chat/routes/chats.routes';
 import {
@@ -44,11 +43,8 @@ import {
 } from '../../web/src/audio/recording/live-recorder';
 
 let server: Server | undefined;
-let releaseChat: (() => void) | undefined;
 
 afterEach(async () => {
-  releaseChat?.();
-  releaseChat = undefined;
   vi.unstubAllEnvs();
   server?.closeAllConnections();
   if (server)
@@ -70,7 +66,6 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
   };
   const emit = vi.fn();
   const chat = new WorldChat(() => [speaker], emit);
-  releaseChat = bindChatRuntime(chat);
   const token = chat.issue(speaker.id);
   let rejected = false;
   const upstream = vi.fn<typeof fetch>(async (_url, init) => {
@@ -105,7 +100,7 @@ it('keeps listening after rejected nearby speech, clears stale captions and publ
   mocked.speech = new WhisperAdapter('http://asr.test/v1', upstream);
   mocked.asrService = new TestAsrService();
   const app = express();
-  app.use(createChatRouter());
+  app.use(createChatRouter(() => ({ chat })));
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;

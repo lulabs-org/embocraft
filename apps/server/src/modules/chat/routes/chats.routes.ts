@@ -9,18 +9,16 @@ import {
 import { type WorldChat } from '../services/chat.service';
 
 import { AppError } from '../../../core/errors/app-error';
-import {
-  getActiveChatRuntime,
-  type AgentSpeechClips,
-} from '../services/chat-runtime.service';
+import type { ChatRoutePort } from '../ports';
 import { ChatSpeechService } from '../services/speech.service';
 
-export type { AgentSpeechClips };
+export type { AgentSpeechClips } from '../ports';
 
 type ChatLocals = {
   chat: WorldChat;
   actor: string;
   token: string;
+  agentSpeech?: ChatRoutePort['agentSpeech'];
 };
 
 const rawAudio = express.raw({ type: () => true, limit: '1mb' });
@@ -42,7 +40,9 @@ function parseChatRoute(query: express.Request['query']) {
 }
 
 /** 创建独立的 Chat 路由 Router 实例 */
-export function createChatRouter(): Router {
+export function createChatRouter(
+  getRuntime: () => ChatRoutePort | undefined,
+): Router {
   const router = express.Router();
   const origin = env.webOrigin();
   const speechService = new ChatSpeechService();
@@ -64,10 +64,12 @@ export function createChatRouter(): Router {
     }),
     (req, res, next) => {
       try {
-        const { chat } = getActiveChatRuntime();
-        if (!chat) throw new AppError('世界服务尚未就绪。', 503);
+        const runtime = getRuntime();
+        if (!runtime) throw new AppError('世界服务尚未就绪。', 503);
+        const { chat } = runtime;
         const token = (req.headers.authorization ?? '').replace(/^Bearer /, '');
         res.locals.chat = chat;
+        res.locals.agentSpeech = runtime.agentSpeech;
         res.locals.token = token;
         res.locals.actor = chat.authenticate(token);
         next();
@@ -382,7 +384,7 @@ export function createChatRouter(): Router {
    */
   router.get('/chat/agent-speech/:id', (req, res, next) => {
     try {
-      const { agentSpeech: service } = getActiveChatRuntime();
+      const { agentSpeech: service } = res.locals as ChatLocals;
       if (!service) throw new AppError('Agent 语音服务未就绪。', 503);
       res
         .type('audio/wav')

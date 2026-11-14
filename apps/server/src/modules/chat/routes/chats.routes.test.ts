@@ -29,16 +29,13 @@ vi.mock('../../asr', async (importOriginal) => {
   };
 });
 
-import { bindChatRuntime } from '../services/chat-runtime.service';
 import { WorldChat } from '../services/chat.service';
+import type { ChatRoutePort } from '../ports';
 import { createChatRouter } from './chats.routes';
 
 let server: Server | undefined;
-let releaseChat: (() => void) | undefined;
 
 afterEach(async () => {
-  releaseChat?.();
-  releaseChat = undefined;
   mocked.speech = undefined as unknown as WhisperAdapter;
   mocked.asrService = undefined as unknown as AsrService;
   vi.unstubAllEnvs();
@@ -47,6 +44,48 @@ afterEach(async () => {
     await new Promise<void>((resolve) => server!.close(() => resolve()));
   }
   server = undefined;
+});
+
+it('resolves the current world per request and keeps its credentials and speech clips together', async () => {
+  const speaker: Player = {
+    id: 'speaker',
+    name: 'Speaker',
+    kind: 'human',
+    connected: true,
+    x: 0,
+    y: 2,
+    z: 0,
+    yaw: 0,
+  };
+  const first = new WorldChat(() => [speaker], vi.fn());
+  const second = new WorldChat(() => [speaker], vi.fn());
+  const firstToken = first.issue(speaker.id);
+  const secondToken = second.issue(speaker.id);
+  const firstAudio = vi.fn(() => Buffer.from('first'));
+  const secondAudio = vi.fn(() => Buffer.from('second'));
+  let runtime: ChatRoutePort | undefined;
+  const origin = 'http://127.0.0.1:5173';
+  vi.stubEnv('WEB_ORIGIN', origin);
+  const app = express();
+  app.use(createChatRouter(() => runtime));
+  server = createServer(app);
+  await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const audio = (token: string) =>
+    fetch(`${base}/chat/agent-speech/clip`, {
+      headers: { Origin: origin, Authorization: `Bearer ${token}` },
+    });
+  expect((await audio(firstToken)).status).toBe(503);
+  runtime = { chat: first, agentSpeech: { audio: firstAudio } };
+  expect(await (await audio(firstToken)).text()).toBe('first');
+  runtime = { chat: second, agentSpeech: { audio: secondAudio } };
+  expect((await audio(firstToken)).status).toBe(401);
+  expect(secondAudio).not.toHaveBeenCalled();
+  expect(await (await audio(secondToken)).text()).toBe('second');
+  expect(firstAudio).toHaveBeenCalledExactlyOnceWith('clip', speaker.id);
+  expect(secondAudio).toHaveBeenCalledExactlyOnceWith('clip', speaker.id);
+  runtime = undefined;
+  expect((await audio(secondToken)).status).toBe(503);
 });
 
 it('publishes confirmed external recognition only with the speaker’s live ticket', async () => {
@@ -63,13 +102,12 @@ it('publishes confirmed external recognition only with the speaker’s live tick
   };
   const emit = vi.fn();
   const chat = new WorldChat(() => [speaker], emit);
-  releaseChat = bindChatRuntime(chat);
   const token = chat.issue('speaker');
   const origin = 'http://127.0.0.1:5173';
   vi.stubEnv('WEB_ORIGIN', origin);
   mocked.asrService = new TestAsrService();
   const app = express();
-  app.use(createChatRouter());
+  app.use(createChatRouter(() => ({ chat })));
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
@@ -139,7 +177,6 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
     yaw: 0,
   };
   const chat = new WorldChat(() => [speaker], vi.fn());
-  releaseChat = bindChatRuntime(chat);
   const token = chat.issue('speaker');
   const bytes = Buffer.from('audio');
   const transcribe = vi.fn().mockResolvedValue('hello');
@@ -162,7 +199,7 @@ it('passes the selected recognition service from a recorded chat upload to Whisp
   const app = express();
   const origin = 'http://127.0.0.1:5173';
   vi.stubEnv('WEB_ORIGIN', origin);
-  app.use(createChatRouter());
+  app.use(createChatRouter(() => ({ chat })));
   app.use(errorHandler());
   server = createServer(app);
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));

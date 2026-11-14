@@ -2,10 +2,17 @@ import cors from 'cors';
 import express, { type Router } from 'express';
 import { env } from '../../../core/config/env';
 import { createOriginGuard } from '../../../core/http/middleware/origin-guard';
-import { getActiveWorld } from '../world.room';
+import type { WorldPresence } from '@voxel/shared';
+
+export type WorldRoutePort = {
+  roomId: string;
+  getPresence(): WorldPresence | undefined;
+};
 
 /** 创建独立的世界路由 Router 实例 */
-export function createWorldRouter(): Router {
+export function createWorldRouter(
+  getWorld: () => WorldRoutePort | undefined,
+): Router {
   const router = express.Router();
   const allowed = env.webOrigin();
 
@@ -30,7 +37,7 @@ export function createWorldRouter(): Router {
    *                   example: 4xK9pL2
    */
   router.get('/world', (_req, res) =>
-    res.json({ roomId: getActiveWorld()?.roomId ?? '' }),
+    res.json({ roomId: getWorld()?.roomId ?? '' }),
   );
 
   /**
@@ -58,7 +65,7 @@ export function createWorldRouter(): Router {
     createOriginGuard({ origin: allowed, required: false }),
     cors({ origin: true }),
     (_req, res) => {
-      const read = () => getActiveWorld()?.getPresence();
+      const read = () => getWorld()?.getPresence();
       if (!read()) {
         res.sendStatus(503);
         return;
