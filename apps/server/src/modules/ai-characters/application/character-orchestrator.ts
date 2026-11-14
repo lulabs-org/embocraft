@@ -14,10 +14,9 @@ import type {
 } from '../../../persistence/management-archive';
 import type { ManagementStore } from '../../../persistence/management-store';
 import { migrateArchive } from '../../../persistence/migrate-archive';
-import { bindConsoleSyncEvents, ConsoleSyncEvents } from '../../console-sync';
+import { ConsoleSyncEvents } from '../../console-sync';
 import { type ProviderRuntimePort, type SavedProvider } from '../../providers';
 import {
-  bindTaskService,
   markOffline,
   TaskCoordinator,
   TaskSnapshots,
@@ -27,7 +26,6 @@ import { validateAICharacter } from '../domain/character-settings';
 import { taskExecutionState } from '../integrations/task-execution-adapter';
 import { CharacterVoiceCoordinator } from '../integrations/voice-coordinator';
 import { CharacterSnapshots } from '../persistence/character-snapshots';
-import type { AICharacterRoutePort } from '../ports';
 import { CharacterExecutionService } from '../runtime/character-execution';
 import {
   AICharacterRegistry,
@@ -39,24 +37,6 @@ import { CharacterManagementService } from './character-management';
 import { CharacterOperations } from './character-operations';
 import { characterSettings } from '../persistence/character-record';
 import { restoreAICharacterJob } from './character-restore';
-
-let activeCharacterOrchestrator: AICharacterRoutePort | undefined;
-
-export function bindCharacterOrchestrator(
-  manager: AICharacterRoutePort,
-): () => void {
-  activeCharacterOrchestrator = manager;
-  return () => {
-    if (activeCharacterOrchestrator === manager)
-      activeCharacterOrchestrator = undefined;
-  };
-}
-
-export function getActiveCharacterOrchestrator(): AICharacterRoutePort {
-  if (!activeCharacterOrchestrator)
-    throw new AppError('AI 角色管理服务尚未就绪。', 503);
-  return activeCharacterOrchestrator;
-}
 
 export class AICharacterOrchestrator {
   readonly jobs = new AICharacterRegistry();
@@ -72,7 +52,7 @@ export class AICharacterOrchestrator {
   private readonly management: CharacterManagementService;
   private readonly operations: CharacterOperations;
 
-  private readonly releaseBindings: () => void;
+  private readonly releaseProviderAndVoiceEvents: () => void;
   private closing = false;
   private restoreFailed = false;
   private readonly failedCharacters = new Set<string>();
@@ -219,16 +199,10 @@ export class AICharacterOrchestrator {
       save: (changes) => this.save(changes),
       detachAgent: (...args) => this.tasks.detachAgent(...args),
     });
-    const releaseCharacterBinding = bindCharacterOrchestrator(this);
-    const releaseTaskBinding = bindTaskService(this.tasks);
-    const releaseSyncEvents = bindConsoleSyncEvents(this.events);
-    this.releaseBindings = () => {
+    this.releaseProviderAndVoiceEvents = () => {
       releaseVoiceGuard();
       releaseProviderGuard();
       releaseProviderChanged();
-      releaseCharacterBinding();
-      releaseTaskBinding();
-      releaseSyncEvents();
     };
   }
 
@@ -475,7 +449,7 @@ export class AICharacterOrchestrator {
   }
 
   private async shutdown() {
-    this.releaseBindings();
+    this.releaseProviderAndVoiceEvents();
     this.taskScheduler.close();
     this.planScheduler.close();
     this.closing = true;

@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createDatabaseClient } from '../src/core/database/client';
 import { createServer } from '../src/server';
+import { getActiveWorld } from '../src/modules/world';
 
 vi.mock('../src/core/database/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/core/database/client')>()),
@@ -76,10 +77,15 @@ afterEach(async () => {
 });
 
 it('shares the runtime client with the world and disconnects once after its consumers stop', async () => {
+  loadWorld.mockImplementationOnce(async () => {
+    expect(getActiveWorld()).toBeUndefined();
+    return { revision: 0, edits: [] };
+  });
   server = await createServer();
   await server.listen();
   expect(createDatabaseClient).toHaveBeenCalledOnce();
   expect(loadWorld).toHaveBeenCalledOnce();
+  expect(getActiveWorld()).toBe(server._internals.world);
   expect(server._internals.world.getPresence().persistence).toBe('postgresql');
   const dispose = server._internals.world.onDispose.bind(
     server._internals.world,
@@ -87,7 +93,9 @@ it('shares the runtime client with the world and disconnects once after its cons
   let worldDisposed = false;
   vi.spyOn(server._internals.world, 'onDispose').mockImplementation(
     async () => {
-      await dispose();
+      const disposing = dispose();
+      expect(getActiveWorld()).toBeUndefined();
+      await disposing;
       expect(disconnect).not.toHaveBeenCalled();
       worldDisposed = true;
     },

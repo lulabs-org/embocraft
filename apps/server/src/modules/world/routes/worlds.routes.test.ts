@@ -3,19 +3,6 @@ import express from 'express';
 import { createServer, type Server } from 'node:http';
 import type { WorldPresence } from '@voxel/shared';
 
-const mocked = vi.hoisted(() => ({
-  getActiveWorld:
-    vi.fn<
-      () =>
-        | { roomId: string; getPresence: () => WorldPresence | undefined }
-        | undefined
-    >(),
-}));
-
-vi.mock('../world.room', () => ({
-  getActiveWorld: () => mocked.getActiveWorld(),
-}));
-
 import { createWorldRouter } from './worlds.routes';
 
 describe('read-only world presence stream', () => {
@@ -42,13 +29,12 @@ describe('read-only world presence stream', () => {
         },
       ],
     };
-    mocked.getActiveWorld
-      .mockReset()
-      .mockImplementation(() =>
-        state ? { roomId: state.roomId, getPresence: () => state } : undefined,
-      );
     const app = express();
-    app.use(createWorldRouter());
+    app.use(
+      createWorldRouter(() =>
+        state ? { roomId: state.roomId, getPresence: () => state } : undefined,
+      ),
+    );
     server = createServer(app);
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),

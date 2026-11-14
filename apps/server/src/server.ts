@@ -67,9 +67,11 @@ export async function createServer() {
       DEFAULT_MANAGEMENT_PATHS,
       gatewayAuth.middleware,
       (management) => {
-        management.use(createAICharacterRouter(new CharacterQueries(db)));
+        management.use(
+          createAICharacterRouter(new CharacterQueries(db), characters),
+        );
         management.use(createProviderRouter());
-        management.use(createTaskRouter());
+        management.use(createTaskRouter(characters.tasks));
         management.use(createConsoleSyncRouter());
       },
     ),
@@ -96,14 +98,14 @@ export async function createServer() {
   );
 
   // 3. 游戏世界房间与聊天路由
-  app.use(createWorldRouter());
-  app.use(createChatRouter());
+  app.use(createWorldRouter(getActiveWorld));
+  app.use(createChatRouter(getActiveWorld));
 
   app.use(errorHandler());
   const http = createHttpServer(app);
   // Sockets register module-by-module like HTTP routes; other upgrades reach Colyseus.
   const sockets: SocketRoutes = new Map();
-  installGatewaySocket(sockets, gatewayAuth);
+  installGatewaySocket(sockets, gatewayAuth, characters.events);
   installAsrSocket(sockets);
   const transport = new RoutedWebSocketTransport(http, sockets);
   const server = new Server({

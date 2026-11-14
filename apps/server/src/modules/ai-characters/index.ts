@@ -1,7 +1,5 @@
 export {
   AICharacterOrchestrator,
-  bindCharacterOrchestrator,
-  getActiveCharacterOrchestrator,
   type AICharacterDependencies,
 } from './application/character-orchestrator';
 export { createAICharacterOrchestrator } from './composition';

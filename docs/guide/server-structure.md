@@ -271,16 +271,18 @@ export { WorldStore } from './persistence/store';
 export { createWorldRouter } from './routes/worlds.routes';
 ```
 
-### 2.3 统一的零参路由工厂契约
+### 2.3 路由工厂与显式依赖
 
-所有模块的 HTTP 路由统一提供无参 `create*Router(): Router` 工厂函数，由 `src/server.ts` 声明式挂载，不再通过装配层透传跨模块状态回调：
+HTTP 路由通过 `create*Router(...)` 工厂函数创建，由 `src/server.ts` 装配依赖并挂载。角色路由接收查询端口和管理端口，任务路由接收 `TaskPort`；世界和聊天路由接收当前就绪房间的读取函数，以适应房间晚于路由创建、先于 HTTP 关闭的生命周期。路由不通过全局绑定查找这些依赖：
 
 ```typescript
 // apps/server/src/modules/world/routes/worlds.routes.ts
-export function createWorldRouter(): Router {
+export function createWorldRouter(
+  getWorld: () => WorldRoutePort | undefined,
+): Router {
   const router = express.Router();
   router.get('/world', (_req, res) =>
-    res.json({ roomId: getActiveWorld()?.roomId ?? '' }),
+    res.json({ roomId: getWorld()?.roomId ?? '' }),
   );
   // ...
   return router;
@@ -295,10 +297,11 @@ export function createWorldRouter(): Router {
 // apps/server/src/modules/gateway/gateway.socket.ts
 export function installGatewaySocket(
   routes: SocketRoutes,
-  auth = new GatewayAuth(env.readServer().gateway),
+  auth: GatewayAuth,
+  events: ConsoleSyncEvents,
 ) {
   routes.set('/ai-characters/gateway', (socket, req) =>
-    gatewaySocket(getActiveConsoleSyncEvents(), auth, socket, req),
+    gatewaySocket(events, auth, socket, req),
   );
 }
 ```
@@ -307,7 +310,7 @@ export function installGatewaySocket(
 
 ## 3. 核心装配流程（`server.ts`）
 
-服务装配层在单入口 `createServer()` 中完成环境读取、数据库共享连接设置与无参路由/Socket 挂载：
+服务装配层在单入口 `createServer()` 中完成环境读取、数据库共享连接设置与路由/Socket 挂载；任务路由通过 `createTaskRouter(characters.tasks)` 显式接收 `TaskPort`：
 
 ```typescript
 import express from 'express';
@@ -320,7 +323,7 @@ import {
 } from './core/http/middleware/management-policy';
 import { errorHandler } from './core/http/middleware/error-handler';
 
-// 各模块从 index.ts 引入路由工厂与 Socket 安装函数；角色路由接收查询端口
+// 各模块从 index.ts 引入路由工厂与 Socket 安装函数；角色路由接收查询和管理端口，任务路由接收 TaskPort
 import {
   createAICharacterOrchestrator,
   CharacterQueries,

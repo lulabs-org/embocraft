@@ -1,4 +1,4 @@
-import { bindChatRuntime, ChatStore, WorldChat, visibleEvent } from '../chat';
+import { ChatStore, WorldChat, visibleEvent } from '../chat';
 import { ttsService, type ResolvedSpeech } from '../tts';
 import { peekDatabaseClient } from '../../core/database/client';
 import { AppError } from '../../core/errors/app-error';
@@ -29,12 +29,10 @@ import {
 } from './domain/player-name';
 import { validateEdit, parseInput } from './domain/validation';
 const zero: Input = { x: 0, z: 0, jump: false, yaw: 0 };
+// Reserve the single room during startup and shutdown as well as normal operation.
 let activeRoom: WorldRoom | undefined;
-function setActiveWorld(room: WorldRoom | undefined) {
-  activeRoom = room;
-}
 export function getActiveWorld(): WorldRoom | undefined {
-  return activeRoom;
+  return activeRoom?.isReady ? activeRoom : undefined;
 }
 export class WorldRoom extends Room<WorldState> {
   private actorVoices = new Map<string, string>();
@@ -67,7 +65,7 @@ export class WorldRoom extends Room<WorldState> {
   private signalBudget = new Map<string, { at: number; count: number }>();
   private events: WorldEvent[] = [];
   private seq = 0;
-  private ownsActive = false;
+  isReady = false;
   private spatialSignal = createSpatialSignaling(
     (id) => this.state.players.get(id),
     (recipient, signal) =>
@@ -100,8 +98,8 @@ export class WorldRoom extends Room<WorldState> {
     );
     if (activeRoom)
       throw new Error('Single world is full; join the existing room');
-    setActiveWorld(this);
-    this.ownsActive = true;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- Reserve this room across asynchronous startup and shutdown.
+    activeRoom = this;
     this.store =
       options.store ?? new WorldStore(undefined, peekDatabaseClient());
     this.setState(new WorldState());
@@ -109,12 +107,10 @@ export class WorldRoom extends Room<WorldState> {
       this.state.revision = await this.store.load(this.blocks);
     } catch (error) {
       await this.store.close();
-      if (activeRoom === this) setActiveWorld(undefined);
-      this.ownsActive = false;
+      if (activeRoom === this) activeRoom = undefined;
       throw error;
     }
     const unsubs = [
-      bindChatRuntime(this.chat, this.agentSpeech),
       domainEvents.on('agent.voice.bound', ({ sessionId, serviceId }) => {
         if (!this.state.players.has(sessionId)) return;
         if (this.actorVoices.get(sessionId) === serviceId) return;
@@ -291,6 +287,7 @@ export class WorldRoom extends Room<WorldState> {
         body.grounded = b.grounded;
       }
     }, 50);
+    this.isReady = true;
   }
   onJoin(client: Client, options: { name?: string; kind?: string }) {
     const name = normalizePlayerName(options.name);
@@ -372,13 +369,14 @@ export class WorldRoom extends Room<WorldState> {
     this.event('left', client.sessionId, {});
   }
   async onDispose() {
+    this.isReady = false;
     this.releaseVoiceEvents?.();
     this.actorVoices.clear();
     this.agentSpeech.close();
     this.chat.clear();
     await this.queue;
     await this.store?.close();
-    if (this.ownsActive && activeRoom === this) setActiveWorld(undefined);
+    if (activeRoom === this) activeRoom = undefined;
   }
   getPresence(): WorldPresence {
     return {
