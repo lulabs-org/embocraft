@@ -1,7 +1,6 @@
-import type { TaskRun } from '@voxel/shared';
+import type { TaskRunAction } from '@voxel/shared';
 import { i18n } from '../../../../i18n';
 
-type RecordedAction = NonNullable<TaskRun['actions']>[number];
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -9,7 +8,7 @@ const object = (value: unknown): Record<string, unknown> =>
 const number = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
-export function presentAction(entry: RecordedAction) {
+export function presentAction(entry: TaskRunAction) {
   let raw = entry.detail;
   let data: Record<string, unknown> = {};
   try {

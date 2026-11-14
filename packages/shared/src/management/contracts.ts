@@ -1,5 +1,7 @@
 import type { AICharacterSummary } from '../agent/characters';
-import type { TaskPlan, TaskRun } from '../task/plans';
+import type { TaskPlan, TaskPlanState } from '../task/plans';
+import type { TaskRun } from '../task/runs';
+import type { TaskTiming } from '../task/timing';
 
 export type TaskIdentity = { id: string; revision: number; startedAt: number };
 export type ResourceMetadata = {
@@ -13,8 +15,8 @@ export type PlanQueryFilter = {
   characterId?: string;
   offset?: number;
   search?: string;
-  state?: TaskPlan['state'] | 'unassigned';
-  timing?: TaskPlan['timing']['kind'];
+  state?: TaskPlanState | 'unassigned';
+  timing?: TaskTiming['kind'];
 };
 export type ManagementErrorData = {
   code: string;

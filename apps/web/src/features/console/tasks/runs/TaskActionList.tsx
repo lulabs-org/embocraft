@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import type { TaskRun } from '@voxel/shared';
+import type { TaskRunAction } from '@voxel/shared';
 import { useI18n } from '../../../../i18n/context';
 import { presentAction } from '../presentation/action-presentation';
 
@@ -8,7 +8,7 @@ export function TaskActionList({
   report,
   timeZone,
 }: {
-  actions: TaskRun['actions'];
+  actions: TaskRunAction[] | undefined;
   report?: string;
   timeZone: string;
 }) {

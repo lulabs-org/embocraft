@@ -7,6 +7,14 @@ export type TaskLimits = {
   tokenBudget: number;
   taskTimeoutMs: number;
 };
+
+export const DEFAULT_TASK_LIMITS: TaskLimits = {
+  maxTurns: 100,
+  maxStalledTurns: 3,
+  tokenBudget: 50000,
+  taskTimeoutMs: 900000,
+};
+
 export type AICharacterTaskStatus =
   | 'running'
   | 'waiting'

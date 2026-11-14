@@ -2,14 +2,14 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
-import type { TaskRun } from '@voxel/shared';
+import type { TaskRunAction } from '@voxel/shared';
 import { TaskActionList } from './TaskActionList';
 
 it('shows newest records first, preserves numbering and formats start times in the plan timezone', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const host = document.createElement('div');
   const root = createRoot(host);
-  const actions: NonNullable<TaskRun['actions']> = [
+  const actions: TaskRunAction[] = [
     { call: 1, index: 0, kind: 'chat', status: 'succeeded', detail: '{}' },
     {
       call: 2,
