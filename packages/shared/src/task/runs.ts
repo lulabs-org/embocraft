@@ -1,5 +1,5 @@
 import type { AICharacterTask, AICharacterTaskStatus } from './contracts';
-import type { TaskPlanDraft } from './plans';
+import type { TaskPlanDraft } from './plan-draft';
 
 /** Execution task states plus outcomes managed by scheduling and run orchestration. */
 export type TaskRunStatus =
