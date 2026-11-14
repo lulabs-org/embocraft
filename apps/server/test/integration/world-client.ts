@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { Session, delay, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
 

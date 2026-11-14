@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { getDatabaseClient } from '../../../core/database/client';
+import { db as sharedDb } from '../../../core/database/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
 import {
   AI_CHARACTER_LOG_LIMIT,
@@ -131,11 +131,7 @@ function internalView(
 
 /** Targeted management and HTTP reads, independent of the full recovery archive. */
 export class CharacterQueries implements CharacterQueryPort, CharacterReadPort {
-  constructor(private readonly customDb?: PrismaClient) {}
-
-  private get db(): PrismaClient {
-    return this.customDb ?? getDatabaseClient();
-  }
+  constructor(private readonly db: PrismaClient = sharedDb) {}
 
   async get(id: string): Promise<CharacterDetail> {
     const row = await this.db.$transaction(

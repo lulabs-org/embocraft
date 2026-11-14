@@ -10,7 +10,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDatabaseClient } from '../src/core/database/client';
+import { db } from '../src/core/database/client';
 import {
   createAICharacterOrchestrator,
   CharacterQueries,
@@ -37,7 +37,6 @@ import { taskExecutionFixture } from './helpers/task-execution-fixture';
 import { TaskCoordinator } from '../src/modules/tasks';
 
 const url = process.env.TEST_DATABASE_URL;
-const db = url ? createDatabaseClient(url) : undefined;
 
 describe.skipIf(!url)('PostgreSQL provider and management persistence', () => {
   beforeEach(async () => {

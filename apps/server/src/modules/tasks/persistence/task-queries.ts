@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { RuntimeState } from '@voxel/agent-runtime';
 import type { TaskPlanSummary } from '@voxel/shared';
-import { getDatabaseClient } from '../../../core/database/client';
+import { db as sharedDb } from '../../../core/database/client';
 import { AppError } from '../../../core/errors/app-error';
 import type {
   TaskPlanResult,
@@ -72,10 +72,7 @@ function runResult(
 
 /** Select only the requested plans/runs; filtering, ordering and page boundaries live in SQL. */
 export class TaskQueries implements TaskQueryPort {
-  constructor(private readonly customDb?: PrismaClient) {}
-  private get db() {
-    return this.customDb ?? getDatabaseClient();
-  }
+  constructor(private readonly db: PrismaClient = sharedDb) {}
 
   private async assertCharacter(tx: Prisma.TransactionClient, id: string) {
     if (

@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { getDatabaseClient } from '../core/database/client';
+import { db as sharedDb } from '../core/database/client';
 import { AppError } from '../core/errors/app-error';
 import {
   applyManagementChange,
@@ -122,13 +122,9 @@ function snapshot(
 export class DatabaseManagementArchive implements ManagementStore {
   readonly characters: CharacterQueries;
   readonly tasks: TaskQueries;
-  constructor(private readonly customDb?: PrismaClient) {
-    this.characters = new CharacterQueries(customDb);
-    this.tasks = new TaskQueries(customDb);
-  }
-
-  private get db(): PrismaClient {
-    return this.customDb ?? getDatabaseClient();
+  constructor(private readonly db: PrismaClient = sharedDb) {
+    this.characters = new CharacterQueries(this.db);
+    this.tasks = new TaskQueries(this.db);
   }
 
   private async read(tx: Prisma.TransactionClient, change?: ManagementChange) {

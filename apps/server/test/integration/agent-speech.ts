@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { delay, Session, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
 import { validatePcmWav } from '../../src/core/audio/pcm-wav';
@@ -6,7 +7,6 @@ import { SpeachesTtsAdapter } from '../../src/modules/tts/adapters/speaches-tts.
 import { createTestServer } from '../helpers/test-server';
 
 import type { AgentSpeechEvent } from '@voxel/shared';
-process.env.DATABASE_URL = '';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5188';
 const real = process.env.REAL_TTS === '1';
 const server = await createTestServer({ origin: process.env.WEB_ORIGIN });

@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { Session, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';
 import { createTestServer } from '../helpers/test-server';
@@ -5,7 +6,6 @@ import { createTestServer } from '../helpers/test-server';
 import { PLAYER_NAME_TAKEN } from '../../src/modules/world/domain/player-name';
 
 {
-  process.env.DATABASE_URL = '';
   const server = await createTestServer();
   const sessions: Session[] = [];
   try {

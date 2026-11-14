@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { emptyState } from '@voxel/agent-runtime/testing';
 
 import {
@@ -21,7 +22,6 @@ import { key } from '@voxel/shared';
 import { testAgentConfig } from '../../../../tests/support/agent-config';
 import { toolResponse } from '../../../../tests/support/pi-response';
 
-process.env.DATABASE_URL = '';
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 const dir = await mkdtemp(join(tmpdir(), 'voxel-navigation-'));
 let manager: AICharacterOrchestrator | undefined;

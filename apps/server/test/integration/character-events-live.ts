@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 /** Real local model acceptance, isolated world and fixture-only provider store. */
 import { delay, Session, until } from '@voxel/agent-runtime';
 import assert from 'node:assert/strict';

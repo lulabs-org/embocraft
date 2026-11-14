@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { delay, Session, until } from '@voxel/agent-runtime';
 
 import type { ChatData } from '@voxel/shared';

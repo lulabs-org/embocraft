@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { Session, until } from '@voxel/agent-runtime';
 import {
   ManagementEvents,

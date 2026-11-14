@@ -15,11 +15,7 @@ import {
 } from './core/http/middleware/management-policy';
 import { errorHandler } from './core/http/middleware/error-handler';
 import { resolveServerUrls, type ServerUrls } from './core/http/address';
-import {
-  createDatabaseClient,
-  resetDatabaseClient,
-  setDatabaseClient,
-} from './core/database/client';
+import { db } from './core/database/client';
 import { checkStartupDatabase } from './core/database/health';
 
 import type { SocketRoutes } from './core/transport/socket-routes';
@@ -45,11 +41,9 @@ import { createChatRouter } from './modules/chat';
  */
 export async function createServer() {
   const config = env.readServer();
-  await checkStartupDatabase(config.databaseUrl);
+  await checkStartupDatabase();
   const gatewayAuth = new GatewayAuth(config.gateway);
 
-  const db = createDatabaseClient(config.databaseUrl);
-  setDatabaseClient(db);
   let serverUrls: ServerUrls | undefined;
   const characters = createAICharacterOrchestrator(
     undefined,
@@ -68,7 +62,7 @@ export async function createServer() {
       gatewayAuth.middleware,
       (management) => {
         management.use(
-          createAICharacterRouter(new CharacterQueries(db), characters),
+          createAICharacterRouter(new CharacterQueries(), characters),
         );
         management.use(createProviderRouter());
         management.use(createTaskRouter(characters.tasks));
@@ -130,8 +124,7 @@ export async function createServer() {
           await once(http, 'close');
         }
         consoleSync.reset();
-        resetDatabaseClient(db);
-        await db?.$disconnect();
+        await db.$disconnect();
       }
     })());
   const listen = async () => {

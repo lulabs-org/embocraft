@@ -1,6 +1,5 @@
 import { ChatStore, WorldChat, visibleEvent } from '../chat';
 import { ttsService, type ResolvedSpeech } from '../tts';
-import { peekDatabaseClient } from '../../core/database/client';
 import { AppError } from '../../core/errors/app-error';
 import { domainEvents } from '../../core/events/domain-events';
 import { AgentSpeech } from './services/agent-speech.service';
@@ -100,13 +99,11 @@ export class WorldRoom extends Room<WorldState> {
       throw new Error('Single world is full; join the existing room');
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- Reserve this room across asynchronous startup and shutdown.
     activeRoom = this;
-    this.store =
-      options.store ?? new WorldStore(undefined, peekDatabaseClient());
+    this.store = options.store ?? new WorldStore();
     this.setState(new WorldState());
     try {
       this.state.revision = await this.store.load(this.blocks);
     } catch (error) {
-      await this.store.close();
       if (activeRoom === this) activeRoom = undefined;
       throw error;
     }
@@ -375,7 +372,6 @@ export class WorldRoom extends Room<WorldState> {
     this.agentSpeech.close();
     this.chat.clear();
     await this.queue;
-    await this.store?.close();
     if (activeRoom === this) activeRoom = undefined;
   }
   getPresence(): WorldPresence {

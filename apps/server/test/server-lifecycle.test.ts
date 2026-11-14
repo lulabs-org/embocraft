@@ -230,11 +230,8 @@ describe('server assembly and lifecycle', () => {
     const load = vi
       .spyOn(WorldStore.prototype, 'load')
       .mockRejectedValueOnce(Error('world load failed'));
-    const closed = vi.spyOn(WorldStore.prototype, 'close');
     await expect(createTestServer()).rejects.toThrow('world load failed');
-    expect(closed).toHaveBeenCalled();
     load.mockRestore();
-    closed.mockRestore();
     const recovered = await createTestServer();
     try {
       expect((await fetch(recovered.httpUrl + '/health')).status).toBe(200);

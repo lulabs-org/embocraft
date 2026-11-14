@@ -1,7 +1,8 @@
+import './database-env';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseClient } from '../../src/core/database/client';
+import { db } from '../../src/core/database/client';
 import { createServer } from '../../src/server';
 import type { AICharacterDependencies } from '../../src/modules/ai-characters';
 import type { AsrBridge, WhisperAdapter } from '../../src/modules/asr';
@@ -21,28 +22,21 @@ export async function createTestServer(options: TestServerOptions = {}) {
   const testDatabaseUrl = process.env.TEST_DATABASE_URL;
   if (!testDatabaseUrl || !new URL(testDatabaseUrl).pathname.endsWith('_test'))
     throw new Error('TEST_DATABASE_URL 必须指向专用的 _test 数据库。');
-  const previousDatabaseUrl = process.env.DATABASE_URL;
-  process.env.DATABASE_URL = testDatabaseUrl;
-  const cleanup = createDatabaseClient(testDatabaseUrl);
   try {
-    const tables = await cleanup.$queryRawUnsafe<Array<{ tablename: string }>>(
+    const tables = await db.$queryRawUnsafe<Array<{ tablename: string }>>(
       "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'",
     );
     if (tables.length) {
       const names = tables
         .map(({ tablename }) => `"${tablename.replaceAll('"', '""')}"`)
         .join(', ');
-      await cleanup.$executeRawUnsafe(
+      await db.$executeRawUnsafe(
         `TRUNCATE TABLE ${names} RESTART IDENTITY CASCADE`,
       );
     }
   } catch (error) {
-    if (previousDatabaseUrl !== undefined)
-      process.env.DATABASE_URL = previousDatabaseUrl;
-    else delete process.env.DATABASE_URL;
+    await db.$disconnect();
     throw error;
-  } finally {
-    await cleanup.$disconnect();
   }
   const directory =
     options.directory ?? (await mkdtemp(join(tmpdir(), 'voxel-test-')));
@@ -50,12 +44,6 @@ export async function createTestServer(options: TestServerOptions = {}) {
   const prevOrigin = process.env.WEB_ORIGIN;
   const prevToken = process.env.AGENT_GATEWAY_TOKEN;
   const prevGatewayOrigins = process.env.AGENT_GATEWAY_ALLOWED_ORIGINS;
-
-  const restoreDatabaseUrl = () => {
-    if (previousDatabaseUrl !== undefined)
-      process.env.DATABASE_URL = previousDatabaseUrl;
-    else delete process.env.DATABASE_URL;
-  };
 
   process.env.SERVER_PORT = String(options.port ?? 0);
   process.env.AGENT_GATEWAY_TOKEN = 'fixture-gateway-token-for-tests';
@@ -112,7 +100,6 @@ export async function createTestServer(options: TestServerOptions = {}) {
             if (prevGatewayOrigins !== undefined)
               process.env.AGENT_GATEWAY_ALLOWED_ORIGINS = prevGatewayOrigins;
             else delete process.env.AGENT_GATEWAY_ALLOWED_ORIGINS;
-            restoreDatabaseUrl();
             if (!options.directory)
               await rm(directory, { recursive: true, force: true });
           }
@@ -128,8 +115,8 @@ export async function createTestServer(options: TestServerOptions = {}) {
     if (prevGatewayOrigins !== undefined)
       process.env.AGENT_GATEWAY_ALLOWED_ORIGINS = prevGatewayOrigins;
     else delete process.env.AGENT_GATEWAY_ALLOWED_ORIGINS;
-    restoreDatabaseUrl();
-    await server?.close();
+    if (server) await server.close();
+    else await db.$disconnect();
     if (!options.directory)
       await rm(directory, { recursive: true, force: true });
     throw error;

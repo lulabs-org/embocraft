@@ -1,3 +1,4 @@
+import '../helpers/database-env';
 import { controlRun } from '../../../../tests/support/managed-tasks';
 import { MemoryProviderRepository } from '../helpers/memory-storage';
 import { createTestServer } from '../helpers/test-server';
@@ -30,7 +31,6 @@ assert(provider?.apiKey, 'The selected provider must have a configured key.');
 const output = resolve(
   process.env.NAVIGATION_OUTPUT || '../../artifacts/navigation-live-model.json',
 );
-process.env.DATABASE_URL = '';
 const dir = await mkdtemp(join(tmpdir(), 'voxel-navigation-live-'));
 let server: Awaited<ReturnType<typeof createTestServer>> | undefined;
 let manager: AICharacterOrchestrator | undefined,

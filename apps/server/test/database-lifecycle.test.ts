@@ -1,52 +1,80 @@
-import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createDatabaseClient } from '../src/core/database/client';
 import { createServer } from '../src/server';
 import { getActiveWorld } from '../src/modules/world';
 
 vi.mock('../src/core/database/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/core/database/client')>()),
-  createDatabaseClient: vi.fn(),
+  db,
 }));
 
 vi.mock('../src/core/database/health', () => ({
   checkStartupDatabase: vi.fn(),
 }));
 
-const disconnect = vi.fn();
-const loadWorld = vi.fn();
-const findProviders = vi.fn().mockResolvedValue([]);
-const findTtsProviders = vi.fn().mockResolvedValue([]);
-const findAsrProviders = vi.fn().mockResolvedValue([]);
-const findAssignments = vi.fn().mockResolvedValue([]);
-const findCharacters = vi.fn().mockResolvedValue([]);
-const findPlans = vi.fn().mockResolvedValue([]);
-const findRuns = vi.fn().mockResolvedValue([]);
-const findRequests = vi.fn().mockResolvedValue([]);
-const transaction = vi.fn();
-const db = {
-  $disconnect: disconnect,
-  $queryRaw: vi.fn(),
-  world: { upsert: loadWorld },
-  agentProvider: { findMany: findProviders },
-  ttsProvider: { findMany: findTtsProviders },
-  asrProvider: { findMany: findAsrProviders },
-  asrAssignment: { findMany: findAssignments },
-  agentCharacter: { findMany: findCharacters },
-  agentPlan: { findMany: findPlans },
-  agentRun: { findMany: findRuns },
-  agentRequest: { findMany: findRequests },
-  $transaction: transaction,
-} as unknown as PrismaClient;
+const {
+  disconnect,
+  loadWorld,
+  findProviders,
+  findTtsProviders,
+  findAsrProviders,
+  findAssignments,
+  findCharacters,
+  findPlans,
+  findRuns,
+  findRequests,
+  transaction,
+  db,
+} = vi.hoisted(() => {
+  const disconnect = vi.fn();
+  const loadWorld = vi.fn();
+  const findProviders = vi.fn().mockResolvedValue([]);
+  const findTtsProviders = vi.fn().mockResolvedValue([]);
+  const findAsrProviders = vi.fn().mockResolvedValue([]);
+  const findAssignments = vi.fn().mockResolvedValue([]);
+  const findCharacters = vi.fn().mockResolvedValue([]);
+  const findPlans = vi.fn().mockResolvedValue([]);
+  const findRuns = vi.fn().mockResolvedValue([]);
+  const findRequests = vi.fn().mockResolvedValue([]);
+  const transaction = vi.fn();
+  const db = {
+    $disconnect: disconnect,
+    $queryRaw: vi.fn(),
+    world: { upsert: loadWorld },
+    agentProvider: { findMany: findProviders },
+    ttsProvider: { findMany: findTtsProviders },
+    asrProvider: { findMany: findAsrProviders },
+    asrAssignment: { findMany: findAssignments },
+    agentCharacter: { findMany: findCharacters },
+    agentPlan: { findMany: findPlans },
+    agentRun: { findMany: findRuns },
+    agentRequest: { findMany: findRequests },
+    $transaction: transaction,
+  };
+
+  return {
+    disconnect,
+    loadWorld,
+    findProviders,
+    findTtsProviders,
+    findAsrProviders,
+    findAssignments,
+    findCharacters,
+    findPlans,
+    findRuns,
+    findRequests,
+    transaction,
+    db,
+  };
+});
 
 let server: Awaited<ReturnType<typeof createServer>> | undefined;
 
 beforeEach(async () => {
   vi.resetAllMocks();
-  process.env.DATABASE_URL = 'postgresql://fixture/world';
-  process.env.SERVER_PORT = '0';
-  process.env.SERVER_HOST = '127.0.0.1';
-  process.env.AGENT_GATEWAY_TOKEN = 'fixture-gateway-token-for-tests';
+  vi.stubEnv('DATABASE_URL', 'postgresql://fixture/world');
+  vi.stubEnv('SERVER_PORT', '0');
+  vi.stubEnv('SERVER_HOST', '127.0.0.1');
+  vi.stubEnv('AGENT_GATEWAY_TOKEN', 'fixture-gateway-token-for-tests');
   for (const findMany of [
     findProviders,
     findTtsProviders,
@@ -59,11 +87,8 @@ beforeEach(async () => {
   ])
     findMany.mockResolvedValue([]);
   transaction.mockImplementation(async (fn: unknown) =>
-    typeof fn === 'function'
-      ? (fn as (client: PrismaClient) => unknown)(db)
-      : fn,
+    typeof fn === 'function' ? (fn as (client: unknown) => unknown)(db) : fn,
   );
-  vi.mocked(createDatabaseClient).mockReturnValue(db);
   loadWorld.mockResolvedValue({ revision: 0, edits: [] });
 });
 
@@ -73,6 +98,7 @@ afterEach(async () => {
   } finally {
     server = undefined;
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   }
 });
 
@@ -83,7 +109,6 @@ it('shares the runtime client with the world and disconnects once after its cons
   });
   server = await createServer();
   await server.listen();
-  expect(createDatabaseClient).toHaveBeenCalledOnce();
   expect(loadWorld).toHaveBeenCalledOnce();
   expect(getActiveWorld()).toBe(server._internals.world);
   expect(server._internals.world.getPresence().persistence).toBe('postgresql');

@@ -1,8 +1,8 @@
 import { env } from './core/config';
-import { createServer } from './server';
 
 try {
   const config = env.load();
+  const { createServer } = await import('./server');
   const server = await createServer();
   const { httpUrl: url } = await server.listen();
 
