@@ -1,3 +1,15 @@
+export type TaskTiming =
+  | { kind: 'immediate' }
+  | { kind: 'once'; at: number }
+  | { kind: 'interval'; everyMs: number }
+  | { kind: 'daily'; time: string }
+  | { kind: 'weekly'; time: string; weekdays: number[] };
+
+/** Whether the timing schedules recurring runs. */
+export function isRepeating(timing: TaskTiming) {
+  return ['interval', 'daily', 'weekly'].includes(timing.kind);
+}
+
 export function zonedDateParts(ms: number, zone: string) {
   const p = new Intl.DateTimeFormat('en-CA', {
     timeZone: zone,

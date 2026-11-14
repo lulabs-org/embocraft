@@ -1,11 +1,17 @@
-import type { TaskPlan, TaskPlanSummary, TaskRun } from '@voxel/shared';
+import type {
+  TaskPlanState,
+  TaskPlanSummary,
+  TaskRun,
+  TaskRunStatus,
+  TaskTiming,
+} from '@voxel/shared';
 import { i18n } from '../../../../i18n';
 
 export const runEnded = (run: TaskRun) =>
   ['completed', 'cancelled', 'skipped', 'missed'].includes(run.status);
 
-const getRunStatusLabel = (status: TaskRun['status']) => {
-  const map: Record<TaskRun['status'], string> = {
+const getRunStatusLabel = (status: TaskRunStatus) => {
+  const map: Record<TaskRunStatus, string> = {
     queued: i18n.t('console.plans.statusQueued'),
     running: i18n.t('console.plans.statusRunning'),
     waiting: i18n.t('console.plans.statusWaiting'),
@@ -22,17 +28,17 @@ const getRunStatusLabel = (status: TaskRun['status']) => {
   return map[status] || status;
 };
 
-export const runStatus: Record<TaskRun['status'], string> = new Proxy(
-  {} as Record<TaskRun['status'], string>,
+export const runStatus: Record<TaskRunStatus, string> = new Proxy(
+  {} as Record<TaskRunStatus, string>,
   {
     get(_target, prop: string) {
-      return getRunStatusLabel(prop as TaskRun['status']);
+      return getRunStatusLabel(prop as TaskRunStatus);
     },
   },
 );
 
-const getPlanStatusLabel = (state: TaskPlan['state']) => {
-  const map: Record<TaskPlan['state'], string> = {
+const getPlanStatusLabel = (state: TaskPlanState) => {
+  const map: Record<TaskPlanState, string> = {
     enabled: i18n.t('console.plans.statusEnabled'),
     paused: i18n.t('console.plans.planStatePaused'),
     completed: i18n.t('console.plans.planStateCompleted'),
@@ -41,11 +47,11 @@ const getPlanStatusLabel = (state: TaskPlan['state']) => {
   return map[state] || state;
 };
 
-export const planStatus: Record<TaskPlan['state'], string> = new Proxy(
-  {} as Record<TaskPlan['state'], string>,
+export const planStatus: Record<TaskPlanState, string> = new Proxy(
+  {} as Record<TaskPlanState, string>,
   {
     get(_target, prop: string) {
-      return getPlanStatusLabel(prop as TaskPlan['state']);
+      return getPlanStatusLabel(prop as TaskPlanState);
     },
   },
 );
@@ -99,7 +105,7 @@ export function timingLabel(
   }
 }
 
-export const timingIcon = (kind: TaskPlan['timing']['kind']) => {
+export const timingIcon = (kind: TaskTiming['kind']) => {
   switch (kind) {
     case 'immediate':
       return '⚡';
