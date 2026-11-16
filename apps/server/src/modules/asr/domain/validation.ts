@@ -142,10 +142,10 @@ function validateLiveSettings(
 }
 
 // ============================================================================
-// 3. 外部 SenseVoice 服务配置校验
+// 3. SenseVoice 服务配置校验
 // ============================================================================
 
-/** 外部服务按模型 ID 选择权重，例如 iic/SenseVoiceSmall 或 sensevoice。 */
+/** 服务按模型 ID 选择权重，例如 sensevoice 或 iic/SenseVoiceSmall。 */
 const SENSE_VOICE_MODEL = /^[a-zA-Z0-9][a-zA-Z0-9._:/+-]{0,199}$/;
 
 /** 地址与密钥复用语音服务的连接校验；SenseVoice 容器与本机部署都允许 HTTP。 */

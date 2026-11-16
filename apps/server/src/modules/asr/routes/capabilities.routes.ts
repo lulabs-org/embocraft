@@ -68,7 +68,7 @@ export function installCapabilitiesRoutes(router: Router) {
             : await asrService.get(String(req.query.serviceId));
         // 云端配置不是服务器内引擎，engineFor 会直接拒绝。
         const engine = await speechRouter.engineFor(selected);
-        // 已安装模型列表来自外部 SenseVoice 服务；仅在实际使用 SenseVoice 时查询，
+        // 已安装模型列表来自 SenseVoice 服务；仅在实际使用 SenseVoice 时查询，
         // 避免 Whisper 部署因 SenseVoice 不可达而多等一次超时。
         const [local, senseVoiceModels] = await Promise.all([
           engine.status(settingsFor(selected)),

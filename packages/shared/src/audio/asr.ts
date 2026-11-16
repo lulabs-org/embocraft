@@ -48,7 +48,8 @@ export type SenseVoiceAsrView = SenseVoiceAsrSettings & {
   hasApiKey?: boolean;
 };
 export const DEFAULT_SENSE_VOICE_ASR: SenseVoiceAsrSettings = {
-  model: 'iic/SenseVoiceSmall',
+  // FunASR 的 OpenAI 兼容服务以 sensevoice 作为默认模型别名。
+  model: 'sensevoice',
   language: 'zh',
 };
 export type AsrProviderDraft =

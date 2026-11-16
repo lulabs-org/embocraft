@@ -102,7 +102,7 @@ it('reports readiness through health and falls back to the model list', async ()
   const adapter = new SenseVoiceAdapter(undefined, fetcher);
   const status = await adapter.status(settings);
   expect(status.available).toBe(true);
-  expect(status.reason).toContain('外部容器');
+  expect(status.reason).toContain('SenseVoice 容器');
   expect(requests).toEqual([
     'http://asr.local/health',
     'http://asr.local/v1/models',
@@ -186,6 +186,27 @@ it('omits the language field for auto detection', async () => {
     { ...settings, language: 'auto' },
   );
   expect(form?.has('language')).toBe(false);
+});
+
+it('uses the FunASR alias when the model is blank', async () => {
+  let form: FormData | undefined;
+  const fetcher = vi.fn(
+    async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/health'))
+        return new Response('', { status: 200 });
+      form = init?.body as FormData;
+      return new Response(JSON.stringify({ text: '你好' }), { status: 200 });
+    },
+  ) as unknown as typeof fetch;
+  const adapter = new SenseVoiceAdapter(undefined, fetcher);
+  await adapter.transcribe(
+    pcmWav(),
+    'audio/wav',
+    'zh',
+    new AbortController().signal,
+    { ...settings, model: '' },
+  );
+  expect(form?.get('model')).toBe('sensevoice');
 });
 
 it('maps empty, invalid and upstream failures to explicit errors', async () => {

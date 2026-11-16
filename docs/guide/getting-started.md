@@ -27,12 +27,13 @@ cp -n .env.example .env
 | 本地开发       | 数据库连接串、服务端监听地址与端口、本机语音工具路径 | 配合 `pnpm dev` 与本地数据库脚本使用 |
 | Docker Compose | 宿主机映射端口、数据库初始化账号和密码               | 由 Compose 生成容器内部连接配置      |
 
-`WEB_ORIGIN` 和 `SPEECH_API_URL` 保持注释时，各运行方式使用自己的默认值：
+`WEB_ORIGIN`、`SPEECH_API_URL` 和 `SENSE_VOICE_API_URL` 保持注释时，各运行方式使用自己的默认值：
 
-| 配置                      | 本地开发                   | Docker Compose          |
-| ------------------------- | -------------------------- | ----------------------- |
-| 前端来源 `WEB_ORIGIN`     | `http://127.0.0.1:5173`    | `*`                     |
-| 语音服务 `SPEECH_API_URL` | `http://127.0.0.1:8000/v1` | `http://speech:8000/v1` |
+| 配置                            | 本地开发                   | Docker Compose                 |
+| ------------------------------- | -------------------------- | ------------------------------ |
+| 前端来源 `WEB_ORIGIN`           | `http://127.0.0.1:5173`    | `*`                            |
+| 语音服务 `SPEECH_API_URL`       | `http://127.0.0.1:8000/v1` | `http://speech:8000/v1`        |
+| SenseVoice `SENSE_VOICE_API_URL` | `http://127.0.0.1:8001/v1` | `http://sensevoice:8000/v1`    |
 
 使用域名或自定义 Web 端口时，设置对应的 `WEB_ORIGIN` 和 `AGENT_GATEWAY_ALLOWED_ORIGINS`，后者支持逗号分隔的多个来源。覆盖语音服务地址时，填写从服务端所在环境可访问的地址。
 
@@ -99,7 +100,7 @@ pnpm agent:mock
 
 ## Docker 全栈一键部署
 
-项目提供生产就绪的 Docker Compose 编排配置，整合了 Nginx 前端反代、Node.js 游戏服务端、PostgreSQL 17 以及 Speaches 语音容器。
+项目提供生产就绪的 Docker Compose 编排配置，整合了 Nginx 前端反代、Node.js 游戏服务端、PostgreSQL 17、Speaches 语音容器（Whisper + Piper TTS）以及 SenseVoice ASR 容器（FunASR OpenAI 兼容服务）。
 
 ### 1. 架构与端口映射
 
@@ -114,12 +115,12 @@ pnpm agent:mock
                                         ▼ (2567 端口)
                              ┌─────────────────────┐
                              │  Node.js 权威服务端  │
-                             └──┬────────────────┬─┘
-                  SQL 查询 (55432)│                │ ASR / TTS 推理 (8000)
-                                ▼                ▼
-                      ┌──────────────────┐  ┌──────────────────┐
-                      │ PostgreSQL 17 DB │  │ Speaches 语音容器 │
-                      └──────────────────┘  └──────────────────┘
+                             └──┬─────────┬────────┬┘
+                  SQL (55432)   │         │        │ ASR / TTS (8000)
+                                ▼         ▼        ▼
+                      ┌──────────────┐ ┌────────┐ ┌──────────────┐
+                      │ PostgreSQL   │ │Speaches│ │ SenseVoice   │
+                      └──────────────┘ └────────┘ └──────────────┘
 ```
 
 ### 2. 一键启动指令
@@ -140,6 +141,7 @@ docker compose up -d --build
 - **Swagger 交互式 API 文档**：`http://localhost:2567/api-docs`
 - **本地 PostgreSQL 实例**：宿主机暴露 `55432` 端口，数据持久化于 `voxel_postgres_data` 卷。
 - **Speaches 语音推理服务**：容器内 `8000` 端口，包含离线 Whisper 识别与 Piper 语音合成。
+- **SenseVoice 识别服务**：容器内 `8000` 端口，宿主机默认暴露 `8001`；首次启动会下载 SenseVoiceSmall 到 `embocraft_sensevoice_cache` 卷（约数分钟），之后离线运行。
 
 ### 3. 常用运维命令
 
@@ -164,6 +166,7 @@ docker compose down -v
 | `SERVER_PORT`       | `2567`          | 服务端直接访问端口           |
 | `POSTGRES_PORT`     | `55432`         | 数据库宿主机访问端口         |
 | `SPEECH_PORT`       | `8000`          | 语音服务宿主机访问端口       |
+| `SENSE_VOICE_PORT`  | `8001`          | SenseVoice 宿主机访问端口    |
 | `POSTGRES_USER`     | `voxel`         | 数据库初始化用户             |
 | `POSTGRES_PASSWORD` | `voxelpassword` | 数据库初始化密码，部署前修改 |
 | `POSTGRES_DB`       | `voxel`         | 数据库名称                   |

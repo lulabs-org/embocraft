@@ -20,7 +20,7 @@ import type {
 const MAX_TEXT = 240;
 
 /**
- * 外部 SenseVoice 服务返回的常见形态是 `{ text }`；仅接受这一种，
+ * SenseVoice 服务返回的常见形态是 `{ text }`；仅接受这一种，
  * 避免把服务端错误页或调试字段误当成识别结果广播出去。
  */
 function readTranscript(value: unknown): string {
@@ -37,14 +37,14 @@ function readTranscript(value: unknown): string {
   return normalized;
 }
 
-/** 外部服务按模型 ID 选择权重；`default` 映射到部署文档推荐的 SenseVoice 模型。 */
+/** 服务按模型 ID 选择权重；`default` 映射到内置 FunASR 的 sensevoice 别名。 */
 function modelName(settings?: SenseVoiceAsrDraft) {
   const model = settings?.model?.trim();
   return !model || model === 'default' ? DEFAULT_SENSE_VOICE_ASR.model : model;
 }
 
 /**
- * 外部 OpenAI 兼容的 SenseVoice 识别适配器。
+ * OpenAI 兼容的 SenseVoice 识别适配器。
  * 推理、模型下载与资源占用都在独立容器内完成，本进程只负责归一化音频、
  * 拼接请求并解析文本；地址与密钥可按服务配置覆盖，未配置时回退部署默认值。
  */
@@ -98,7 +98,7 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
         return {
           available: true,
           reason:
-            'SenseVoice 识别服务可连接。模型在外部容器内离线运行，录音只发送到该服务。',
+            'SenseVoice 识别服务可连接。模型在 SenseVoice 容器内离线运行，录音只发送到该服务。',
         };
       const models = await this.fetcher(
         `${connection.baseUrl}/models`,
@@ -108,7 +108,7 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
         return {
           available: true,
           reason:
-            'SenseVoice 识别服务可连接。模型在外部容器内离线运行，录音只发送到该服务。',
+            'SenseVoice 识别服务可连接。模型在 SenseVoice 容器内离线运行，录音只发送到该服务。',
         };
       return {
         available: false,
@@ -152,7 +152,7 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
   }
 
   async normalize(audio: Buffer, contentType: string, signal: AbortSignal) {
-    // 浏览器快照已是 16 kHz 单声道 PCM，直接转发给外部服务，省去 FFmpeg 进程开销。
+    // 浏览器快照已是 16 kHz 单声道 PCM，直接转发给 SenseVoice 服务，省去 FFmpeg 进程开销。
     const format = audioFormats[contentType.split(';')[0].trim().toLowerCase()];
     if (format === 'wav') {
       try {

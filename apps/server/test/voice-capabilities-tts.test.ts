@@ -7,7 +7,7 @@ vi.mock('../src/modules/asr/engines', () => ({
   localSpeech: {
     status: async () => ({ available: true, reason: 'ASR ready' }),
   },
-  // 能力接口会并行读取外部 SenseVoice 模型列表；测试用空列表保持契约稳定。
+  // 能力接口会并行读取 SenseVoice 模型列表；测试用空列表保持契约稳定。
   senseVoiceSpeech: { listModels: async () => [] },
 }));
 vi.mock('../src/modules/asr/services/asr.service', () => ({ asrService: {} }));

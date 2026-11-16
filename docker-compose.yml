@@ -55,6 +55,35 @@ services:
       retries: 3
       start_period: 20m
 
+  sensevoice:
+    build:
+      context: .
+      dockerfile: Dockerfile.sensevoice
+    container_name: embocraft-sensevoice
+    restart: unless-stopped
+    networks:
+      - embocraft-network
+    environment:
+      # 模型缓存到命名卷，容器重建后无需重新下载。
+      MODELSCOPE_CACHE: /models
+    volumes:
+      - sensevoice_cache:/models
+    ports:
+      - '${SENSE_VOICE_PORT:-8001}:8000'
+    # 首次启动会下载并加载 SenseVoiceSmall，健康检查留出较长的启动窗口。
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20m
+
   server:
     build:
       context: .
@@ -68,6 +97,8 @@ services:
         condition: service_healthy
       speech:
         condition: service_healthy
+      sensevoice:
+        condition: service_healthy
     environment:
       SERVER_HOST: 0.0.0.0
       DATABASE_URL: postgresql://${POSTGRES_USER:-embocraft}:${POSTGRES_PASSWORD:-embocraftpassword}@db:5432/${POSTGRES_DB:-embocraft}?schema=public
@@ -75,9 +106,9 @@ services:
       AGENT_GATEWAY_TOKEN: '${AGENT_GATEWAY_TOKEN:-}'
       AGENT_GATEWAY_ALLOWED_ORIGINS: '${AGENT_GATEWAY_ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}'
       SPEECH_API_URL: '${SPEECH_API_URL:-http://speech:8000/v1}'
-      # SenseVoice 由使用者自行部署的 OpenAI 兼容容器提供；留空时 auto 回退 Whisper。
+      # SenseVoice 由项目内置容器提供；也可改为任何 OpenAI 兼容的远端地址。
       ASR_PROVIDER: '${ASR_PROVIDER:-auto}'
-      SENSE_VOICE_API_URL: '${SENSE_VOICE_API_URL:-}'
+      SENSE_VOICE_API_URL: '${SENSE_VOICE_API_URL:-http://sensevoice:8000/v1}'
     volumes:
       - server_data:/app/.data
     ports:
@@ -106,5 +137,7 @@ volumes:
     name: embocraft_postgres_data
   speech_cache:
     name: embocraft_speech_cache
+  sensevoice_cache:
+    name: embocraft_sensevoice_cache
   server_data:
     name: embocraft_server_data

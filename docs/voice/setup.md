@@ -5,7 +5,7 @@
 ::: tip 核心架构概览
 
 - **TTS 语音合成**：支持本地轻量 Piper 引擎、阿里云百炼 Qwen-TTS、兼容 OpenAI Speech API 以及前端浏览器 Web Speech 原生朗读。
-- **ASR 语音识别**：支持外部 SenseVoice 服务、本地自托管 Whisper、阿里云实时语音识别（Fun-ASR / Paraformer）以及前端 Web Speech 识别。
+- **ASR 语音识别**：支持项目内置的 SenseVoice 服务、本地自托管 Whisper、阿里云实时语音识别（Fun-ASR / Paraformer）以及前端 Web Speech 识别。
 - **零秘钥泄露**：配置文件以 `0600` 权限保存在服务端，浏览器仅接收脱敏元数据（`hasApiKey: boolean`）。
   :::
 
@@ -100,7 +100,7 @@ graph LR
 
 ```mermaid
 graph TD
-    ASR[语音识别 ASR 引擎] --> SenseVoice[外部 SenseVoice<br>OpenAI 兼容容器 / 用户自行部署]
+    ASR[语音识别 ASR 引擎] --> SenseVoice[内置 SenseVoice<br>FunASR OpenAI 兼容服务 / CPU]
     ASR --> Whisper[自托管 Whisper<br>多模型 / 参数调优 / 自 托管服务]
     ASR --> AliyunASR[阿里云实时识别<br>Fun-ASR / Paraformer / 流式毫秒级反馈]
     ASR --> BrowserASR[浏览器原生识别<br>Web Speech API / 33 种语言]
@@ -139,18 +139,21 @@ graph TD
 
 前端音量门槛仅用于分句，不能替代语音服务的人声检测。上述措施减少误识别，不能保证所有背景声都被过滤。
 
-### 3. 外部 SenseVoice 识别服务
+### 3. SenseVoice 识别服务（项目内置容器）
 
-SenseVoice 与 Whisper 一样通过 OpenAI 兼容的 `/v1/audio/transcriptions` 接口调用独立容器，项目 server 进程不再加载 ONNX 模型或原生插件。使用者可自行部署 FunASR（`funasr-server`、`modelscope/funasr` 等兼容服务），然后在控制台填写地址、模型 ID（如 `iic/SenseVoiceSmall`）、可选 API Key 与识别语言；地址留空时跟随部署默认值。
+SenseVoice 与 Whisper 一样通过 OpenAI 兼容的 `/v1/audio/transcriptions` 接口调用独立容器。项目提供 `Dockerfile.sensevoice`，基于 FunASR 官方 `funasr-server` 在 CPU 上运行，`docker-compose.yml` 中的 `sensevoice` 服务会随全栈一起启动，容器内地址为 `http://sensevoice:8000/v1`。首次启动会从 ModelScope 下载 SenseVoiceSmall 到 `sensevoice_cache` 卷，之后离线运行；宿主机默认映射到 8001 端口，便于本地调试。
+
+控制台可保存多份 SenseVoice 配置，覆盖地址、模型（默认 `sensevoice`，即 FunASR 内置的 `iic/SenseVoiceSmall` 别名）、语言（自动 / 中文 / 英文）与可选 API Key；地址留空时跟随部署默认值。也可以把 `SENSE_VOICE_API_URL` 指向任意 OpenAI 兼容的 SenseVoice 服务替换内置容器；换成其他服务时，模型 ID 需按该服务文档填写（例如 `iic/SenseVoiceSmall`）。
 
 | 环境变量 | 默认值 | 作用说明 |
-| :------------------ | :----- | :------------------------------------------------------------------------------- |
+| :------------------ | :--------------------------------- | :------------------------------------------------------------------------------- |
 | `ASR_PROVIDER` | `auto` | 配置了 `SENSE_VOICE_API_URL` 时优先 SenseVoice，否则回退 Whisper；也可强制 `whisper` / `sense-voice` |
-| `SENSE_VOICE_API_URL` | 空 | 外部 SenseVoice 服务地址（含 `/v1`）；留空时每份 SenseVoice 配置需自行填写地址 |
+| `SENSE_VOICE_API_URL` | Docker `http://sensevoice:8000/v1` | SenseVoice 服务地址；本地开发可指向 `http://127.0.0.1:8001/v1` |
+| `SENSE_VOICE_PORT` | `8001` | 内置 SenseVoice 容器映射到宿主机的端口 |
 
-Docker 部署时 server 镜像不打包任何 ASR 模型；`docker-compose.yml` 默认把 `SENSE_VOICE_API_URL` 透传给服务端，容器由使用者自行部署并确保与 server 在同一网络，例如 `SENSE_VOICE_API_URL=http://sensevoice:8000/v1`。服务字段为空或不可达时，`auto` 不会选用 SenseVoice，语音识别回退到 Speaches Whisper。
+内置镜像只包含 CPU 版 PyTorch 与 FunASR，构建与首次启动比纯 Node 服务慢；模型缓存后再次启动无需联网。若服务器访问 PyPI 或 PyTorch 源受限，可换用可达镜像源重建：`docker compose build --build-arg PIP_MIRROR=https://pypi.tuna.tsinghua.edu.cn/simple sensevoice`。若不需要 SenseVoice，可移除 compose 中的 `sensevoice` 服务并清空 `SENSE_VOICE_API_URL`，`auto` 会自动回退到 Speaches Whisper。
 
-识别请求会先归一化为 16 kHz 单声道 WAV（浏览器录音快照直接转发，不再调用 FFmpeg），显式选择中文/英文时才发送 `language`，`auto` 交给模型检测。模型下载、首次加载与资源占用全部由外部容器承担；能力探测通过该服务的 `/health` 或 `/v1/models` 判断是否就绪，保存的服务配置只保留地址、模型、语言与可选密钥，公开列表仅返回 `hasApiKey`。
+识别请求会先归一化为 16 kHz 单声道 WAV（浏览器录音快照直接转发，不再调用 FFmpeg），显式选择中文/英文时才发送 `language`，`auto` 交给模型检测。模型下载、首次加载与资源占用全部由内置容器承担；能力探测通过该服务的 `/health` 或 `/v1/models` 判断是否就绪，保存的服务配置只保留地址、模型、语言与可选密钥，公开列表仅返回 `hasApiKey`。
 
 ### 4. 浏览器语音识别（Web Speech API）
 

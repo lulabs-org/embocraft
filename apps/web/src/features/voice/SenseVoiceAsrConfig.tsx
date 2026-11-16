@@ -8,7 +8,7 @@ import { useI18n } from '../../i18n';
 import { voiceApi } from './api';
 
 /**
- * 外部 SenseVoice 服务配置：地址、可选密钥、模型与语言分开保存。
+ * SenseVoice 服务配置：地址、可选密钥、模型与语言分开保存。
  * 地址留空时跟随 SENSE_VOICE_API_URL，便于 Compose 内统一部署、控制台仍可覆盖。
  */
 export function SenseVoiceAsrConfig({

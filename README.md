@@ -12,7 +12,7 @@ A standalone, local multiplayer 3D voxel and embodied AI sandbox: TypeScript · 
 ## Key Features
 
 - 🤖 **LLM-Powered AI Players**: Integrates large language models such as DeepSeek, featuring autonomous observation, spatial navigation, multi-step reasoning & planning, and voxel editing capabilities.
-- 🎙️ **Proximity Spatial Audio & Live Transcription**: Built-in Whisper ASR speech recognition and Piper offline TTS speech synthesis, with distance- and orientation-based 3D attenuation mixing, automatically broadcasting transcribed subtitles to nearby players and agents upon sentence completion.
+- 🎙️ **Proximity Spatial Audio & Live Transcription**: Built-in Whisper and SenseVoice ASR speech recognition plus Piper offline TTS speech synthesis, with distance- and orientation-based 3D attenuation mixing, automatically broadcasting transcribed subtitles to nearby players and agents upon sentence completion.
 - 🧱 **Authoritative Multiplayer World**: Three.js instanced voxel rendering, powered by a Node.js / Colyseus server that authoritatively validates movement physics, velocity, raycast collisions, gravity, and voxel adjacency support rules.
 - 🔌 **Agent Gateway Central Management**: Dedicated HTTP/WebSocket endpoints for unified AI character lifecycle management, task plan queues, status acknowledgments, and token budget protection.
 
@@ -55,7 +55,7 @@ Once started, open http://127.0.0.1:5173 in your browser. You can open two separ
 
 ### 2. One-Click Full-Stack Docker Deployment
 
-This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, and an integrated Speaches voice container (Whisper ASR + Piper TTS). SenseVoice is optional and runs in an external OpenAI-compatible ASR container that you deploy and configure yourself:
+This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, an integrated Speaches voice container (Whisper ASR + Piper TTS), and a bundled SenseVoice ASR container (FunASR's OpenAI-compatible `funasr-server`):
 
 ```sh
 # Start all services with one command
@@ -66,11 +66,11 @@ pnpm docker:up
 pnpm docker:down
 ```
 
-SenseVoice follows the same HTTP path as Whisper: point `SENSE_VOICE_API_URL` at your own OpenAI-compatible SenseVoice service (for example FunASR with `/v1/audio/transcriptions`) and leave it empty to fall back to the shared Speaches Whisper service when `ASR_PROVIDER=auto`:
+The bundled SenseVoice container starts with the stack and is used by default when `ASR_PROVIDER=auto`. Its first start downloads SenseVoiceSmall into the `embocraft_sensevoice_cache` volume; later starts run offline. The host exposes it on `${SENSE_VOICE_PORT:-8001}`:
 
 ```sh
-# Deploy the SenseVoice container yourself, then expose its URL to the server
-SENSE_VOICE_API_URL=http://sensevoice:8000/v1 pnpm docker:up
+# Use any other OpenAI-compatible SenseVoice service instead of the bundled one
+SENSE_VOICE_API_URL=http://my-sensevoice:8000/v1 pnpm docker:up
 ```
 
 The server image ships no ASR models or native runtime; model packs never enter git or the server build context. Each saved SenseVoice profile may also override the URL, model ID and optional API key from the console.

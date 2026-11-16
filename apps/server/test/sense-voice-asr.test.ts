@@ -13,7 +13,7 @@ import {
 import { TestAsrService } from './helpers/memory-storage';
 
 /**
- * 跨层契约：HTTP 路由 → 领域校验 → 服务仓储 → 外部 SenseVoice 适配器。
+ * 跨层契约：HTTP 路由 → 领域校验 → 服务仓储 → SenseVoice 适配器。
  * 上游用一个真实的本地 HTTP 服务代替容器，验证请求字段、鉴权与错误映射。
  */
 const mocked = vi.hoisted(() => ({
@@ -80,7 +80,7 @@ type UpstreamCall = {
   body: string;
 };
 
-describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
+describe('SenseVoice ASR over the ASR HTTP boundary', () => {
   let server: Server, base: string;
   let upstream: Server, upstreamBase: string;
   let calls: UpstreamCall[];
@@ -118,7 +118,7 @@ describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
     await new Promise<void>((resolve) => upstream.close(() => resolve()));
   });
   beforeEach(async () => {
-    // auto + 配置了外部地址是 SenseVoice 的典型部署形态。
+    // auto + 配置了服务地址是 SenseVoice 的典型部署形态。
     vi.stubEnv('ASR_PROVIDER', 'auto');
     vi.stubEnv('SENSE_VOICE_API_URL', upstreamBase);
     vi.stubEnv('WEB_ORIGIN', origin);
@@ -163,8 +163,8 @@ describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
       method: 'POST',
       body: JSON.stringify({
         provider: 'sense-voice',
-        name: '外部识别',
-        model: 'iic/SenseVoiceSmall',
+        name: 'SenseVoice 识别',
+        model: 'sensevoice',
         language: 'zh',
         ...extra,
       }),
@@ -176,10 +176,10 @@ describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
     const body = await response.json();
     expect(body.senseVoiceModels).toEqual(['iic/SenseVoiceSmall']);
     expect(body.local).toMatchObject({ available: true });
-    expect(body.local.reason).toContain('外部容器');
+    expect(body.local.reason).toContain('SenseVoice 容器');
   });
 
-  it('saves an external profile, hides its key and transcribes through it', async () => {
+  it('saves a SenseVoice profile, hides its key and transcribes through it', async () => {
     const created = await createService({
       baseUrl: upstreamBase,
       apiKey: 'secret',
@@ -188,7 +188,7 @@ describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
     const service = await created.json();
     expect(service).toMatchObject({
       provider: 'sense-voice',
-      model: 'iic/SenseVoiceSmall',
+      model: 'sensevoice',
       language: 'zh',
       baseUrl: upstreamBase,
       hasApiKey: true,
@@ -213,7 +213,7 @@ describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
       call.url.endsWith('/audio/transcriptions'),
     )!;
     expect(post.authorization).toBe('Bearer secret');
-    expect(post.body).toContain('iic/SenseVoiceSmall');
+    expect(post.body).toContain('sensevoice');
     expect(post.body).toContain('name="language"');
     expect(post.body).toContain('zh');
     // 16 kHz WAV 快照原样转发，无需 FFmpeg。
@@ -227,7 +227,7 @@ describe('SenseVoice external ASR over the ASR HTTP boundary', () => {
     const post = calls.find((call) =>
       call.url.endsWith('/audio/transcriptions'),
     )!;
-    // auto 交给外部模型检测，不发送 language 字段。
+    // auto 交给模型检测，不发送 language 字段。
     expect(post.body).not.toContain('name="language"');
   });
 

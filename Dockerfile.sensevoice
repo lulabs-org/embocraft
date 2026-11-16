@@ -1,0 +1,38 @@
+# 项目内置的 SenseVoice ASR 服务：FunASR 官方 OpenAI 兼容接口。
+# 只负责 /v1/audio/transcriptions 与 /health，模型在首次启动时下载到 /models。
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MODELSCOPE_CACHE=/models
+
+# server 会先把所有录音归一化为 16 kHz WAV，因此容器只需 libsndfile 读取 WAV，无需 ffmpeg。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libsndfile1 \
+      libgomp1 \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# amd64 走 PyTorch 官方 CPU 源，避免拉取 CUDA 依赖；arm64 使用 PyPI 的 aarch64 轮子。
+# 默认使用 PyPI；网络受限时可通过 --build-arg 换成可达的镜像源。
+ARG PIP_MIRROR=https://pypi.org/simple
+ARG TORCH_CPU_INDEX=https://download.pytorch.org/whl/cpu
+ARG TARGETARCH
+RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    if [ "$arch" = "arm64" ]; then \
+      pip install --index-url "$PIP_MIRROR" torch==2.7.1 torchaudio==2.7.1; \
+    else \
+      pip install --index-url "$TORCH_CPU_INDEX" \
+        torch==2.7.1 torchaudio==2.7.1; \
+    fi \
+    && pip install --index-url "$PIP_MIRROR" "funasr==1.4.25" fastapi uvicorn python-multipart \
+    && pip check
+
+EXPOSE 8000
+
+# 首次启动会下载 SenseVoiceSmall 并加载到内存，健康检查留出较长的启动窗口。
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+
+# sensevoice 是 funasr-server 的模型别名，与 DEFAULT_SENSE_VOICE_ASR 保持一致。
+CMD ["funasr-server", "--host", "0.0.0.0", "--port", "8000", "--model", "sensevoice", "--device", "cpu"]

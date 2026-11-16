@@ -12,7 +12,7 @@
 ## 核心特性
 
 - 🤖 **大模型 AI 玩家**：支持 DeepSeek 等大语言模型，具备自主观察、空间移动、多轮推理规划与方块编辑能力。
-- 🎙️ **附近空间语音与实时转写**：内置 Whisper ASR 语音识别与 Piper 离线 TTS 语音合成，支持基于 3D 距离与朝向的衰减混音，并在断句后向附近玩家与 Agent 自动广播转写字幕。
+- 🎙️ **附近空间语音与实时转写**：内置 Whisper / SenseVoice ASR 语音识别与 Piper 离线 TTS 语音合成，支持基于 3D 距离与朝向的衰减混音，并在断句后向附近玩家与 Agent 自动广播转写字幕。
 - 🧱 **权威多人世界**：Three.js 实例化体素渲染，由 Node.js / Colyseus 服务端权威执行物理移动、速度、射线碰撞、重力及方块相邻支撑校验。
 - 🔌 **Agent Gateway 管理中枢**：提供独立的 HTTP/WebSocket 协议端点，统一管理 AI 角色生命周期、任务计划队列、状态回执与 Token 预算保护。
 
@@ -55,7 +55,7 @@ pnpm agent:ai --api-key sk-your-deepseek-api-key
 
 ### 2. Docker 一键全栈部署
 
-本项目提供开箱即用的 Docker Compose 编排，包含 Web 前端、Node 后端、PostgreSQL 数据库以及内置的 Speaches 语音容器（Whisper ASR + Piper TTS）：
+本项目提供开箱即用的 Docker Compose 编排，包含 Web 前端、Node 后端、PostgreSQL 数据库、内置的 Speaches 语音容器（Whisper ASR + Piper TTS）以及 SenseVoice ASR 容器（FunASR 的 OpenAI 兼容 `funasr-server`）：
 
 ```sh
 # 一键启动所有服务
@@ -66,7 +66,7 @@ pnpm docker:up
 pnpm docker:down
 ```
 
-如需 SenseVoice 识别，请自行部署 OpenAI 兼容的 SenseVoice 容器（例如 FunASR 的 `/v1/audio/transcriptions`），并在启动时设置 `SENSE_VOICE_API_URL`；server 镜像不打包模型，地址留空时 `ASR_PROVIDER=auto` 自动回退到内置 Whisper 服务。
+SenseVoice 容器默认随栈启动，`ASR_PROVIDER=auto` 时优先使用。首次启动会下载 SenseVoiceSmall 到 `embocraft_sensevoice_cache` 卷，之后离线运行；宿主机端口默认 8001。需要换成其他 OpenAI 兼容服务时设置 `SENSE_VOICE_API_URL` 即可；server 镜像不打包任何 ASR 模型。
 
 启动完成后：
 
@@ -121,7 +121,7 @@ embocraft/
 | **AI Agent** | [接入 AI 玩家](docs/agent/players.md)         | DeepSeek 模型接入、推理工具链与任务执行循环  |
 |              | [Agent Gateway](docs/agent/gateway.md)        | 管理令牌、HTTP 控制端点与 WebSocket 状态订阅 |
 |              | [统一事件运行时](docs/agent/runtime.md)       | 任务执行器、检查点持久化与预算配额保护       |
-| **语音服务** | [语音服务管理](docs/voice/setup.md)           | Whisper ASR 与 Piper TTS 模型安装与配置      |
+| **语音服务** | [语音服务管理](docs/voice/setup.md)           | SenseVoice / Whisper ASR 与 Piper TTS 模型安装与配置 |
 | **变更记录** | [验证记录](docs/changelog/validation.md)      | 浏览器双端回归、网络异常恢复与功能验收记录   |
 |              | [Pi 架构迁移](docs/changelog/pi-migration.md) | Agent 运行时架构演进记录                     |
 

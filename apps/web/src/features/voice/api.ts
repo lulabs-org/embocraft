@@ -12,7 +12,7 @@ import { managementRequest } from '@voxel/shared/management';
 
 export type SpeechCapabilities = {
   local: { available: boolean; reason: string };
-  /** 外部 SenseVoice 服务通过 /v1/models 暴露的模型 ID；不可达时为空。 */
+  /** SenseVoice 服务通过 /v1/models 暴露的模型 ID；不可达时为空。 */
   senseVoiceModels?: string[];
 };
 
