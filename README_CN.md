@@ -55,7 +55,7 @@ pnpm agent:ai --api-key sk-your-deepseek-api-key
 
 ### 2. Docker 一键全栈部署
 
-本项目提供开箱即用的 Docker Compose 编排，包含 Web 前端、Node 后端、PostgreSQL 数据库、内置的 Speaches 语音容器（Whisper ASR + Piper TTS）以及 SenseVoice ASR 容器（FunASR 的 OpenAI 兼容 `funasr-server`）：
+本项目提供开箱即用的 Docker Compose 编排，包含 Web 前端、Node 后端、PostgreSQL 数据库以及内置的 Speaches 语音容器（Whisper ASR + Piper TTS）：
 
 ```sh
 # 一键启动所有服务
@@ -66,7 +66,7 @@ pnpm docker:up
 pnpm docker:down
 ```
 
-SenseVoice 容器默认随栈启动，`ASR_PROVIDER=auto` 时优先使用。首次启动会下载 SenseVoiceSmall 到 `embocraft_sensevoice_cache` 卷，之后离线运行；宿主机端口默认 8001。需要换成其他 OpenAI 兼容服务时设置 `SENSE_VOICE_API_URL` 即可；server 镜像不打包任何 ASR 模型。
+SenseVoice 不在编排内，需自行提供 OpenAI 兼容服务：设置 `SENSE_VOICE_API_URL`（需包含 `/v1`，且从 server 容器内可访问）后，`ASR_PROVIDER=auto` 时会优先使用；留空则自动回退 Speaches Whisper。也可在 Web 控制台为单个 SenseVoice 服务填写地址；server 镜像不打包任何 ASR 模型。
 
 启动完成后：
 

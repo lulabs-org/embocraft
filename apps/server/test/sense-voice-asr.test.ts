@@ -176,7 +176,7 @@ describe('SenseVoice ASR over the ASR HTTP boundary', () => {
     const body = await response.json();
     expect(body.senseVoiceModels).toEqual(['iic/SenseVoiceSmall']);
     expect(body.local).toMatchObject({ available: true });
-    expect(body.local.reason).toContain('SenseVoice 容器');
+    expect(body.local.reason).toContain('SenseVoice 服务');
   });
 
   it('saves a SenseVoice profile, hides its key and transcribes through it', async () => {

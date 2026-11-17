@@ -55,7 +55,7 @@ Once started, open http://127.0.0.1:5173 in your browser. You can open two separ
 
 ### 2. One-Click Full-Stack Docker Deployment
 
-This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, an integrated Speaches voice container (Whisper ASR + Piper TTS), and a bundled SenseVoice ASR container (FunASR's OpenAI-compatible `funasr-server`):
+This project provides out-of-the-box Docker Compose orchestration covering the Web frontend, Node backend, PostgreSQL database, and an integrated Speaches voice container (Whisper ASR + Piper TTS):
 
 ```sh
 # Start all services with one command
@@ -66,14 +66,14 @@ pnpm docker:up
 pnpm docker:down
 ```
 
-The bundled SenseVoice container starts with the stack and is used by default when `ASR_PROVIDER=auto`. Its first start downloads SenseVoiceSmall into the `embocraft_sensevoice_cache` volume; later starts run offline. The host exposes it on `${SENSE_VOICE_PORT:-8001}`:
+SenseVoice is not part of the stack; provide your own OpenAI-compatible service. Set `SENSE_VOICE_API_URL` (must include `/v1` and be reachable from the server container) and `ASR_PROVIDER=auto` will prefer it; when unset, auto falls back to Speaches Whisper:
 
 ```sh
-# Use any other OpenAI-compatible SenseVoice service instead of the bundled one
+# Point the stack at an external SenseVoice service
 SENSE_VOICE_API_URL=http://my-sensevoice:8000/v1 pnpm docker:up
 ```
 
-The server image ships no ASR models or native runtime; model packs never enter git or the server build context. Each saved SenseVoice profile may also override the URL, model ID and optional API key from the console.
+You can also override the URL per saved profile from the console. The server image ships no ASR models or native runtime; model packs never enter git or the server build context.
 
 After launch:
 

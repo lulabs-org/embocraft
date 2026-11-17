@@ -138,7 +138,7 @@ function readSpeechConfig(env: EnvLookup = process.env) {
       env.SPEECH_API_URL?.trim() || DEFAULT_SPEECH_API_URL
     ).replace(/\/+$/, ''),
     asrProvider,
-    // SenseVoice 由独立容器提供；留空时 auto 回退 Whisper，保存的配置仍可单独填写地址。
+    // SenseVoice 由外部 OpenAI 兼容服务提供；留空时 auto 回退 Whisper，保存的配置仍可单独填写地址。
     senseVoiceApiUrl: (env.SENSE_VOICE_API_URL?.trim() ?? '').replace(
       /\/+$/,
       '',

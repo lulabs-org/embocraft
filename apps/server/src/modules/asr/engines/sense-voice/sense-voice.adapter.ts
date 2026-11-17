@@ -98,7 +98,7 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
         return {
           available: true,
           reason:
-            'SenseVoice 识别服务可连接。模型在 SenseVoice 容器内离线运行，录音只发送到该服务。',
+            'SenseVoice 识别服务可连接。模型在 SenseVoice 服务内运行，录音只发送到该服务。',
         };
       const models = await this.fetcher(
         `${connection.baseUrl}/models`,
@@ -108,7 +108,7 @@ export class SenseVoiceAdapter implements SpeechTranscriberPort {
         return {
           available: true,
           reason:
-            'SenseVoice 识别服务可连接。模型在 SenseVoice 容器内离线运行，录音只发送到该服务。',
+            'SenseVoice 识别服务可连接。模型在 SenseVoice 服务内运行，录音只发送到该服务。',
         };
       return {
         available: false,

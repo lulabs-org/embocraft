@@ -102,7 +102,7 @@ it('reports readiness through health and falls back to the model list', async ()
   const adapter = new SenseVoiceAdapter(undefined, fetcher);
   const status = await adapter.status(settings);
   expect(status.available).toBe(true);
-  expect(status.reason).toContain('SenseVoice 容器');
+  expect(status.reason).toContain('SenseVoice 服务');
   expect(requests).toEqual([
     'http://asr.local/health',
     'http://asr.local/v1/models',
