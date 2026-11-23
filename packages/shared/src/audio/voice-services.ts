@@ -45,6 +45,24 @@ export const MIMO_TTS_VOICES = [
   { id: 'Dean', name: 'English · Dean' },
 ] as const;
 export const DEFAULT_MIMO_TTS_VOICE = MIMO_TTS_VOICES[0].id;
+/**
+ * Voice-clone model: `audio.voice` carries an mp3/wav sample as a base64 data
+ * URI instead of a preset ID, so each request re-sends the sample.
+ */
+export const MIMO_TTS_CLONE_MODEL = 'mimo-v2.5-tts-voiceclone';
+/** Data URI prefixes MiMo accepts for clone samples. */
+export const MIMO_CLONE_SAMPLE_PREFIXES = [
+  'data:audio/mpeg;base64,',
+  'data:audio/mp3;base64,',
+  'data:audio/wav;base64,',
+  'data:audio/x-wav;base64,',
+] as const;
+/** MiMo caps the base64 payload at 10 MB; data URI prefix is negligible. */
+export const MIMO_CLONE_SAMPLE_MAX_CHARS = 10 * 1024 * 1024;
+/** Samples travel as data URIs; preset voices never match these prefixes. */
+export function isMimoVoiceSample(voice: string): boolean {
+  return MIMO_CLONE_SAMPLE_PREFIXES.some((prefix) => voice.startsWith(prefix));
+}
 export type VoiceServiceSettings = {
   name: string;
   type: VoiceServiceType;

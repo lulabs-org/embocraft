@@ -1,4 +1,4 @@
-import type { VoiceServiceView } from '@voxel/shared';
+import { isMimoVoiceSample, type VoiceServiceView } from '@voxel/shared';
 import { AppError } from '../../../core/errors/app-error';
 import { domainEvents } from '../../../core/events/domain-events';
 import type { SavedVoice } from '../domain/voice-service-validation';
@@ -7,6 +7,8 @@ import { validateVoiceService } from '../domain/voice-service-validation';
 
 const publicView = ({ apiKey, ...value }: SavedVoice): VoiceServiceView => ({
   ...value,
+  // Clone samples can reach 10 MB; the browser only needs to know one is saved.
+  voice: isMimoVoiceSample(value.voice) ? '' : value.voice,
   capability: 'tts',
   hasApiKey: !!apiKey,
 });

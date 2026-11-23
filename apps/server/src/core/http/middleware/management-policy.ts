@@ -24,11 +24,14 @@ export const DEFAULT_MANAGEMENT_PATHS = [
 ] as const;
 
 /** Shared management transport policy; authentication is supplied by composition. */
-export const managementBody = [
+const managementBodyWithLimit = (jsonLimit: string): RequestHandler[] => [
   validateIdempotencyKey,
   requireJsonRequest,
-  express.json({ limit: '32kb' }),
+  express.json({ limit: jsonLimit }),
 ];
+
+/** Default policy for management routers that only accept small JSON payloads. */
+export const managementBody = managementBodyWithLimit('32kb');
 
 export const managementErrors = errorHandler((error) => {
   if (error instanceof AppError)
@@ -57,10 +60,17 @@ export function createManagementRouter(
   paths: string | readonly string[],
   authenticate: RequestHandler,
   install: (router: Router) => void,
+  options: { jsonLimit?: string } = {},
 ): Router {
   const router = express.Router();
   const routePaths = paths as string | string[];
-  router.use(routePaths, authenticate, ...managementBody);
+  router.use(
+    routePaths,
+    authenticate,
+    ...(options.jsonLimit
+      ? managementBodyWithLimit(options.jsonLimit)
+      : managementBody),
+  );
   install(router);
   router.use(routePaths, (_req, res) => {
     res.status(404).json({ error: '管理接口不存在，请确认前后端版本一致。' });

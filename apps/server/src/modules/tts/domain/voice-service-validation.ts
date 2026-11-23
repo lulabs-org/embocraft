@@ -1,4 +1,10 @@
-import { DEFAULT_PIPER_MODEL, type VoiceServiceDraft } from '@voxel/shared';
+import {
+  DEFAULT_PIPER_MODEL,
+  MIMO_CLONE_SAMPLE_MAX_CHARS,
+  MIMO_TTS_CLONE_MODEL,
+  isMimoVoiceSample,
+  type VoiceServiceDraft,
+} from '@voxel/shared';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../core/errors/app-error';
 import { validateVoiceConnection } from '../../../core/audio/voice-service-connection';
@@ -39,21 +45,48 @@ export function validateVoiceService(
     (!model || !/^[a-zA-Z0-9][a-zA-Z0-9._:/+-]*$/.test(model))
   )
     throw new AppError('请填写有效的语音模型 ID。');
-  const voice = str(
+  // MiMo voice clone sends a base64 audio sample as `audio.voice`; presets stay short.
+  const clone = type === 'mimo' && model === MIMO_TTS_CLONE_MODEL;
+  const rawVoice = input.voice ?? '';
+  if (
+    clone &&
+    typeof rawVoice === 'string' &&
+    rawVoice.length > MIMO_CLONE_SAMPLE_MAX_CHARS + 64
+  )
+    throw new AppError('克隆样本不能超过 10 MB。');
+  let voice = str(
     'voice',
-    type === 'browser' || type === 'speaches' ? 200 : 100,
+    clone
+      ? MIMO_CLONE_SAMPLE_MAX_CHARS + 64
+      : type === 'browser' || type === 'speaches'
+        ? 200
+        : 100,
   );
-  if (type !== 'browser' && !voice) throw new AppError('请选择或填写音色。');
+  if (clone) {
+    // Editing a saved clone reuses its sample: the browser never receives it.
+    if (
+      !voice &&
+      previous?.type === 'mimo' &&
+      previous.model === model &&
+      isMimoVoiceSample(previous.voice)
+    )
+      voice = previous.voice;
+    if (!voice || !isMimoVoiceSample(voice))
+      throw new AppError('请上传 mp3 或 wav 格式的克隆样本，且不超过 10 MB。');
+  } else if (type !== 'browser' && !voice) {
+    throw new AppError('请选择或填写音色。');
+  }
   const voiceLanguage =
     type === 'browser' ? str('voiceLanguage', 40) : undefined;
   if (voiceLanguage && !/^[a-zA-Z0-9-]+$/.test(voiceLanguage))
     throw new AppError('音色语言格式无效。');
   // MiMo preset voices are Chinese names (e.g. 冰糖), so any Unicode letter is allowed;
-  // Speaches keeps its own ID format and is skipped below.
+  // Speaches keeps its own ID format and clone samples keep their data URI form.
   const voicePattern = /^[\p{L}\p{N}_. ()-]+$/u;
   if (
     type !== 'browser' &&
     type !== 'speaches' &&
+    !clone &&
     voice &&
     !voicePattern.test(voice)
   )

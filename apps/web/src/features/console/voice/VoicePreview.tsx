@@ -1,5 +1,5 @@
 import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRelay';
-import type { VoiceServiceDraft } from '@voxel/shared';
+import { MIMO_TTS_CLONE_MODEL, type VoiceServiceDraft } from '@voxel/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { speakBrowserText } from '../../../audio';
 import { useI18n } from '../../../i18n';
@@ -29,17 +29,25 @@ export function VoicePreview({
   const request = useRef<AbortController | undefined>(undefined);
   const audio = useRef<HTMLAudioElement>(null);
   // Any configuration change invalidates the audio and status of an older setup.
+  // Samples can reach 10 MB, so compare their size and tail instead of the payload.
+  const voiceKey =
+    draft.voice.length > 200
+      ? `${draft.voice.length}:${draft.voice.slice(-32)}`
+      : draft.voice;
   const signature = [
     draft.type,
     draft.baseUrl,
     draft.model,
-    draft.voice,
+    voiceKey,
     draft.voiceLanguage ?? '',
     draft.speed,
   ].join('\u0000');
+  // A saved clone keeps its sample on the server, so a blank draft voice is fine.
+  const savedClone = draft.model === MIMO_TTS_CLONE_MODEL && !!serviceId;
   // Server types need a model and a voice; browser synthesis can fall back to a system voice.
   const ready =
-    draft.type === 'browser' || (!!draft.model.trim() && !!draft.voice.trim());
+    draft.type === 'browser' ||
+    (!!draft.model.trim() && (!!draft.voice.trim() || savedClone));
   const stop = useCallback(() => {
     request.current?.abort();
     audio.current?.pause();
