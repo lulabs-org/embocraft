@@ -88,6 +88,8 @@ export async function createServer() {
       (management) => {
         management.use(createTtsRouter());
       },
+      // Voice-clone drafts carry an mp3/wav sample as a base64 data URI.
+      { jsonLimit: '12mb' },
     ),
   );
 

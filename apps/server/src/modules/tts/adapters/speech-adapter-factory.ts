@@ -3,14 +3,18 @@ import type { SavedVoice } from '../domain/voice-service-validation';
 import type { SpeechSynthesizer } from '../services/speech-synthesizer';
 import { BailianTts } from './bailian-tts.adapter';
 import { CompatibleTts } from './compatible-tts.adapter';
+import { MimoTts } from './mimo-tts.adapter';
 import { SpeachesTtsAdapter } from './speaches-tts.adapter';
 
+/** Map a saved service type to its synthesizer; browser speech never reaches the server. */
 export function createSpeechAdapter(value: SavedVoice): SpeechSynthesizer {
   switch (value.type) {
     case 'speaches':
       return new SpeachesTtsAdapter(value);
     case 'bailian':
       return new BailianTts(value);
+    case 'mimo':
+      return new MimoTts(value);
     case 'compatible':
       return new CompatibleTts(value);
     case 'browser':

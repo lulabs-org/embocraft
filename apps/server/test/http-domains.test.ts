@@ -135,7 +135,10 @@ it('protects each management domain and retains transport policies after path mi
         headers,
         body: JSON.stringify({ text: 'x'.repeat(40000) }),
       });
-      expect(large.status, path).toBe(413);
+      // Voice-clone samples raise the TTS limit to 12 MB; other domains keep 32 KB.
+      expect(large.status, path).toBe(
+        path.startsWith('/voice/tts') ? 400 : 413,
+      );
       if (!path.startsWith('/voice/asr')) {
         const invalidKey = await fetch(url, {
           headers: { ...headers, 'Idempotency-Key': 'invalid key' },
@@ -185,7 +188,17 @@ it('protects each management domain and retains transport policies after path mi
       headers,
       body: JSON.stringify({ text: 'x'.repeat(9000) }),
     });
-    expect(voiceLarge.status).toBe(400); // Parsed under 32 KiB, rejected by service validation.
+    // Parsed under the 12 MB TTS limit, rejected by service validation.
+    expect(voiceLarge.status).toBe(400);
+    const voiceOversized = await fetch(
+      server.httpUrl + '/voice/tts/services',
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: 'x'.repeat(12 * 1024 * 1024 + 1) }),
+      },
+    );
+    expect(voiceOversized.status).toBe(413);
   } finally {
     await server.close();
   }

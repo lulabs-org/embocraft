@@ -1,8 +1,14 @@
 import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRelay';
-import type {
-  VoiceServiceDraft,
-  VoiceServiceType,
-  VoiceServiceView,
+import {
+  DEFAULT_MIMO_TTS_VOICE,
+  MIMO_CLONE_SAMPLE_MAX_CHARS,
+  MIMO_TTS_CLONE_MODEL,
+  MIMO_TTS_MODEL,
+  MIMO_TTS_VOICES,
+  isMimoVoiceSample,
+  type VoiceServiceDraft,
+  type VoiceServiceType,
+  type VoiceServiceView,
 } from '@voxel/shared';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -11,6 +17,7 @@ import { BrowserVoiceSelect } from './BrowserVoiceSelect';
 import { SpeachesModelSelect } from '../../../components/audio/SpeachesModelSelect';
 import { VoicePreview } from './VoicePreview';
 
+/** Providers share one form; only the voice input differs per service type. */
 const fresh = (type: VoiceServiceType = 'speaches'): VoiceServiceDraft => ({
   name: '',
   type,
@@ -19,17 +26,102 @@ const fresh = (type: VoiceServiceType = 'speaches'): VoiceServiceDraft => ({
   baseUrl:
     type === 'bailian'
       ? 'https://dashscope.aliyuncs.com/api/v1'
-      : type === 'compatible'
-        ? 'https://api.openai.com/v1'
-        : '',
+      : type === 'mimo'
+        ? 'https://api.xiaomimimo.com/v1'
+        : type === 'compatible'
+          ? 'https://api.openai.com/v1'
+          : '',
   model:
     type === 'bailian'
       ? 'qwen3-tts-flash'
-      : type === 'compatible'
-        ? 'tts-1'
-        : '',
-  voice: type === 'bailian' ? 'Cherry' : type === 'compatible' ? 'alloy' : '',
+      : type === 'mimo'
+        ? MIMO_TTS_MODEL
+        : type === 'compatible'
+          ? 'tts-1'
+          : '',
+  voice:
+    type === 'bailian'
+      ? 'Cherry'
+      : type === 'mimo'
+        ? DEFAULT_MIMO_TTS_VOICE
+        : type === 'compatible'
+          ? 'alloy'
+          : '',
 });
+
+function readSample(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Keep the base64 payload but trust the extension for the MIME prefix. */
+function sampleDataUri(file: File, dataUrl: string): string {
+  if (isMimoVoiceSample(dataUrl)) return dataUrl;
+  const name = file.name.toLowerCase();
+  const mime = name.endsWith('.mp3')
+    ? 'audio/mpeg'
+    : name.endsWith('.wav')
+      ? 'audio/wav'
+      : '';
+  const comma = dataUrl.indexOf(',');
+  if (!mime || comma < 0) return '';
+  return `data:${mime};base64,${dataUrl.slice(comma + 1)}`;
+}
+
+/** Uploads one mp3/wav sample and stores it in the draft as a base64 data URI. */
+function CloneSampleField({
+  voice,
+  saved,
+  onChange,
+}: {
+  voice: string;
+  saved: boolean;
+  onChange: (voice: string) => void;
+}) {
+  const { t } = useI18n();
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const upload = async (file?: File) => {
+    setError('');
+    if (!file) return;
+    try {
+      const sample = sampleDataUri(file, await readSample(file));
+      if (!sample) throw new Error(t('console.voice.mimoCloneInvalid'));
+      if (sample.length > MIMO_CLONE_SAMPLE_MAX_CHARS + 64)
+        throw new Error(t('console.voice.mimoCloneTooLarge'));
+      setName(file.name);
+      onChange(sample);
+    } catch (e) {
+      setName('');
+      setError(e instanceof Error ? e.message : t('console.voice.mimoCloneInvalid'));
+    }
+  };
+  return (
+    <div className="voice-key-field">
+      <span className="voice-key-label">
+        {t('console.voice.mimoCloneSampleLabel')}
+      </span>
+      <input
+        type="file"
+        accept=".mp3,.wav,audio/mpeg,audio/wav"
+        aria-label={t('console.voice.mimoCloneSampleLabel')}
+        onChange={(e) => void upload(e.target.files?.[0])}
+      />
+      <small role={error ? 'alert' : undefined}>
+        {error ||
+          (voice
+            ? t('console.voice.mimoCloneReady', { name })
+            : saved
+              ? t('console.voice.mimoCloneSaved')
+              : t('console.voice.mimoCloneHint'))}
+      </small>
+    </div>
+  );
+}
 
 export function VoiceServices({
   services,
@@ -46,13 +138,16 @@ export function VoiceServices({
     speaches: t('console.voice.typeSpeaches'),
     browser: t('console.voice.typeBrowser'),
     bailian: t('console.voice.typeBailian'),
+    mimo: t('console.voice.typeMimo'),
     compatible: t('console.voice.typeCompatible'),
   };
 
   const voiceLabel = (service: VoiceServiceView) =>
     service.type === 'speaches'
       ? [service.model, service.voice].filter(Boolean).join(' · ')
-      : service.voice || t('console.voice.autoSelectVoice');
+      : service.model === MIMO_TTS_CLONE_MODEL
+        ? t('console.voice.mimoCloneVoiceLabel')
+        : service.voice || t('console.voice.autoSelectVoice');
 
   const [selected, setSelected] = useState<string | null | undefined>();
   const [draft, setDraft] = useState(fresh);
@@ -79,6 +174,14 @@ export function VoiceServices({
     return () => abort.abort();
   }, [active, draft.type]);
   const saved = services.find((s) => s.id === selected);
+  // Saved clone samples never reach the browser, so an empty voice means "keep it".
+  const cloneSaved =
+    saved?.type === 'mimo' && saved.model === MIMO_TTS_CLONE_MODEL;
+  const cloneWithoutSample =
+    draft.type === 'mimo' &&
+    draft.model === MIMO_TTS_CLONE_MODEL &&
+    !draft.voice &&
+    !cloneSaved;
   const canKeepKey = (() => {
     if (!saved?.hasApiKey || saved.type !== draft.type) return false;
     if (!draft.baseUrl.trim()) return saved.baseUrl === '';
@@ -334,9 +437,37 @@ export function VoiceServices({
                     <input
                       required
                       maxLength={128}
+                      list={draft.type === 'mimo' ? 'mimo-models' : undefined}
                       value={draft.model}
-                      onChange={(e) => change({ model: e.target.value })}
+                      onChange={(e) => {
+                        const model = e.target.value;
+                        if (draft.type !== 'mimo')
+                          return change({ model });
+                        // Clone samples and preset voice IDs are not interchangeable.
+                        change(
+                          model === MIMO_TTS_CLONE_MODEL
+                            ? { model, voice: '' }
+                            : {
+                                model,
+                                voice: isMimoVoiceSample(draft.voice)
+                                  ? DEFAULT_MIMO_TTS_VOICE
+                                  : draft.voice,
+                              },
+                        );
+                      }}
                     />
+                    {draft.type === 'mimo' && (
+                      <datalist id="mimo-models">
+                        <option
+                          value={MIMO_TTS_MODEL}
+                          label={t('console.voice.mimoPresetModel')}
+                        />
+                        <option
+                          value={MIMO_TTS_CLONE_MODEL}
+                          label={t('console.voice.mimoCloneModel')}
+                        />
+                      </datalist>
+                    )}
                   </label>
                 )}
               </>
@@ -361,6 +492,29 @@ export function VoiceServices({
                 active={active}
                 onChange={change}
               />
+            ) : draft.type === 'mimo' ? (
+              draft.model === MIMO_TTS_CLONE_MODEL ? (
+                <CloneSampleField
+                  voice={draft.voice}
+                  saved={cloneSaved}
+                  onChange={(voice) => change({ voice })}
+                />
+              ) : (
+                <label>
+                  {t('console.voice.voiceLabel')}
+                  {/* Voice IDs are sent verbatim; Chinese voices use Chinese names by design. */}
+                  <select
+                    value={draft.voice}
+                    onChange={(e) => change({ voice: e.target.value })}
+                  >
+                    {MIMO_TTS_VOICES.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )
             ) : (
               <label>
                 {t('console.voice.voiceLabel')}
@@ -396,15 +550,19 @@ export function VoiceServices({
             {draft.type === 'bailian' && (
               <p className="agent-hint">{t('console.voice.hintBailian')}</p>
             )}
+            {draft.type === 'mimo' && (
+              <p className="agent-hint">{t('console.voice.hintMimo')}</p>
+            )}
           </fieldset>
           {dirty && (
             <p className="agent-hint">{t('console.voice.previewDirtyHint')}</p>
           )}
+          {/* Preview the current form values, including edits that are not saved yet. */}
           <VoicePreview
             serviceId={selected ?? undefined}
-            service={saved}
+            draft={draft}
             active={active}
-            disabled={dirty || busy}
+            disabled={busy}
           />
           <fieldset disabled={busy}>
             <div className="voice-service-actions console-form-actions">
@@ -412,7 +570,8 @@ export function VoiceServices({
                 className="primary"
                 disabled={
                   !dirty ||
-                  (draft.type === 'speaches' && (!draft.model || !draft.voice))
+                  (draft.type === 'speaches' && (!draft.model || !draft.voice)) ||
+                  cloneWithoutSample
                 }
               >
                 {busy

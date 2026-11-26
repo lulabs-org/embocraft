@@ -1,19 +1,20 @@
 import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRelay';
-import type { VoiceServiceView } from '@voxel/shared';
+import { MIMO_TTS_CLONE_MODEL, type VoiceServiceDraft } from '@voxel/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { speakBrowserText } from '../../../audio';
 import { useI18n } from '../../../i18n';
 import { voiceApi } from './api';
 import { voicePreviewSamples } from './voice-preview-samples';
 
+/** Previews the current form values, including changes that are not saved yet. */
 export function VoicePreview({
   serviceId,
-  service,
+  draft,
   active,
   disabled = false,
 }: {
   serviceId?: string;
-  service?: VoiceServiceView;
+  draft: VoiceServiceDraft;
   active: boolean;
   disabled?: boolean;
 }) {
@@ -27,6 +28,26 @@ export function VoicePreview({
   const [error, setError] = useState('');
   const request = useRef<AbortController | undefined>(undefined);
   const audio = useRef<HTMLAudioElement>(null);
+  // Any configuration change invalidates the audio and status of an older setup.
+  // Samples can reach 10 MB, so compare their size and tail instead of the payload.
+  const voiceKey =
+    draft.voice.length > 200
+      ? `${draft.voice.length}:${draft.voice.slice(-32)}`
+      : draft.voice;
+  const signature = [
+    draft.type,
+    draft.baseUrl,
+    draft.model,
+    voiceKey,
+    draft.voiceLanguage ?? '',
+    draft.speed,
+  ].join('\u0000');
+  // A saved clone keeps its sample on the server, so a blank draft voice is fine.
+  const savedClone = draft.model === MIMO_TTS_CLONE_MODEL && !!serviceId;
+  // Server types need a model and a voice; browser synthesis can fall back to a system voice.
+  const ready =
+    draft.type === 'browser' ||
+    (!!draft.model.trim() && (!!draft.voice.trim() || savedClone));
   const stop = useCallback(() => {
     request.current?.abort();
     audio.current?.pause();
@@ -42,7 +63,7 @@ export function VoicePreview({
       request.current?.abort();
       player?.pause();
     };
-  }, [serviceId, active, disabled, stop]);
+  }, [serviceId, active, disabled, signature, stop]);
   useEffect(() => {
     if (!url) return;
     void audio.current
@@ -50,22 +71,26 @@ export function VoicePreview({
       .catch(() => setStatus(t('console.voice.previewStatusClickToPlay')));
     return () => URL.revokeObjectURL(url);
   }, [url, t]);
+  /** Browser services speak locally; every other type is synthesized by the server. */
   const preview = async () => {
-    if (!serviceId || disabled || !active) return;
+    if (disabled || !active || !ready) return;
     stop();
     const abort = new AbortController();
     request.current = abort;
     setBusy(true);
     setStatus(t('console.voice.previewStatusConnecting'));
     try {
-      if (service?.type === 'browser') {
+      if (draft.type === 'browser') {
         setStatus(t('console.voice.previewStatusBrowserSpeaking'));
-        await speakBrowserText(text, service, abort.signal);
+        await speakBrowserText(text, draft, abort.signal);
         if (!abort.signal.aborted)
           setStatus(t('console.voice.previewStatusBrowserDone'));
         return;
       }
-      const blob = await voiceApi.previewVoice(serviceId, text, abort.signal);
+      const blob = await voiceApi.previewVoice(
+        { serviceId, draft, text },
+        abort.signal,
+      );
       if (abort.signal.aborted) return;
       setUrl(URL.createObjectURL(blob));
       setStatus(t('console.voice.previewStatusSuccess'));
@@ -115,9 +140,7 @@ export function VoicePreview({
         </select>
         <button
           type="button"
-          disabled={
-            !busy && (!serviceId || disabled || !active || !text.trim())
-          }
+          disabled={!busy && (!ready || disabled || !active || !text.trim())}
           onClick={() => (busy ? stop() : void preview())}
           title={
             busy
@@ -146,9 +169,9 @@ export function VoicePreview({
         }}
       />
       <small className="tts-preview-hint">
-        {service?.type === 'browser'
+        {draft.type === 'browser'
           ? t('console.voice.previewHintBrowser')
-          : service?.type === 'speaches'
+          : draft.type === 'speaches'
             ? t('console.voice.previewHintSpeaches')
             : t('console.voice.previewHintCloud')}
       </small>
