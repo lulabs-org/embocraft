@@ -1,8 +1,11 @@
 import { ConsoleFeedbackRelay } from '../../../components/ui/ConsoleFeedbackRelay';
-import type {
-  VoiceServiceDraft,
-  VoiceServiceType,
-  VoiceServiceView,
+import {
+  DEFAULT_MIMO_TTS_VOICE,
+  MIMO_TTS_MODEL,
+  MIMO_TTS_VOICES,
+  type VoiceServiceDraft,
+  type VoiceServiceType,
+  type VoiceServiceView,
 } from '@voxel/shared';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -11,6 +14,7 @@ import { BrowserVoiceSelect } from './BrowserVoiceSelect';
 import { SpeachesModelSelect } from '../../../components/audio/SpeachesModelSelect';
 import { VoicePreview } from './VoicePreview';
 
+/** Provider defaults stay in sync with the server-side validation and MiMo presets. */
 const fresh = (type: VoiceServiceType = 'speaches'): VoiceServiceDraft => ({
   name: '',
   type,
@@ -19,16 +23,27 @@ const fresh = (type: VoiceServiceType = 'speaches'): VoiceServiceDraft => ({
   baseUrl:
     type === 'bailian'
       ? 'https://dashscope.aliyuncs.com/api/v1'
-      : type === 'compatible'
-        ? 'https://api.openai.com/v1'
-        : '',
+      : type === 'mimo'
+        ? 'https://api.xiaomimimo.com/v1'
+        : type === 'compatible'
+          ? 'https://api.openai.com/v1'
+          : '',
   model:
     type === 'bailian'
       ? 'qwen3-tts-flash'
-      : type === 'compatible'
-        ? 'tts-1'
-        : '',
-  voice: type === 'bailian' ? 'Cherry' : type === 'compatible' ? 'alloy' : '',
+      : type === 'mimo'
+        ? MIMO_TTS_MODEL
+        : type === 'compatible'
+          ? 'tts-1'
+          : '',
+  voice:
+    type === 'bailian'
+      ? 'Cherry'
+      : type === 'mimo'
+        ? DEFAULT_MIMO_TTS_VOICE
+        : type === 'compatible'
+          ? 'alloy'
+          : '',
 });
 
 export function VoiceServices({
@@ -46,6 +61,7 @@ export function VoiceServices({
     speaches: t('console.voice.typeSpeaches'),
     browser: t('console.voice.typeBrowser'),
     bailian: t('console.voice.typeBailian'),
+    mimo: t('console.voice.typeMimo'),
     compatible: t('console.voice.typeCompatible'),
   };
 
@@ -361,6 +377,21 @@ export function VoiceServices({
                 active={active}
                 onChange={change}
               />
+            ) : draft.type === 'mimo' ? (
+              <label>
+                {t('console.voice.voiceLabel')}
+                {/* Voice IDs are sent verbatim; Chinese voices use Chinese names by design. */}
+                <select
+                  value={draft.voice}
+                  onChange={(e) => change({ voice: e.target.value })}
+                >
+                  {MIMO_TTS_VOICES.map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : (
               <label>
                 {t('console.voice.voiceLabel')}
@@ -396,15 +427,19 @@ export function VoiceServices({
             {draft.type === 'bailian' && (
               <p className="agent-hint">{t('console.voice.hintBailian')}</p>
             )}
+            {draft.type === 'mimo' && (
+              <p className="agent-hint">{t('console.voice.hintMimo')}</p>
+            )}
           </fieldset>
           {dirty && (
             <p className="agent-hint">{t('console.voice.previewDirtyHint')}</p>
           )}
+          {/* Preview the current form values, including edits that are not saved yet. */}
           <VoicePreview
             serviceId={selected ?? undefined}
-            service={saved}
+            draft={draft}
             active={active}
-            disabled={dirty || busy}
+            disabled={busy}
           />
           <fieldset disabled={busy}>
             <div className="voice-service-actions console-form-actions">

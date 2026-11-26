@@ -179,11 +179,54 @@ export function createTtsRouter(): Router {
 
   /**
    * @openapi
+   * /voice/tts/preview:
+   *   post:
+   *     security:
+   *       - ManagementBearer: []
+   *     summary: 用未保存的草稿配置合成试听音频
+   *     tags:
+   *       - TTS
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               serviceId:
+   *                 type: string
+   *                 description: 已保存服务 ID，仅用于复用同类型同地址的密钥
+   *               draft:
+   *                 type: object
+   *                 description: 当前表单值，包含 type、baseUrl、model、voice、speed 等
+   *               text:
+   *                 type: string
+   *                 example: "你好，我是智能体。"
+   *     responses:
+   *       200:
+   *         description: 合成的 WAV 音频
+   *         content:
+   *           audio/wav:
+   *             schema:
+   *               type: string
+   *               format: binary
+   */
+  router.post(
+    '/voice/tts/preview',
+    asyncAbortableRoute(async (req, res, signal) => {
+      // Drafts are validated and synthesized in memory; nothing is persisted.
+      const audio = await ttsService.preview(req.body, signal);
+      if (!signal.aborted) res.type('audio/wav').send(audio.bytes);
+    }),
+  );
+
+  /**
+   * @openapi
    * /voice/tts/services/{id}/preview:
    *   post:
    *     security:
    *       - ManagementBearer: []
-   *     summary: 试听语音合成效果
+   *     summary: 按已保存配置试听语音合成效果（草稿请用 /voice/tts/preview）
    *     tags:
    *       - TTS
    *     parameters:
